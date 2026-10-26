@@ -4639,7 +4639,8 @@ Q6  B3: a mechanical main-pipeline refactor (RobotModel by name, an
     behaviour default off.
 Q7  The calendar has no slack; the process-only GO criterion and the
     reporting rule if B7 cannot meet it in time.
-Q8  The exact submission date, to fix the latest B8 start.
+Q8  The exact submission date, to fix the latest B8 start.  ANSWERED
+    2026-10-26: 2026-12-04, so the latest B8 start is 2026-11-24 (BF#1).
 Q9  D11 branch (iii): if no cup class fits the gripper even by its top face,
     the campaign is not runnable as specified; the user decides then.
 Q10 M7: in the bridge, the rediscovery cleanup keeps every superseded
@@ -5129,7 +5130,34 @@ and B3 diffs, where the remaining questions are code, not plan text.
 --------------------------------------------------------------------------------
 P4.14 BF# ENTRIES (appended while executing, in the P4.7 format)
 --------------------------------------------------------------------------------
-(none yet)
+BF#1 [DONE]  SUBMISSION DATE, LATEST B8 START, QUESTIONS SETTLED  (before B0,
+      2026-10-26)
+  WHAT: The user gave the paper's submission deadline as 2026-12-04 (Q8) and
+  told the executor to start B0 with the plan's proposed answers.  By P4.4's
+  rule the latest B8 start is ten days before the deadline: 2026-11-24.  The
+  work before B8 (B0 3, B1 2-3, B3 5-6, B2 5-7, B4 1-2, B5 3-5, B6 1-2, B7 3,
+  review gates 1 to 3 about 3) is 26 to 34 days, 36 with M6, against the 29
+  calendar days from 2026-10-26 through 2026-11-23 inclusive.  The lower half
+  fits with 3 days to spare; the upper end misses the latest B8 start by 5
+  days (7 with M6).  P4.4's milestones were computed on the upper half and put
+  B7 and review gate 3 at 2026-11-28, after the latest B8 start, so they are
+  replaced by lower-half checkpoints: B0 and B1 part 1 by 2026-10-29; B3 and
+  B1 part 2 by 2026-11-04; B2 and review gate 1 by 2026-11-10; B4 to B6 and
+  review gate 2 by 2026-11-16; B7 and review gate 3 by 2026-11-20; B8 from
+  2026-11-21, starting 2026-11-24 at the latest, review gate 4 after it.  If
+  B7 and review gate 3 are not through by 2026-11-24, P4.4's OUTCOMES rule
+  applies unchanged.  The cut order is unchanged; none of its items lies
+  before B8, so it cannot recover days before the latest B8 start.
+  BEFORE / AFTER: Q8 open, no latest B8 start, upper-half milestones / Q8
+  2026-12-04, latest B8 start 2026-11-24, the lower-half checkpoints above.
+  CLAIM EFFECT: none.
+  HONESTY CLASS: configuration (schedule).
+  DECISION 2026-10-26 (user): deadline 2026-12-04; start B0 with the proposed
+  answers to Q1 to Q7, Q9 and Q11.  Q10 (M7) was asked about and explained;
+  its proposed answer (on in the bridge, default off on our scenes) stands
+  unless the user rejects it before B5.  Q12 applies only if B1(i) finds the
+  at-home test unreachable.
+  RESULT: n/a.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
