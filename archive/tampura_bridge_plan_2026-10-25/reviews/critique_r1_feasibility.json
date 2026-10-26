@@ -1,0 +1,127 @@
+{
+  "lens": "FEASIBILITY, TECHNICAL CLIFFS, DRIFT RISK (B0-B9 against source; one machine, WSL, December 2026)",
+  "verdict": "revise",
+  "findings": [
+    {
+      "severity": "blocker",
+      "title": "D4's camera is undefined for the nine render sites that are not the sense action: the implementer will build a phantom eye",
+      "plan_location": "D4, B2 (camera params), M1 / B4",
+      "problem": "D4 says the fixed camera is their wrist camera at DEFAULT_ARM_POS and that a sense is only valid with the arm there (hence M1). B2 then says camera params come from the camera_frame link state at q_home, i.e. one fixed view matrix. But the main pipeline renders through env.detect_objects() at planning time (the blocker census), before every pick descent, twice after every release, after every action (integrity check), on refresh and retirement, not only in the sense executor. Under B2's definition those renders come from a camera pose the physical camera does not occupy while the arm is elsewhere; under a literal wrist camera the census at planning time would need either a render from q_home the arm is not at, or an unplanned move home (the archived CB#120(g) violation). The plan does not notice the contradiction, so an implementing agent will improvise: either a virtual camera everywhere (making M1 a fake precondition) or a mix of viewpoints with shadows cast from one pose and observations from another.",
+      "evidence": "plan lines 268-277 and 370-371; execution.py:343 (census), :720 and :723 (_observe_release), :821, :998 (pick re-observe), :1799 (world_integrity_check), :1954, :2102, :2495 (sense); test_full_pipeline.py:610, :1936, :2169; all use the env's single camera_position/target.",
+      "required_change": "Decide now, in D4: the eye is an EXTERNAL fixed camera placed at the pose of camera_frame at DEFAULT_ARM_POS (640x480, fov = 2*atan(240/525) = 49.1 deg, aspect 4:3, TinyRenderer), declared in task_spec and disclosed as 'the same viewpoint as their generator's hidden check, not mounted on the arm; when the arm is at home the hand is in frame exactly as in their check'. D4's objection to an external eye does not apply at this pose. Then M1 and B4 are dropped (keep M3's at_config goal and D6), the move home before sense disappears, and a gate states 'every render's view matrix equals the declared camera pose'. If the authors insist on a real wrist camera, the plan must instead specify a render-from-current-link-pose rule for every one of the listed sites AND how the planning-time census is obtained without a phantom render or an unplanned motion; I do not see a way with today's pipeline."
+    },
+    {
+      "severity": "blocker",
+      "title": "execute_pick's contact floor (table_z + 0.035) is above the top of a 2.2 cm die: 0 of 20 by construction, and D7/B6 do not list the constant",
+      "plan_location": "D7, B6 (constants list), R1",
+      "problem": "execute_pick computes contact_z = max(estimated_top - 0.005, table_z + 0.035) for the panda_grasptarget frame. In their URDF, as in pybullet_data's, the finger joints sit at hand z 0.0584 and panda_grasptarget at 0.105, i.e. the frame is at the fingertip plane. For the die (height about 2.2 cm: problem z 0.0209 with the generator's +0.01 margin) the floor wins (0.035 > 0.017), the fingertips stop 3.5 cm above the table, the pads close on air above a 2.2 cm object, both-pad verification fails, one retry, pick_giveup. Every seed ends there regardless of the planner. The 0.035 was tuned to 3-4 cm cubes; B6 re-derives sense and size constants from the die class but omits the executor's pick geometry (the archived bridge's lift_height is exactly this family of constant).",
+      "evidence": "execution.py:1033-1037 (_FINGER_TIP_DEPTH = 0.035, min_contact_z, contact_z); panda.urdf:343-368 on the WSL share (finger joints at 0.0584, panda_grasptarget at 0.105, finger upper limit 0.04); problems/1747173590.312597.json die z 0.02085; plan lines 435-448 list NOMINAL extents, slice offset, spacing, auto_cell, finger opening, reach, nothing about the pick floor, the 0.04 aperture cap or the width gate.",
+      "required_change": "Add to B1: measure the pad z-span of their finger.obj relative to panda_grasptarget. Add to B6: min_contact_z = table_z + (pad bottom offset below the frame) + a declared table clearance, and contact_z = max(top - margin, that floor), both derived from the robot model and the die class height, never from a seed; make the floor a task-spec parameter with today's 0.035 as the thesis-scene default (or change it globally with its own A/B). Check the pre-grasp aperture cap (0.04) and the width gate [0.005, pinch_half + 0.008] against the die class in the same BF# entry. G9 provenance applies."
+    },
+    {
+      "severity": "major",
+      "title": "All three layouts hide the die under a d or e cup; the plan says 'two of three' and expects a 0.086 span from a 0.045 finger limit that the URDF does not have",
+      "plan_location": "R1, B6 (finger opening, cup graspability)",
+      "problem": "1747173591 co-locates the die with d_cups_ud, 1747173593 with e_cups_ud, and 1747173590 puts it 1.5 cm from d_cups_ud. So the cup-width question decides all 20 seeds, not two layouts. B6 expects their fingers to open 0.045 (span 0.086); their URDF limits panda_finger_joint1/2 to upper=0.04 (the 0.045 is a code constant, OPEN_GRIPPER_POS, that position control cannot exceed). GRASP_MAX_SPAN therefore stays 0.076. YCB d and e cups have rim diameters of the same order (the inverted cup's AABB width is the rim), so the honest top-down pinch of the rim is at or beyond the span; the narrower inverted base (the top face) is well inside it. B6 lists the top-face pinch refinement as 'the ONLY admissible alternative' but leaves it as a fallback, which invites adopting it after seeing failures.",
+      "evidence": "problems/1747173590.312597.json, 1747173591.670785.json, 1747173593.826745.json (categories and poses); panda.urdf:348 and :355 (upper=0.04); plan lines 438-439 and 622-623 (R1 'two of three layouts').",
+      "required_change": "Correct B6 (span 0.076 unless the clearance rule changes, with its own BF#) and R1 (all 20 seeds). Pre-register the decision rule in B6: if the d or e class AABB width measured in B1 exceeds the span, the top-face pinch-width refinement (pinch extent taken from the top slice of the depth cloud, a general perception feature) is adopted BEFORE B7 with its A/B on our scenes, as a model tweak entry; otherwise the plain sampler runs. Either way the rule is fixed before any episode."
+    },
+    {
+      "severity": "major",
+      "title": "D3 writes grasp_body as a PyBullet body id; their reward matches store symbols, so the terminal reward is 0 for every physically successful episode",
+      "plan_location": "D3, G6",
+      "problem": "SceneBelief.abstract emits Atom('holding', [self.grasp_body]) and is-target over the store symbols in self.world.objects; the reward needs the two to name the same symbol. Their own pick writes obs.grasp = the grasp symbol and obs.grasp_body = the object symbol. D3's 'grasp_body = the contacted body's id (never the target's name)' can never satisfy Exists o. is-target(o) and holding(o). G6's tests are all negative (force failures, assert 0); nothing asserts the positive case, so this would surface only in B7.",
+      "evidence": "find_dice/env.py:306-315 (abstract), :392-394 (pick_execute_fn sets symbols), :70-73 (their body-id to symbol lookup); plan lines 259-262.",
+      "required_change": "ObservationAdapter resolves the contacted body id to its store symbol with the same lookup their obs_from_camera_image uses (store.get(sym) == body), sets grasp to a store symbol (store.add_typed(<our grasp record>, 'grasp')), and conf to the 7 arm joints only. G6 gains the positive fault-injection case: a physically verified hold at home must yield rewards[-1] == 1.0."
+    },
+    {
+      "severity": "major",
+      "title": "at-home: the executor settles to 2e-3 rad, their test is allclose 1e-4; the loop can livelock on zero-length moves, and B7's 'tolerance rule' fallback contradicts G6",
+      "plan_location": "D6, M3, B7, R3",
+      "problem": "move_robot_smooth's settle exits as soon as every joint is within 2e-3 rad (120-step cap). Their at-home is np.allclose(conf, DEFAULT_ARM_POS, rtol=1e-4, atol=1e-4), about 1e-4 to 4e-4 rad per joint. After each move the loop stores the READBACK as current_config, so with the goal ('at_config', q_home) the planner sees the arm not at q_home, plans another move whose motion is near zero, the settle again stops at 2e-3, and so on until the wall cap, unless the controller happens to converge further. B7's fallback 'pre-register the tolerance rule the campaign uses' cannot be implemented honestly: the tolerance lives in their abstract() (never edited, H4) and G6 forbids snapping conf.",
+      "evidence": "robot_utils.py:778-785; find_dice/env.py:318-320; test_full_pipeline.py:1591-1597; plan lines 453-457.",
+      "required_change": "Measure in B1 or B3, before any episode: steady-state joint error of a settled hold at DEFAULT_ARM_POS with a held body on their robot. Specify that the loop's at_config evaluator uses exactly their allclose, so our loop neither stops before their reward can be 1 nor re-plans forever (add a bound: a zero-length move that does not change the evaluator's verdict ends the episode as failure, logged). If the error exceeds the tolerance, the only admissible fixes are a tighter or longer FINAL settle in move_robot_smooth as a main-pipeline change with A/B, or counting the episode as failure. Delete the tolerance-rule fallback."
+    },
+    {
+      "severity": "major",
+      "title": "D8 assumes 'static or dynamic'; their YCB bodies are created with baseMass = -1, a negative mass whose stepped behaviour is undefined",
+      "plan_location": "D8, B1(c), R9",
+      "problem": "create_ycb passes mass=-1 straight to createMultiBody(baseMass=...). TAMPURA never steps physics so it never notices. Our pipeline steps physics from the first settle. A dynamic multibody with mass -1 and inertia computed from -1 is not 'static', so D8's 'made dynamic ONCE if static' never triggers, and changeDynamics(mass=m) alone keeps the stale inertia. Two scenes also start with the die floating inside the cup's VHACD hull; whether it drops cleanly or the first step ejects die and cup is unknown.",
+      "evidence": "panda_env_utils.py:676-702 (mass=-1 default, baseMass=mass); plan lines 310-317.",
+      "required_change": "B1(c): in a throwaway client, load each of the three scenes, record getDynamicsInfo mass and inertia, getClosestPoints(die, cup) before any step, then step 240 times and report per-body displacement and NaNs. D8: set mass AND localInertiaDiagonal for every task body from declared class masses before the first step, unconditionally; pre-register what counts as a scene-invalidating reaction (e.g. any cup displaced more than 1 cm during the initial settle) and how it is disclosed, so no scene is quietly re-rolled or re-seated."
+    },
+    {
+      "severity": "major",
+      "title": "B2's env_adapter is a from-scratch duck type of ~30 members while BoxelTestEnv.__init__ hard-wires connect/reset: the agent will either fork the env or hack it",
+      "plan_location": "B2 (env_adapter), B3, Q6",
+      "problem": "BoxelTestEnv.__init__ connects its own GUI/DIRECT client, calls resetSimulation on it, opens the plan client and builds _gui_to_plan; there is no way to adopt their existing client 0. The loop and execution use about 30 env members (detect_objects, get_camera_observation, generate_boxels, generate_free_space, annotate_free_space_surface, sync_to_plan_client, plan_body_id, _gui_to_plan, step_simulation, update_object_positions, camera and table attributes). Reimplementing them in the bridge is the archived failure mode (streams_boxel.py, execution_boxel.py were such copies). Three days is not enough either way.",
+      "evidence": "boxel_env.py:435-531; map_execution design_relevant_details (env surface list); plan lines 361-388.",
+      "required_change": "Decide the mechanism in B3: BoxelTestEnv gains an adopt-existing-client constructor path (client_id given, no resetSimulation, no _setup_scene, bodies registered from a provided name-to-id table, the plan twin built through the existing _mirror_* helpers from their URDF and create_ycb into a fresh DIRECT client). The bridge subclasses it and overrides nothing that touches perception, boxel generation or the plan-client sync. State explicitly that a parallel implementation of any of those methods fails review. Re-estimate B2 at 5-7 days."
+    },
+    {
+      "severity": "major",
+      "title": "The workspace window (free space, placement candidates, shadow table ranges) is undefined in their world; the robot stands on a 1.53 m table and the home camera sees only part of it",
+      "plan_location": "B2 (table AABB), D7",
+      "problem": "B2 takes the table AABB from their table body: 1.53 x 1.22 m at x 0.1, so x from -0.665 to 0.865, with the robot base at the origin on that surface. Free-space cells and placement candidates over the whole table include cells under the robot, behind it and outside the home camera's frustum (sense endpoints outside the frame are never observed, so fragments or objects placed there are permanently unobservable). Nothing in the plan says how the window is chosen, which is exactly where an agent would pick ranges by looking at where cups land.",
+      "evidence": "panda_env_utils.py:709-713 (TABLE_AABB, TABLE_POSE); perception.py:247-249 (out-of-frame endpoints never claimed observed); their place sampler's shortened table (map_tampura: centre (0.475, 0, -0.015), 0.75 x 1.22); plan line 371.",
+      "required_change": "Declare once in task_spec: free-space, placement and ShadowCalculator ranges = their shortened-table region (x 0.1 to 0.85, y -0.61 to 0.61, a constant from their own code, the same region their placements use) intersected with the reach gate from B1(f); record it in BF#; never adjust after a seed. Note in the disclosures that both systems may place out of the home view."
+    },
+    {
+      "severity": "major",
+      "title": "No calendar; the day counts sum to 21 agent-days before reviews and compute, against a December deadline about five weeks away",
+      "plan_location": "B0-B8 effort lines, B9, R12",
+      "problem": "B0 2 + B1 1 + B2 3 + B3 3 + B4 1 + B5 3 + B6 1 + B7 3 + B8 4 = 21 days, plus three adversarial review rounds, plus the campaign (two reps, O episodes up to 900 s), plus paper text. My estimate from the cliffs above (adapter, RobotModel across five files with a 40-seed A/B per side, a new region kind with a synthetic hollow-cup scene, and B7 where the pick floor, cup grasp, at-home and physics unknowns all land) is 30 to 45 agent-days serial on one machine with CB#113 paused. B9 is listed as optional after B8, so there is no pre-registered fallback if B7 slips.",
+      "evidence": "plan lines 337, 358-359, 388, 404, 416, 433, 448, 459, 468, 470-473; deadline per the project record (December 2026).",
+      "required_change": "Add a calendar with a go/no-go: first full watched episode (B7) by a fixed date (e.g. 2026-11-20). Cut scope now: camera option (A) removes B4; no main() injection refactor in B3 (the bridge constructs the args namespace; only RobotModel by name and the adopt-client constructor land); subclass instead of reimplement (previous finding); the pinch-top-face rule decided in B6 before B7. Pre-register the fallback if B7 misses the date: the planner-only row (B9) or a reduced claim, chosen now, not after results."
+    },
+    {
+      "severity": "minor",
+      "title": "G3 'executed sequence == planned sequence, no deletions' is false for every episode with a replan",
+      "plan_location": "G3",
+      "problem": "The loop abandons the current plan on every sense outcome (optimistic sense), on integrity-triggered belief changes, on IK failures during place/stack, on give-ups, and runs a disposal plan while holding. Read literally the gate is red on our own scenes; an agent will loosen it ad hoc.",
+      "evidence": "test_full_pipeline.py:1025-1037 (reactive replanning), :1895 and :2144 (break on IK failure), :1375-1413 (disposal plan per map_execution).",
+      "required_change": "G3: every executed primitive is step i of plan k, executed in order from step 1 with no skips or insertions; a plan may end early only on an enumerated, logged trigger (sense outcome, integrity replan, IK failure, give-up, deadline); any other truncation fails."
+    },
+    {
+      "severity": "minor",
+      "title": "G13's whole-tree hash will fail on their own run outputs and on pddlstream's temp/ written into their repo",
+      "plan_location": "G13, B0, B2 command",
+      "problem": "The bridge must run with cwd = their repo root (the problems path is relative), pddlstream writes TEMP_DIR = 'temp/' relative to cwd, and their rollout writes runs/run_<time>/ there too. A sha256 over tampura_environments/ changes on every run; the implementer will exclude paths silently.",
+      "evidence": "pddlstream/algorithms/downward.py:68; find_dice/env.py:802 (relative problems path, per map); map_tampura (runs/run_<time>/ in their tree); plan lines 125-128.",
+      "required_change": "G13 hashes tracked sources only (git ls-files of both repos) and asserts git status reports no modified tracked file after each run; temp/ and runs/ are acknowledged untracked outputs listed in B0."
+    },
+    {
+      "severity": "minor",
+      "title": "Interpreter parity: our pipeline is validated in wsl_env (python 3.10, numpy 2.2.6) but would run arm O under their venv (python 3.11, numpy 1.24.4)",
+      "plan_location": "B2 command, P4.6 ARMS, B3 A/B",
+      "problem": "pybullet is 3.2.7 in both, so physics matches, but B3's A/B runs in wsl_env while the campaign would run under their interpreter with a three-year-older numpy; their env also needs scipy, trimesh and imageio, which wsl_env lacks.",
+      "evidence": "wsl_env site-packages (numpy 2.2.6, pybullet 3.2.7, python3.10); /root/tampura-work/.venv (numpy 1.24.4, pybullet 3.2.7, scipy 1.15.3, trimesh 4.12.2, imageio); find_dice/env.py:13, pb_utils.py:14-20, panda_env_utils.py:17-18 (imports).",
+      "required_change": "Fix one interpreter for arm O in P4.6 and record it in campaign.json; before B7 run our holding scene seeds 0-19 under that interpreter and compare with the wsl_env baseline (same acceptance as B3). Simplest: add scipy, trimesh, imageio, pyyaml to wsl_env and run O there with their two packages on PYTHONPATH; T stays in their venv."
+    },
+    {
+      "severity": "minor",
+      "title": "B5's deliverable 'found only through that sense' will fail on the normal path and tempts suppressing discovery",
+      "plan_location": "B5 deliverable, G15",
+      "problem": "After the cup is placed, _integrity_after renders, register_new_detections registers the now-visible die and the loop replans; the planned sense of the interior fragment never executes. An agent chasing the deliverable as worded would disable the discovery path or special-case it.",
+      "evidence": "test_full_pipeline.py:1109-1185 (_integrity_after, per map_execution); execution.py:2255-2384 (register_new_detections); the sweep gives unplanned fragments no strikes (execution.py:2211-2252, 3047-3079), so the interior fragment is otherwise safe.",
+      "required_change": "Reword: the interior fragment's belief status changes only through a render of its grid; the die is registered either by the post-place integrity render (logged as discovery) or by the planned sense, both acceptable; disabling or delaying the discovery path to make the sense 'do it' is forbidden."
+    },
+    {
+      "severity": "minor",
+      "title": "B3's acceptance 'any plan-count change fails' is stricter than a wall-clock-bounded search can satisfy",
+      "plan_location": "B3 deliverable",
+      "problem": "plan() is bounded by max_time; a plan that times out on one arm and not the other changes plan counts without any behavioural difference, and the plan itself acknowledges a +/-1-2 flip noise floor for outcomes.",
+      "evidence": "plan lines 400-404; pddlstream_planner solve(max_time) per map_model.",
+      "required_change": "Accept per-seed outcome equality; a plan-count difference fails only if a re-run of that seed on both arms reproduces it; log timed-out plan() calls as the noise source in the BF# entry."
+    }
+  ],
+  "what_the_plan_gets_right": [
+    "D2 is feasible as written: TampuraEnv.problem_spec is @property @lru_cache (one ProblemSpec instance, so an appended schema persists), env.step resolves the schema by name on every call (environment.py:17-22, 62), ProblemSpec.verify only checks each schema's preconditions, effects and verify_effects against the predicate table (spec.py:235-260), so a schema with none of them passes, and Policy.rollout never calls applicable_actions for a custom policy (policy.py:96-161).",
+    "The default-client assumption is structurally sound: setup_robot_pybullet opens the executing world as the first bc.BulletClient (panda_env_utils.py:844-847), so pybullet id 0 is their world provided nothing connects earlier; B1(d) asserting it is the right gate.",
+    "Interior regions as SHADOW-typed fragments (D5/M2) need no planner, stream or PDDL change, and the sweep does not strike unplanned fragments (sweep_all_fragments only removes on clear_but_empty and shrinks on still_blocked; strikes are counted only for the planned fragment, execution.py:2211-2252, 3047-3079).",
+    "The gates are concrete and each names the archived violation it would have caught; G5, G6, G8, G9, G11 and G19 directly target the discarded bridge's mechanisms.",
+    "Seed-for-seed scene pinning with the os.listdir caveat, the pre-registered budgets and repetitions, the Wilson intervals, the stratification by layout and the disclosure list are the right protocol.",
+    "Passing the belief-posed plan twin as physics_client to the shadow caster (R6) closes PAPER_AUDIT item (h) for the bridge without touching our scenes.",
+    "The plan rejects the right things: no welds, no friction raising, no scripted park, no lift-and-look, no planner swap, no 'faithful' naming."
+  ]
+}

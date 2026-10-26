@@ -1,0 +1,246 @@
+{
+  "summary": "FORENSIC AUDIT OF archive/tampura_bridge_v1 (discarded 2026-08-20). The bridge ran OUR planner inside TAMPURA's rollout through a Policy subclass (BoxelPolicy) that always returned Action('no-op'), physically drove their PyBullet world from inside get_action, and wrote the atoms their reward reads straight into their SceneBelief (belief_bridge.mark_holding / mark_at_home). Two generations exist side by side: the Phase 3-C kinematic bridge (execution_bridge.py: resetJointState interpolation, teleport-into-gripper, JOINT_FIXED weld, teleport-to-rest; pddl/domain_find_dice.pddl with pick/place RELAXED to no streams; plan_solve hand-building a one-cup symbolic init) which produced the 20/20, and the later 'genuine' rebuild (execution_boxel.py + streams_boxel.py + planner_boxel.py + domain_find_dice_streamful.pddl) which restored streams, RRT, collision checks and a contact-verified grasp but kept a weld, kept the policy-side decision logic and kept the forced-success path (CB#123).\n\nWHERE THE DECISIONS ACTUALLY LIVED. (1) WHICH cup to relocate: plan_solve picks cands[0] of the sorted visible names and builds an init with exactly one cup, one placeholder region and one free destination, so the planner has one legal plan (boxel_policy.py:83-98; _solve_smoke.py:44 asserts the fixed 5-action script). (2) WHERE to place: _next_place_xy picks the free boxel farthest from the occluder centroid and execute_place is called with that xy; the planner's chosen destination boxel is carried in the converted plan but never used; the comment justifies the override with knowledge about the hidden die's region (boxel_policy.py:160-176, 324-336). (3) ORDER / plan post-processing: _convert_plan deletes every planned move action and re-plans transit inside the executor, rewrites sense and go_home args to the literal 'die' (boxel_policy.py:215-238). (4) WHEN to park: an unplanned execute_go_home before every sense and at step 0 (boxel_policy.py:295-296, 345-348; CB#120(g)); the main pipeline's sense handler deliberately does not retract (execution.py:2463-2467). (5) Belief steering: when the die is visible every shadow is declared known-empty without observation to prune sense from the search (boxel_policy.py:248-258); 'known empty' is tracked per CUP NAME, not per sensed region (boxel_policy.py:352-353, 193-205), which bakes the containment semantics ('one cup hides the die') into the wrapper. (6) WHEN to declare success: the go_home branch discards execute_go_home's status and unconditionally writes at_home into their belief, sets _done and info['success']=True (boxel_policy.py:372-381, CB#123); execute_pick ignores the lift's return (execution_boxel.py:263). run_boxel_on_finddice.py reports RESULT from the policy's own _done/_failed flags (:69-74), not from TAMPURA's reward.\n\nGROUND-TRUTH READS. FindDiceAdapter enumerates ALL of their bodies with true pose + AABB, including the hidden die, and names it 'die' by category (perception_adapter.py:121-146); the die's body id is in streams.object_body_ids from step 0 (_streams_smoke.py:33) and the shared-streams fallback reads a pre-sense target's true AABB (streams_boxel.py:415-422, 487-494); execute_pick grasps at the object's LIVE simulator AABB centre, including for the die (execution_boxel.py:191-197); the policy reads the die's pose for a capture (boxel_policy.py:379). Visibility itself is a rendered segmentation mask mapped body-id->name (perception_adapter.py:104-119), the same simulated-perception model the main pipeline uses (execution.py:2474, 2495): acceptable only if declared.\n\nWELDS / TELEPORTS. execution_bridge.py is wholesale teleport+weld+kinematic (27-40, 49-63, 86-120, 123-155, 158-173). execution_boxel.py still welds after contact verification (_weld 94-107, used at 251), makes their STATIC cups/die dynamic at pick time (182-183), raises friction (236-238) and zeroes their hand-link masses (58-71). sense_config.set_sense_config teleports the arm (sense_config.py:32-34). Finger open is a resetJointState teleport (robot_utils_boxel.py:599-600), pre-#P1 behaviour.\n\nHARNESS. TAMPURA's Policy.rollout runs max_steps (20) iterations; for 'no-op' it skips env.step and deep-copies the belief (tampura/policies/policy.py:105-153, 125-127), computing reward = get_reward(b.abstract()) (108, 138). Their reward is And(Exists(is-target & holding), at-home) over atoms SceneBelief.abstract derives from belief.grasp/grasp_body/current_conf (find_dice/env.py:306-323, 993-1004; spec.py:140-143). The bridge wrote exactly those fields (belief_bridge.py:44-58, sentinel grasp 'g_bridge_die'). So their code only evaluated a boolean over atoms we asserted; their execute_fn/effects/observation model, SceneState update and visibility belief never ran. The harness idea (their env, scene generator, seeds, config, rollout timer untouched) is reusable; the success channel as built is poisoned because belief writes were decoupled from physical outcome. A reusable version must derive the at-home/holding writes from independent physical readback (joint error vs DEFAULT_ARM_POS at a declared tolerance; die between both finger pads with contacts and no constraint) or go through their execute_fn path, and the sweep must score both arms from history.rewards[-1]==1.0 (tampura_sweep.py:193-195).\n\nDOMAINS. domain_find_dice.pddl relaxed pick/place to (?o ?b) with no Grasp/Config/at_config/kin_solution/boxel_fits (219-282), added (at_home)/(at_sense_config) and go_home (326-337) and (not (at_home)) effects; with plan_solve's one-cup init this fully determined the plan. domain_find_dice_streamful.pddl restored the streamful pick/place/move/stack but DROPPED (boxel_fits ?o ?region) from sense (101-116 vs domain_pddlstream.pddl:183) and predates F31 placement_hides/place_hiding and stack cost 3. Neither domain fork is acceptable; the honest form is the main domain plus a declared minimal delta (go_home + at_home effects), diffed in CI.\n\nTHE 100% ILLUSION (CODEBASE_AUDIT_FINAL #118/#119/#120, lines 475-563): zero streams + one-option init -> the planner always emitted [pick cup, place, sense, pick die, go_home]; kinematic teleport/weld execution could not fail; relocating cups alphabetically is guaranteed to uncover a die hidden under exactly one cup within max_steps; mark_holding on weld and mark_at_home after a kinematic interpolation that cannot miss; their reward then read our writes. The 'sense' never sensed the planned region: the die appeared in a whole-scene re-segmentation after a cup was moved (boxel_policy.py:348-349) because lateral shadows never contain it (CB#120(f), boxelize.py:12-15). No per-seed record of the 20/20 exists in the archive (no sweep driver, no results file); the number survives only in audit prose.",
+  "facts": [
+    {
+      "claim": "DECISION BY BRIDGE (which cup): plan_solve hand-selects the cup to relocate as cands[0] of the sorted visible non-die names not yet in known_empty, and hand-builds a one-cup/one-region/one-free-dest init so the planner has exactly one legal plan.",
+      "evidence": "archive/tampura_bridge_v1/boxel_policy.py:83-98 ('cands = [n for n in sorted(visible) if n != \"die\" and n not in set(known_empty)]', 'cup = cands[0]', init with (\"blocks_view_at\", cup, cup_b, region) and single \"free_dest\"); archive/tampura_bridge_v1/_solve_smoke.py:44 asserts names == [\"pick\",\"place\",\"sense\",\"pick\",\"go_home\"]",
+      "confidence": "verified"
+    },
+    {
+      "claim": "DECISION BY BRIDGE (where to place): _next_place_xy chooses the placement spot (free boxel farthest from the occluder centroid, spread from used spots) and execute_place is called with that xy; the planner's destination boxel (kept as args[1] by _convert_plan) is never used, and the comment justifies the override by the hidden die's region.",
+      "evidence": "archive/tampura_bridge_v1/boxel_policy.py:160-176 (_next_place_xy), 231-233 (place keeps str(args[1])), 324-336 ('xy = self._next_place_xy()' passed to execute_place; comment 'we execute that at the free boxel FARTHEST from the die region ... The planner cannot see the still-hidden die at plan time, so its arbitrary free choice can land between the robot and the die'); contrast main pipeline test_full_pipeline.py:1789-1798 (place_pos from the planned boxel id)",
+      "confidence": "verified"
+    },
+    {
+      "claim": "PLAN POST-PROCESSING: _convert_plan deletes every planned 'move' action (planner-certified trajectories discarded, transit re-planned inside execute_pick/place), and rewrites sense/go_home args to the literal 'die'.",
+      "evidence": "archive/tampura_bridge_v1/boxel_policy.py:215-238 ('if name == \"move\": continue'; sense -> Action(args=(\"die\", str(args[1]))); go_home -> Action(args=(\"die\",))); docstring 218-220 admits 'drop the transit move actions (our execute_pick/place re-plan their own transit ...)'",
+      "confidence": "verified"
+    },
+    {
+      "claim": "UNPLANNED ACTION (arm park): execute_go_home is executed before every sense and at step 0 without a corresponding planned action; the main pipeline's sense handler deliberately does not retract.",
+      "evidence": "archive/tampura_bridge_v1/boxel_policy.py:295-296 (first step), 345-348 (sense branch: 'execute_go_home(...) # park arm clear of the external camera'); archive/CODEBASE_AUDIT_FINAL.txt:557-559 (#120(g)); execution.py:2463-2467 (retract commented out in handle_sense_action)",
+      "confidence": "verified"
+    },
+    {
+      "claim": "BELIEF STEERING: when the die is visible, every SHADOW boxel is passed as known_empty_shadows without any observation, explicitly to remove sense options from the search; the main pipeline passes only observed-empty plus parked shadows.",
+      "evidence": "archive/tampura_bridge_v1/boxel_policy.py:248-258 ('mark every shadow known-empty for the die. This drops the (now-pointless) sense options from the search', known_empty_shadows=all_shadows); test_full_pipeline.py:1217-1218, 1327 (known_empty = belief.get_known_empty_shadows() + belief.get_parked_shadows()); belief.py:74-80, 115-117 (mark_sensed per shadow id)",
+      "confidence": "verified"
+    },
+    {
+      "claim": "CONTAINMENT SEMANTICS IN THE WRAPPER: 'known empty' is tracked per relocated CUP NAME and translated to shadow ids through the occluder's object_name, so the model's region-level belief is replaced by a cup-level 'the die was not under this cup' bookkeeping that encodes the find_dice task structure.",
+      "evidence": "archive/tampura_bridge_v1/boxel_policy.py:352-353 ('self._known_empty.append(self._held_cup_name)'), 193-205 (_known_empty_shadow_ids maps via occ.object_name in self._known_empty); CB#120(f) archive/CODEBASE_AUDIT_FINAL.txt:550-556 (die never inside a lateral shadow, 'exhaustive relocate+re-sense does' the search)",
+      "confidence": "verified"
+    },
+    {
+      "claim": "FORCED SUCCESS (CB#123), verbatim: the go_home branch discards execute_go_home's status and unconditionally writes at_home into their belief, sets _done and info['success']=True, so a 'no_path' go-home still scores reward 1.0.",
+      "evidence": "archive/tampura_bridge_v1/boxel_policy.py:372-381: 'elif act.name == \"go_home\":\\n    self._q_current, _ = execute_go_home(\\n        self._streams, world, self._model, self._q_current, self._gui,\\n        held_body=self._die_body)\\n    bb.mark_at_home(belief)\\n    self._done = True\\n    self._refresh_overlay()\\n    die_xyz = world.client.getBasePositionAndOrientation(self._die_body)[0]\\n    self._capture(\"phase3c_genuine_die_at_home.png\", die_xyz)\\n    info[\"success\"] = True'; execute_go_home returns 'no_path' at archive/tampura_bridge_v1/execution_boxel.py:369-372; archive/CODEBASE_AUDIT_FINAL.txt:669-687; PAPER_AUDIT.txt:3190-3194",
+      "confidence": "verified"
+    },
+    {
+      "claim": "FORCED SUCCESS (lift): execute_pick ignores the lift _plan_follow return value and returns status 'ok' even when the lift found no path, so the held cup may stay at contact height during transport.",
+      "evidence": "archive/tampura_bridge_v1/execution_boxel.py:263-265 ('_plan_follow(streams, rb, model, q_con_held, q_lift_cfg, gui)' return unused; 'return _current_config(...), cid, \"ok\"'); archive/CODEBASE_AUDIT_FINAL.txt:679-682",
+      "confidence": "verified"
+    },
+    {
+      "claim": "SELF-REPORTED RESULT: the entry point prints SUCCESS/FAILURE from the policy's own _done/_failed flags, not from TAMPURA's reward; the holding atom is written by the bridge on its own contact check and never re-verified later.",
+      "evidence": "archive/tampura_bridge_v1/run_boxel_on_finddice.py:69-74; archive/tampura_bridge_v1/boxel_policy.py:370 ('bb.mark_holding(belief, bb.die_alias(belief))' right after execute_pick returns ok); archive/tampura_bridge_v1/belief_bridge.py:16, 44-58 (sentinel grasp 'g_bridge_die', current_conf = list(DEFAULT_ARM_POS))",
+      "confidence": "verified"
+    },
+    {
+      "claim": "SCENE-SPECIFIC LITERALS: target/occluder pick branches are keyed on the literal name 'die'; plan_pick_goal defaults to 'cup_0'; probes index adapter.objects['cup_0'].",
+      "evidence": "archive/tampura_bridge_v1/boxel_policy.py:310 ('if act.name == \"pick\" and arg0 != \"die\"'), 359, 43 (plan_pick_goal(target_name=\"cup_0\")), 74-80, 235-237; archive/tampura_bridge_v1/execution_bridge.py:214; archive/tampura_bridge_v1/_domain_smoke.py:31; archive/tampura_bridge_v1/_ik_probe.py:42",
+      "confidence": "verified"
+    },
+    {
+      "claim": "HIDDEN-OBJECT-TUNED CONSTANT: execute_pick's lift_height=0.06 is justified by the hidden die's height under the cup ('the cup bottom must clear the die top (~5 cm above the cup bottom here)'), i.e. a constant derived from unobserved scene knowledge.",
+      "evidence": "archive/tampura_bridge_v1/execution_boxel.py:160-161, 210-215",
+      "confidence": "verified"
+    },
+    {
+      "claim": "GROUND-TRUTH READ (object table): FindDiceAdapter enumerates ALL of their bodies with true pose and AABB, including the hidden die, names it 'die' by category and exposes its body id; the policy reads adapter.objects['die'].object_id and adapter.objects[cup].object_id directly.",
+      "evidence": "archive/tampura_bridge_v1/perception_adapter.py:121-146 (_build_objects: pbu.get_pose/get_aabb for every body in world.objects; name 'die' for category 'dice'); archive/tampura_bridge_v1/boxel_policy.py:312, 351",
+      "confidence": "verified"
+    },
+    {
+      "claim": "GROUND-TRUTH READ (streams): the hidden die's body id is in streams.object_body_ids from step 0, and the streams' boxel_fits / hideability tests fall back to the simulator AABB of a pre-sense target.",
+      "evidence": "archive/tampura_bridge_v1/_streams_smoke.py:33 ('object_body_ids = {n: o.object_id for n, o in adapter.objects.items()}'); archive/tampura_bridge_v1/streams_boxel.py:364-377 (_resolve_body_id), 415-422 and 487-494 (p.getAABB(body_id) fallback 'Pre-sense targets lack OBJECT registry boxels')",
+      "confidence": "verified"
+    },
+    {
+      "claim": "GROUND-TRUTH READ (grasp pose): execute_pick computes approach/contact/lift from the object's LIVE simulator AABB (pbu.get_aabb), including for the die pick, instead of the registry estimate; execute_place reads the held object's live AABB and base pose for the release height; the policy reads the die's true pose for a capture.",
+      "evidence": "archive/tampura_bridge_v1/execution_boxel.py:191-197 ('Grasp at the object's LIVE AABB centre'), 285-290; archive/tampura_bridge_v1/boxel_policy.py:360-362, 379; contrast test_full_pipeline.py:1804-1807 ('#P1 WP2b ... no simulator read')",
+      "confidence": "verified"
+    },
+    {
+      "claim": "PERCEPTION BOUNDARY: visibility is a rendered segmentation mask mapped body-id -> name (simulated perfect segmentation); this is the main pipeline's accepted perception model too, so it is reusable only as a declared model assumption.",
+      "evidence": "archive/tampura_bridge_v1/perception_adapter.py:104-119 (segment_visible: getCameraImage seg mask, id2name); execution.py:2474, 2495 (main sense uses env.detect_objects() seg + target body id)",
+      "confidence": "verified"
+    },
+    {
+      "claim": "GT-DRIVEN PROBES: _cam_check.py and _seg_check.py locate the 'hiding' cup by distance to the die's TRUE position and teleport it to [5,5,5] to test reveal; the external camera pose candidates were evaluated against 'die_hidden' using that knowledge.",
+      "evidence": "archive/tampura_bridge_v1/_cam_check.py:33-35 (hiding = min(cups, key=distance to die.position)), 37-57 (candidate eyes scored by cups_visible / die_hidden; resetBasePositionAndOrientation(hiding.object_id, [5,5,5])); archive/tampura_bridge_v1/_seg_check.py:37, 57",
+      "confidence": "verified"
+    },
+    {
+      "claim": "TELEPORT + WELD (kinematic generation): execute_simplified_pick teleports the object into the gripper and welds it; _move_arm interpolates joints via resetJointState while re-teleporting the attached object each frame; execute_faithful_pick welds with createConstraint; execute_faithful_place teleports the object to its rest pose after removeConstraint; execute_go_home carries the held body kinematically.",
+      "evidence": "archive/tampura_bridge_v1/execution_bridge.py:27-40 (resetBasePositionAndOrientation + createConstraint), 49-63 (resetJointState loop, :62 resetBasePositionAndOrientation of attached), 86-120 (:101/:114 finger resets, :115-116 createConstraint JOINT_FIXED), 123-155 (:149 removeConstraint, :152 resetBasePositionAndOrientation to rest_z), 158-173",
+      "confidence": "verified"
+    },
+    {
+      "claim": "WELD (so-called genuine generation): execution_boxel still attaches the grasped object with a JOINT_FIXED createConstraint after contact verification; CB#120(d) recorded this as PARTIAL and #P1 has since removed welds from the main pipeline.",
+      "evidence": "archive/tampura_bridge_v1/execution_boxel.py:94-107 (_weld), 249-251 ('cid = _weld(client, rb, model.ee_link, obj_body)'), 15 (docstring 'attach with a JOINT_FIXED constraint'); PAPER_AUDIT.txt:3180-3183",
+      "confidence": "verified"
+    },
+    {
+      "claim": "RUNTIME PHYSICS EDITS OF THEIR SCENE/ROBOT: their static cups/die are made dynamic (mass 0.05) at pick time, lateral friction is raised to 4.0 on object and fingers, and their hand-frame link masses are zeroed (fix_phantom_masses); their URDF/files are untouched but the running world is modified.",
+      "evidence": "archive/tampura_bridge_v1/execution_boxel.py:178-183 (changeDynamics mass=0.05 if mass <= 0), 236-238 (lateralFriction=4.0), 58-71 (fix_phantom_masses); archive/CODEBASE_AUDIT_FINAL.txt:572-579 (SCENE ADAPTATIONS disclosed)",
+      "confidence": "verified"
+    },
+    {
+      "claim": "ARM TELEPORT (sense config): set_sense_config teleports the arm to SENSE_ARM_CONF via set_group_positions; used by the adapter in wrist mode and by capture_sense_image.",
+      "evidence": "archive/tampura_bridge_v1/sense_config.py:32-34, 59; archive/tampura_bridge_v1/perception_adapter.py:71-73",
+      "confidence": "verified"
+    },
+    {
+      "claim": "FINGER TELEPORT (inherited pre-#P1): open_gripper resets both finger joints with resetJointState; the main pipeline now opens motor-driven (#P1), so reviving the fork would regress.",
+      "evidence": "archive/tampura_bridge_v1/robot_utils_boxel.py:569-600 (resetJointState open); test_full_pipeline.py:1780 ('open gripper (motor-driven, #P1)')",
+      "confidence": "verified"
+    },
+    {
+      "claim": "COLLISION-CHECK TELEPORT WITH RESTORE: is_config_collision_free repositions held bodies to the EE pose and restores them; acceptable only if restore is exact and never used on the task world outside a check.",
+      "evidence": "archive/tampura_bridge_v1/robot_utils_boxel.py:245-250 (resetBasePositionAndOrientation of held ids), 300-307 (restore in finally)",
+      "confidence": "verified"
+    },
+    {
+      "claim": "HARNESS MECHANICS: TAMPURA's Policy.rollout iterates max_steps (20 for find_dice), computes reward from b.abstract() before and after get_action, and for action.name == 'no-op' skips env.step and deep-copies the belief, so in-place belief mutations made inside get_action survive.",
+      "evidence": "<git>/tampura/tampura/policies/policy.py:105-153 (loop; :108 reward; :120 get_action; :125-127 no-op branch 'bp = copy.deepcopy(b)'; :138 reward after); env_configs/find_dice.yml:6 (max_steps: 20)",
+      "confidence": "verified"
+    },
+    {
+      "claim": "WHAT THEIR CODE JUDGED: only get_reward(abstract_belief) = And(Exists(is-target & holding), at-home), where holding comes from belief.grasp/grasp_body and at-home from np.allclose(current_conf, DEFAULT_ARM_POS, 1e-4); all three fields were written by belief_bridge; their execute_fn/effects_fn/observation model and SceneState update never ran because env.step is skipped on no-op.",
+      "evidence": "<git>/tampura/tampura/spec.py:140-143; tampura_environments_full/tampura_environments/find_dice/env.py:306-323 (abstract), 993-1004 (reward), 924-991 (action schemas with execute_fn never invoked); archive/tampura_bridge_v1/belief_bridge.py:44-58; archive/tampura_bridge_v1/_belief_smoke.py:38-50 (proves the writes alone flip reward 0 -> 1.0)",
+      "confidence": "verified"
+    },
+    {
+      "claim": "TAMPURA's own success metric is rewards[-1] == 1.0 on the terminal belief (also belief-based, self-reported by their executor), so comparability requires the bridge arm to be scored by the same rule, not by policy flags.",
+      "evidence": "scratchpad/wsl_tampura/tampura_sweep.py:186-195 and metric_notes :94; find_dice/env.py:297-299 (their holding atom set from observation.grasp)",
+      "confidence": "verified"
+    },
+    {
+      "claim": "RELAXED DOMAIN: domain_find_dice.pddl removes Grasp/Config/at_config/kin_solution from pick and boxel_fits/kin_solution/at_config from place, adds (at_sense_config), (at_home), go_home and (not (at_home)) effects; the header calls pick 'RELAXED ... (user-sanctioned MODIFIED action)'.",
+      "evidence": "pddl/domain_find_dice.pddl:5-14, 61-62, 219-249 (pick (?o ?b)), 260-282 (place (?o ?b)), 326-337 (go_home); contrast pddl/domain_pddlstream.pddl:234-264, 275-304",
+      "confidence": "verified"
+    },
+    {
+      "claim": "STREAMFUL DOMAIN DELTA: domain_find_dice_streamful.pddl keeps the streamful pick/place/move/stack but drops (boxel_fits ?o ?region) from sense, adds go_home and (not (at_home)) effects on pick/place/stack, and predates the main domain's placement_hides/place_hiding and stack cost 3.",
+      "evidence": "pddl/domain_find_dice_streamful.pddl:101-116 (sense without boxel_fits), 142-167, 172-196, 201-224, 231-242; pddl/domain_pddlstream.pddl:169-191 (sense with boxel_fits at :183), 60-61, 314-338, 377",
+      "confidence": "verified"
+    },
+    {
+      "claim": "SHADOW->OCCLUDER WIRING: the bridge sets created_by_boxel_id on each shadow and feeds a shadow_occluder_map so blocks_view_at is emitted; without it sense would ground without relocating the cup. This mirrors the main pipeline's census and is legitimate, but the comment shows the discovery of the die never came from the sensed region (lateral shadows do not contain it).",
+      "evidence": "archive/tampura_bridge_v1/boxelize.py:73-77, 12-15 (containment vs shadow note); archive/tampura_bridge_v1/boxel_policy.py:183-191; pddlstream_planner.py:697-712 (main shadow_occluder_map); archive/tampura_bridge_v1/boxel_policy.py:348-349 (reveal = 'die' in whole-scene re-segmentation)",
+      "confidence": "verified"
+    },
+    {
+      "claim": "PLANNER INJECTION PATTERN: BoxelBridgePlanner skips PDDLStreamPlanner.__init__ and sets attributes by hand (registry, robot_id, shadow_occluder_map, camera_pos, tray_name=None, streams, home_config, domain, stream pddl); plan/_build_init are inherited. Fragile to drift in the main __init__ but not itself a decision injection.",
+      "evidence": "archive/tampura_bridge_v1/planner_boxel.py:28-50",
+      "confidence": "verified"
+    },
+    {
+      "claim": "STREAMS FORK: streams_boxel.py and robot_utils_boxel.py are byte-forks of the shared streams.py/robot_utils.py made to avoid touching shared files during a live sweep; they carry robot-agnostic RobotModel threading, 300-iteration IK, FK tolerance 0.01 and seed-closest multi-start solve_pose_ik, all of which have since drifted from the #P1 main pipeline.",
+      "evidence": "archive/tampura_bridge_v1/streams_boxel.py:4-7, 193-196, 217-230, 615-673; archive/CODEBASE_AUDIT_FINAL.txt:565-569",
+      "confidence": "verified"
+    },
+    {
+      "claim": "ROBOT MODEL RESOLUTION BY NAME: build_robot_model queries their live Panda's ARM_GROUP/GRIPPER_GROUP joints, link_from_name('panda_grasptarget'), joint limits, DEFAULT_ARM_POS and structural self-collision pairs (with a restored resetJointState probe) -- robot wiring with no task decision; reusable.",
+      "evidence": "archive/tampura_bridge_v1/tampura_robot.py:33-57, 60-98",
+      "confidence": "verified"
+    },
+    {
+      "claim": "MONKEYPATCH OF THEIR CLASS: suppress_tampura_visibility_voxels no-ops VoxelGrid.draw_intervals at runtime (rendering only); their files are not edited but their code is altered in-process.",
+      "evidence": "archive/tampura_bridge_v1/boxelize.py:120-131; archive/tampura_bridge_v1/run_boxel_on_finddice.py:63",
+      "confidence": "verified"
+    },
+    {
+      "claim": "CAMERA CHOICE: the bridge substituted a fixed external camera (occluder-centroid target, eye at y-0.3, z+0.9) for TAMPURA's wrist camera, locked on first build; die-independent by construction but a model substitution that must be declared, and its pose was probed against die visibility.",
+      "evidence": "archive/tampura_bridge_v1/perception_adapter.py:58-70, 88-102; archive/tampura_bridge_v1/boxel_policy.py:124-125, 148-150; archive/tampura_bridge_v1/_cam_check.py:37-49",
+      "confidence": "verified"
+    },
+    {
+      "claim": "NAMING VIOLATION (H6): functions execute_faithful_pick/place and nine capture files are named 'faithful'.",
+      "evidence": "archive/tampura_bridge_v1/execution_bridge.py:86, 123; archive/tampura_bridge_v1/captures/faithful_pick_*.png (8 files) and item12_planner_faithful_pick.png",
+      "confidence": "verified"
+    },
+    {
+      "claim": "THE 100% CAME FROM THE KINEMATIC GENERATION: CODEBASE_AUDIT #119 states the Phase 3-C bridge hits 20/20 ONLY because it executes kinematically (no motion planning, no collision checks, no physics) on guaranteed-solvable scenes, and #120 calls the 20/20 an ARTIFACT of zero streams, kinematic IK moves, weld/teleport, and an AABB oracle over every body including the hidden die.",
+      "evidence": "archive/CODEBASE_AUDIT_FINAL.txt:495-499, 521-526, 528-562; scratchpad/TAMPURA_PLAN_HEAD.md:552-569 (PHASE 3-C RESULT)",
+      "confidence": "verified"
+    },
+    {
+      "claim": "NO PER-SEED RECORD of the kinematic 20/20 exists in the archive: there is no sweep driver and no results JSON for the bridge; run_boxel_on_finddice.py runs one seed and prints one RESULT line.",
+      "evidence": "directory listing of archive/tampura_bridge_v1 (no sweep script, no results file); archive/tampura_bridge_v1/run_boxel_on_finddice.py:49-78; grep of scratchpad for 'RESULT seed|boxel_run' found only plan prose (TAMPURA_PHASE3B_PLAN_HEAD.md:197, 260, 267, 276)",
+      "confidence": "likely"
+    },
+    {
+      "claim": "ORACLE VISIBILITY (earlier generation): the adapter still carries oracle_detect_objects (AABB-corner oracle over all bodies via foreign-self reuse of BoxelTestEnv) which CB#120(e) identified as reading ground truth; the later policy used segment_visible, but the oracle path remained callable and was used by probes.",
+      "evidence": "archive/tampura_bridge_v1/perception_adapter.py:177-188; archive/tampura_bridge_v1/_sense_smoke.py:82; archive/tampura_bridge_v1/_cam_check.py:46; archive/CODEBASE_AUDIT_FINAL.txt:545-549",
+      "confidence": "verified"
+    },
+    {
+      "claim": "PAPER_AUDIT #P4 recorded the no-op-policy harness as 'acceptable for the paper (it drives their env, belief, and reward untouched)' and left native execute_fn execution optional; this forensic read qualifies that: the harness drives their reward FUNCTION untouched but every reward INPUT was bridge-written.",
+      "evidence": "PAPER_AUDIT.txt:3200-3203; archive/tampura_bridge_v1/belief_bridge.py:1-12, 44-58",
+      "confidence": "verified"
+    }
+  ],
+  "design_relevant_details": [
+    "DETECTION T1 (welds/teleports): grep the bridge tree for 'createConstraint|resetBasePositionAndOrientation|resetJointState|set_group_positions|set_pose\\(|changeDynamics'; every hit must be in an allowlist (file:line + audit entry) or CI fails. Would have caught execution_bridge.py:34-35,57,62,101,114-116,152; execution_boxel.py:69,105,183,236-238; sense_config.py:34; robot_utils_boxel.py:599-600.",
+    "DETECTION T2 (ground-truth reads): grep policy/perception/planner/executor modules for 'getBasePositionAndOrientation|get_pose\\(|get_aabb\\(|getAABB\\(' and fail unless the call is inside a module named scoring/verification; would have caught perception_adapter.py:127-128, execution_boxel.py:88,102,191,285-287, boxel_policy.py:379, streams_boxel.py:419,491.",
+    "DETECTION T3 (executed vs planned ledger): log the planner's returned plan and every executed primitive with its plan-step index; assert executed sequence == planned sequence (same names, same order, no insertions, no deletions); count executed primitives not in the plan and require 0. Would have caught the dropped 'move' actions (boxel_policy.py:225-226) and the unplanned go_home parks (:295-296, :345-348).",
+    "DETECTION T4 (place destination fidelity): for each executed place assert |executed xy - registry.get_boxel(planned ?b).center.xy| < tolerance; would have caught _next_place_xy (boxel_policy.py:160-176, 331).",
+    "DETECTION T5 (belief-input provenance): every id in known_empty_shadows passed to planner.plan must have a matching mark_sensed(found=False) event from an executed sense in the ledger; would have caught known_empty_shadows=all_shadows (boxel_policy.py:253-258) and the cup-name bookkeeping (:352-353).",
+    "DETECTION T6 (reward-write provenance + CB#123 regression): belief writes (holding / at-home) must be preceded in the same step by an executor status 'ok' AND an independent physical readback (max |q - DEFAULT_ARM_POS| below a declared tolerance; target body between both finger pads with two contacts and no constraint). Unit test: monkeypatch execute_go_home to return 'no_path' and assert terminal reward == 0 and fail_reason == 'go_home_no_path'; same for a lift that returns False (execution_boxel.py:263).",
+    "DETECTION T7 (scene literals): grep policy/planner/executor code for '\"cup_0\"|\"die\"|cup_[0-9]' and fail unless the hit is the category->name mapping in the adapter or a log string; would have caught boxel_policy.py:43,74-99,210-237,310,359 and execution_bridge.py:214.",
+    "DETECTION T8 (hidden-object isolation): at step 0 and after every sense, assert set(streams.object_body_ids.keys()) == set(registry OBJECT boxel names) == segment_visible(); a 'die' key present before reveal fails. Would have caught _streams_smoke.py:33 and perception_adapter.py:121-146.",
+    "DETECTION T9 (scene-knowledge constants): every executor constant (lift_height, approach_clearance, release offsets) must be derived from observed registry extents or equal the main pipeline's constant with a cited line; a justification mentioning the hidden object fails review. Would have caught execution_boxel.py:210-215.",
+    "DETECTION T10 (domain diff gate): diff pddl/domain_pddlstream.pddl against the bridge domain in CI and require the diff to be exactly the declared delta (added go_home action, (at_home) predicate and (not (at_home)) effects); any removed precondition (kin_solution, at_config, boxel_fits, placement_hides) fails. Would have caught domain_find_dice.pddl:219-282 and domain_find_dice_streamful.pddl:101-116.",
+    "DETECTION T11 (planner identity, no post-processing): assert type(planner).plan is PDDLStreamPlanner.plan and type(planner)._build_init is PDDLStreamPlanner._build_init; assert the executor receives the very list object solve() returned (id equality) and that no function between planner.plan and the dispatch loop filters or maps it. Would have caught _convert_plan (boxel_policy.py:215-238, 278).",
+    "DETECTION T12 (success-criterion parity): the sweep driver must compute success for BOTH arms as history.rewards[-1] == 1.0 (tampura_sweep.py:193) and assert the bridge's printed RESULT equals the reward-derived verdict per seed; would have caught run_boxel_on_finddice.py:69-74.",
+    "DETECTION T13 (fault-injection mutation test): per seed, inject 'no_path' at go_home, 'no_grasp_contact' at the die pick and a simulated slip after the lift; any injected run still scoring 1.0 fails CI.",
+    "DETECTION T14 (their-tree and in-process integrity): hash tampura_environments/ and tampura/ before and after each run (must be equal) and assert in headless eval that VoxelGrid.draw_intervals.__module__ and env methods are theirs (no monkeypatch; boxelize.py:120-131).",
+    "DETECTION T15 (runtime teleport trap): after env.initialize and streams build, wrap client.resetBasePositionAndOrientation and client.createConstraint for all task-object body ids to raise unless called inside the collision-check helper, and after each helper call assert every task body's pose is bit-identical to before (robot_utils_boxel.py:245-250, 305-307 restore).",
+    "DETECTION T16 (sense fidelity): each executed sense must be classified from rays/render over the PLANNED region id (as execution.handle_sense_action does, execution.py:2460-2521) and the reveal event must be attributed to that region; a reveal that comes from a whole-scene re-segmentation outside a sense action (boxel_policy.py:348-349) fails.",
+    "DETECTION T17 (visibility path): grep the episode path for 'oracle_detect_objects' and fail; only the render/segmentation path may classify visibility (perception_adapter.py:104-119 vs 177-188).",
+    "DETECTION T18 (naming lint H6): grep bridge code, captures and audit prose for 'faithful' and fail.",
+    "DETECTION T19 (timing comparability): assert all planning and execution happens inside Policy.get_action so TAMPURA's RolloutHistory.time_deltas (loop_s) covers it, run headless (no GUI time.sleep in follow_trajectory/open_gripper), and record per-seed planner wall-clock separately from physics stepping.",
+    "DETECTION T20 (seed hygiene): assert random.seed/np.random.seed(global_seed) are set before env.initialize and that no bridge code consumes the global RNG before get_scene_data selects the problem JSON (find_dice/env.py:830); compare the loaded problem file name per seed against TAMPURA's run for the same seed.",
+    "INTERFACE FACTS for the restart: their reward atoms are holding(?o) from belief.grasp/grasp_body and at-home from np.allclose(current_conf, DEFAULT_ARM_POS, rtol=1e-4, atol=1e-4) (find_dice/env.py:306-323); their action schemas pick/place/look/go-home with execute_fn (env.py:924-991); their rollout no-op special case at policy.py:125-127; find_dice.yml max_steps 20; their cups/die are static bodies (mass <= 0) that TAMPURA only looks behind (execution_boxel.py:178-183 note); their Panda: arm joints 0-6, fingers [12,13], EE panda_grasptarget link 14 (tampura_robot.py:1-9, 28-30); their wrist camera is the sensing camera (sense_config.py:4-13).",
+    "REUSABLE IN PRINCIPLE (with the stated condition): tampura_robot.build_robot_model (robot wiring by name); perception_adapter.segment_visible render path (declared simulated segmentation; must not consult the adapter's hidden-object table); perception_adapter._extract_table and FreeSpaceGenerator/ShadowCalculator/reboxelize wiring in boxelize.boxelize_scene (visible-only boxelization, boxelize.py:40-42); planner_boxel's injection pattern IF rebuilt from the current PDDLStreamPlanner.__init__ and loading the main domain plus a diffed delta; execution_boxel.follow_trajectory/_plan_follow IF they replay the planner's own move trajectories; run_boxel_on_finddice.py skeleton IF RESULT is reward-derived; belief_bridge.die_alias/cup_aliases lookups (category-based, same information their is-target atoms expose).",
+    "POISONED, DO NOT REVIVE: execution_bridge.py (all); boxel_policy.plan_solve/plan_pick_goal/_next_place_xy/_convert_plan/_plan_attempt's all-shadows trick/_known_empty-by-cup/unplanned parks/go_home branch; execution_boxel._weld and the live-AABB grasp pose; lift_height tuned to the hidden die; both pddl/domain_find_dice*.pddl forks; the streams_boxel/robot_utils_boxel forks as files (upstream the RobotModel parameterization into streams.py/robot_utils.py or re-fork from the current #P1 code with a byte-diff test); 'faithful' naming."
+  ],
+  "honesty_risks": [
+    "Containment regions (looking under a cup) are the one model tweak the user allows; the trap is to implement them as a per-cup flag in the wrapper (the archived _known_empty-by-cup-name, boxel_policy.py:352-353, 193-205). They must be geometric belief boxels (cup footprint volume) with blocks_view_at from the cup, sensed by the existing sense action over that region id and eliminated only by mark_sensed(shadow_id, found=False) on an observation.",
+    "Their cups and die are static bodies; a bridge must make them dynamic or it cannot pick them (execution_boxel.py:178-183). This is a legitimate but material scene adaptation that changes their physics; it must be a declared audit entry with before/after, applied at build time for all task bodies (not lazily at pick time), and the same for fix_phantom_masses.",
+    "The place override was justified by hidden-die knowledge (boxel_policy.py:325-330). Any 'helper heuristic' for destinations, lifts or camera poses that is motivated by where the die might be is an oracle in disguise; the planner's destination must be executed as planned and a bad destination must be allowed to fail honestly.",
+    "Dropping planned move actions and re-planning transit in the executor (boxel_policy.py:225-226) is plan post-processing even though the main pipeline also plans motion at runtime; the restart must execute the planner's move trajectories (test_full_pipeline.py:1515) or declare any runtime re-plan as the main pipeline's own documented behaviour, identically.",
+    "Success is a belief write (mark_holding/mark_at_home) that their reward trusts (belief_bridge.py:44-58). The implementer can slide into writing at_home from the constant DEFAULT_ARM_POS (as before) because a physically driven arm will not match their 1e-4 allclose; the honest options are to feed their abstract() the real joint readback and accept failures, or to declare a tolerance rule in the record. Never write the constant.",
+    "The die's body id and true pose are available from the adapter's object table and from streams.object_body_ids from step 0 (perception_adapter.py:121-146, _streams_smoke.py:33); any code path that resolves 'die' before a sense revealed it is an oracle read, including the streams' pre-sense AABB fallback (streams_boxel.py:415-422) which must become a declared target-class size prior.",
+    "Grasping at the object's live simulator AABB centre (execution_boxel.py:191-197) is a true-pose read; the main pipeline post-#P1 WP2b uses the registry estimate (test_full_pipeline.py:1804-1807). The bridge must do the same or it is comparing a pose-oracle executor against TAMPURA.",
+    "The forced-success pattern (status discarded, boxel_policy.py:372-381; lift return ignored, execution_boxel.py:263) recurs whenever an executor returns a tuple and the caller unpacks with '_'. Every executor status must be threaded and asserted; CI needs the fault-injection test.",
+    "Both archived domains were forks that removed preconditions (relaxed pick/place; sense without boxel_fits). A 'small tweak' must be expressed as a diff against pddl/domain_pddlstream.pddl and reviewed as such; a copied file hides removals.",
+    "The streams/robot_utils forks were made to protect a live sweep and then drifted (pre-#P1 weld, resetJointState open). Reviving them would silently reintroduce welds; the restart must build on the current shared code (PAPER_AUDIT.txt:3166-3168).",
+    "A fixed external camera replaces their wrist camera (perception_adapter.py:58-70); it is a declared model substitution only if its pose rule is scene-agnostic and fixed before any run, and never tuned by probing die visibility (as _cam_check.py did).",
+    "The segmentation-mask visibility maps body ids to names (perception_adapter.py:116-119); this perfect segmentation is the thesis's perception model and is used by the main pipeline too, but it must be stated in the record so a reviewer does not read it as an oracle.",
+    "Timing comparability: TAMPURA's loop_s includes planning plus their kinematic execution; ours includes RRT plus physics stepping; GUI sleeps (follow_trajectory, open_gripper) inflate it. Headless runs with separately recorded planner time are required, and the 5x solve retry (boxel_policy.py:265-283) must be counted in the episode clock.",
+    "Success scoring must be identical for both arms (history.rewards[-1] == 1.0, tampura_sweep.py:193); a bridge-side RESULT line (run_boxel_on_finddice.py:69-74) is a second judge and must not be quoted.",
+    "The archived 20/20 has no per-seed record; any future headline number needs the per-seed JSON, console logs and the fault-injection evidence, or it cannot be audited."
+  ],
+  "open_questions": [
+    "How should their at-home atom be satisfied honestly when the arm is driven by physics: feed SceneBelief.current_conf the real joint readback (their 1e-4 allclose will mostly fail) or record a declared tolerance; this is the main design decision for the success channel.",
+    "Should the restart execute through their action schemas' execute_fn/effects_fn (env.step) instead of the no-op harness, so their observation model judges holding/known-pose, as PAPER_AUDIT.txt:3200-3203 left optional?",
+    "Is the main pipeline's own pre-sense target AABB fallback (streams.py counterpart of streams_boxel.py:415-422, audit #55) already declared as a known target-class size prior, or is it an undeclared ground-truth read that the bridge would inherit?",
+    "Does the current PDDLStreamPlanner.__init__ (post F6 sense gate, F31 placement_hides) carry attributes that a by-hand subclass like planner_boxel.py:40-49 would miss; the injection pattern must be rebuilt from the current constructor.",
+    "Where, if anywhere, does a per-seed record of the kinematic 20/20 exist (WSL runs/ directory?); the archive has none.",
+    "How will containment regions be generated from a visible cup without knowing whether anything is under it: as a footprint volume for every occluder (uniform prior) with a declared hideability test using a target-class size prior?",
+    "Static-to-dynamic conversion of their cups changes their physics: does TAMPURA's own run need the same conversion for parity, or is the asymmetry (they never pick) declared as inherent to the comparison?"
+  ]
+}

@@ -1,0 +1,1353 @@
+================================================================================
+#P4 RESTART PLAN (2026-10-25/26): OUR PIPELINE ON TAMPURA'S FIND_DICE, SEED
+     FOR SEED.  [OPEN]
+================================================================================
+Branch tampura-bridge, cut 2026-10-25 from main-paper-icaps-2027 (the renamed
+p1-real-grasp-perception) at c31cbdd.  This is version 4 of the plan.  Evidence
+folder: archive/tampura_bridge_plan_2026-10-25/ holds the six ground-truth maps
+written by read-only reader agents (map_tampura, map_model, map_execution,
+map_forensics, map_thesis, map_eval), draft 1 and versions 2 and 3 of this plan
+(plan_draft_1.txt, plan_version_2.txt, plan_version_3.txt), the round-1
+critiques of draft 1 (reviews/critique_r1_*.json), the round-2 and round-3
+verification critiques of versions 2 and 3 (reviews/verify_r2_*.json,
+reviews/verify_r3_*.json) and the TAMPURA 2026-05-26 baseline (per-seed JSON,
+sweep driver, find_dice.yml).  This section supersedes the CB#120 / CB#123
+requirement notes above as the work order; those notes stay as history.
+Markers: [OPEN] / [DONE] / [REJECTED] / [ABORTED].  Decisions and fixes made
+while executing are BF#1, BF#2, ... appended in P4.14, one entry each.
+
+--------------------------------------------------------------------------------
+P4.0  WHAT THE USER ASKED FOR (2026-10-25, binding)
+--------------------------------------------------------------------------------
+"Make little changes and just let our setup work on their find_dice problem.
+We might need to change our model to allow the idea of looking underneath a
+certain kind of object.  Every tweak is honestly reported.  Then run this on
+TAMPURA's env vs the TAMPURA system on the same seeds and see who did better,
+how quickly.  No welds, no oracles, no hardcoded solutions.  The planner stays
+the same; a different planner is out of scope.  The point is to make the thesis
+claims comparable, and as a result provable or at least justifiable.  Any
+change that breaks that honesty is flagged and aborted.  All changes stay
+faithful to the POD line of work.  Later: other tasks, possibly LW1 in a 3D
+Wumpus world.  Keep a documented record of every decision and fix in the style
+of the codebase audit."
+
+THE FAILURE THAT MUST NOT REPEAT.  The first bridge (archive/tampura_bridge_v1,
+discarded 2026-08-20) scored 20/20 because bridge code, not the planner, chose
+which cup to move (boxel_policy.py:83-98 hand-built a one-cup init so exactly
+one plan existed), where to place it (_next_place_xy, :160-176, justified in a
+comment by where the hidden die was), deleted the planned move actions and
+re-planned transit itself (:215-238), parked the arm before every sense without
+a planned action (:295-296, :345-348), declared every shadow known-empty
+without an observation once the die was visible (:248-258), swapped the domain
+through a planner subclass (planner_boxel.py:28-49), welded the grasp
+(execution_boxel.py:94-107), grasped at the object's live simulator AABB
+(:191-197), kept the hidden die's body id in the streams from step 0
+(_streams_smoke.py:33), and wrote at_home and success into TAMPURA's belief
+whether or not the arm had moved (boxel_policy.py:372-381, CB#123).  The
+planner only ever emitted [pick cup, place, sense, pick die, go_home].
+
+--------------------------------------------------------------------------------
+P4.1  HONESTY CONTRACT H1-H6 AND THE GATES G1-G21 THAT ENFORCE IT
+--------------------------------------------------------------------------------
+H1  No welds or constraints, no teleports of task objects or of the robot, no
+    ground-truth reads (true poses, body-id matching beyond the declared
+    identity map, TAMPURA's belief or world internals) feeding any decision:
+    planning, perception, belief update, success scoring.
+H2  The planner is PDDLStream + Fast Downward exactly as in the main pipeline:
+    no planner swap, no domain swap outside a declared and generated delta, no
+    plan post-processing, no hardcoded action sequence, no scripted decision
+    logic, no robot motion outside a planned action.  Every WHAT / WHERE /
+    ORDER decision is the planner's, computed from the belief.
+H3  Model tweaks are allowed only if small, expressible in the thesis's POD
+    model (belief as literals over named regions, a sense action with a
+    deterministic observation, hidden regions as belief volumes, discovery by
+    relocation and sensing, optimistic determinisation, replanning), and each
+    has its own audit entry with BEFORE / AFTER / CLAIM EFFECT lines.
+H4  Seed for seed: TAMPURA's exact seeds 0-19, their scene files untouched,
+    their success criterion, honest failures counted.  No seed- or scene-
+    specific code; no decision rule fitted to the released layouts.  Never
+    edit their tree.
+H5  Anything that cannot satisfy H1-H4 is flagged and ABORTED in this record,
+    never worked around.
+H6  No adaptation is named "faithful"; neutral verbs (execute_pick).  Prose for
+    the user and the paper carries no dashes.
+
+GATES.  tools/bridge_gates.py (B0) implements every gate as a runnable check;
+it runs before every bridge commit and before any quoted number.  Each gate
+names the archived violation it would have caught.  Every runtime hook below
+both raises AND increments a violation counter that is read after the episode
+(G21), because main-pipeline diagnostics swallow broad exceptions
+(world_eye.py:172-176, telemetry.py:201-205).
+G1  Weld/teleport grep over tampura_bridge/ and every main-pipeline module the
+    bridge imports: createConstraint, changeConstraint, removeBody,
+    createMultiBody, loadURDF, resetBasePositionAndOrientation,
+    resetBaseVelocity, resetJointState, resetJointStateMultiDof(s),
+    applyExternalForce, applyExternalTorque, setCollisionFilterPair,
+    setCollisionFilterGroupMask, set_group_positions, set_pose(,
+    changeDynamics, setGravity, setTimeStep, setPhysicsEngineParameter.  Every
+    hit is on an allowlist (file:line + BF# entry) or the gate fails.  The
+    allowlist starts with the plan-twin mirror writes; D9's pre-registered
+    set-up; our own scene construction in boxel_env (_setup_scene and the
+    spawn helpers, unreachable on the adopt-client path, asserted by B3(b));
+    the save/probe/restore writes of robot_utils.is_config_collision_free
+    (robot_utils.py:235, 269, 324, 327; plan client at run time); and those of
+    robot_utils.solve_ik (:566, 618, 671; the G14 exemption).
+    (execution_bridge.py:34-35,57,62,101,114-116,152; execution_boxel.py:69,
+    105,183,236-238; sense_config.py:34; boxelize.py:150-152.)
+G2  Ground-truth read grep over decision code (policy, planner, streams,
+    perception, executor): getBasePositionAndOrientation, get_pose(, get_aabb(,
+    getAABB(, rayTest(, rayTestBatch(, world.poses, belief.object_poses,
+    visibility_grid, reads of ObjectInfo.position.  Allowed only in the
+    scoring adapter's contact and joint readback, the plan-twin mirror, ray
+    casts whose client is the plan twin (B3(c); G8(b) checks the client at
+    run time) and a declared WRITE-ONLY set (world_eye, telemetry, the
+    print-only diagnostics at execution.py:605-606, 657-658, 1132, 1260, and
+    the D9 after_settle hook); a test asserts that no value from the
+    write-only set reaches the registry, the belief, the planner or the
+    executor.
+    (perception_adapter.py:127-128; execution_boxel.py:88,102,191,285-287;
+    streams_boxel.py:419,491.)
+G3  Executed-vs-planned ledger plus a motion-layer hook.  Every executed
+    primitive is step i of plan k, executed in order from step 1 with
+    identical args, no skips, no insertions; a plan ends early only on an
+    enumerated and logged trigger (sense outcome, integrity replan, IK
+    failure, give-up, deadline); the runtime plan_motion re-solve before a
+    move is logged with its goal configuration equal to the planned one.  The
+    dispatcher sets and clears a context (plan id, step index); a hook on
+    pybullet.setJointMotorControl2/Array, setJointMotorControlMultiDof(Array)
+    and robot_utils.move_robot_smooth for the executing robot fails when no
+    context is active, so motion commanded
+    from outside the dispatcher (execute_fn before or after main(), the env
+    adapter, the scoring adapter) cannot pass.  (Dropped moves boxel_policy.py:
+    225-226; parks at :295-296, :346-347, which ran outside any dispatcher.)
+G4  Place destination fidelity: |executed xy - registry.get_boxel(planned
+    boxel).center.xy| below the executor's own tolerance.  (_next_place_xy.)
+G5  Belief provenance.  Every SHADOW boxel (lateral or interior) that leaves
+    the registry, leaves the belief, or changes status carries a provenance
+    row written at the classifier call site, from an enumerated channel:
+    planned sense render; full-registry sweep render (execution.py:2185-2201);
+    lost-caster retirement render (execution.py:2105-2125); rediscovery
+    retirement render (M7); strike park (unresolved, counted separately per
+    episode); "observed before placement" (D6, with the free-cell record it
+    rests on).  A removal or status change with no render of that region's
+    grid and no listed channel fails.  If the user rejects M7 (Q10), one more
+    channel is enumerated, "superseded by recast, unrendered" (the rediscovery
+    cleanup at execution.py:2871-2884), counted per episode with each dropped
+    fragment's volume and disclosed as P4.5 correction (6); it is never
+    silent.  (known_empty_shadows = all_shadows, boxel_policy.py:253-258;
+    per-cup-name bookkeeping :352-353.)
+G6  Scoring channel.  The ONLY writer of TAMPURA's belief inputs is
+    tampura_bridge/scoring.py (D3).  POSITIVE controls run first and must
+    pass: a verified two-pad hold of the die body with the arm at
+    DEFAULT_ARM_POS yields get_reward 1.0; the same hold of a cup body yields
+    0.0.  Then the fault injections: go_home no_path, a failed lift, a slip
+    after the lift; each must end with rewards[-1] == 0.0.  The arm readback
+    is logged at main() return and at observation build, and the two must be
+    bit-identical; stepSimulation calls on the executing client outside
+    main() (before it starts and after it returns) are counted and must be 0,
+    so no post-hoc settle can carry the arm toward the 1e-4 boundary.  The
+    RolloutHistory pickle loads in their venv without tampura_bridge on
+    PYTHONPATH (B1(j) tests the round trip; D12).  (CB#123.)
+G7  Scene-literal grep: "cup_0", "die", cup_[0-9], problem file names, any
+    value read from problems/*.json in a decision module.  Allowed only in
+    task_spec.py (category table) and log strings.  (boxel_policy.py:43,
+    74-99, 310.)
+G8  Identity-map boundary.  (a) The env adapter's object table is the seg-id
+    to name and category map built from their world.objects and
+    world.categories, the same map their obs_from_camera_image applies
+    (env.py:70-73); it carries no pose, orientation or AABB for any body
+    without an OBJECT boxel.  (b) Runtime hook: pybullet getAABB,
+    getBasePositionAndOrientation, getClosestPoints and getContactPoints
+    raise when called on the executing client with the body id of a TASK
+    body that has no OBJECT boxel (the robot, the plane and the table are
+    outside this rule; the executor's tactile queries with bodyA = robot
+    stay legal, execution.py:483, 1169, 1255), and rayTest and rayTestBatch
+    raise on the executing client outright; exceptions: the plan-twin static
+    branch, the scoring adapter and the G2 write-only set.  (c) After every
+    sync, every
+    boxel-less body in the plan twin sits at _PLAN_CLIENT_PARK.  (d) The paper
+    states the identity map (seg id to category) as the perception assumption
+    both systems share; the main pipeline already hands the target's id to the
+    sense classifier as its recognition stand-in (execution.py:88-89, 2474).
+G9  Constant provenance.  Every constant the bridge passes into perception,
+    planning or execution is the main pipeline's value with a cited line, or
+    derived ONCE from the Panda URDF, the YCB meshes, a constant in their
+    source (cited) or a scene-independent probe on an empty table, recorded
+    in a BF# entry.  Forbidden sources: instance poses, problems/*.json, the
+    released layouts, the seed, any episode outcome.  (lift_height tuned to
+    the hidden die, execution_boxel.py:210-215.)
+G10 Planner and domain identity, unconditional.  At every plan() call:
+    type(planner) is PDDLStreamPlanner and type(planner.streams) is
+    streams.BoxelStreams exactly (no subclass); sha256 of planner.domain_pddl
+    and planner.stream_pddl equals pddl/domain_pddlstream.pddl and
+    pddl/stream.pddl, or, when M1 is adopted, the file tools/
+    gen_bridge_domain.py regenerates from them plus the declared delta (P4.5
+    M1); the regenerated file contains every precondition of the live domain.
+    (planner_boxel.py:28-49; domain_find_dice.pddl:219-282;
+    domain_find_dice_streamful.pddl:101-116.)
+G11 Planner call path.  (i) No pddlstream import in tampura_bridge/ or in any
+    episode-path module other than pddlstream_planner.py and streams.py.
+    (ii) A hook on the solve name bound in pddlstream_planner (imported at
+    module load, :33) asserts that the caller is PDDLStreamPlanner.plan and
+    that the number of solve calls equals the number of plan ids in the
+    ledger.  (iii) The list object PDDLStreamPlanner.plan returned is the
+    list the dispatcher iterates (id equality, loop variable logged per
+    step).  (Hand-built init + direct solve, boxel_policy.py:68-105;
+    _convert_plan :215-238.)
+G12 Success parity: success for BOTH arms is rewards[-1] == 1.0 from each
+    arm's RolloutHistory.  No bridge-side RESULT line is quoted anywhere.
+    (run_boxel_on_finddice.py:69-74.)
+G13 Their tree and their loop are untouched.  sha256 over `git ls-files` of
+    tampura and tampura_environments before and after every run, and `git
+    status` shows no modified tracked file (runs/, temp/, logs/, __pycache__
+    are acknowledged untracked outputs; pddlstream's TEMP_DIR is cwd
+    relative).  Every loaded tampura module's __file__ lies inside the hashed
+    trees.  Exactly two runtime registrations exist and are asserted: the
+    boxel_episode schema (arm O, D2) and the tampura_policy_timed policy (arm
+    T, P4.6); BoxelBridgePolicy is instantiated directly, not registered.
+    type(policy).rollout is Policy.rollout on both arms; the timed subclass's
+    __dict__ holds only __init__ and get_action; the env has no instance
+    attribute "step".  The T driver is run_planner.py's __main__ copied line
+    for line plus one import, kept identical by a diff check.  No monkeypatch
+    of their classes.  A pip freeze of arm T's venv is hashed before and
+    after every run and must not change (D12).  (boxelize.py:120-131.)
+G14 Runtime state trap on the pybullet MODULE (BulletClient forwards to it,
+    so one wrap covers both call styles): every state-changing call G1 greps
+    for dispatches on (physicsClientId, body id) and fails for any task body
+    AND for the robot on the executing client (createMultiBody and loadURDF
+    fail on the executing client outright), except: D9's pre-registered
+    set-up before the first physics step; the plan-twin mirror (plan client
+    only); the save/probe/restore of the plan-client robot in IK and
+    collision checks (streams.py:416-418, 470-473; robot_utils.py:235-327);
+    and robot_utils.solve_ik on the EXECUTING robot's arm joints, called by
+    execute_pick, execute_place, execute_stack and the post-action lift
+    (execution.py:880, 1058-1091, 1380-1381, 1582-1594), valid only inside a
+    dispatcher context and asserted net-zero by the hook: no stepSimulation
+    during the call and the arm's joint positions restored bit-identically on
+    exit.  solve_ik's resetJointState also zeroes the arm's joint velocities;
+    that is a main-pipeline property shared with our scenes and is disclosed
+    in its BF#.  Task-body poses in the executing world are asserted
+    unchanged across every collision check.  (A resetJointState of the arm to
+    DEFAULT_ARM_POS before scoring would be CB#123 moved from the belief into
+    the simulator; it is not net-zero, so it fails.)
+G15 Sense fidelity: a sense outcome is classified from the render of the
+    PLANNED region's grid (execution.handle_sense_action).  A body that
+    becomes visible elsewhere is registered by register_new_detections and
+    logged as discovery; both paths are legitimate, and disabling or delaying
+    discovery to make a sense "do it" is forbidden.  (Reveal by whole-scene
+    re-segmentation credited to a sense, boxel_policy.py:348-349.)
+G16 Oracle paths.  The env adapter (which inherits both from BoxelTestEnv)
+    overrides oracle_detect_objects to raise, and its call counter reads 0;
+    it overrides update_object_positions as a counted no-op that reads
+    nothing, because main() calls it unconditionally (test_full_pipeline.py:
+    564, 1734, 1845, 1906, 2085, 2153) and so does every release
+    (execution.py:623), while ObjectInfo.position, the field it writes, is
+    read only by spawn code and the Phase-4 oracle (boxel_env.py:1365;
+    test_full_pipeline.py:696), so skipping the read is decision-neutral.
+    G2's leak test asserts ObjectInfo.position is never read on the bridge
+    path.
+G17 Naming lint: "faithful" absent from bridge code, captures and prose.
+G18 Clock: between env.initialize() returning and the first env.step the
+    bridge performs only the schema registration.  D9's set-up, the settle,
+    the env adapter, the first render, boxelization and shadow casting run
+    inside execute_fn, so their RolloutHistory.time_deltas covers them, as it
+    covers TAMPURA's own t=0 stream sampling.  Ledger timestamps prove it; the
+    durations are logged.  Headless runs only during the campaign.
+G19 Seed hygiene on BOTH drivers: random.seed and np.random.seed(global_seed)
+    precede env.initialize exactly as run_planner.py does; no bridge or
+    driver code consumes the global RNG before get_scene_data; the loaded
+    problem file per seed equals the pinned map (P4.2) and is asserted;
+    PYTHONHASHSEED is pinned to one value for B1(g), both T repetitions and O.
+G20 Camera: a module-level hook on pybullet.getCameraImage for every client
+    checks that the view and projection matrices equal those their own
+    pbu.get_image_at_pose path computes at DEFAULT_ARM_POS (D4); write-only
+    captures (world_eye images, GUI panes) are declared by name.
+    (segment_visible rendered with its own 60 deg projection,
+    perception_adapter.py:110-115.)
+G21 Violation counters: every runtime hook of G3, G5, G6 (stepSimulation
+    outside main()), G8, G10, G11, G14, G16 and G20 increments a per-episode
+    counter written to the ledger; any count above 0 fails the episode's
+    gate check whatever happened to the exception.  P4.6 SUCCESS says how a
+    gate-failed episode is counted.
+
+REVIEW GATES (agents).  An adversarial pass with the lenses cheat (hardcoding,
+oracle, weld, scope), POD faithfulness, comparison validity and feasibility
+runs four times, each before the next package starts: (1) on the B2+B3
+diffs, before B4; (2) on the B4+B5+B6 diffs (every model tweak including M7,
+and the frozen constants with the D11 branch), before B7; (3) on B7's
+episodes and diffs, before B8; (4) on B8's campaign report.  This is the only
+list.  Reports go to archive/tampura_bridge_plan_2026-10-25/reviews/ with
+durable per-agent files.  This continues the user's 2026-09-18 mandate.
+
+--------------------------------------------------------------------------------
+P4.2  GROUND TRUTH IN ONE PAGE (verified 2026-10-25/26 against mirrored source)
+--------------------------------------------------------------------------------
+THEIR TASK.  find_dice: a Franka Panda (models/srl/franka_panda/panda.urdf;
+tool link panda_tool_tip; wrist camera link camera_frame, 640x480, fx=fy=525,
+so a vertical field of view of 2*atan(240/525) = 49.1 deg; their renders use
+near 0.02, far 5.0, up = world +z, target along the camera's +z axis,
+pb_utils.py:1836-1844, 1895-1908; finger joint upper limit 0.04 m in the URDF
+per the round-1 feasibility critique, while OPEN_GRIPPER_POS 0.045 is a code
+constant position control cannot reach; B1 re-verifies), a table whose top is
+z = 0, one YCB die plus 1 to 5 upside-down YCB cups (a..e_cups_ud) at x in
+[0.3, 0.7], y in [-0.4, 0.4].  Every YCB body is created with baseMass = -1
+(panda_env_utils.py:676-702), neither static nor a usable dynamic mass.  Their
+world NEVER sets gravity (no setGravity in find_dice, setup_robot_pybullet or
+the tampura package; PyBullet's default is zero) and never steps physics.
+Cups start 1 cm above their resting height (env_generator.py:117); in layouts
+1747173591 and 1747173593 the die sits at the hiding cup's centre point, about
+4 cm above the table, for the whole TAMPURA episode.  Exactly THREE scene files
+exist; get_scene_data picks one with random.choice after the global seed
+(env.py:801-811).  The die sits inside a d or e cup in ALL THREE layouts: at
+d_cups_ud's point in 1747173591, at e_cups_ud's point in 1747173593, 1.5 cm
+from d_cups_ud in 1747173590.  The generator required the die to be absent from
+the wrist camera's segmentation at DEFAULT_ARM_POS and each object's centre
+point (only) to project into that image (env_generator.py:131-148, 164-180).
+Pinned seed-to-scene map of the 2026-05-26 run (each console's "Loading scene
+from" line; os.listdir order dependent):
+  1747173590 (die + 4 cups) <- seeds 1,2,3,4,8,14,15,18   (TAMPURA 2/8)
+  1747173591 (die + 1 cup)  <- seeds 0,7,9,11,12,13,16    (TAMPURA 6/7)
+  1747173593 (die + 4 cups) <- seeds 5,6,10,17,19         (TAMPURA 3/5)
+Actions: pick(o,g) [requires not moved(o)], place(o,g,p), look(o1,o2,q)
+["look behind o2 for o1", depends moved(o2)], go-home [only while holding],
+no-op.  Streams sampled ONCE at t=0 (5 grasps from a saved per-mesh grasp
+library, 5 placements uniform on a shortened table x 0.1 to 0.85 with no
+inter-object collision check, 5 look confs 20 to 30 cm above each object's t=0
+pose).  Belief: known poses plus a 15 mm visibility voxel grid; voxels within
+7.5 mm of ANY known object's concave collision mesh are cleared, so the cavity
+of an inverted cup stays a die candidate without any per-class declaration.
+Perception hands out the TRUE pose of every body whose id appears in any pixel
+of the seg mask (env.py:57-75).  Execution is kinematic: headless trajectories
+TELEPORT to the last waypoint, the carried object follows the tool by
+resetBasePositionAndOrientation, picks cannot physically fail, nothing falls.
+Reward = Exists o: is-target(o) and holding(o), and at-home, evaluated on the
+abstract BELIEF over STORE SYMBOLS: abstract() emits holding(grasp_body) and
+is-target over the symbols in world.objects (env.py:306-321), and their own
+pick writes grasp_body = the object's store symbol (env.py:362, 394); at-home
+is np.allclose(conf, DEFAULT_ARM_POS, rtol=1e-4, atol=1e-4); their go-home
+reports DEFAULT_ARM_POS even when its motion plan failed (env.py:563-581).
+Rollout: exactly max_steps = 20 steps, no early stop, no-op after the goal;
+the store and env.state are deep-copied every step and the whole history is
+pickled at the end (policy.py:66, 106, 159); loop_s = time_deltas[-1] covers
+get_action (200 outcome samples per replan, each an IK, BiRRT or render; SymK
+itself 0.04 to 1.5 s per episode) plus env.step.  Local run 2026-05-26: 11/20,
+loop 240 +/- 151 s over all episodes, 166 +/- 85 s over successes; every
+inspected failure is the same degeneracy (a look that reveals nothing is
+re-selected to step 20 under the envelope rule, tampura_policy.py:83-99).  The
+policy hook: a Policy subclass with get_action(belief, store) -> (Action(name,
+store symbols), info, store); env.step resolves the schema by name on every
+call and ProblemSpec.verify accepts a schema with no preconditions or effects
+(environment.py:17-22, 62; spec.py:235-260); store.add_typed works after
+initialize (store.py:59-63).
+
+OUR MODEL.  Belief = BeliefState status per fragment (unknown / not_here /
+found / unresolved) plus one Know-If fluent obj_at_boxel_KIF.  sense(?o
+?region) needs handempty, view_clear(region), not KIF, boxel_fits; it
+optimistically asserts the target in the region; view_clear is derived from
+static blocks_view_at facts and the blockers' current boxels.  Sense takes no
+configuration: the camera is fixed (methods.tex:170).  Shadows are 2.5-D
+lateral volumes cast from the fixed camera from registered task bodies only,
+by rayTestBatch on the default client: none of the three cast sites passes a
+client (boxel_env.py:1512-1513; execution.py:2356-2357, 2979-2980), so in our
+scenes a ray can stop at a body not yet registered (PAPER_AUDIT item (h));
+an object's footprint is never inside a shadow (shadow_calculator.py:217-236);
+the robot is excluded from detection (boxel_env.py:1749-1752) and casts
+nothing.  Free space is the workspace box minus registered OBJECT and SHADOW
+AABBs (free_space.py:47-48, 86-102), and the planner gets KIF for the target
+on every OBJECT and free boxel on audit #67's premise that the camera covers
+the whole table (pddlstream_planner.py:667-681).  After a place the moved
+object's box is re-posed from the render and no new shadow is cast
+(test_full_pipeline.py:1910-1975, matching methods.tex:157); new fragments are
+cast only when a sense discovers or rediscovers a body (execution.py:2255-2384,
+2948-3003; the rediscovery path first deletes the body's old fragments from the
+registry and the belief without a render, :2871-2884, and carves the recast
+only against OBJECT boxels, :2960-2980, while register_new_detections also
+carves against existing fragments, :2278-2279; F9 bounds rediscovery to 3).
+The deleted area becomes free space and receives the not-here literal without
+an observation (pddlstream_planner.py:675-681): an unsound belief write in
+today's pipeline (M7).  After a move the loop names the joint readback after
+the target configuration whatever the residual (test_full_pipeline.py:
+1591-1597), and RobotConfig equality is by name (streams.py:118-124).  The
+goal is ('holding', target) (test_full_pipeline.py:762) and the loop ends as
+soon as the target body is held (_loop_done, :1201-1209); init gives Config
+and at_config only to current_config (pddlstream_planner.py:889-890); the
+planner's home_config is REST_POSES under the symbol q_home (streams.py:
+255-258).  The planner reads pddl/domain_pddlstream.pddl unconditionally
+(pddlstream_planner.py:177).
+Execution is physical since #P1: friction grasp with tactile verification,
+motor release, integrity checks; the one exempt hardcoded motion is the
+post-pick / post-place lift, 0.10 m in code (execution.py:869).  Execution-time
+IK runs on the EXECUTING robot: solve_ik saves the arm, resets it to the seed
+and to each candidate, and restores it (robot_utils.py:556-672); pick, place,
+stack and the lift call it (execution.py:880, 1058-1091, 1380-1381,
+1582-1594).  Our env sets gravity -9.81 right after resetSimulation
+(boxel_env.py:510-511) and, in _setup_scene, finger-pad lateral friction 1.2
+and fingers opened to 0.04 (boxel_env.py:810-812, 824-828); every scene object
+gets lateral friction 1.0 (ObjectSpec default, boxel_env.py:91, applied at
+:674-677), so our grasp is validated at pad 1.2 against object 1.0, while
+their YCB bodies keep PyBullet's 0.5.  main() runs a 50-step settle and then
+env.update_object_positions() before Phase 2 (test_full_pipeline.py:562-564).
+Constants tied to our setup: Panda links
+9/10/11 hardcoded in five files; external camera at (0.1,-0.8,0.7), near
+0.01; table top 0.325; reach gate R 0.815 about a WORLD z of 0.066;
+GRASP_MAX_SPAN 0.076 compared with the ESTIMATED box (streams.py:719, 819);
+the pick contact floor table_z + 0.035 (execution.py:1034-1037), which lies
+ABOVE the top of a die of about 2 cm; the endpoint settle of move_robot_smooth
+stops at 2e-3 rad (robot_utils.py:780), twenty times their at-home tolerance;
+class priors 0.04 / 0.03 and sense-grid offsets derived from 3 to 4 cm cubes.
+execution.py and the robot_utils motion functions call the pybullet module on
+the DEFAULT client; their executing world is the first BulletClient they open
+(panda_env_utils.py:844-847).  Our pipeline is validated in wsl_env (Python
+3.10, numpy 2.2.6); their venv is Python 3.11, numpy 1.24.4, trimesh 4.12.2,
+scipy 1.15.3; pybullet is 3.2.7 in both.  Importing tampura pulls in torch,
+gymnasium, stable_baselines3 and tensorboard (tampura/__init__.py:1-3,
+policies/__init__.py:4, dqn_policy.py:11-16), none of which wsl_env has, and
+a pickle written under numpy 2.x does not load under numpy 1.24.
+
+THE GAP.  Their die is hidden by CONTAINMENT; our shadows are lateral and our
+objects are solid.  Their camera moves; ours is fixed.  Their goal needs
+at-home; ours stops at holding.  Their execution is kinematic and gravity-free;
+ours physical.  Their 20 seeds are 20 stochastic trials over three layouts.
+
+--------------------------------------------------------------------------------
+P4.3  DESIGN DECISIONS D1-D12 (each becomes a BF# entry once implemented)
+--------------------------------------------------------------------------------
+D1  WHAT RUNS: our WHOLE pipeline (main loop, PDDLStream planner, streams,
+    render-based perception, physical execution) inside TAMPURA's executing
+    PyBullet world, on their seeds, through their rollout.  Not a planner-only
+    port onto their kinematic controllers (that variant is B9, optional, needs
+    a user decision, and would be labelled "planners under TAMPURA's
+    executor").  The thesis claims concern the whole method.
+
+D2  HARNESS: BoxelBridgePolicy (instantiated directly) returns ONE action per
+    episode, a schema named boxel_episode appended at runtime to
+    env.problem_spec.action_schemas (no preconditions, identity effects_fn,
+    OUR execute_fn).  Their rollout, their env.step, their Belief.update and
+    their get_reward run untouched: our execute_fn performs D9's set-up,
+    builds the env adapter and calls main(), which settles (D9 step (5)),
+    takes the first render, boxelizes and runs the whole plan-act-sense loop
+    (bounded by the episode wall cap); execute_fn then returns the SceneState
+    it received and the D3 observation; their update
+    applies the observation; their reward judges it; steps 1..19 return no-op
+    (their no-op branch deep-copies the belief, so a reward reached at step 0
+    persists to rewards[-1] without any bridge write).  The info dict holds
+    only JSON-able values; our ledger lives in our files.  REJECTED: the
+    archived no-op policy that mutated their SceneBelief in place
+    (belief_bridge.py:44-58); it bypassed their observation channel and is
+    where the forced success lived.
+
+D3  SCORING CHANNEL: tampura_bridge/scoring.py ObservationAdapter builds the
+    terminal observation from physical readback only:
+    SceneObservation(camera_image=None, poses={}, grasp=G, grasp_body=S,
+    conf=Q).  S is the store symbol s in env.sim_world.objects with
+    store.get(s) == the body id that both finger pads contact with squeeze
+    force >= 0.5 N (the harness's _verify_holding rule) and no constraint on
+    that body, resolved with the same lookup their obs_from_camera_image uses
+    (env.py:70-73); never chosen by name; None when the pads hold nothing or a
+    non-task body.  G is a store symbol of type grasp added once through
+    store.add_typed(<plain tuple: position, quaternion, width>, 'grasp') when
+    S is not None, so deep copies and the pickle stay plain data.  Q is the
+    real readback of the 7 arm joints, never a constant.  camera_image and
+    poses stay empty: the reward does not read them, and a render through
+    their perception would pull true poses into scoring for no effect.  The
+    symbol lookup is the ONLY store read in scoring.  TAMPURA's own go-home
+    reports at-home on a failed motion plan; ours cannot, so our arm is scored
+    stricter on this point, which is disclosed, not imitated.
+
+D4  CAMERA: a FIXED EXTERNAL camera with exactly the view their own
+    pbu.get_image_at_pose computes for camera_frame at DEFAULT_ARM_POS (eye,
+    target along the camera's +z, up = world +z, near 0.02, far 5.0, 640x480,
+    fx=fy=525), rendered with our TinyRenderer path, declared once in
+    task_spec.py and used for every render (G20).  It is the thesis's sensor
+    model unchanged (a fixed eye; sense calls no streams; methods.tex:170)
+    placed at the viewpoint of their generator's hidden check, so "hidden at
+    t=0" means the same thing for both systems.  It is a declared extra sensor
+    with respect to their robot, not a ground-truth read.  When the arm is at
+    home its hand is in frame exactly as in their check (B1(e) measures what
+    it hides; D8 removes that area from the workspace); when the arm is
+    elsewhere it can occlude the eye, which the sense classifier treats as a
+    blocker.  REJECTED: (a) the physical wrist camera, because every non-sense
+    render (census at planning time, pick re-observation, post-release checks,
+    integrity checks; execution.py:343, 720, 723, 821, 998, 1799, 1954, 2102;
+    test_full_pipeline.py:1936, 2169) would come from an unplanned moving
+    viewpoint, and the planning-time census would need a phantom render from
+    home or an unplanned move home (CB#120(g)); (b) an external camera at any
+    other pose, because it changes what "hidden" means relative to their
+    generator.  DISCLOSED in the headline itself (M5): our eye observes after
+    every action without moving the arm; theirs observes only on look, from
+    20 to 30 cm, and at initialize.
+
+D5  ARM CLEARANCE BEFORE SENSING (model tweak M1).  With the eye where the
+    hand rests at home, the arm away from home can block the eye's view of
+    the region it just uncovered; three still_blocked senses then park the
+    region.  The domain already handles the held object's self-occlusion with
+    the handempty precondition (added 2026-08-21 for exactly that reason).
+    M1 adds (at_config ?q) (sense_config ?q) to sense for a clearance
+    configuration q_clear, a Config object of its own carrying DEFAULT_ARM_POS
+    joints, reached by a planned move through move + plan-motion, with TODAY's
+    name-on-arrival semantics (the 2e-3 rad settle is ample for a geometric
+    clearance); it is NOT the goal symbol q_home and shares none of D7's
+    tolerance, hold or bound.  At q_clear the robot occludes exactly what it
+    occluded in the t=0 render the regions were cast from, and D8 removes that
+    area from the workspace, so every region inside the window is unoccluded
+    by the arm at q_clear by construction.  PRE-REGISTERED, SCENE-INDEPENDENT
+    RULE (B1(h)): on an empty table, for each declared hollow class at every
+    cell of the D8 window, render the class's interior footprint from the D4
+    eye with the arm at the post-place lift pose over that cell; if the worst
+    blocked fraction exceeds SENSE_MARGINAL_BLOCKED_FRACTION (0.05), M1 is
+    adopted, otherwise dropped.  Adoption is the expected outcome, and the
+    record says so.  LINEAGE: the discarded bridge gated sensing on
+    DEFAULT_ARM_POS through is_at_sense_config(atol=1e-4) and an at-home teleport
+    (archive sense_config.py:28-41; boxel_policy.py:54); M1 differs by being a
+    planned move with a planned motion, decided on measured geometry, with no
+    teleport and no tolerance shared with scoring; the M1 BF# cites this.
+
+D6  CONTAINMENT = INTERIOR REGIONS OF HOLLOW CLASSES (model tweak M2).  A
+    category declared hollow in task_spec.py, with cavity dimensions measured
+    once in B1(b) from the YCB mesh (inner footprint = AABB minus wall
+    thickness; cavity height), casts a SHADOW-typed belief region of kind
+    interior over that cavity, created_by the hollow object, wired like a
+    lateral fragment (belief.add_shadow, shadow_occluder_map, census, corridor
+    facts, sense over its grid), and carved on EVERY registration path
+    against all OBJECT boxels except its caster's and all existing SHADOW
+    fragments, interiors included (B5's one carve set; today's discovery
+    path carves laterals against OBJECT boxels only, P4.2, which M7 aligns).
+    The planner, the streams and the sense action are unchanged.  Interior
+    ids live in their own list (interior_boxel_ids), exempt from the
+    rediscovery cleanup at execution.py:2871-2884; an interior region leaves
+    the belief only through a render of its grid (G5).  An interior region is
+    a fixed region of space: when its caster is moved, it stays where it was
+    and its view-blocking fact releases.
+    STATUS RULE (pre-registered, decided by the observation record, never by
+    the code path, no per-object flag anywhere): whenever a hollow body is
+    registered from a render (initial boxelization, discovery, rediscovery,
+    re-registration after loss), its cavity footprint is tested against the
+    record.  If every part of it lies in space that was free inside the D8
+    window W when last imaged, or was rendered empty by a sense, sweep or
+    retirement render, the interior region is created not_here with
+    provenance "observed before placement" and the record it rests on (G5);
+    otherwise it is created unknown.  At every place the destination's
+    cavity footprint is logged with the free cells it covered.  Free cells
+    are the complement of the registered OBJECT and SHADOW regions inside W.
+    W is D8's scene-independent window, built on the EMPTY table (inside the
+    eye's 3-D frustum up to the tallest declared class height and free of
+    robot pixels in the home render, B1(e)); it never reads a layout.  The
+    record of when each cell was last imaged supplies the observational
+    part, so under the 2.5-D shadow model a free cell is observed space.
+    This reproduces the thesis's rule
+    for lateral shadows (a relocated object casts no new shadow,
+    methods.tex:157) with an observational justification.
+    REJECTED: a new region predicate (redundant with blocks_view_at +
+    view_clear); lift-and-look or sense-while-holding (contradicts handempty,
+    reopens scripted motion); interiors for every object (changes the thesis
+    scenes); a "cups already moved are empty" flag (the archived per-cup
+    bookkeeping, boxel_policy.py:352-353).  The generic variant (every object
+    hollow) stays behind a task-spec switch and is not used.
+
+D7  GOAL AND AT-HOME: goal ('and', ('holding', die), ('at_config', q_home)).
+    Everything below is one B3(d) loop change, default off, under the B3
+    acceptance; none of it lives in the bridge (no planner subclass and no
+    hand-built init, G10 and G11).  (i) main() takes the goal through B3(c)'s
+    goal keyword.  (ii) A home-configuration parameter gives the planner's
+    home_config the joints of task_spec's q_home (their DEFAULT_ARM_POS;
+    default REST_POSES, streams.py:255-258), symbol q_home.  (iii) Whenever a
+    goal configuration is declared, _build_init emits (Config q_home) (Boxel
+    home) (config_for_boxel q_home home), so move (which needs (Config ?q2)
+    and config_for_boxel, domain_pddlstream.pddl:207-216) can reach q_home
+    from any current configuration through plan-motion with the die as
+    cargo; the home pseudo-boxel is excluded from every init enumeration by a
+    type check, asserted (no is_free_space, is_shadow or boxel_fits fact
+    names it).  (iv) The post-pick configuration and every readback
+    configuration carry the held body's held_body_ids, ignored_body_ids and
+    grasp_ee_offset, so plan-motion starts a corrective move from a
+    configuration that is not in collision with the die it holds (today the
+    readback built at test_full_pipeline.py:1594 carries joints and name
+    only).  (v) The at-home evaluator applies THEIR exact test (np.allclose
+    on the 7-joint readback, rtol = atol = 1e-4) and ONLY to a move whose
+    target is q_home; every other move keeps today's name-on-arrival rule.
+    When the test fails, current_config becomes a fresh Config symbol
+    q_readback_k carrying the readback joints (never named q_home), so the
+    planner's init is honest and the planner itself plans the corrective
+    move.  (vi) For a declared goal configuration the loop ends on the goal
+    test itself, the target held AND the last move to q_home passing the
+    at-home test, not on _loop_done's holding-only test.  The only new exit
+    is home_not_reached, after two consecutive PLANNED moves to q_home that
+    leave the test false; the existing exits are unchanged.  (vii) A move to
+    q_home ends with a final hold that converges to their tolerance or a
+    bounded step cap (an executor mode, default off).  B3's tests include a
+    corrective move to q_home planned while holding (an injected at-home
+    miss on our holding scene with a declared goal configuration); the A/B
+    on our scenes shows only that the change is inert when no goal
+    configuration is declared.  The headline uses their strict test;
+    secondary columns report "holding but not at home" and "at home within
+    2e-3 rad", computed by the campaign report from the logged readback,
+    never written into their belief.  B7 measures; it does not choose a
+    rule.
+
+D8  TARGET-CLASS, ROBOT AND WORKSPACE CONSTANTS ARE TASK-SPEC INPUTS, SET ONCE
+    (B6), from G9's allowed sources only: NOMINAL_HIDDEN_EXTENTS and _MIN from
+    the die mesh; SENSE_LOW_SLICE_OFFSET below the die's half height minus
+    SENSE_RENDER_DEPTH_TOL; SENSE_DENSE_SPACING below half the die footprint;
+    octree auto_cell from the largest declared class; the pick contact floor
+    min_contact_z = table_z + (pad bottom offset below panda_grasptarget, from
+    their finger mesh) + a declared clearance, with 0.035 kept as the
+    thesis-scene default; the pre-grasp aperture cap and the grip width gate
+    checked against the die class; GRASP_MAX_SPAN from the URDF finger limit
+    (0.04 per finger gives 0.076 with today's clearance); the reach envelope
+    from B1(f).  WORKSPACE WINDOW W for free space, placement candidates and
+    ShadowCalculator: their shortened-table region (a constant in their place
+    sampler), intersected with the reach envelope, keeping only cells whose
+    column up to the tallest declared class height projects entirely into the
+    D4 frame (3-D corners, not the table-plane footprint) and is free of robot
+    pixels in the empty-table home render (B1(e)).  W restricts OUR
+    placements to space the eye images; TAMPURA's placements may land out of
+    view; disclosed.  BF# restates audit #67's premise (observed_clear_regions
+    None means "the camera images the whole workspace") as valid inside W
+    only.  Our scenes keep every default.
+
+D9  PHYSICS SET-UP IN THEIR WORLD, PRE-REGISTERED AND COMPLETE.  Inside
+    execute_fn, before main() and before the first physics step, in this
+    order: (1) setGravity(0, 0, -9.81) on the executing client (our value,
+    boxel_env.py:511; their world has none); (2) setTimeStep 1/240 (our
+    SIM_TIMESTEP, robot_utils.py); (3) for every task body, mass AND
+    localInertiaDiagonal from declared class masses (cited to the YCB
+    dataset) AND lateralFriction 1.0 (the ObjectSpec default every object in
+    our scenes carries, boxel_env.py:91, 674-677) through one changeDynamics
+    call, unconditionally (their -1 is not a usable mass; their 0.5 friction
+    is PyBullet's default, never set by them); (4) our gripper set-up applied
+    to the robot we drive: finger-pad lateral friction 1.2 and fingers opened
+    to 0.04 (boxel_env.py:810-812, 824-828), so the pad contact runs at the
+    pad 1.2 against object 1.0 pairing our grasp is validated with (the
+    archived 4.0 is forbidden).  Then main() performs (5) its own Phase-1
+    settle of 50 steps (test_full_pipeline.py:562), which IS this step:
+    execute_fn adds no settle of its own, and the counted no-op
+    update_object_positions follows (G16); and (6) Phase 2's first render
+    (:610).  Between (5) and (6), B3(c)'s after_settle hook runs the
+    bridge's read-only check: assert the die is absent from the D4 eye's
+    segmentation, and log the settle displacement of every task body, the
+    die included (max XY and yaw drift, JSON pose to settled pose;
+    pre-registered disclosure threshold 1 cm).  The hook is in G2's
+    write-only set and runs under G3 and G14 with no allowance (it moves and
+    steps nothing).  If the die is visible, the episode is flagged
+    scene_changed_by_settle and reported in its own row of the per-seed
+    table, never re-seated or re-rolled.  Each set-up item is a G1/G14
+    allowlist entry with one BF#; nothing else of theirs is altered;
+    campaign.json records gravity, timestep, frictions and masses.  The
+    B1(c) probe uses this identical call sequence (steps (1) to (4), then
+    exactly 50 steps).  TAMPURA's arm runs as shipped: no gravity, cups 1 cm
+    above the table, and in layouts 1747173591 and 1747173593 (12 of 20
+    seeds) the die inside its cup at about 4 cm, picked from mid-air; the
+    paper states this.
+
+D10 BUDGETS: one wall cap of 900 s per episode on both arms, enforced by
+    tools/_bridge_campaign.py (the same value as tampura_sweep.py's kill in
+    the 2026-05-26 baseline and in B1(g)); our --max-plan-time bounded by the
+    remaining episode budget; no
+    action cap on our arm (their 20 steps are their step semantics; our
+    actions are finer grained); a killed or crashed episode enters every
+    time statistic at the cap value, flagged censored, on both arms.
+
+D11 CUP GRASPABILITY, pre-registered and scene-independent: for EVERY cup
+    class in the scenes' category table (a..e), B1(b) measures the collision-
+    mesh AABB width and the inverted top-face width, and B1(e) measures our
+    detector's ESTIMATED pinch extent for that class on an empty table at
+    the eye's viewing geometry (the sampler gates on the estimate,
+    streams.py:819).  (i) If every class's largest estimated width fits
+    GRASP_MAX_SPAN, the sampler runs unchanged.  (ii) If not, the top-face
+    pinch refinement M6 (pinch extent from the top slice of the object's
+    depth cloud, a general perception feature) is adopted BEFORE B7 with its
+    own BF# and an A/B on our scenes.  (iii) If the top face does not fit
+    either, the campaign is not runnable as specified (0/20 by construction
+    would measure the gripper, not the method) and the user decides;
+    TAMPURA's grasp library stays #P5.  New exit reason no_grasp_in_span (the
+    stream offered no grasp for a hollow object the plan needed) keeps such
+    failures attributable.
+
+D12 INTERPRETER FOR ARM O: its OWN venv, never their venv and never one that
+    arm T uses.  Arm O imports tampura (Policy, TampuraEnv, structs), and
+    that import pulls in torch, gymnasium, stable_baselines3 and tensorboard
+    (P4.2).  Candidate (A), preferred: a clone of their venv (Python 3.11,
+    numpy 1.24.4, their exact packages) plus our pinned dependencies, so the
+    RolloutHistory pickle loads in their venv (G6).  Candidate (B): wsl_env
+    plus their full import set at their versions, trimesh, scipy and imageio
+    pinned to theirs and pyyaml added; under (B) a numpy 2.x pickle cannot
+    load in their venv, so G6's pickle check runs in arm O's venv and the
+    deviation is disclosed.  B1(j) runs five tests per candidate, in order:
+    'import tampura' and their packages' full import set; all three layouts
+    built under the candidate and under their venv with identical per-body
+    AABBs and identical t=0 segmentation id sets (create_ycb offsets
+    geometry by trimesh's centre of mass, panda_env_utils.py:688-691; their
+    code has NumPy-2-sensitive calls such as pb_utils.py:1781); a G6 pickle
+    round trip into their venv; a smoke run of our holding scene; and the
+    c31cbdd A/A of B3's acceptance.  (A) is used if it passes all five;
+    otherwise (B) if it passes all but the pickle round trip; otherwise the
+    user decides.  campaign.json records the choice and a pip-freeze hash of
+    both venvs; G13 asserts arm T's freeze unchanged before and after every
+    run.
+
+--------------------------------------------------------------------------------
+P4.4  WORK PACKAGES B0-B9 (each ends with a BF# record)
+--------------------------------------------------------------------------------
+EXECUTION ORDER: B0; B1 part 1; B3; B1 part 2; B2; review gate 1; B4; B5; B6;
+review gate 2; B7; review gate 3; B8; review gate 4.  B9 only on a user
+decision.  The numbering is by topic, not by order.
+B0  [OPEN]  GATES AND LEDGER FIRST.  tools/bridge_gates.py implementing
+    G1-G21 (greps, runtime hooks with violation counters, the ledger reader,
+    the domain regeneration check, the tree hash, the T-driver diff) and the
+    G6 controls as pytest cases under tampura_bridge/tests/.  The ledger and
+    the dispatcher context land in the main dispatcher as a run_logger event
+    stream (plan id, step index, action, args, executor status, destination
+    xy, render view matrix, belief provenance) so they serve our scenes too.
+    Class: infrastructure.  Deliverable: the gates run green on an empty
+    tampura_bridge/ package; the G6 controls exist and fail until B2/B7 make
+    them pass.  Effort 3 days.
+
+B1  [OPEN]  RECONNAISSANCE, NUMBERS INTO THE RECORD (BF#2).  PART 1 runs
+    before B3 and is read-only: (a), (b), (c), (d), (g), (j).  PART 2 runs
+    after B3, because it needs B3's RobotModel, adopt-client constructor and
+    loop parameters at a recorded commit: (e), (f), (h), (i).  Probe scripts
+    under tools/ run against throwaway clients, never against their tree,
+    never reading problems/*.json for any decision.
+    (a) URDF: indices of panda_tool_tip, panda_grasptarget if present,
+        panda_finger_joint1/2 and camera_frame; finger joint limits; pad
+        z-span of the finger mesh relative to panda_grasptarget.
+    (b) YCB extents from the MESH FILES ONLY: die; every cup class a..e: AABB
+        width, inverted top-face width, height, wall thickness, cavity.
+    (c) getDynamicsInfo mass, inertia and lateral friction of every task
+        body after env.initialize (expect -1 and 0.5);
+        getPhysicsEngineParameters gravity (expect 0); then D9 steps (1) to
+        (4) and exactly 50 steps (the settle main() performs), per-body
+        displacement, NaN check, assert gravity == -9.81 after step (1).
+    (d) The executing world's client id (0 expected; sim_world 1).
+    (e) The D4 eye from their own pbu path at DEFAULT_ARM_POS; on an EMPTY
+        table: the robot-occluded footprint (robot seg pixels back-projected
+        through the slab up to the tallest declared class), the table-plane
+        and 3-D frustum coverage, hence W; for each cup class at window
+        cells, our estimated pinch extent (D11).  On the three layouts, for
+        the disclosures only (feeds no constant and no choice): bodies in
+        frame, each cup's in-frame fraction, the die absent from all three
+        masks (assert), and the die's pixel count and our AABB error with
+        each cup parked away IN TURN (every cup, not a chosen one).
+    (f) Reach envelope on their empty table with tools/_probe_reach_envelope.py
+        (base at the origin, table top 0).
+    (g) TAMPURA as shipped, seeds 0-19 headless, once, with the pinned
+        PYTHONHASHSEED, under P4.6's MACHINE rule (about 85 min): the
+        seed-to-scene map is re-confirmed and the block becomes arm T's
+        reproduction reference.
+    (h) D5's scene-independent M1 rule on the empty table.
+    (i) At-home convergence on their Panda: from post-place lift poses to
+        DEFAULT_ARM_POS, empty-handed and holding a body of the die's class
+        mass; steady-state max joint error and steps under today's
+        move_robot_smooth and under the D7 final hold.
+    (j) D12's five venv tests per candidate, in D12's order.
+    Class: measurement.  Abort: if (d) is not client 0, B3 threads
+    physicsClientId through execution.py and robot_utils first (mechanical,
+    flagged).  GUI twin for (g): wsl -d Ubuntu -e bash -lc 'bash
+    /root/tampura-work/tampura_run_gui.sh 0 1'.  Effort 2 to 3 days + 85 min.
+
+B2  [OPEN]  HARNESS: tampura_bridge/ (fresh package; nothing imported from the
+    archive).  run_bridge_on_finddice.py (seeds random and numpy with
+    --global-seed, builds FindDiceEnv(config), b0, store = env.initialize(),
+    asserts the loaded scene file against the pinned map, registers the
+    schema, instantiates BoxelBridgePolicy, policy.rollout(env, b0, store);
+    --vis is an int flag; exit code from rewards[-1]); policy.py
+    (BoxelBridgePolicy: boxel_episode at t=0, no-op afterwards);
+    env_adapter.py (a SUBCLASS of BoxelTestEnv through B3(b)'s adopt-
+    existing-client constructor: adopts their client 0, registers bodies
+    from the category table, builds the plan twin in a fresh DIRECT client
+    through B3(b)'s plan-client-only mirror variants from their URDF and
+    create_ycb, declares the D4 camera and W, sets the shadow-raycast client
+    to the plan twin (B3(c)), overrides oracle_detect_objects to raise and
+    update_object_positions as a counted no-op (G16), and overrides NOTHING
+    that touches perception, boxel generation or plan-twin sync: a parallel
+    implementation of any of those fails review); scoring.py (D3);
+    task_spec.py (the declared task knowledge: target category 'dice',
+    hollow categories with cavity dimensions, class sizes, masses and
+    friction, the D4 camera, W (B1 part 2's measured values, provisional
+    until B6 freezes them), q_home, q_clear if M1, the D9 set-up values, and
+    nothing else; its hash goes into campaign.json);
+    tools/run_tampura_timed.py (the T driver: run_planner.py's __main__ line
+    for line plus the timed-policy import, G13 diff).  Class: translation.
+    Deliverable: seed 0 and seed 1 run D9 and main()'s settle, and build
+    OBJECT and lateral boxels from the first render inside execute_fn, every
+    shadow cast on the plan twin; no planning yet; interior boxels are B5's
+    deliverable; G1, G2, G7, G8, G13, G14, G16, G18, G19, G20, G21 green;
+    plan-twin poses equal registry centres, boxel-less bodies sit at the
+    park pose, and the executing client's body count is unchanged.  Abort:
+    any need to read world.poses or belief.object_poses for a boxel (H1).
+    GUI twin (SB = this repo's /mnt/c path, PL = the pddlstream_lib
+    checkout, TW = /root/tampura-work, VO = the arm-O venv of D12):
+    wsl -d Ubuntu -e bash -lc 'cd $TW/tampura_environments &&
+    PYTHONPATH=$SB:$PL:$TW/tampura:$TW/tampura_environments
+    $VO/bin/python $SB/tampura_bridge/run_bridge_on_finddice.py
+    --global-seed 0 --vis 1'.  Effort 5 to 7 days.
+
+B3  [OPEN]  MAIN-PIPELINE PARAMETERISATION, NO BEHAVIOUR CHANGE ON OUR SCENES.
+    Runs after B1 part 1 and before B1 part 2 and B2.
+    (a) robot_utils gains a RobotModel (arm joints, finger joints, EE link,
+        gripper links, ignored self pairs, finger limits) resolved by NAME at
+        env build and threaded to streams, execution, world_eye, telemetry;
+        the pybullet_data Panda resolves to today's 9/10/11 (asserted).
+    (b) BoxelTestEnv gains an adopt-existing-client constructor path (client
+        given, no resetSimulation, no _setup_scene, bodies from a name-to-id
+        table) and plan-client-only variants of the mirror helpers: today's
+        _mirror_load_urdf loads into BOTH clients (boxel_env.py:623-634),
+        which would put a second Panda into their world, and
+        _mirror_spawn_object builds primitives only (:636-683).  The path
+        asserts that the executing client's body count is unchanged after
+        construction; the caller is responsible for D9's set-up, which this
+        path does not perform.
+    (c) main() gains keyword arguments with byte-identical defaults: env
+        (injected; default builds BoxelTestEnv as today), target_name
+        (default None: today's Phase-4 choice, including its random.choice,
+        so the global RNG stream of our scenes is unchanged), oracle_phases
+        (default True; False skips the :576 check and Phase 4), domain_file
+        (default today's pddl/domain_pddlstream.pddl; the only way M1's
+        generated domain reaches the planner), goal (default None: today's
+        ('holding', target), :762) and after_settle (default None; a
+        read-only callable run once between the Phase-1 settle and Phase 2's
+        first render, D9).  BoxelTestEnv gains a shadow-raycast client
+        (default None: today's default-client rays, so PAPER_AUDIT item (h)
+        is unchanged on our scenes) passed at all three cast sites; when it
+        is set, the plan twin is synced to the OBJECT boxes known at that
+        moment, with every boxel-less body parked, BEFORE each cast,
+        including the initial generate_boxels, which today runs before the
+        first sync_to_plan_client (test_full_pipeline.py:610, 1321).  The
+        bridge builds the args namespace itself; no settings-object refactor.
+    (d) Loop and executor parameters with today's behaviour as default: the
+        pick contact floor (D8), the reach constants, and D7 (i) to (vii) as
+        one list: goal configuration and its home joints; the init facts
+        (Config q_home) (Boxel home) (config_for_boxel q_home home); the held
+        body's metadata on the post-pick and readback configurations; the
+        at-home evaluator; the q_readback_k renaming; loop termination by the
+        goal test; the home_not_reached exit; the final hold (all default
+        off).
+    (e) physicsClientId threading only if B1(d) demands it.
+    (f) The arm-O venv per D12.
+    Class: refactor.  ACCEPTANCE (pre-registered, under P4.6's MACHINE
+    rule): first an A/A run of c31cbdd against itself in the arm-O venv on
+    our holding scene, seeds 0-19 and 100-119, gives the noise flip count;
+    then the A/B of B3 against c31cbdd on the same seeds.  Phase-4 target
+    choices must be identical (they are decided before any wall-clock
+    search).  Outcome flips are accepted up to the A/A count; each flipped
+    seed gets ONE pre-registered re-run on both arms, and a flip that
+    reproduces fails.  Plan-count differences follow the same rule;
+    timed-out plan() calls are logged as the noise source.  Tests: the D7
+    corrective move planned while holding (an injected at-home miss on our
+    holding scene with a declared goal configuration); the after_settle hook
+    neither steps nor moves anything; with the shadow-raycast client set, no
+    ray reaches the executing client.  B5, M6 and M7 reuse this acceptance.
+    Lands on tampura-bridge first, cherry-picked to main-paper-icaps-2027
+    once green.  Effort 4 to 5 days.
+
+B4  [OPEN, CONDITIONAL ON B1(h)]  MODEL TWEAK M1.  pddl/domain_find_dice_v2.pddl
+    GENERATED by tools/gen_bridge_domain.py from the live domain plus the
+    declared delta (P4.5 M1); _build_init emits (Config q_clear) (sense_config
+    q_clear) (Boxel clear_spot) (config_for_boxel q_clear clear_spot) when the
+    task spec declares a clearance configuration; the clear_spot pseudo-boxel
+    is excluded from every init enumeration by the same type check as home
+    (asserted).  The domain reaches the planner only through main(domain_file)
+    (B3(c)); G10 checks it.  Our scenes declare none and keep the live domain.
+    Class: model tweak.  Deliverable: on OUR holding scene seed 0 with a
+    declared clearance configuration, the planner emits a planned move to
+    q_clear before every sense and G3 shows no other difference.  Abort: any
+    precondition removal; any cost chosen by looking at outcomes.
+    Effort 1 to 2 days.
+
+B5  [OPEN]  MODEL TWEAK M2, INTERIOR REGIONS (D6), AND M7 UNLESS THE USER
+    REJECTS IT (Q10).  BoxelData gains region_kind in {lateral, interior};
+    boxel_env.generate_boxels and the registration paths in execution.py
+    (register_new_detections, the sense discovery and rediscovery path,
+    re-registration after loss) cast an interior region for every
+    registered body whose category is declared hollow, from the measured
+    cavity, with the D6 status rule; interior_boxel_ids is a separate list
+    exempt from the rediscovery cleanup.  ONE CARVE SET on every
+    registration path for every new interior fragment: all OBJECT boxels
+    except the caster's plus all existing SHADOW fragments, interiors
+    included.  M7 (P4.5) gives lateral fragments the same carve set on the
+    rediscovery path and makes the rediscovery cleanup keep every superseded
+    lateral fragment unless its grid renders empty, as retire_lost_objects
+    does (execution.py:2105-2118); it is a switch, default off on our scenes,
+    on in the bridge.  Without M7 the lateral overlap volume and the
+    unrendered drops are logged per episode and disclosed (G5, correction
+    (6)).  The post-place carve casts none and logs the destination's cavity
+    footprint.  Class: model tweak.  Deliverable: (1) a synthetic test on
+    OUR table (a hollow cup URDF over a cube, cup class declared hollow):
+    the planner relocates the cup to a cell outside the corridor and the
+    cube is found, either by the planned sense of the interior region or by
+    the post-place integrity render (logged as discovery); the interior
+    region's status changes only through a render of its grid or the logged
+    "observed before placement" record (G5); (2) on find_dice seeds 0 and 1,
+    the first render yields an interior region for every registered cup,
+    with no planning; (3) a synthetic rediscovery on OUR table with M7 on
+    keeps an occluded superseded fragment and removes an observed-empty one;
+    (4) no change on scenes without a hollow class and with M7 off (B3
+    acceptance).  Abort: any path that removes an interior region from the
+    belief or marks it not_here without a render of its grid or a logged
+    free-cell record; any "already moved" flag.  Effort 3 to 5 days, M7
+    included.
+
+B6  [OPEN]  TASK-SPEC CONSTANTS (D8) AND THE D11 RULE, from B1's numbers only.
+    Every value and its derivation in one BF# entry; G9 green; values
+    (including W, provisional since B2) frozen in task_spec.py before B7.
+    If D11 lands in branch (ii), M6 is implemented here with its A/B.
+    Class: configuration (M6: model tweak).  Abort: any per-seed value.
+    Effort 1 to 2 days (M6: plus 2).
+
+B7  [OPEN]  FIRST FULL EPISODES, WATCHED.  Seed 0 (1-cup layout), then seed 1
+    (4-cup layout), GUI with the user watching, then the same two headless
+    under the MACHINE rule.  Record the whole episode: plan per replan,
+    ledger, sense outcomes, integrity events, settle displacements, their
+    reward trace.  Review gate 2 (B4+B5+B6) has passed before B7 starts;
+    review gate 3 runs on B7's episodes and diffs before B8.  GO CRITERION
+    (pre-registered, process only, rewards never enter it): G1-G21 green
+    with no gate trip in any of the four episodes (a trip blocks GO), the G6
+    positive and negative controls pass, and every episode reaches a logged
+    exit reason with no harness exception.  Class: verification.  Abort: any
+    gate red; any temptation to add a helper motion, retry or fallback (H2,
+    R7).  Effort 3 days.
+
+B8  [OPEN]  THE CAMPAIGN (P4.6): both arms, seeds 0-19, two repetitions,
+    serial, interleaved per seed, under the MACHINE rule; report script with
+    the paired table, McNemar, Fisher, Wilson, the anytime figure and the
+    regenerated wall-clock figure (closes CB#111, fixes CB#125); review gate
+    4 on the report.  Reported whatever the outcome.  A gate-failed episode
+    counts as a failure of its arm (P4.6 SUCCESS).  Class: measurement.
+    Abort: any re-run outside the pre-registered repetitions and the
+    stalled-episode rule; any setting changed between arms; the harness
+    stop rule of P4.6 SUCCESS.  Effort 4 days including compute.
+
+B9  [OPEN, OPTIONAL, NOT A FALLBACK]  PLANNER-ONLY VARIANT: our planner
+    driving THEIR controllers through their schemas.  Only on a user
+    decision; labelled as such.
+
+CALENDAR (pre-registered).  Efforts: B0 3, B1 2-3, B2 5-7, B3 4-5, B4 1-2, B5
+3-5 (M7 included), B6 1-2, B7 3, B8 4: 26 to 34 agent-days, plus 2 if M6 is
+needed (26 to 36).  The four review gates add about 4 days: 30 to 38 days of
+serial work (30 to 40 with M6), against the 38 calendar days from 2026-10-26
+through the B8 milestone of 2026-12-02, counted inclusive and with every day a
+working day.  The upper end fills the window exactly; M6 overruns it by 2
+days.  Milestones, assuming the upper half of each range: B0 + B1 part
+1 by 2026-10-30; B3 + B1 part 2 by 2026-11-05; B2 + review gate 1 by
+2026-11-13; B4 to B6 + review gate 2 by 2026-11-23; B7 + review gate 3 by
+2026-11-27; B8 + review gate 4 by 2026-12-02.  The schedule has no slack and
+slipping is the expected case.
+LATEST B8 START: ten days before the paper's submission deadline (the exact
+December date is to be filled in from the call for papers, Q8).  CUT ORDER if
+time runs short, touching nothing in the gates, the protocol or the
+disclosures: (1) B9; (2) the optional view-blocking placement count (P4.5
+ledger); (3) CB#125's docstring fix.  OUTCOMES.  If B7 meets its GO criterion,
+B8 runs and is reported whatever it shows, also after a milestone slip if it
+still starts before the latest B8 start.  If B7 cannot meet it in time, the
+paper states that a seed-for-seed run in TAMPURA's environment was attempted,
+names the blocking BF#, reports B7's per-episode outcomes, and keeps the
+indirect comparison only under the corrected wording of P4.5, not as evidence
+of parity.  B9 is not a fallback: it tests the planner alone, a different
+claim, and needs a user decision.
+
+--------------------------------------------------------------------------------
+P4.5  THE MODEL TWEAKS, THE CLAIM LEDGER AND THE WORDING
+--------------------------------------------------------------------------------
+M1  ARM CLEARANCE BEFORE SENSING (conditional, D5).
+    BEFORE: (:action sense :parameters (?o ?region) :precondition (and (Obj
+    ?o) (Boxel ?region) (handempty) (view_clear ?region) (not
+    (obj_at_boxel_KIF ?o ?region)) (boxel_fits ?o ?region)) ...).
+    AFTER (exact delta that tools/gen_bridge_domain.py applies and G10
+    checks): predicates gain (sense_config ?q); sense's parameters become
+    (?o ?region ?q) and its precondition adds (Config ?q) (at_config ?q)
+    (sense_config ?q); effects unchanged.  sense_config is a static init fact
+    true only of q_clear.
+    POD JUSTIFICATION: the precondition Pre(Y) of the observation states that
+    the robot occludes exactly what it occluded in the t=0 render from which
+    the regions were cast (and W excludes that area), as handempty already
+    states for the held object; the observation itself is unchanged
+    (deterministic render of the region's grid from the fixed eye).
+    CLAIM EFFECT: methods.tex:170's "sense calls no streams because the camera
+    is fixed" stays true; its sentence that view_clear is the only geometric
+    precondition and the sense listing at methods.tex:141-148 are already
+    stale (handempty and boxel_fits, domain_pddlstream.pddl:174, 183) and
+    become more so; the paper adds that in the find_dice runs sensing
+    requires the arm at a declared clearance pose, measured necessary for this
+    eye placement (BF#2), at the cost of a planned move per sense.
+
+M2  INTERIOR REGIONS OF HOLLOW CLASSES (D6).
+    BEFORE: hidden regions are lateral occlusion shadows only; an OBJECT boxel
+    is solid (audit #67), so its footprint is removed from hidden space.
+    AFTER: for a category declared hollow, the solidity assumption is relaxed:
+    its measured cavity rejoins the hidden space as one region of kind
+    interior, cast by the object at registration with the D6 status rule,
+    cleared only by relocating the object and observing the region's grid.
+    Categories not declared hollow cast nothing (all thesis scenes).
+    PARTITION STATEMENT: for a hollow class the OBJECT boxel denotes the shell
+    (the box minus its interior region) for InBoxel, and K(not InBoxel(target,
+    shell)) rests on the observed outer surface and the solid walls; the
+    interior region is carved with B5's one carve set on every registration
+    path, so audit #68's at-most-one-SHADOW-per-point invariant holds for
+    interiors; for lateral fragments on the rediscovery path it holds only
+    with M7 (P4.2); the Boxel set is a partition of the workspace except that
+    an OBJECT box and its interior region share volume.  methods.tex:84 and
+    :97 need this qualification in the paper.
+    POD JUSTIFICATION: a belief region with a Know-If literal, cleared only by
+    an observation of its grid; discovery by relocation plus sensing; the
+    thesis's hiddenness definition (methods.tex:138, every corner's line of
+    sight blocked) covers it.  M2 is a single-level, declared-cavity region;
+    the recursive partitioning of concave geometry that conclusion.tex:41-45
+    describes stays future work.
+    CLAIM EFFECT: results.tex:352 (TAMPURA keeps occlusion sub-symbolic, we
+    name it) is unchanged, with the qualification that in find_dice the
+    interior region exists because of a declared class property, not because
+    the camera cast it; its view-blocking and clearance are camera-derived as
+    for lateral shadows.
+    PARITY SENTENCE (paper): "TAMPURA derives hollowness from the category's
+    concave mesh for every known object; we declare it per class with cavity
+    dimensions measured from the same mesh, because our perception yields
+    boxes, not meshes; both take the category label from the scene."
+
+M3  GOAL CONJUNCT at_config(q_home) (D7): a goal form plus the home
+    pseudo-boxel init facts, not a domain change; the goal formula is the same
+    for both systems and the evaluation is stricter on ours (D3, D7).
+
+M4  SCORING (D2, D3): success for both systems = TAMPURA's reward on
+    TAMPURA's belief through TAMPURA's observation channel; our belief inputs
+    come from physical readback through the store-symbol lookup; theirs from
+    their kinematic executor.  The paper states both.
+
+M5  HEADLINE SENTENCES.  BEFORE: abstract.tex:18 (comparable end-to-end cost
+    about 144 s vs 166 s and reliability 65.6 % vs the >= 63 % implied, "on
+    the closest analogous hidden-object task"); results.tex:93 (the end-to-end
+    time definition) and :108 (TAMPURA as an external reference with the
+    per-step 57 s); results.tex:295 ("marginally easier goal", "the two run on
+    different environments, so it benchmarks neither system"); results.tex:300
+    (figure caption numbers); results.tex:304-312 ("rough parity end-to-end",
+    "comparable in reliability", "a marginally easier goal"); results.tex:
+    336-345 ("different environments ... benchmark neither system", "the
+    closest analogous task"); results.tex:354 ("sufficient ... at comparable
+    end-to-end cost and reliability, and simpler to model"); conclusion.tex:10
+    ("comparable end-to-end cost and reliability").
+    AFTER (template, blanks filled only from campaign.json): "On TAMPURA's
+    Find Die, seed for seed over its 20 released episodes and three layouts,
+    our pipeline (a fixed camera at TAMPURA's home wrist-camera pose,
+    observing after every action) reached the goal in X/20 [Wilson CI]
+    against Y/20 [CI] for TAMPURA (wrist camera, observing on look) (paired
+    McNemar p = ...), at a median loop time of ... vs ..."  results.tex:93 and
+    :108 are rewritten to define the same-machine loop time and TAMPURA as a
+    measured arm.
+    RULE: the parity adjectives are deleted now in every listed sentence and
+    come back only if the intervals support them; a worse result is written as
+    such; "simpler to model" is dropped or qualified by the task-knowledge
+    disclosure (ours: hollow classes with cavity sizes, die and cup class
+    sizes and masses, target class, the eye pose, W and, if M1, a clearance
+    pose; theirs: category meshes, saved grasp library, look-conf sampler,
+    target class).
+
+M6  TOP-FACE PINCH WIDTH (conditional, D11 branch (ii)): BEFORE the pinch
+    extent is the estimated AABB width; AFTER it is the extent of the top
+    slice of the object's depth cloud.  A general perception feature with the
+    B3 acceptance on our scenes; CLAIM EFFECT: none on the thesis scenes
+    (cubes have equal top and AABB widths), recorded either way.
+
+M7  REDISCOVERY KEEPS UNOBSERVED FRAGMENTS (B5; a switch, default off on our
+    scenes, on in the bridge unless the user rejects it, Q10).
+    BEFORE: when a sense rediscovers a registered body, its old fragments are
+    removed from the registry and the belief without a render
+    (execution.py:2871-2884); the area becomes free space and the planner
+    receives the not-here literal for it without an observation
+    (pddlstream_planner.py:675-681); the recast is carved against OBJECT
+    boxels only (:2960-2980).
+    AFTER: a superseded fragment is tested with the sense slices against the
+    rediscovery render; an observed-empty one is marked not_here and
+    removed, and one that is still occluded is kept as an unknown region
+    without a caster and left to the sense action, exactly as
+    retire_lost_objects treats a lost caster's fragments (execution.py:
+    2105-2118); the recast carves against all OBJECT boxels except the
+    caster's and all existing fragments, as register_new_detections does
+    (:2278-2279).
+    POD JUSTIFICATION: a K-literal changes only through an observation of its
+    region; M7 removes a belief write that had none.
+    CLAIM EFFECT: no thesis sentence describes the rediscovery cleanup; the
+    observed-space premise of free space (audit #67) is restored on this
+    path.  Whether the main pipeline adopts M7 for the thesis scenes is a
+    separate BF# with its own A/B; until then the thesis numbers stand as
+    produced and correction (6) applies to them.
+
+CLAIM LEDGER.
+  MEASURED by B8 (only if B7 meets its GO criterion): results.tex:93, :295,
+  :300, :304-312 per-episode time and reliability (replaced by same-task,
+  same-machine, same-seed numbers with intervals); "marginally easier goal"
+  (deleted: same goal formula, evaluation stricter on our side, disclosed);
+  :354 "sufficient to reach the goal" (measured on find_dice only: one task,
+  three layouts, 20 seeds, worded with that scope); :336-345 and :389-404
+  "different environments", "not the same problem", "a shared scene file
+  would strengthen" (resolved; the hardware sentence names the campaign CPU).
+  STAYS ARCHITECTURAL: :352 symbolic vs sub-symbolic occlusion and view-blind
+  placement (unmeasured unless a view-blocking placement count is added to
+  both arms from logs; optional, first in the cut order after B9); :295 and
+  :108 per-step 11 s vs 57 s (dropped: step semantics differ; their per-step
+  time includes 200 effects_fn samples); :354 "simpler to model"
+  (qualitative, see M5); related-work statements on LAO* and the learned MDP
+  (source-verified, unchanged); all semantic-vs-uniform partition claims
+  (ours only, untouched).  M1, M2, M6 and M7 are used in find_dice only and
+  the sentence that introduces them says so (conclusion.tex:27-33, 41-45 name
+  sensing configurations and concave interiors as future work).
+
+CORRECTIONS THE PAPER NEEDS REGARDLESS.
+  (1) The 3-strike give-up.  methods.tex:168 ("marked empty without ever
+  being directly observed ... it is unsound") and results.tex:464-468 ("marks
+  it as not containing the target", the run report distinguishes the two) are
+  accurate: the code parks the fragment (BeliefState unresolved,
+  execution.py:3061-3079) and withholds it from the planner with the same
+  Know-If literal as an observed-empty fragment (test_full_pipeline.py:
+  1217-1218; pddlstream_planner.py:638-640).  Two sentences need correcting:
+  results.tex:469-470 ("the evaluation counts the give-up case as a
+  failure") becomes "an episode that ends with only given-up regions left and
+  no target is a failure; a give-up followed by finding the target elsewhere
+  is a success" (test_full_pipeline.py:1260-1271), and methods.tex:168's
+  "re-grounding the view-blocking facts is left to future work" is reconciled
+  with the F2 blocks_view_at re-keying (test_full_pipeline.py:1053-1055).
+  (2) The post-action lift is 0.10 m.  (3) SymK is a Fast Downward top-k
+  fork, so "the same Fast Downward-based planner" means the FD lineage.
+  (4) Our domain uses derived predicates, so "no deductive axioms" must read
+  "no LW1-style knowledge axioms over K-literals".  (5) The sense listing at
+  methods.tex:141-148 omits handempty and boxel_fits.  (6) Today's
+  rediscovery cleanup removes a body's old fragments without a render and
+  hands the area to the planner as free space with the not-here literal
+  (execution.py:2871-2884; pddlstream_planner.py:675-681).  The paper states
+  this for the thesis numbers, with the number of episodes in which it fired
+  from the F9 rediscovery counter (test_full_pipeline.py:1087-1097) where
+  the logs carry it, until the main pipeline adopts M7.  This finding is new:
+  the #P1 F20 review follow-up (fixes in ba924bd) made the cleanup remove the
+  fragments from the belief as well, but no observation was added; P4.13
+  (round 3, R3.4) is its audit record.
+
+--------------------------------------------------------------------------------
+P4.6  EVAL PROTOCOL (pre-registered; any later change is itself a BF# entry)
+--------------------------------------------------------------------------------
+ARMS.  T = TAMPURA (tampura cdddf14, tampura_environments 4167c35, find_dice.yml
+as snapshotted in the 2026-05-26 JSON, their venv), run through
+tools/run_tampura_timed.py with tampura_policy_timed, a subclass in OUR code
+that overrides get_action only (super().get_action inside perf_counter, the
+span written to our side log) and inherits rollout (G13).  The step plus
+update share of step k is time_deltas[k] - time_deltas[k-1] minus the
+get_action span of step k.  B1(g)'s as-shipped block is arm T's reproduction
+reference; pre-registered agreement: the timed block's per-seed outcomes may
+differ from B1(g) only on seeds that also flipped between the 2026-05-26 block
+and B1(g); otherwise both blocks are reported and neither is chosen.  O = our
+pipeline through the bridge (B2-B6) at one recorded commit, run from an
+immutable snapshot directory (the CB#113 pattern), in the D12 venv.
+PYTHONHASHSEED is pinned to the same value for B1(g), both T repetitions and
+O.
+SEEDS AND SCENES.  --global-seed 0..19 on both arms; the loaded scene file is
+logged per episode and must equal the pinned map; results are reported per
+layout and pooled; the paper says there are three layouts.  No seed is added,
+dropped, re-rolled or re-run outside the repetitions and the stalled-episode
+rule below.
+SUCCESS.  rewards[-1] == 1.0 from each arm's RolloutHistory (G12).  Secondary
+columns, never substituted: O holding but not at home; O at home within 2e-3
+rad (from the logged readback); O _verify_holding; optionally T successes
+whose executing arm is not at DEFAULT_ARM_POS (read-only, after the episode).
+Per-seed rows also carry scene_changed_by_settle and every cup's in-frame
+fraction below 1 (B1(e)).  GATE-FAILED EPISODES (pre-registered): an episode
+with any G21 count above 0 counts as a failure of its arm, keeps its row and
+is flagged with the hook's name; it is never excluded and never re-run.
+HARNESS STOP RULE: three gate-failed episodes of one arm with the same hook
+stop the campaign; the partial table is reported with the stop reason, and a
+run after the fix is a new campaign with its own BF#, reported beside the
+stopped one.
+STATISTICS.  Primary evidence: the paired per-seed table of repetition 1
+(seed, scene file, T outcome, O outcome, both times).  Primary test: McNemar's
+exact test on the discordant seeds; secondary: Fisher's exact test, two-
+sided; Wilson 95 % intervals on every rate (11/20 is 0.34 to 0.74).  At n = 20
+per arm two independent rates need a gap of roughly 7 seeds to reach
+p < 0.05 by Fisher (the round-1 validity critique's estimate: 11/20 vs 17/20
+gives about 0.08), so the headline is descriptive with intervals.  Repetition
+2 is the stability check (per-seed flips reported) and is never pooled with
+repetition 1.  Per-layout rates (8, 7, 5 seeds) are reported without tests.
+The +/-1-2 seed flip rate of identical code is the noise floor, not a
+significance threshold.
+TIME.  (t1) loop time = time_deltas[-1] on both arms; T's contains no
+physical simulation time (headless teleport, no gravity), O's contains stepped
+physics; both labelled.  (t2) process wall from each driver.  (t3) time to
+first reward 1.0 for successes.  (t4) actions to goal at macro level (pick,
+place, sense, look; each move folded into the action it serves, the final move
+home into the goal) with O's raw dispatched count beside it.  (t5) planning
+share on both arms: T's summed get_action spans; O's summed plan() spans plus
+first-render and boxelization time.  ANYTIME FIGURE: cumulative success
+fraction against elapsed loop time up to 900 s for both arms (T: the time at
+solve_step; O: the time of the final action), so a reader can apply any
+budget.  All times as mean +/- std and median with n, over all episodes
+(censored at the cap, flagged) and success-only.
+MODE AND BUDGETS.  Headless on both arms; GUI runs are for watching only.
+900 s wall per episode on both; T's 20 steps as shipped; O has no action cap.
+MACHINE (binds B1(g), every A/A and A/B acceptance run of B3, B5, M6 and M7,
+B7's headless episodes and B8).  Serial; in B8 interleaved per seed (T k, O
+k, T k, O k ...); idle machine; host kept awake; before each episode
+`pgrep -af` with the pattern
+  test_full_pipeline|run_planner|run_bridge_on_finddice|run_tampura_timed|tampura_sweep|_bridge_campaign
+shows no process other than the driver itself; CB#113 paused for the whole
+window.  tools/_bridge_campaign.py owns the 900 s cap on both arms in B8.
+Stalled-episode rule, written down now: an episode whose wall clock exceeds
+1.5x the cap (host sleep) is dropped and re-run once, flagged.
+DISCLOSURES IN THE TABLE NOTES: containment vs lateral shadows and the hollow
+class declaration (M2, parity sentence); the eye at their home wrist pose,
+fixed, observing after every action, vs their moving wrist camera observing
+on look from 20 to 30 cm (also in the headline, M5); visibility needs 6
+localisable pixels on our side and 1 seg pixel on theirs (perception.py:320 vs
+env.py:64-73); the clearance precondition if M1; kinematic gravity-free
+execution vs physical execution with gravity (D9); their perfect poses vs our
+depth estimates; their saved grasp library vs our top-down contact grasp (and
+M6 if adopted); at-home strictness (D3, D7); masses, the settle and its
+campaign maximum displacement, their cups floating 1 cm and their die at about
+4 cm inside the cup in 12 of 20 seeds (D9); W restricted to the eye's
+unoccluded view for our placements, theirs unrestricted (D8); the task
+knowledge each system was given (M5); three layouts; every cup partly out of
+frame.
+OUTPUT.  eval_results/tampura_bridge_<date>/{T,O}/rep<k>.json in the 2026-05-26
+JSON's per-seed shape plus scene_file, and for O planning_time_s, plan_count,
+exit_reason, parked_count, settle_max_disp, scene_changed_by_settle; copied
+RolloutHistory pickles and console logs; campaign.json with both commits, the
+config snapshot, problems/ hashes, the task_spec hash, the D9 values, the D12
+interpreter and package versions, CPU, WSL kernel, PYTHONHASHSEED.  Never WSL
+/tmp; previous campaigns are never overwritten.
+COMMANDS.  T as-shipped block (B1(g)): wsl -d Ubuntu -e bash -lc 'source
+/root/tampura-work/.venv/bin/activate && cd /root/tampura-work/
+tampura_environments && PYTHONHASHSEED=<pinned> python -u /root/tampura-work/
+tampura_sweep.py --seeds 0-19 --out runs/<name>.json'.  T GUI: bash
+/root/tampura-work/tampura_run_gui.sh N 1.  O: the B2 command with --vis 0
+(headless) or --vis 1 (GUI).  The interleaved driver is
+tools/_bridge_campaign.py (B8).
+
+--------------------------------------------------------------------------------
+P4.7  RECORD FORMAT
+--------------------------------------------------------------------------------
+Every decision, fix, measurement and abort during #P4 is a BF#N entry in
+P4.14, in this shape:
+  BF#N [OPEN|DONE|REJECTED|ABORTED]  <title>  (package Bk, date)
+  WHAT: one paragraph.  EVIDENCE: file:line, run directory, numbers.
+  BEFORE / AFTER (for any model, constant or harness change).
+  CLAIM EFFECT: which thesis sentence(s) change and how (or "none").
+  HONESTY CLASS: translation | model tweak | configuration | measurement |
+  infrastructure | refactor | FORBIDDEN (then ABORTED with the reason).
+  DECISION yyyy-mm-dd (who): the choice and the alternatives rejected.
+  RESULT: outcome lines once run.
+Commits: one per BF# entry where code changes, one-line subjects, on
+tampura-bridge.  The bridge wiki page is updated per BF# that changes
+architecture or the domain.  Agent review reports go under
+archive/tampura_bridge_plan_2026-10-25/reviews/.
+
+--------------------------------------------------------------------------------
+P4.8  OUT OF SCOPE, AND WHAT STAYS OPEN FOR LW1 / 3D WUMPUS
+--------------------------------------------------------------------------------
+OUT: any planner other than PDDLStream + FD as configured today (--planner
+ff-astar2, search_sample_ratio 0.25, unit costs off, sense gate off, corridor
+test cell+object, fixed for the campaign); TAMPURA's grasp library and
+controllers (#P5; B9 is the only sanctioned contact with their controllers);
+the real robot (#P6); LW1 (#P9); editing their tree; probabilistic weighting
+of regions; an action cap on our arm.
+KEPT OPEN: belief as literals over named regions (interior regions are more
+names); deterministic observations as a function of the true world through
+the render; the planned observable Y_R = "target in region R" with Pre(Y_R) =
+view_clear(R) and handempty (and at_config(q_clear) if M1), with
+boxel_fits(o, R) as a static applicability literal (emitted for every pair
+under --sense-gate off).  A SECOND, PASSIVE CHANNEL exists: every render
+evaluates every region's grid and every visible body with the render's own
+visibility test as its precondition, not a planner literal (full-registry
+sweep, execution.py:2185-2201; lost-caster retirement, :2105-2125;
+register_new_detections, :2255-2285); it writes found, not_here (all
+endpoints seen) or a new occluder, never a parked status; in LW1 terms these
+are observables whose preconditions are not modelled in the domain and are
+absorbed by replanning.  G5 enumerates both channels.  No probabilities, no
+learned priors, no planner-external choosers.  KNOWN GAP (not opened by the
+bridge): parked fragments are given the not_here literal in the planner
+(P4.5 correction 1).  The LW1-clean alternative, withholding is_shadow or
+boxel_fits for a parked fragment so it is unsensable rather than known, is a
+main-pipeline candidate (BF# to file) that needs the B3 acceptance on our
+scenes and is not done silently inside the bridge.  SECOND KNOWN GAP, closed
+in the bridge by M7 unless the user rejects it: the rediscovery cleanup's
+unobserved removal (P4.5 M7, correction (6)); in LW1 terms it is a write to a
+K-literal with no observable behind it.
+
+--------------------------------------------------------------------------------
+P4.9  RISKS AND THE GATE THAT CATCHES EACH
+--------------------------------------------------------------------------------
+R1  Cup width vs finger span decides ALL 20 seeds (every layout hides the die
+    under a d or e cup).  Gate: D11 on estimated widths, decided in B6.
+R2  The 1-cup layout makes the plan short; the temptation is to script it.
+    Gate: G3, G10, G11; the plan still comes out of solve() from the belief.
+R3  At-home within 1e-4 rad under position control with a payload.  Gate:
+    B1(i) measures; D7 (i) to (vii) fix the goal, the init facts, the held
+    metadata, the evaluator scope, the renaming, the termination, the bound
+    and the hold, all in B3(d) with a corrective-move test; no tolerance rule
+    is ever chosen from outcomes.
+R4  Default-client coupling.  Gate: B1(d), B3(e), G14.
+R5  The hidden die is a real body in the executing world.  Gate: every
+    planning-time collision check and every shadow raycast runs on the
+    belief-posed plan twin (B3(c)); G2, G8(b)(c).
+R6  The shadow caster raycasts the true world (PAPER_AUDIT item (h)): rays
+    stop at the first body hit, so an unregistered die would clamp a
+    fragment.  Gate: B3(c)'s shadow-raycast client, set to the plan twin by
+    the bridge and synced before every cast, the initial one included; G2
+    and G8(b) trap rayTest and rayTestBatch on the executing client.  Our
+    scenes keep the default until a separate BF# decides with the B3
+    acceptance; the bridge is stricter than the thesis pipeline here, which
+    is disclosed.
+R7  The implementer "helps" with a fallback (retry, nudge, re-aim, park,
+    sweep).  Gate: G3's motion-layer hook (MultiDof calls included); G1 and
+    G14 on velocity, force, collision-filter, constraint and body-creation
+    calls; G6's zero count of stepSimulation outside main(); G21.  A new
+    retry policy beyond today's dispatcher bounds is FORBIDDEN unless it
+    lands in the main pipeline with the B3 acceptance and a BF#.
+    home_not_reached (D7) is the one new bound and is pre-registered here.
+R8  Constants or rules fitted to the released layouts or to outcomes.  Gate:
+    G9; B1 decisions run on an empty table; B6 before B7; task_spec hash in
+    campaign.json.
+R9  Scene drift from the physics settle, including the die settling into
+    view.  Gate: D9 order, assert and scene_changed_by_settle row; no
+    re-seat, no re-roll.
+R10 Machine contention, host sleep.  Gate: P4.6 MACHINE.
+R11 The 20-step vs wall-cap asymmetry invites post hoc re-weighting.  Gate:
+    D10 pre-registered; the anytime figure shows every budget.
+R12 Session budget: this plan's first agent run was cut by the usage limit on
+    2026-10-25; agent passes write durable per-agent files.
+R13 Schedule.  Gate: the calendar, the process-only GO criterion and the
+    pre-registered outcomes (B7 cannot suppress an unfavourable result).
+R14 Arm occlusion of the fixed eye parks regions.  Gate: D5's M1 rule.
+R15 Zero gravity in their world would make our physical execution a global
+    weld.  Gate: D9 step (1), B1(c) assert, G14 on setGravity.
+R16 Two interpreters building different scenes, or arm O's dependencies
+    leaking into arm T's venv.  Gate: D12's five tests, separate venvs, G13's
+    freeze hash.
+R17 A gate trip handled after seeing which arm and seed tripped.  Gate: P4.6
+    GATE-FAILED EPISODES and HARNESS STOP RULE, pre-registered.
+R18 The executor's own IK on the executing robot mistaken for, or used to
+    hide, a teleport.  Gate: G14's net-zero exemption for solve_ik only,
+    inside a dispatcher context.
+
+--------------------------------------------------------------------------------
+P4.10 OPEN QUESTIONS FOR THE USER (the plan proposes an answer to each)
+--------------------------------------------------------------------------------
+Q1  D1/D2: our whole pipeline inside their world through a one-action schema;
+    the planner-only variant stays B9, optional.
+Q2  D4: a fixed eye at the pose of their wrist camera at DEFAULT_ARM_POS (not
+    the physical wrist camera); M1 decided by B1(h), adoption expected.
+Q3  D6: hollow declared per category with mesh-measured cavities, not cast
+    for every object.
+Q4  D9: gravity, timestep, masses, object friction 1.0 (our scenes' value),
+    our gripper's pad friction and opening set in their world before the
+    first step; main()'s own settle, logged and disclosed.
+Q5  D10/P4.6: 900 s cap, headless, two repetitions, no action cap on ours,
+    paired analysis with McNemar.
+Q6  B3: a mechanical main-pipeline refactor (RobotModel by name, an
+    adopt-client constructor with plan-client-only mirrors, six keyword
+    arguments on main(), a shadow-raycast client, D7's loop change), every
+    new behaviour default off.
+Q7  The calendar has no slack; the process-only GO criterion and the
+    reporting rule if B7 cannot meet it in time.
+Q8  The exact submission date, to fix the latest B8 start.
+Q9  D11 branch (iii): if no cup class fits the gripper even by its top face,
+    the campaign is not runnable as specified; the user decides then.
+Q10 M7: in the bridge, the rediscovery cleanup keeps every superseded
+    fragment that does not render empty (a switch, default off on our
+    scenes).  If rejected, today's unobserved removal stays, counted per
+    episode and disclosed (G5, correction (6)).
+Q11 D12: arm O in its own venv, preferably a clone of theirs plus our pinned
+    dependencies, never in theirs.
