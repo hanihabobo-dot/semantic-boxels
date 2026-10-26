@@ -32,13 +32,16 @@ Or as a context manager::
 """
 
 import argparse
+import functools
 import json
 import logging
 import os
 import random
 import shutil
 import sys
+import time
 from collections import Counter
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
@@ -153,6 +156,7 @@ class RunLogger:
         logging.info('Run started  : %s', self._timestamp)
         logging.info('Log file     : %s', self.log_path)
         logging.info('Verbosity    : %s (console), DEBUG (file)', verbosity)
+        ledger_open(self.run_dir)
 
     # ----- artefact saving ---------------------------------------------------
 
@@ -176,6 +180,7 @@ class RunLogger:
 
     def close(self):
         """Restore stdout, flush the log file, and remove handlers."""
+        ledger_close()
         logging.info('Run finished : %s',
                      datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
         logging.info('Full log at  : %s', self.log_path)
@@ -201,6 +206,163 @@ class RunLogger:
     def __exit__(self, *exc):
         self.close()
         return False
+
+
+# ---------------------------------------------------------------------------
+# #P4 B0: the run ledger and the dispatcher context
+# ---------------------------------------------------------------------------
+# The ledger is an append-only event stream, <run_dir>/ledger.jsonl, one
+# JSON object per line: every plan() result, every dispatched step and how
+# it ended, the runtime motion re-solve before a move, the commanded place
+# target, and one provenance row per belief change of a SHADOW fragment.
+# tools/bridge_gates.py reads it (gates G3, G4, G5, G11, G21); the bridge's
+# runtime hooks read the dispatcher context.  Writing an event never feeds a
+# decision: arguments are copied out as names and numbers.  A write that
+# fails is counted, printed and recorded when the ledger closes, so the
+# reader can refuse an incomplete ledger instead of passing it.
+
+_ledger_file = None
+_ledger_write_errors = 0
+_dispatch = None
+_provenance = []
+
+# The ways a dispatched step may end.  'ok' is the only one that lets the
+# dispatcher go on to the next step of the same plan; every other value is
+# a logged early end (gate G3).  'unlabelled' is written only when the
+# dispatcher left a step without saying why, and fails G3.
+STEP_END_STATUSES = (
+    'ok', 'sense_outcome', 'integrity_replan', 'motion_resolve_failed',
+    'pick_failure', 'place_failure', 'stack_failure', 'empty_hand',
+    'stale_precondition', 'unlabelled',
+)
+
+
+def ledger_open(run_dir) -> None:
+    """Start <run_dir>/ledger.jsonl.  Called by RunLogger."""
+    global _ledger_file, _ledger_write_errors, _dispatch
+    ledger_close()
+    _ledger_write_errors = 0
+    _dispatch = None
+    _provenance.clear()
+    _ledger_file = open(Path(run_dir) / 'ledger.jsonl', 'w', encoding='utf-8')
+    ledger_event('ledger_open', pid=os.getpid())
+
+
+def ledger_close() -> None:
+    global _ledger_file
+    if _ledger_file is None:
+        return
+    ledger_event('ledger_close', write_errors=_ledger_write_errors)
+    _ledger_file.close()
+    _ledger_file = None
+
+
+def ledger_arg(value):
+    """One action argument as the ledger records it: names stay names, a
+    configuration is its name, anything else is its type and object id (so
+    the reader can prove the dispatched object is the planned one)."""
+    if isinstance(value, str):
+        return value
+    name = getattr(value, 'name', None)
+    if isinstance(name, str) and hasattr(value, 'joint_positions'):
+        return f"cfg:{name}"
+    return f"{type(value).__name__}@{id(value)}"
+
+
+def ledger_plan(plan):
+    """A plan as the ledger records it: [[action, arg, ...], ...]."""
+    if plan is None:
+        return None
+    return [[str(a[0])] + [ledger_arg(x) for x in a[1:]] for a in plan]
+
+
+def _ledger_default(obj):
+    if hasattr(obj, 'tolist'):
+        return obj.tolist()
+    if isinstance(obj, (set, frozenset, tuple)):
+        return list(obj)
+    return repr(obj)
+
+
+def ledger_event(kind: str, **fields) -> None:
+    """Append one event.  The open dispatcher context, if any, is stamped
+    on it."""
+    global _ledger_write_errors
+    if _ledger_file is None:
+        return
+    row = {'t': time.perf_counter(), 'wall': time.time(), 'kind': kind}
+    if _dispatch is not None:
+        row['plan'] = _dispatch['plan']
+        row['step'] = _dispatch['step']
+    row.update(fields)
+    try:
+        _ledger_file.write(json.dumps(row, default=_ledger_default) + '\n')
+        _ledger_file.flush()
+    except Exception as e:
+        _ledger_write_errors += 1
+        print(f"  WARNING: ledger write failed ({kind}): {e}")
+
+
+def dispatch_begin(plan_id, step, action, args, plan_obj=None) -> None:
+    """Open the dispatcher context for step `step` (1-based) of plan
+    `plan_id`.  The bridge's motion hook (gate G3) refuses motion
+    commanded while no context is open."""
+    global _dispatch
+    if _dispatch is not None:
+        dispatch_end('unlabelled')
+    _dispatch = {'plan': plan_id, 'step': step, 'action': action}
+    ledger_event('step', action=action, args=[ledger_arg(x) for x in args],
+                 plan_obj=plan_obj)
+
+
+def dispatch_end(status: str) -> None:
+    """Close the dispatcher context with how the step ended (one of
+    STEP_END_STATUSES).  A no-op when no context is open."""
+    global _dispatch
+    if _dispatch is None:
+        return
+    if status not in STEP_END_STATUSES:
+        status = 'unlabelled'
+    ledger_event('step_end', status=status)
+    _dispatch = None
+
+
+def current_dispatch():
+    """The open dispatcher context as a dict, or None."""
+    return None if _dispatch is None else dict(_dispatch)
+
+
+@contextmanager
+def provenance(channel: str, **detail):
+    """Name the observation channel behind every belief change made inside
+    the block (gate G5).  The innermost block wins."""
+    _provenance.append(dict(detail, channel=channel))
+    try:
+        yield
+    finally:
+        _provenance.pop()
+
+
+def provenance_channel(channel: str):
+    """provenance() for a whole function, as a decorator."""
+    def deco(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            with provenance(channel):
+                return fn(*args, **kwargs)
+        return wrapper
+    return deco
+
+
+def ledger_belief(region: str, op: str, status=None) -> None:
+    """One G5 provenance row.  Called by BeliefState for every status
+    change and removal, and by BoxelRegistry for every SHADOW boxel that
+    leaves the registry; the channel comes from the innermost provenance
+    block, or is None when no call site named one."""
+    ctx = dict(_provenance[-1]) if _provenance else {}
+    channel = ctx.pop('channel', None)
+    ledger_event('belief', region=str(region), op=op, status=status,
+                 channel=channel, **ctx)
 
 
 # ---------------------------------------------------------------------------

@@ -3942,7 +3942,7 @@ P4.4  WORK PACKAGES B0-B9 (each ends with a BF# record)
 EXECUTION ORDER: B0; B1 part 1; B3; B1 part 2; B2; review gate 1; B4; B5; B6;
 review gate 2; B7; review gate 3; B8; review gate 4.  B9 only on a user
 decision.  The numbering is by topic, not by order.
-B0  [OPEN]  GATES AND LEDGER FIRST.  tools/bridge_gates.py implementing
+B0  [DONE 2026-10-26, BF#2, BF#3]  GATES AND LEDGER FIRST.  tools/bridge_gates.py implementing
     G1-G21 (greps, runtime hooks with violation counters, the ledger reader,
     the domain regeneration check, the tree hash, the T-driver diff) and the
     G6 controls as pytest cases under tampura_bridge/tests/.  The ledger and
@@ -5158,6 +5158,128 @@ BF#1 [DONE]  SUBMISSION DATE, LATEST B8 START, QUESTIONS SETTLED  (before B0,
   unless the user rejects it before B5.  Q12 applies only if B1(i) finds the
   at-home test unreachable.
   RESULT: n/a.
+
+BF#2 [DONE]  B0: GATES, RUNTIME HOOKS AND THE RUN LEDGER  (B0, 2026-10-26)
+  WHAT: The gates exist as runnable checks in two places.  The static and
+  ledger side is tools/bridge_gates.py (standard library only): the import
+  graph, G1 and G2 by AST scan against the reviewed allowlist
+  tools/bridge_gates_allowlist.txt, G7, G10's domain hashes, G11(i), G13
+  (their trees, git status, pip freeze, T-driver diff), G17, and a ledger
+  reader for G3, G4, G5, G11, G15, G19 and G21.  The runtime side is
+  tampura_bridge/gate_hooks.py, because the harness must import it and tools/
+  is not a package: install(GateConfig) wraps the pybullet module for G3's
+  motor hook, G6's step count, G8(b)'s queries and rays, G14's state writes
+  and G20's camera, rebinds robot_utils.solve_ik (G14's net-zero exemption),
+  move_robot_smooth (G3) and both collision checks (task-body poses
+  unchanged) in every loaded module of this repository, and wraps
+  PDDLStreamPlanner.plan (G10, including the goal and target pin) and the
+  solve() it calls (G11(ii)).  Every hook counts, writes a ledger row and
+  raises; gate_record() writes the counts (G21).  The G6 controls are seven
+  pytest cases in tampura_bridge/tests/test_g6_controls.py that fail until B2
+  and B7.  The ledger is <run_dir>/ledger.jsonl, opened by RunLogger, so it
+  serves our scenes too: one row per plan() call and result, per dispatched
+  step and how it ended, per runtime move re-solve, per commanded place
+  target, per sense outcome, and per belief change of a SHADOW fragment.
+  FINDINGS AND DEVIATIONS FROM THE PLAN TEXT, each decided here:
+  (a) BulletClient injects its client id only into builtins
+      (pybullet_utils.bullet_client: inspect.isbuiltin), so the plan's "one
+      wrap covers both call styles" was wrong as stated: a Python wrapper on
+      the module would receive no client id from a BulletClient and act on
+      client 0.  install() gives BulletClient.__getattr__ the same injection
+      for the wrapped functions; forwarding is otherwise unchanged.  This is
+      pybullet_utils' class, not TAMPURA's; B1(d) confirms which client class
+      their executing world uses.  Tested.
+  (b) G3's early-end triggers.  The dispatcher has 17 exits; each now names
+      one of: sense_outcome, integrity_replan, motion_resolve_failed,
+      pick_failure, place_failure, stack_failure (the plan's "IK failure"
+      and "give-up"; give-ups are decided inside these paths), empty_hand
+      and stale_precondition (the step's precondition no longer holds in the
+      belief).  The last two are existing dispatcher bounds, not new retries.
+      The dispatcher has no deadline exit; the wall-clock bound is the outer
+      loop's.  An exit without a name is written as 'unlabelled' and fails.
+  (c) G4 compares the executor's commanded target with the planned boxel's
+      registry centre at 1e-6 m (in our dispatcher it is that centre); the
+      released body's position is not measured here.
+  (d) G5 is enforced at the data layer, not only at call sites: BeliefState
+      (mark_sensed, mark_unresolved, remove_shadow, add_shadow) and
+      BoxelRegistry.remove_boxel for SHADOW boxels write the row; call sites
+      name the channel (planned_sense_render on handle_sense_action,
+      sweep_render on sweep_all_fragments, lost_caster_render on
+      retire_lost_objects, strike_park at both parks, superseded_unrendered at
+      the rediscovery cleanup).  A change made where no channel was named
+      fails, so a new unlabelled site cannot pass silently.
+  (e) G6 counts executing-client steps: steps inside a dispatched step reset
+      the count, steps outside it after the first dispatched step accumulate
+      and become G6 violations at gate_record; main()'s settle before the
+      first dispatch is counted separately (it is D9 step (5)).
+  (f) G8(b): an unfiltered getContactPoints (no bodyA) on the executing
+      client is a violation.
+  (g) The allowlist.  The graph has 22 modules, rooted at test_full_pipeline.py
+      as a declared root (D1 runs its main()) until B2's drivers exist.  40 G1
+      and 35 G2 hits, each reviewed by hand: plan-client writes and the plan-
+      twin mirror; the three solve_ik resets (G14 exemption); print-only
+      ground-truth diagnostics and the scoring-only verifiers, world_eye and
+      telemetry (write-only); and our own scene construction, the oracle
+      paths, BoxelTestEnv.reset, the Phase-4 oracle read and the overlay
+      bodies (unreachable on the bridge path through B3(b), the G16
+      overrides, oracle_phases=False and draw_boxel_overlays=False; asserted
+      at run time by the hooks, not taken on trust).  No hit is a new honesty
+      problem.  Two need action before review gate 1: the shadow caster
+      (shadow_calculator.py:160) runs on the default client, i.e. on their
+      executing world, until B3(c), so G8(b) would fail every bridge episode
+      before then; and world_eye and telemetry must run inside
+      gate_hooks.write_only in bridge runs, or be off.
+  (h) Numbering: B1's record, called BF#2 in P4.4, takes the next free number.
+  BEFORE / AFTER: no gates, no ledger / the files above.  Main-pipeline
+  changes are logging only: run_logger.py (ledger, dispatcher context,
+  provenance), belief.py and boxel_data.py (provenance rows), execution.py
+  (channel labels), test_full_pipeline.py (plan and step rows, the 17
+  labelled exits, move_resolve, place_target, sense_result).
+  EVIDENCE: archive/tampura_bridge_plan_2026-10-25/bf/BF2_b0/: gates_and_tests.txt
+  (bridge_gates.py all exit 0; 33 tests pass: 19 hook tests including G10's
+  pre-registered positive control, an extra obj_at_boxel conjunct, and
+  solve_ik restoring a Panda arm bit for bit; 14 reader controls that tamper
+  a clean ledger and must fail; the 7 G6 controls fail), and the ledgers of
+  two smokes on our scenes (random-pairs, holding, seeds 0 and 999): both
+  SUCCESS; G3, G4, G5, G15 pass (7 steps in 1 plan; 21 steps in 6 plans with
+  5 labelled early ends; 7 fragment changes, all planned or sweep renders).
+  The smokes show the pipeline still runs with the ledger on; they are not
+  B3's A/A acceptance, which covers these files too.
+  CLAIM EFFECT: none.
+  HONESTY CLASS: infrastructure.
+  DECISION 2026-10-26 (executor, under the user's go-ahead): as above.
+  Rejected: hooks on BulletClient instances only (misses execution.py's
+  module-level calls); provenance at call sites only (misses new sites).
+  RESULT: B0 deliverable met: the gates run green on the B0 package, the G6
+  controls exist and fail.
+
+BF#3 [DONE, user may override]  THEIR TREE IS NOT AS SHIPPED: ONE IMPORT FIX,
+      NOW DECLARED AND PINNED  (B0, 2026-10-26)
+  WHAT: G13's first run failed: tampura_environments (4167c35) has one
+  modified tracked file, tampura_environments/__init__.py, last written
+  2026-05-26 08:32, the day of the TAMPURA baseline.  At 4167c35 the package
+  does not import as shipped: its __init__ star-imports the toy_discrete
+  subpackage that commit 4167c35 ("remove toy discrete") deleted, and
+  run_planner.py imports the package (/root/tampura-work/setup.log:206-217
+  records the ModuleNotFoundError).  The 2026-05-26 set-up replaced the six
+  star imports with guarded imports of the same six subpackages that copy
+  their public names and warn on a missing one.  find_dice is imported and
+  run exactly as before.  The 11/20 baseline ran on this tree.  P4.2 and H4
+  said the tree was untouched; that was wrong.
+  BEFORE / AFTER: G13 required no modified tracked file / G13 accepts exactly
+  this file with sha256 9a64bea0...7b8ec4 (DECLARED_THEIR_CHANGES in
+  tools/bridge_gates.py) and fails on any other change, in either tree.
+  CLAIM EFFECT: a disclosure in the table notes and campaign.json: "TAMPURA
+  environments 4167c35 does not import as shipped; one import fix in its
+  package __init__ (the only change to their trees)".
+  HONESTY CLASS: configuration.
+  DECISION 2026-10-26 (executor): keep the existing fix, pin it, disclose it.
+  H4 reads "never edit their tree beyond this declared import fix".
+  Alternative not taken: replace it by the one-line deletion of the
+  toy_discrete import, the smallest possible fix; it would change arm T's
+  environment relative to the 2026-05-26 baseline.  The user may choose it
+  before B1(g) runs; G13's pin then changes with its own BF#.
+  RESULT: G13 passes on both trees.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS

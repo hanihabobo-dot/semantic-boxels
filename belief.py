@@ -2,12 +2,16 @@
 Belief state for the partial-observability search.
 
 Extracted from test_full_pipeline.py during the audit #26 refactor.
-Pure bookkeeping — no PyBullet, no planner, no I/O.  This makes the
+Pure bookkeeping — no PyBullet, no planner.  This makes the
 class trivially unit-testable and lets the orchestration loop in
 test_full_pipeline.py read top-down without scrolling past dataclasses.
+The one output is the #P4 B0 ledger row per fragment change (gate G5),
+a no-op when no run ledger is open.
 """
 
 from typing import Dict, List, Optional
+
+from run_logger import ledger_belief
 
 
 class BeliefState:
@@ -58,6 +62,8 @@ class BeliefState:
         declare "all searched" with unsensed fragments still standing.
         A fragment that already has a status keeps it.
         """
+        if shadow_id not in self.shadow_status:
+            ledger_belief(shadow_id, 'add', 'unknown')
         self.shadow_status.setdefault(shadow_id, 'unknown')
 
     def remove_shadow(self, shadow_id: str) -> None:
@@ -69,10 +75,13 @@ class BeliefState:
         all-searched exit and the run summary would name phantom
         unsearched shadows (review finding 2026-09-18).  Observation-backed
         removals keep using mark_sensed(found=False)."""
+        if shadow_id in self.shadow_status:
+            ledger_belief(shadow_id, 'forget', None)
         self.shadow_status.pop(shadow_id, None)
 
     def mark_sensed(self, shadow_id: str, found: bool) -> None:
         """Update belief after sensing a shadow."""
+        ledger_belief(shadow_id, 'status', 'found' if found else 'not_here')
         if found:
             self.shadow_status[shadow_id] = 'found'
             self.target_found_in = shadow_id
@@ -90,6 +99,7 @@ class BeliefState:
         """
         if self.shadow_status.get(shadow_id) == 'found':
             return
+        ledger_belief(shadow_id, 'status', 'unresolved')
         self.shadow_status[shadow_id] = 'unresolved'
 
     def get_parked_shadows(self) -> List[str]:

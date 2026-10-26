@@ -14,6 +14,8 @@ from typing import List, Dict, Optional, Set, Tuple, Any
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 
+from run_logger import ledger_belief
+
 
 class BoxelType(Enum):
     """Semantic type of a boxel."""
@@ -158,7 +160,12 @@ class BoxelRegistry:
         return self.get_boxels_by_type(BoxelType.FREE_SPACE)
 
     def remove_boxel(self, boxel_id: str) -> Optional[BoxelData]:
-        return self.boxels.pop(boxel_id, None)
+        removed = self.boxels.pop(boxel_id, None)
+        # #P4 B0 gate G5: a fragment leaving the registry is a belief
+        # change and gets a provenance row.
+        if removed is not None and removed.boxel_type == BoxelType.SHADOW:
+            ledger_belief(boxel_id, 'remove', None)
+        return removed
 
     def get_adjacent_free_boxels(self, region_min, region_max,
                                   exclude_ids=None, tolerance: float = 0.01):

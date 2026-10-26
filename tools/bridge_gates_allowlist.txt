@@ -1,0 +1,85 @@
+# tools/bridge_gates_allowlist.txt: the reviewed G1 / G2 allowlist (#P4 B0).
+# Generated from `python tools/bridge_gates.py allowlist-draft` over the
+# campaign import graph, every line then reviewed by hand (2026-10-26).
+# Fields: gate | file | function | line (informational) | class | reason |
+# source line.  A hit matches on (file, function, source line); every hit
+# needs one entry and every entry one hit, so a code change re-opens review.
+# G1 classes: plan client, D9 set-up, G14 exemption, unreachable on the
+# bridge path, test control.  G2 classes: write-only, scoring, plan twin,
+# unreachable on the bridge path, test control.  "Unreachable" claims are
+# asserted at run time by gate_hooks (G14, G8(b), G16), not taken on trust.
+G1 | boxel_env.py | BoxelTestEnv.__init__ | 510 | unreachable on the bridge path | our own world's construction; B3(b)'s adopt-client constructor skips it for the executing client, asserted there | p.resetSimulation(physicsClientId=self.client_id)
+G1 | boxel_env.py | BoxelTestEnv.__init__ | 511 | unreachable on the bridge path | our own world's construction; B3(b)'s adopt-client constructor skips it for the executing client, asserted there | p.setGravity(0, 0, -9.81, physicsClientId=self.client_id)
+G1 | boxel_env.py | BoxelTestEnv.__init__ | 512 | unreachable on the bridge path | our own world's construction; B3(b)'s adopt-client constructor skips it for the executing client, asserted there | p.setRealTimeSimulation(0, physicsClientId=self.client_id)
+G1 | boxel_env.py | BoxelTestEnv.__init__ | 525 | plan client | the plan twin is a fresh DIRECT client the env creates | p.resetSimulation(physicsClientId=self.plan_client_id)
+G1 | boxel_env.py | BoxelTestEnv.__init__ | 526 | plan client | the plan twin is a fresh DIRECT client the env creates | p.setGravity(0, 0, -9.81, physicsClientId=self.plan_client_id)
+G1 | boxel_env.py | BoxelTestEnv.__init__ | 527 | plan client | the plan twin is a fresh DIRECT client the env creates | p.setRealTimeSimulation(0, physicsClientId=self.plan_client_id)
+G1 | boxel_env.py | BoxelTestEnv._mirror_load_urdf | 631 | unreachable on the bridge path | loads into our executing world; the adopt path uses B3(b)'s plan-client-only mirror variants | gid = p.loadURDF(*args, **kwargs, physicsClientId=self.client_id)
+G1 | boxel_env.py | BoxelTestEnv._mirror_load_urdf | 632 | plan client | the plan-twin half of the mirror loader | pid = p.loadURDF(*args, **kwargs, physicsClientId=self.plan_client_id)
+G1 | boxel_env.py | BoxelTestEnv._mirror_spawn_object | 667 | unreachable on the bridge path | spawns into both clients; the adopt path uses B3(b)'s plan-client-only variant | body_id = p.createMultiBody(
+G1 | boxel_env.py | BoxelTestEnv._mirror_spawn_object | 675 | unreachable on the bridge path | spawns into both clients; the adopt path uses B3(b)'s plan-client-only variant | p.changeDynamics(body_id, -1,
+G2 | boxel_env.py | BoxelTestEnv.sync_to_plan_client | 727 | unreachable on the bridge path | the registry-less branch for probes; main() always passes registry (test_full_pipeline.py:1000, 1152, 1323) | pos, orn = p.getBasePositionAndOrientation(
+G1 | boxel_env.py | BoxelTestEnv.sync_to_plan_client | 729 | plan client | plan-twin mirror (registry-less branch) | p.resetBasePositionAndOrientation(
+G2 | boxel_env.py | BoxelTestEnv.sync_to_plan_client | 743 | plan twin | plan-twin mirror reads the static bodies only (plane, table, robot, tray), never a task body; G8(b) traps a task-body read at run time | pos, orn = p.getBasePositionAndOrientation(
+G1 | boxel_env.py | BoxelTestEnv.sync_to_plan_client | 745 | plan client | plan-twin mirror of a static body | p.resetBasePositionAndOrientation(
+G1 | boxel_env.py | BoxelTestEnv.sync_to_plan_client | 754 | plan client | poses the plan twin from the registry centre, or parks a body without a boxel | p.resetBasePositionAndOrientation(
+G1 | boxel_env.py | BoxelTestEnv.sync_to_plan_client | 764 | plan client | mirrors the robot's joints into the plan twin | p.resetJointState(self.plan_robot_id, j, angle,
+G1 | boxel_env.py | BoxelTestEnv._setup_scene | 811 | unreachable on the bridge path | our scene's pad friction; D9 sets it in their world during set-up | p.changeDynamics(robot_id, finger_link, lateralFriction=1.2,
+G1 | boxel_env.py | BoxelTestEnv._setup_scene | 825 | unreachable on the bridge path | our scene's finger opening; D9 sets it in their world during set-up | p.resetJointState(robot_id, fj, 0.04,
+G1 | boxel_env.py | BoxelTestEnv._setup_scene | 827 | plan client | finger opening of the plan-twin robot | p.resetJointState(self.plan_robot_id, fj, 0.04,
+G1 | boxel_env.py | BoxelTestEnv._spawn_object | 888 | unreachable on the bridge path | our scene construction | body_id = p.createMultiBody(baseMass=spec.mass,
+G1 | boxel_env.py | BoxelTestEnv._spawn_object | 893 | unreachable on the bridge path | our scene construction | p.changeDynamics(body_id, -1,
+G2 | boxel_env.py | BoxelTestEnv._create_tray | 1068 | unreachable on the bridge path | our scene construction (tray) | aabb_min, aabb_max = p.getAABB(body_id,
+G2 | boxel_env.py | BoxelTestEnv._hidden_xy_positions | 1332 | unreachable on the bridge path | our scene construction (hidden-target placement) | hits = p.rayTestBatch([cam] * 8, corners, numThreads=0)
+G2 | boxel_env.py | BoxelTestEnv._create_targets | 1365 | unreachable on the bridge path | spawn code | ((float(info.position[0]), float(info.position[1])),
+G2 | boxel_env.py | BoxelTestEnv._create_targets | 1365 | unreachable on the bridge path | spawn code | ((float(info.position[0]), float(info.position[1])),
+G2 | boxel_env.py | BoxelTestEnv.oracle_detect_objects | 1822 | unreachable on the bridge path | oracle path; the env adapter overrides it to raise (G16) | pos, orn = p.getBasePositionAndOrientation(obj_info.object_id, **_pc)
+G2 | boxel_env.py | BoxelTestEnv.oracle_detect_objects | 1831 | unreachable on the bridge path | oracle path; the env adapter overrides it to raise (G16) | aabb_min, aabb_max = p.getAABB(obj_info.object_id, **_pc)
+G2 | boxel_env.py | BoxelTestEnv.oracle_detect_objects | 1842 | unreachable on the bridge path | oracle path; the env adapter overrides it to raise (G16) | results = p.rayTestBatch(
+G2 | boxel_env.py | BoxelTestEnv.update_object_positions | 1867 | unreachable on the bridge path | the env adapter overrides update_object_positions as a counted no-op (G16) | pos, orn = p.getBasePositionAndOrientation(obj_info.object_id)
+G1 | boxel_env.py | BoxelTestEnv.reset | 1888 | unreachable on the bridge path | BoxelTestEnv.reset; the env adapter's reset() raises | p.resetSimulation(physicsClientId=cid)
+G1 | boxel_env.py | BoxelTestEnv.reset | 1889 | unreachable on the bridge path | BoxelTestEnv.reset; the env adapter's reset() raises | p.setGravity(0, 0, -9.81, physicsClientId=cid)
+G1 | boxel_env.py | BoxelTestEnv.reset | 1890 | unreachable on the bridge path | BoxelTestEnv.reset; the env adapter's reset() raises | p.setRealTimeSimulation(0, physicsClientId=cid)
+G2 | execution.py | _release_and_verify_drop | 606 | write-only | print-only #84 pre-release diagnostic of the held body, which has an OBJECT boxel; covered by the G2 leak test | pre_pos, pre_orn = p.getBasePositionAndOrientation(held_body_id)
+G2 | execution.py | _release_and_verify_drop | 607 | write-only | print-only #84 pre-release diagnostic of the held body, which has an OBJECT boxel; covered by the G2 leak test | pre_aabb_min, pre_aabb_max = p.getAABB(held_body_id)
+G2 | execution.py | _release_and_verify_drop | 658 | write-only | print-only diagnostic after the release, next to the robot's own verdict (_observe_release) | _gt_aabb_min, _ = p.getAABB(held_body_id)
+G2 | execution.py | _release_and_verify_drop | 659 | write-only | print-only diagnostic after the release, next to the robot's own verdict (_observe_release) | _, _gt_orn = p.getBasePositionAndOrientation(held_body_id)
+G2 | execution.py | execute_pick | 1133 | write-only | print-only pick-arrival diagnostic; nothing here feeds control | obj_live_pos = p.getBasePositionAndOrientation(obj_id)[0]
+G2 | execution.py | execute_pick | 1261 | write-only | printed in the grip-lost message only; the decision is the tactile pad check above it | obj_z_now = p.getBasePositionAndOrientation(obj_id)[0][2]
+G1 | execution.py | execute_place | 1458 | plan client | mirrors the placed body into the plan twin from the belief | p.resetBasePositionAndOrientation(
+G2 | execution.py | execute_stack | 1568 | write-only | print-only #84 stack diagnostic | held_orn = p.getBasePositionAndOrientation(held_body_id)[1]
+G2 | execution.py | execute_stack | 1572 | write-only | print-only #84 stack diagnostic | _gt_sup = p.getAABB(env.objects[on_obj_name].object_id)
+G2 | execution.py | execute_stack | 1631 | write-only | print-only #84 arrival diagnostic | live_obj_pos, live_obj_orn = p.getBasePositionAndOrientation(held_body_id)
+G1 | execution.py | execute_stack | 1715 | plan client | mirrors the stacked body into the plan twin from the belief | p.resetBasePositionAndOrientation(
+G1 | robot_utils.py | is_config_collision_free | 235 | plan client | collision probe on the plan client at run time; G14 fails it on the executing client | p.resetJointState(robot_id, i, angle,
+G2 | robot_utils.py | is_config_collision_free | 267 | plan twin | save of the held body's pose inside the plan-client collision probe | saved_held[hid] = p.getBasePositionAndOrientation(
+G1 | robot_utils.py | is_config_collision_free | 269 | plan client | collision probe on the plan client at run time; G14 fails it on the executing client | p.resetBasePositionAndOrientation(
+G1 | robot_utils.py | is_config_collision_free | 324 | plan client | collision probe on the plan client at run time; G14 fails it on the executing client | p.resetJointState(robot_id, i, angle,
+G1 | robot_utils.py | is_config_collision_free | 327 | plan client | collision probe on the plan client at run time; G14 fails it on the executing client | p.resetBasePositionAndOrientation(
+G1 | robot_utils.py | solve_ik | 566 | G14 exemption | execution-time IK on the executing robot's arm joints, net-zero inside a dispatcher context (gate_hooks solve_ik) | p.resetJointState(robot_id, i, angle,
+G1 | robot_utils.py | solve_ik | 618 | G14 exemption | execution-time IK on the executing robot's arm joints, net-zero inside a dispatcher context (gate_hooks solve_ik) | p.resetJointState(robot_id, i, angle,
+G1 | robot_utils.py | solve_ik | 671 | G14 exemption | execution-time IK on the executing robot's arm joints, net-zero inside a dispatcher context (gate_hooks solve_ik) | p.resetJointState(robot_id, i, angle,
+G2 | shadow_calculator.py | ShadowCalculator.calculate_shadow_boxel | 160 | plan twin | the shadow caster; B3(c)'s shadow-raycast client points it at the plan twin; until then G8(b) fails it on the executing client | results = p.rayTestBatch(corners, ray_ends, numThreads=0, **_pc)
+G2 | streams.py | BoxelStreams.__init__ | 247 | plan twin | the robot base on the plan client (proprioception) | base_pos, _ = p.getBasePositionAndOrientation(
+G1 | streams.py | BoxelStreams._pybullet_ik | 360 | plan client | plan-client IK seed write | p.resetJointState(self.robot_id, i, angle,
+G1 | streams.py | BoxelStreams._pybullet_ik | 417 | plan client | plan-client IK probe and restore | p.resetJointState(self.robot_id, i, angle,
+G1 | streams.py | BoxelStreams._pybullet_ik | 472 | plan client | plan-client IK probe and restore | p.resetJointState(self.robot_id, i, angle,
+G2 | streams.py | BoxelStreams.test_target_can_hide_in_shadow | 682 | plan twin | sense-gate test on the plan client; reached only under --sense-gate strict, off in the campaign | results = p.rayTestBatch(
+G2 | telemetry.py | WorldTelemetry.__init__ | 202 | write-only | world telemetry, off unless armed | pos, quat = p.getBasePositionAndOrientation(
+G2 | telemetry.py | WorldTelemetry.register_bodies | 228 | write-only | world telemetry, off unless armed | pos, _ = p.getBasePositionAndOrientation(
+G2 | telemetry.py | WorldTelemetry.phase | 269 | write-only | world telemetry, off unless armed | pos, _ = p.getBasePositionAndOrientation(
+G2 | telemetry.py | WorldTelemetry._body_state | 310 | write-only | world telemetry, off unless armed | pos, quat = p.getBasePositionAndOrientation(
+G2 | telemetry.py | WorldTelemetry._body_state | 316 | write-only | world telemetry, off unless armed | aabb_min, aabb_max = p.getAABB(bid, physicsClientId=self.client_id)
+G2 | test_full_pipeline.py | _verify_cube_on | 181 | write-only | scoring-only verifier, recorded and not acted on (test_full_pipeline.py:2219-2225) | o_min, o_max = p.getAABB(env.objects[obj_name].object_id)
+G2 | test_full_pipeline.py | _verify_cube_on | 182 | write-only | scoring-only verifier, recorded and not acted on (test_full_pipeline.py:2219-2225) | s_min, s_max = p.getAABB(env.objects[support_name].object_id)
+G2 | test_full_pipeline.py | _verify_on_table | 220 | write-only | scoring-only verifier | o_min, _ = p.getAABB(env.objects[obj_name].object_id)
+G2 | test_full_pipeline.py | main | 698 | unreachable on the bridge path | Phase-4 oracle read, unreachable under oracle_phases=False (B3) | tpos = np.array(env.objects[tname].position)
+G2 | test_full_pipeline.py | main | 699 | unreachable on the bridge path | Phase-4 oracle read, unreachable under oracle_phases=False (B3) | t_min, t_max = p.getAABB(env.objects[tname].object_id)
+G1 | visualization.py | conceal_overlay_for_observation | 66 | unreachable on the bridge path | loops over drawn overlay bodies; every bridge run passes draw_boxel_overlays=False | p.resetBasePositionAndOrientation(
+G1 | visualization.py | restore_overlay_after_observation | 83 | unreachable on the bridge path | loops over drawn overlay bodies; every bridge run passes draw_boxel_overlays=False | p.resetBasePositionAndOrientation(
+G1 | visualization.py | BoxelVisualizer._draw_boxel_phantom | 176 | unreachable on the bridge path | overlay body; every bridge run passes draw_boxel_overlays=False | body_id = p.createMultiBody(
+G1 | visualization.py | BoxelVisualizer.draw_boxels | 254 | unreachable on the bridge path | overlay body; every bridge run passes draw_boxel_overlays=False | p.removeBody(body_id)
+G1 | visualization.py | BoxelVisualizer.remove_boxel_viz | 327 | unreachable on the bridge path | overlay body; every bridge run passes draw_boxel_overlays=False | p.removeBody(body_id)
+G1 | visualization.py | BoxelVisualizer.clear_all | 344 | unreachable on the bridge path | overlay body; every bridge run passes draw_boxel_overlays=False | p.removeBody(body_id)
+G2 | world_eye.py | WorldEye._objects | 173 | write-only | world eye snapshot, write-only; bridge runs wrap it in gate_hooks.write_only | pos, quat = p.getBasePositionAndOrientation(bid)
+G2 | world_eye.py | WorldEye._objects | 174 | write-only | world eye snapshot, write-only; bridge runs wrap it in gate_hooks.write_only | amin, amax = p.getAABB(bid)

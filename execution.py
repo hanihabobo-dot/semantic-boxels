@@ -43,6 +43,7 @@ import pybullet as p
 import telemetry          # #P1 F17 world telemetry (no-op unless armed)
 import world_eye          # textual world/belief/camera snapshots (no-op unless armed)
 from boxel_data import BoxelData, BoxelType
+from run_logger import provenance, provenance_channel
 from perception import (DETECTION_MIN_PIXELS, DETECTION_SUPPORT_SNAP,
                         SENSE_MARGINAL_BLOCKED_FRACTION, ObjectDetection,
                         detect_objects_from_render,
@@ -2077,6 +2078,7 @@ def _fragment_renders_empty(bd, render) -> bool:
     return True
 
 
+@provenance_channel('lost_caster_render')
 def retire_lost_objects(lost_ids, registry, viz, shadows,
                         shadow_occluder_map, boxel_centers, occluders,
                         belief, render=None, env=None):
@@ -2177,6 +2179,7 @@ def _shrink_shadow_fragment(registry, shadow_bd, blocked_min, blocked_max,
     return True
 
 
+@provenance_channel('sweep_render')
 def sweep_all_fragments(*, registry, belief, viz, shadows,
                         shadow_occluder_map, boxel_centers,
                         boxel_to_pybullet, target_pybullet_id, robot_id,
@@ -2409,6 +2412,7 @@ def register_new_detections(*, env, registry, belief, viz, detections,
     return registered
 
 
+@provenance_channel('planned_sense_render')
 def handle_sense_action(
     *,
     action_params,
@@ -2733,7 +2737,8 @@ def handle_sense_action(
                       f"is absent).  The content stays unmodelled and "
                       f"the fragment stays in the registry.")
                 blocked_giveup_shadows.add(sid_str)
-                belief.mark_unresolved(sid_str)
+                with provenance('strike_park'):
+                    belief.mark_unresolved(sid_str)
             # #P1 F16: this render is still evidence about every OTHER
             # fragment even though it could not settle this one — the
             # exact loop F15 exposed, where repeated senses of one
@@ -2870,18 +2875,22 @@ def handle_sense_action(
                 # so only the accurate (live-AABB) entry stays.
                 old_obj = registry.get_boxel(obj_name)
                 if old_obj is not None:
-                    for old_sid in list(old_obj.shadow_boxel_ids):
-                        registry.remove_boxel(old_sid)
-                        if viz is not None:
-                            viz.remove_boxel_viz(old_sid)
-                        if old_sid in shadows:
-                            shadows.remove(old_sid)
-                        shadow_occluder_map.pop(old_sid, None)
-                        boxel_centers.pop(old_sid, None)
-                        # #P1 F20 follow-up: the belief must forget the
-                        # superseded fragment too, or it stays 'unknown'
-                        # forever and blocks the all-searched exit.
-                        belief.remove_shadow(old_sid)
+                    # #P4 B0 gate G5: no render of these fragments' grids
+                    # backs this removal (P4.5 correction (6), M7); the
+                    # channel says so and the ledger counts it.
+                    with provenance('superseded_unrendered', body=obj_name):
+                        for old_sid in list(old_obj.shadow_boxel_ids):
+                            registry.remove_boxel(old_sid)
+                            if viz is not None:
+                                viz.remove_boxel_viz(old_sid)
+                            if old_sid in shadows:
+                                shadows.remove(old_sid)
+                            shadow_occluder_map.pop(old_sid, None)
+                            boxel_centers.pop(old_sid, None)
+                            # #P1 F20 follow-up: the belief must forget the
+                            # superseded fragment too, or it stays 'unknown'
+                            # forever and blocks the all-searched exit.
+                            belief.remove_shadow(old_sid)
                     if viz is not None:
                         viz.remove_boxel_viz(obj_name)
 
@@ -3076,7 +3085,8 @@ def handle_sense_action(
               f"audit #47 (deferred out of scope 2026-05-06).")
         _capture_freeze(f"give-up: {shadow_id} blocked 3x (still-blocked 3/3)")
         blocked_giveup_shadows.add(sid_str)
-        belief.mark_unresolved(sid_str)
+        with provenance('strike_park'):
+            belief.mark_unresolved(sid_str)
     else:
         print(f"    -> REPLANNING without marking shadow empty...")
     # #P1 F16: a blocked sense still rendered the whole table — use it on

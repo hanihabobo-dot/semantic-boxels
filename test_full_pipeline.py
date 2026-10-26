@@ -88,7 +88,9 @@ from streams import RobotConfig
 from robot_utils import (move_robot_smooth,
                          detect_execution_collisions,
                          FINGER_JOINTS)
-from run_logger import RunLogger, parse_pipeline_args, report_run_outcome
+from run_logger import (RunLogger, parse_pipeline_args, report_run_outcome,
+                        dispatch_begin, dispatch_end, ledger_event,
+                        ledger_plan)
 from visualization import BoxelVisualizer
 
 from belief import BeliefState
@@ -1350,6 +1352,13 @@ def main(gui=True, run_logger=None, scene_config=None,
             held_obj=held_obj_name,  # audit #58 — preserve grasp across replans
         )
         plan_dt = time.perf_counter() - plan_t0
+        # #P4 B0: every plan() call and its result go to the run ledger
+        # (gates G3, G10, G11).
+        ledger_event('plan', plan_id=plan_count, call='mission', goal=goal,
+                     targets=list(planner_target_objects),
+                     actions=ledger_plan(plan),
+                     plan_obj=(id(plan) if plan is not None else None),
+                     plan_time_s=plan_dt)
         world_eye.snapshot(
             f"plan#{plan_count} planned ({'no plan' if plan is None else str(len(plan)) + ' actions'})",
             registry=registry, belief=belief, plan_count=plan_count,
@@ -1398,6 +1407,12 @@ def main(gui=True, run_logger=None, scene_config=None,
                 held_obj=held_obj_name,
             )
             plan_dt += time.perf_counter() - plan_t1
+            ledger_event('plan', plan_id=plan_count, call='disposal',
+                         goal=('handempty',),
+                         targets=list(planner_target_objects),
+                         actions=ledger_plan(plan),
+                         plan_obj=(id(plan) if plan is not None else None),
+                         plan_time_s=time.perf_counter() - plan_t1)
             if plan is None:
                 exit_reason = "no_plan_while_holding"
                 _bd = getattr(planner, 'last_no_plan_binding_death', None)
@@ -1490,6 +1505,10 @@ def main(gui=True, run_logger=None, scene_config=None,
         for i, action in enumerate(plan):
             action_name = action[0]
             params = action[1:]
+            # #P4 B0: the dispatcher context for this step (gate G3).
+            # Every exit from the step below closes it with a status.
+            dispatch_begin(plan_count, i + 1, action_name, params,
+                           plan_obj=id(plan))
 
             print(f"\n  Executing: {action_name}")
             world_eye.snapshot(
@@ -1551,10 +1570,19 @@ def main(gui=True, run_logger=None, scene_config=None,
                             #       f"(prior diff={diff:.4f} rad, "
                             #       f"{len(new_traj.waypoints)} waypoints)")
                             traj = new_traj
+                            # #P4 B0 gate G3: the re-solve keeps the
+                            # planned goal configuration.
+                            ledger_event(
+                                'move_resolve', goal_config=q2.name,
+                                goal_equal=bool(np.array_equal(
+                                    np.asarray(new_traj.waypoints[-1].joint_positions),
+                                    np.asarray(q2.joint_positions))),
+                                start_diff=diff)
                         except StopIteration:
                             # print(f"    [#60-fix(i)] plan_motion could not replan from "
                             #       f"runtime pose (diff={diff:.4f}) — breaking dispatch "
                             #       f"loop to trigger outer replan")
+                            dispatch_end('motion_resolve_failed')
                             break
 
                 # Stream intermediate waypoints; settle ONLY the final
@@ -1606,6 +1634,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # disturbs bystanders (F18, F10) and nothing re-read the
                 # scene after it until now.
                 if _integrity_after(f"plan#{plan_count} move({dest_boxel_id})"):
+                    dispatch_end('integrity_replan')
                     break
 
             elif action_name == 'sense':
@@ -1638,7 +1667,10 @@ def main(gui=True, run_logger=None, scene_config=None,
                     body_id_to_name=body_id_to_name,
                     show_free=show_free,
                 )
+                ledger_event('sense_result', reason=sense_result.reason,
+                             continue_=sense_result.continue_)
                 if not sense_result.continue_:
+                    dispatch_end('sense_outcome')
                     break
 
             elif action_name == 'pick':
@@ -1662,6 +1694,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                     held_name = body_id_to_name.get(held_body_id, str(held_body_id))
                     print(f"    ERROR: Cannot pick {obj_str} — gripper already "
                           f"holds {held_name}. Replanning.")
+                    dispatch_end('stale_precondition')
                     break
 
                 # Resolve symbolic name → PyBullet object.  The target
@@ -1673,6 +1706,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                     pick_obj_name = target_name
                 else:
                     print(f"    ERROR: Cannot resolve PyBullet object for '{obj_str}'")
+                    dispatch_end('stale_precondition')
                     break
                 # #P1 F24: the pick aims at the registry estimate.  A
                 # pick is grounded on obj_at_boxel_KIF, which _build_init
@@ -1686,6 +1720,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                     print(f"    ERROR: no registry estimate for {obj_str} — "
                           f"the pick was grounded on a fact the belief no "
                           f"longer holds; replanning (#P1 F24)")
+                    dispatch_end('stale_precondition')
                     break
                 pick_pos = np.asarray(_pick_bd.center, dtype=float).copy()
                 pick_aabb = (np.asarray(_pick_bd.min_corner, dtype=float).copy(),
@@ -1741,6 +1776,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                             _lost, registry, viz, shadows,
                             shadow_occluder_map, boxel_centers,
                             occluders, belief, env=env)
+                    dispatch_end('pick_failure')
                     break
                 held_body_id, current_config = result
                 # #P1 F2: a successful pick proves the object is
@@ -1761,6 +1797,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # #P2 (a): the descent and the lift can shove neighbours;
                 # the held object is excluded (F26).
                 if _integrity_after(f"plan#{plan_count} pick({pick_obj_name})"):
+                    dispatch_end('integrity_replan')
                     break
                 # Audit #48: clear the symbolic stack relation so the next
                 # _build_init does not re-emit a stale (on obj_str ?x) fact
@@ -1798,7 +1835,16 @@ def main(gui=True, run_logger=None, scene_config=None,
                         registry.get_boxel(boxel_id_str).center, dtype=float)
                 else:
                     print(f"    ERROR: Cannot resolve position for boxel '{boxel_id_str}'")
+                    dispatch_end('stale_precondition')
                     break
+                # #P4 B0 gate G4: the commanded destination against the
+                # planned boxel's registry centre.
+                _planned_bd = registry.get_boxel(boxel_id_str)
+                ledger_event(
+                    'place_target', boxel=boxel_id_str,
+                    target_xy=np.asarray(place_pos, dtype=float)[:2],
+                    boxel_center_xy=(np.asarray(_planned_bd.center, dtype=float)[:2]
+                                     if _planned_bd is not None else None))
 
                 try:
                     # #P1 WP2b: the held object's estimated box (registry,
@@ -1809,6 +1855,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                         print(f"    ERROR: no registry estimate for the held "
                               f"{obj_str} — cannot size the release; "
                               f"replanning (#P1 WP2b)")
+                        dispatch_end('stale_precondition')
                         break
                     place_result = execute_place(
                         robot_id, env, obj_str, place_pos, grasp, config,
@@ -1855,6 +1902,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                             _lost, registry, viz, shadows,
                             shadow_occluder_map, boxel_centers,
                             occluders, belief, env=env)
+                    dispatch_end('empty_hand')
                     break
                 if place_result is None:
                     # audit #79 (#P1 rework) — distinguish IK failure
@@ -1893,6 +1941,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                         refresh_object_aabbs(env, registry, viz=viz)
                     else:
                         print(f"    IK failure during place — replanning (audit #82)")
+                    dispatch_end('place_failure')
                     break
                 current_config = place_result
                 held_body_id = None
@@ -2025,6 +2074,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # #P2 (a): bystanders after the place (the placed object's
                 # own belief was just refreshed by the carve above).
                 if _integrity_after(f"plan#{plan_count} place({obj_str})"):
+                    dispatch_end('integrity_replan')
                     break
 
             elif action_name == 'stack':
@@ -2050,6 +2100,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                         print(f"    ERROR: no registry estimate for "
                               f"{'the held ' + obj_str if _held_bd is None else 'the support ' + on_obj_str}"
                               f" — cannot aim the stack; replanning (#P1 WP2b)")
+                        dispatch_end('stale_precondition')
                         break
                     stack_result = execute_stack(
                         robot_id, env, obj_str, on_obj_str, grasp, config,
@@ -2091,6 +2142,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                             _lost, registry, viz, shadows,
                             shadow_occluder_map, boxel_centers,
                             occluders, belief, env=env)
+                    dispatch_end('empty_hand')
                     break
                 if stack_result is None:
                     # audit #79 (#P1 rework) — mirror of the place
@@ -2142,6 +2194,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                         refresh_object_aabbs(env, registry, viz=viz)
                     else:
                         print(f"    IK failure during stack — replanning (audit #30)")
+                    dispatch_end('stack_failure')
                     break
                 current_config = stack_result
                 held_body_id = None
@@ -2248,11 +2301,16 @@ def main(gui=True, run_logger=None, scene_config=None,
                     shadow_occluder_map=shadow_occluder_map)
                 # #P2 (a): bystanders and the tower after the stack.
                 if _integrity_after(f"plan#{plan_count} stack({obj_str})"):
+                    dispatch_end('integrity_replan')
                     break
 
+            dispatch_end('ok')
             if gui:
                 env.refresh_debug_camera_views()
 
+        # A step left by a break that named no reason is recorded as such
+        # (gate G3 fails on it); after a labelled exit this is a no-op.
+        dispatch_end('unlabelled')
         if episode_over:
             break
 

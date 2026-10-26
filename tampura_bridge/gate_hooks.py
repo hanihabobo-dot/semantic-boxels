@@ -1,0 +1,614 @@
+"""#P4 B0: runtime gate hooks (PAPER_AUDIT.txt #P4, P4.1).
+
+install(cfg) wraps
+  * every pybullet function that writes world or robot state (G14),
+  * the motor commands and robot_utils.move_robot_smooth (G3),
+  * stepSimulation (G6: no physics step before main() starts, after it
+    returns, or after the last dispatched action),
+  * getAABB, getBasePositionAndOrientation, getClosestPoints,
+    getContactPoints, rayTest and rayTestBatch (G8(b)),
+  * getCameraImage (G20),
+  * robot_utils.solve_ik (G14's net-zero exemption) and the two collision
+    checks (task-body poses unchanged across them, G14),
+  * PDDLStreamPlanner.plan (G10) and the solve() it calls (G11(ii)).
+
+The pybullet wraps sit on the module.  BulletClient looks a function up on
+the module at call time but injects its client id only into builtins, so
+install() gives BulletClient.__getattr__ the same injection for the wrapped
+functions; forwarding is otherwise unchanged.  Names bound with
+`from robot_utils import solve_ik` are rebound in every loaded module of
+this repository.
+
+A hook that sees a violation increments a counter, writes a ledger row and
+raises GateViolation.  The main pipeline's diagnostics swallow broad
+exceptions (world_eye.py:172-176, telemetry.py:201-205), so the counters
+decide: gate_record() writes them to the run ledger after the episode
+(G21), and any count above 0 fails the episode.
+"""
+
+import functools
+import hashlib
+import inspect
+import os
+import sys
+from collections import Counter
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Callable, Optional
+
+import pybullet
+
+import run_logger
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+class GateViolation(RuntimeError):
+    """Raised by a runtime gate hook.  The counter, not the exception,
+    decides the episode."""
+
+
+@dataclass
+class GateConfig:
+    executing_client: int = 0
+    robot_id: Optional[int] = None
+    arm_joints: tuple = (0, 1, 2, 3, 4, 5, 6)
+    # Task bodies in the executing world (the die and the cups).
+    task_body_ids: frozenset = frozenset()
+    # True when the body has an OBJECT boxel in the registry (G8(b)).
+    has_object_boxel: Callable = field(default=lambda body_id: False)
+    # The body the dispatcher holds, or None (tactile queries, G8(b)).
+    held_body: Callable = field(default=lambda: None)
+    # G20: the matrices every render must use (None: renders are logged
+    # but not checked).
+    camera_view: Optional[tuple] = None
+    camera_proj: Optional[tuple] = None
+    camera_tol: float = 1e-6
+    # G10: the mission goal and the target symbol T (None: not checked).
+    mission_goal: Optional[tuple] = None
+    target_symbol: Optional[str] = None
+    domain_file: str = os.path.join(REPO, 'pddl', 'domain_pddlstream.pddl')
+    stream_file: str = os.path.join(REPO, 'pddl', 'stream.pddl')
+
+
+# Writers that name a body: name -> ((positional index, keyword), ...).
+_BODY_WRITERS = {
+    'resetBasePositionAndOrientation': ((0, 'bodyUniqueId'),),
+    'resetBaseVelocity': ((0, 'objectUniqueId'),),
+    'resetJointState': ((0, 'bodyUniqueId'),),
+    'resetJointStateMultiDof': ((0, 'bodyUniqueId'),),
+    'resetJointStatesMultiDof': ((0, 'bodyUniqueId'),),
+    'changeDynamics': ((0, 'bodyUniqueId'),),
+    'applyExternalForce': ((0, 'objectUniqueId'),),
+    'applyExternalTorque': ((0, 'objectUniqueId'),),
+    'setCollisionFilterGroupMask': ((0, 'bodyUniqueId'),),
+    'setCollisionFilterPair': ((0, 'bodyUniqueIdA'), (1, 'bodyUniqueIdB')),
+    'createConstraint': ((0, 'parentBodyUniqueId'), (2, 'childBodyUniqueId')),
+    'removeBody': ((0, 'bodyUniqueId'),),
+}
+# Writers that take no body id fail on the executing client outright.
+_BODYLESS_WRITERS = (
+    'changeConstraint', 'removeConstraint', 'createMultiBody', 'loadURDF',
+    'loadSDF', 'loadMJCF', 'loadBullet', 'loadSoftBody', 'saveState',
+    'restoreState', 'resetSimulation', 'setRealTimeSimulation', 'setGravity',
+    'setTimeStep', 'setPhysicsEngineParameter',
+)
+_MOTORS = ('setJointMotorControl2', 'setJointMotorControlArray',
+           'setJointMotorControlMultiDof', 'setJointMotorControlMultiDofArray')
+_BODY_QUERIES = ('getAABB', 'getBasePositionAndOrientation')
+_PAIR_QUERIES = ('getClosestPoints', 'getContactPoints')
+_RAYS = ('rayTest', 'rayTestBatch')
+_PHASES = ('setup', 'main', 'post')
+
+_cfg: Optional[GateConfig] = None
+_counts = Counter()
+_info = Counter()
+_steps = Counter()
+_phase = 'setup'
+_scoring = 0
+_write_only = []
+_captures = []
+_ik_exempt = []
+_ik_steps = []
+_seen_dispatch = False
+_steps_since_dispatch = 0
+_solve_calls = 0
+_pybullet_originals = {}
+_rebound = []
+_patched_attrs = []
+_orig_plan_code = None
+_planner_cls = None
+_streams_cls = None
+_expected_sha = {}
+
+
+# ----- helpers -----------------------------------------------------------
+
+def _client(kwargs):
+    return kwargs.get('physicsClientId', 0)
+
+
+def _arg(args, kwargs, idx, kw):
+    if kw in kwargs:
+        return kwargs[kw]
+    if len(args) > idx:
+        return args[idx]
+    return None
+
+
+def _violation(gate, fn, detail):
+    _counts[gate] += 1
+    run_logger.ledger_event('gate_violation', gate=gate, fn=fn, detail=detail)
+    raise GateViolation(f"{gate}: {fn}: {detail}")
+
+
+def _executing(kwargs):
+    return _cfg is not None and _client(kwargs) == _cfg.executing_client
+
+
+def _hidden(body):
+    return (body is not None and body in _cfg.task_body_ids
+            and not _cfg.has_object_boxel(body))
+
+
+def _read_exempt():
+    return _scoring > 0 or bool(_write_only)
+
+
+def _sha(text):
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()
+
+
+def _norm(goal):
+    if isinstance(goal, (list, tuple)):
+        return tuple(_norm(g) for g in goal)
+    return str(goal)
+
+
+def _close(a, b, tol):
+    if a is None or b is None:
+        return False
+    a, b = list(a), list(b)
+    return len(a) == len(b) and all(abs(float(x) - float(y)) <= tol
+                                    for x, y in zip(a, b))
+
+
+def _arm_positions(client, robot_id):
+    return tuple(pybullet.getJointState(robot_id, j, physicsClientId=client)[0]
+                 for j in _cfg.arm_joints)
+
+
+def _task_poses(client):
+    get = _pybullet_originals.get('getBasePositionAndOrientation',
+                                  pybullet.getBasePositionAndOrientation)
+    return {b: get(b, physicsClientId=client)
+            for b in sorted(_cfg.task_body_ids)}
+
+
+# ----- pybullet hooks ----------------------------------------------------
+
+def _check_body_write(name, body, args, kwargs):
+    if body == _cfg.robot_id:
+        if (name == 'resetJointState' and _ik_exempt
+                and _ik_exempt[-1] == (_cfg.executing_client, body)
+                and _arg(args, kwargs, 1, 'jointIndex') in _cfg.arm_joints):
+            return
+        _violation('G14', name, f'write to the executing robot (body {body})')
+    if body in _cfg.task_body_ids:
+        _violation('G14', name, f'write to task body {body}')
+    _info['other_body_write'] += 1
+    run_logger.ledger_event('gate_info', note='other_body_write', fn=name,
+                            body=body)
+
+
+def _make_writer(name, orig, slots):
+    def hook(*args, **kwargs):
+        if _executing(kwargs) and _phase != 'setup':
+            if slots is None:
+                enabling = (name != 'setRealTimeSimulation'
+                            or _arg(args, kwargs, 0, 'enableRealTimeSimulation'))
+                if enabling:
+                    _violation('G14', name,
+                               'body-less state write on the executing client')
+            else:
+                for idx, kw in slots:
+                    body = _arg(args, kwargs, idx, kw)
+                    if body is not None and body >= 0:
+                        _check_body_write(name, body, args, kwargs)
+        return orig(*args, **kwargs)
+    return hook
+
+
+def _make_motor(name, orig):
+    def hook(*args, **kwargs):
+        if (_executing(kwargs) and _phase != 'setup'
+                and _arg(args, kwargs, 0, 'bodyUniqueId') == _cfg.robot_id
+                and run_logger.current_dispatch() is None):
+            _violation('G3', name, 'motor command on the executing robot '
+                                   'outside a dispatched action')
+        return orig(*args, **kwargs)
+    return hook
+
+
+def _make_step(orig):
+    def hook(*args, **kwargs):
+        global _seen_dispatch, _steps_since_dispatch
+        if _executing(kwargs):
+            if _ik_steps:
+                _ik_steps[-1] += 1
+            if _phase == 'setup':
+                _steps['setup'] += 1
+                _violation('G6', 'stepSimulation',
+                           'physics step before main() started')
+            elif _phase == 'post':
+                _steps['post'] += 1
+                _violation('G6', 'stepSimulation',
+                           'physics step after main() returned')
+            elif run_logger.current_dispatch() is not None:
+                _steps['main_in_dispatch'] += 1
+                _seen_dispatch = True
+                _steps_since_dispatch = 0
+            else:
+                _steps['main_outside_dispatch'] += 1
+                if _seen_dispatch:
+                    _steps_since_dispatch += 1
+        return orig(*args, **kwargs)
+    return hook
+
+
+def _make_body_query(name, orig):
+    def hook(*args, **kwargs):
+        if _executing(kwargs) and not _read_exempt():
+            body = _arg(args, kwargs, 0, 'bodyUniqueId')
+            if _hidden(body):
+                _violation('G8', name, f'query of task body {body} that has '
+                                       f'no OBJECT boxel')
+        return orig(*args, **kwargs)
+    return hook
+
+
+def _make_pair_query(name, orig):
+    def hook(*args, **kwargs):
+        if _executing(kwargs) and not _read_exempt():
+            a = _arg(args, kwargs, 0, 'bodyA')
+            b = _arg(args, kwargs, 1, 'bodyB')
+            if a is None or a < 0:
+                _violation('G8', name, 'unfiltered contact query on the '
+                                       'executing client')
+            tactile = a == _cfg.robot_id or (a == _cfg.held_body()
+                                             and a is not None)
+            if not tactile:
+                for body in (a, b):
+                    if _hidden(body):
+                        _violation('G8', name, f'query of task body {body} '
+                                               f'that has no OBJECT boxel')
+        return orig(*args, **kwargs)
+    return hook
+
+
+def _make_ray(name, orig):
+    def hook(*args, **kwargs):
+        if _executing(kwargs) and not _read_exempt():
+            _violation('G8', name, 'ray cast on the executing client')
+        return orig(*args, **kwargs)
+    return hook
+
+
+def _make_camera(orig):
+    def hook(*args, **kwargs):
+        view = _arg(args, kwargs, 2, 'viewMatrix')
+        proj = _arg(args, kwargs, 3, 'projectionMatrix')
+        capture = _captures[-1] if _captures else None
+        matched = None
+        if _cfg.camera_view is not None and capture is None:
+            matched = (_close(view, _cfg.camera_view, _cfg.camera_tol)
+                       and _close(proj, _cfg.camera_proj, _cfg.camera_tol))
+        run_logger.ledger_event(
+            'render', client=_client(kwargs), capture=capture, matched=matched,
+            view=list(view) if view is not None else None,
+            proj=list(proj) if proj is not None else None)
+        if matched is False:
+            _violation('G20', 'getCameraImage',
+                       'render with matrices other than the declared eye')
+        return orig(*args, **kwargs)
+    return hook
+
+
+# ----- repository hooks --------------------------------------------------
+
+def _make_solve_ik(orig):
+    @functools.wraps(orig)
+    def solve_ik(robot_id, *args, **kwargs):
+        client = kwargs.get('physics_client', args[2] if len(args) > 2 else 0)
+        if (client != _cfg.executing_client or robot_id != _cfg.robot_id
+                or _phase == 'setup'):
+            return orig(robot_id, *args, **kwargs)
+        if run_logger.current_dispatch() is None:
+            _violation('G14', 'solve_ik', 'IK on the executing robot outside '
+                                          'a dispatched action')
+        before = _arm_positions(client, robot_id)
+        _ik_exempt.append((client, robot_id))
+        _ik_steps.append(0)
+        result = None
+        try:
+            result = orig(robot_id, *args, **kwargs)
+        finally:
+            _ik_exempt.pop()
+            steps = _ik_steps.pop()
+            after = _arm_positions(client, robot_id)
+            if steps or before != after:
+                _violation('G14', 'solve_ik',
+                           f'not net-zero: {steps} physics step(s), arm '
+                           f'restored bit-identically: {before == after}')
+        return result
+    return solve_ik
+
+
+def _make_collision_check(name, orig):
+    sig = inspect.signature(orig)
+
+    @functools.wraps(orig)
+    def check(*args, **kwargs):
+        bound = sig.bind(*args, **kwargs)
+        bound.apply_defaults()
+        client = bound.arguments.get('physics_client', 0)
+        if client != _cfg.executing_client or not _cfg.task_body_ids:
+            return orig(*args, **kwargs)
+        before = _task_poses(client)
+        result = orig(*args, **kwargs)
+        if _task_poses(client) != before:
+            _violation('G14', name, 'task-body poses changed across a '
+                                    'collision check')
+        return result
+    return check
+
+
+def _make_move_smooth(orig):
+    @functools.wraps(orig)
+    def move_robot_smooth(robot_id, *args, **kwargs):
+        if (_phase != 'setup' and robot_id == _cfg.robot_id
+                and run_logger.current_dispatch() is None):
+            _violation('G3', 'move_robot_smooth', 'arm motion outside a '
+                                                  'dispatched action')
+        return orig(robot_id, *args, **kwargs)
+    return move_robot_smooth
+
+
+def check_plan_call(planner, goal, target_objects):
+    """G10 at one plan() call: planner and streams types exactly, domain and
+    stream text, the goal and the target pin.  Writes the call to the
+    ledger; a mismatch is a violation."""
+    problems = []
+    if type(planner) is not _planner_cls:
+        problems.append(f'planner type {type(planner).__name__}')
+    if type(getattr(planner, 'streams', None)) is not _streams_cls:
+        problems.append('streams type '
+                        f'{type(getattr(planner, "streams", None)).__name__}')
+    if _sha(getattr(planner, 'domain_pddl', '')) != _expected_sha['domain']:
+        problems.append('domain text differs from the declared domain file')
+    if _sha(getattr(planner, 'stream_pddl', '')) != _expected_sha['stream']:
+        problems.append('stream text differs from pddl/stream.pddl')
+    if _cfg.mission_goal is not None:
+        allowed = (_norm(_cfg.mission_goal), _norm(('handempty',)))
+        if _norm(goal) not in allowed:
+            problems.append(f'goal {goal!r}')
+    targets = list(target_objects or [])
+    if _cfg.target_symbol is not None and targets != [_cfg.target_symbol]:
+        problems.append(f'target_objects {targets!r}')
+    run_logger.ledger_event('plan_call', goal=goal, targets=targets,
+                            problems=problems)
+    if problems:
+        _violation('G10', 'plan', '; '.join(problems))
+
+
+def _make_plan(orig):
+    sig = inspect.signature(orig)
+
+    @functools.wraps(orig)
+    def plan(self, *args, **kwargs):
+        bound = sig.bind(self, *args, **kwargs)
+        bound.apply_defaults()
+        check_plan_call(self, bound.arguments.get('goal'),
+                        bound.arguments.get('target_objects'))
+        return orig(self, *args, **kwargs)
+    return plan
+
+
+def _make_solve(orig):
+    @functools.wraps(orig)
+    def solve(*args, **kwargs):
+        global _solve_calls
+        _solve_calls += 1
+        caller = sys._getframe(1).f_code
+        if caller is not _orig_plan_code:
+            _violation('G11', 'solve', f'called from {caller.co_name} '
+                                       f'({caller.co_filename}:'
+                                       f'{caller.co_firstlineno})')
+        return orig(*args, **kwargs)
+    return solve
+
+
+def _rebind(module_name, attr, wrapper):
+    """Replace module_name.attr and every binding of the same object in a
+    loaded module of this repository."""
+    original = getattr(sys.modules[module_name], attr)
+    for mod in list(sys.modules.values()):
+        path = os.path.abspath(getattr(mod, '__file__', None) or '')
+        if not path.startswith(REPO + os.sep):
+            continue
+        if getattr(mod, attr, None) is original:
+            setattr(mod, attr, wrapper)
+            _rebound.append((mod, attr, original))
+
+
+def _patch_bullet_client():
+    try:
+        from pybullet_utils import bullet_client
+    except ImportError:
+        return
+    cls = bullet_client.BulletClient
+    original = cls.__getattr__
+
+    def __getattr__(self, name):
+        attribute = getattr(pybullet, name)
+        if getattr(attribute, '_gate_wrapped', False):
+            return functools.partial(attribute, physicsClientId=self._client)
+        return original(self, name)
+
+    cls.__getattr__ = __getattr__
+    _patched_attrs.append((cls, '__getattr__', original))
+
+
+# ----- public API --------------------------------------------------------
+
+def install(cfg: GateConfig) -> None:
+    """Install every hook.  Call before the episode starts; the phase starts
+    at 'setup' (D9's set-up)."""
+    global _cfg, _orig_plan_code, _planner_cls, _streams_cls
+    if _cfg is not None:
+        raise RuntimeError('gate hooks already installed')
+    import pddlstream_planner
+    import robot_utils
+    import streams
+    _cfg = cfg
+    reset_counts()
+    set_phase('setup')
+
+    def wrap(name, hook):
+        hook._gate_wrapped = True
+        hook.__name__ = name
+        _pybullet_originals[name] = getattr(pybullet, name)
+        setattr(pybullet, name, hook)
+
+    for name, slots in _BODY_WRITERS.items():
+        if hasattr(pybullet, name):
+            wrap(name, _make_writer(name, getattr(pybullet, name), slots))
+    for name in _BODYLESS_WRITERS:
+        if hasattr(pybullet, name):
+            wrap(name, _make_writer(name, getattr(pybullet, name), None))
+    for name in _MOTORS:
+        if hasattr(pybullet, name):
+            wrap(name, _make_motor(name, getattr(pybullet, name)))
+    for name in _BODY_QUERIES:
+        wrap(name, _make_body_query(name, getattr(pybullet, name)))
+    for name in _PAIR_QUERIES:
+        wrap(name, _make_pair_query(name, getattr(pybullet, name)))
+    for name in _RAYS:
+        wrap(name, _make_ray(name, getattr(pybullet, name)))
+    wrap('stepSimulation', _make_step(pybullet.stepSimulation))
+    wrap('getCameraImage', _make_camera(pybullet.getCameraImage))
+    _patch_bullet_client()
+
+    _rebind('robot_utils', 'solve_ik', _make_solve_ik(robot_utils.solve_ik))
+    _rebind('robot_utils', 'move_robot_smooth',
+            _make_move_smooth(robot_utils.move_robot_smooth))
+    for name in ('is_config_collision_free', 'is_path_collision_free'):
+        _rebind('robot_utils', name,
+                _make_collision_check(name, getattr(robot_utils, name)))
+
+    _planner_cls = pddlstream_planner.PDDLStreamPlanner
+    _streams_cls = streams.BoxelStreams
+    _orig_plan_code = _planner_cls.plan.__code__
+    _patched_attrs.append((_planner_cls, 'plan', _planner_cls.plan))
+    _planner_cls.plan = _make_plan(_planner_cls.plan)
+    _patched_attrs.append((pddlstream_planner, 'solve',
+                           pddlstream_planner.solve))
+    pddlstream_planner.solve = _make_solve(pddlstream_planner.solve)
+    for key, path in (('domain', cfg.domain_file), ('stream', cfg.stream_file)):
+        with open(path, 'r') as f:
+            _expected_sha[key] = _sha(f.read())
+
+
+def uninstall() -> None:
+    global _cfg
+    for name, original in _pybullet_originals.items():
+        setattr(pybullet, name, original)
+    _pybullet_originals.clear()
+    for mod, attr, original in reversed(_rebound):
+        setattr(mod, attr, original)
+    _rebound.clear()
+    for owner, attr, original in reversed(_patched_attrs):
+        setattr(owner, attr, original)
+    _patched_attrs.clear()
+    _cfg = None
+
+
+def reset_counts() -> None:
+    global _seen_dispatch, _steps_since_dispatch, _solve_calls
+    _counts.clear()
+    _info.clear()
+    _steps.clear()
+    _seen_dispatch = False
+    _steps_since_dispatch = 0
+    _solve_calls = 0
+
+
+def set_phase(phase: str) -> None:
+    """'setup' (D9 before main()), 'main' (inside main()), 'post' (after
+    main() returned, while the observation is built)."""
+    global _phase
+    if phase not in _PHASES:
+        raise ValueError(phase)
+    _phase = phase
+    run_logger.ledger_event('gate_phase', phase=phase)
+
+
+@contextmanager
+def scoring():
+    """The scoring adapter's contact and joint readback (G2, G8(b))."""
+    global _scoring
+    _scoring += 1
+    try:
+        yield
+    finally:
+        _scoring -= 1
+
+
+@contextmanager
+def write_only(name: str):
+    """A declared write-only reader (G2): world_eye, telemetry, the
+    print-only diagnostics, the scoring-only verifiers, the after_settle
+    hook.  G2's leak test checks that nothing read here reaches a
+    decision."""
+    _write_only.append(name)
+    try:
+        yield
+    finally:
+        _write_only.pop()
+
+
+@contextmanager
+def capture(name: str):
+    """A declared write-only render (G20): world_eye images, GUI panes."""
+    _captures.append(name)
+    try:
+        yield
+    finally:
+        _captures.pop()
+
+
+def count_update_object_positions() -> None:
+    """G16: the env adapter's update_object_positions is a counted no-op."""
+    _info['G16_update_object_positions_noop'] += 1
+
+
+def oracle_called(name: str = 'oracle_detect_objects') -> None:
+    """G16: the env adapter's oracle path raises."""
+    _violation('G16', name, 'oracle path called')
+
+
+def counts() -> dict:
+    return dict(_counts)
+
+
+def gate_record() -> dict:
+    """G21: write the episode's counts to the ledger.  Physics steps after
+    the last dispatched action are added to G6 here."""
+    if _steps_since_dispatch:
+        _counts['G6'] += _steps_since_dispatch
+    rec = {'counts': dict(_counts), 'info': dict(_info),
+           'steps': dict(_steps),
+           'steps_after_last_dispatch': _steps_since_dispatch,
+           'solve_calls': _solve_calls}
+    run_logger.ledger_event('gate_record', **rec)
+    return rec
