@@ -1,0 +1,1299 @@
+{
+ "a_urdf": {
+  "urdf": "/root/tampura-work/tampura_environments/models/srl/franka_panda/panda.urdf",
+  "n_joints": 15,
+  "joints": [
+   {
+    "index": 0,
+    "joint": "panda_joint1",
+    "type": 0,
+    "lower": -2.8973,
+    "upper": 2.8973,
+    "max_force": 87.0,
+    "max_velocity": 2.175,
+    "link": "panda_link1"
+   },
+   {
+    "index": 1,
+    "joint": "panda_joint2",
+    "type": 0,
+    "lower": -1.7628,
+    "upper": 1.7628,
+    "max_force": 87.0,
+    "max_velocity": 2.175,
+    "link": "panda_link2"
+   },
+   {
+    "index": 2,
+    "joint": "panda_joint3",
+    "type": 0,
+    "lower": -2.8973,
+    "upper": 2.8973,
+    "max_force": 87.0,
+    "max_velocity": 2.175,
+    "link": "panda_link3"
+   },
+   {
+    "index": 3,
+    "joint": "panda_joint4",
+    "type": 0,
+    "lower": -3.0718,
+    "upper": -0.0698,
+    "max_force": 87.0,
+    "max_velocity": 2.175,
+    "link": "panda_link4"
+   },
+   {
+    "index": 4,
+    "joint": "panda_joint5",
+    "type": 0,
+    "lower": -2.8973,
+    "upper": 2.8973,
+    "max_force": 12.0,
+    "max_velocity": 2.61,
+    "link": "panda_link5"
+   },
+   {
+    "index": 5,
+    "joint": "panda_joint6",
+    "type": 0,
+    "lower": -0.0175,
+    "upper": 3.7525,
+    "max_force": 12.0,
+    "max_velocity": 2.61,
+    "link": "panda_link6"
+   },
+   {
+    "index": 6,
+    "joint": "panda_joint7",
+    "type": 0,
+    "lower": -2.8973,
+    "upper": 2.8973,
+    "max_force": 12.0,
+    "max_velocity": 2.61,
+    "link": "panda_link7"
+   },
+   {
+    "index": 7,
+    "joint": "panda_joint8",
+    "type": 4,
+    "lower": 0.0,
+    "upper": -1.0,
+    "max_force": 0.0,
+    "max_velocity": 0.0,
+    "link": "panda_link8"
+   },
+   {
+    "index": 8,
+    "joint": "panda_hand_joint",
+    "type": 4,
+    "lower": 0.0,
+    "upper": -1.0,
+    "max_force": 0.0,
+    "max_velocity": 0.0,
+    "link": "panda_handv"
+   },
+   {
+    "index": 9,
+    "joint": "panda_hand_jointv",
+    "type": 4,
+    "lower": 0.0,
+    "upper": -1.0,
+    "max_force": 0.0,
+    "max_velocity": 0.0,
+    "link": "panda_hand"
+   },
+   {
+    "index": 10,
+    "joint": "panda_tool_tip_joint",
+    "type": 4,
+    "lower": 0.0,
+    "upper": -1.0,
+    "max_force": 0.0,
+    "max_velocity": 0.0,
+    "link": "panda_tool_tip"
+   },
+   {
+    "index": 11,
+    "joint": "camera_frame_joint",
+    "type": 4,
+    "lower": 0.0,
+    "upper": -1.0,
+    "max_force": 0.0,
+    "max_velocity": 0.0,
+    "link": "camera_frame"
+   },
+   {
+    "index": 12,
+    "joint": "panda_finger_joint1",
+    "type": 1,
+    "lower": 0.0,
+    "upper": 0.04,
+    "max_force": 20.0,
+    "max_velocity": 0.2,
+    "link": "panda_leftfinger"
+   },
+   {
+    "index": 13,
+    "joint": "panda_finger_joint2",
+    "type": 1,
+    "lower": 0.0,
+    "upper": 0.04,
+    "max_force": 20.0,
+    "max_velocity": 0.2,
+    "link": "panda_rightfinger"
+   },
+   {
+    "index": 14,
+    "joint": "panda_grasptarget_hand",
+    "type": 4,
+    "lower": 0.0,
+    "upper": -1.0,
+    "max_force": 0.0,
+    "max_velocity": 0.0,
+    "link": "panda_grasptarget"
+   }
+  ],
+  "arm_joint_indices": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6
+  ],
+  "finger_joint_indices": [
+   12,
+   13
+  ],
+  "finger_limits": [
+   [
+    0.0,
+    0.04
+   ],
+   [
+    0.0,
+    0.04
+   ]
+  ],
+  "reference_links": {
+   "panda_tool_tip": 10,
+   "panda_grasptarget": 14,
+   "panda_hand": 9,
+   "camera_frame": 11
+  },
+  "open_gripper_pos_in_code": [
+   0.045,
+   0.045
+  ],
+  "finger_collision_extent_in_reference_frames": {
+   "panda_leftfinger": {
+    "panda_tool_tip": {
+     "min": [
+      -0.0415,
+      0.0399,
+      -0.0105
+     ],
+     "max": [
+      0.0122,
+      0.0664,
+      0.0105
+     ]
+    },
+    "panda_grasptarget": {
+     "min": [
+      -0.0105,
+      0.0399,
+      -0.0465
+     ],
+     "max": [
+      0.0105,
+      0.0664,
+      0.0072
+     ]
+    },
+    "panda_hand": {
+     "min": [
+      -0.0105,
+      0.0399,
+      0.0585
+     ],
+     "max": [
+      0.0105,
+      0.0664,
+      0.1122
+     ]
+    },
+    "camera_frame": {
+     "min": [
+      0.0736,
+      0.0268,
+      0.0024
+     ],
+     "max": [
+      0.101,
+      0.0479,
+      0.0564
+     ]
+    }
+   },
+   "panda_rightfinger": {
+    "panda_tool_tip": {
+     "min": [
+      -0.0415,
+      -0.0664,
+      -0.0105
+     ],
+     "max": [
+      0.0122,
+      -0.0399,
+      0.0105
+     ]
+    },
+    "panda_grasptarget": {
+     "min": [
+      -0.0105,
+      -0.0664,
+      -0.0465
+     ],
+     "max": [
+      0.0105,
+      -0.0399,
+      0.0072
+     ]
+    },
+    "panda_hand": {
+     "min": [
+      -0.0105,
+      -0.0664,
+      0.0585
+     ],
+     "max": [
+      0.0105,
+      -0.0399,
+      0.1122
+     ]
+    },
+    "camera_frame": {
+     "min": [
+      -0.032,
+      0.0257,
+      0.0008
+     ],
+     "max": [
+      -0.0059,
+      0.0469,
+      0.0548
+     ]
+    }
+   }
+  },
+  "at_default_arm_pos": {
+   "camera_frame_world_pos": [
+    0.1786,
+    0.0488,
+    0.5883
+   ],
+   "camera_frame_world_z_axis": [
+    0.6214,
+    -0.0437,
+    -0.7822
+   ],
+   "tool_tip_world_pos": [
+    0.1752,
+    0.0141,
+    0.5322
+   ],
+   "tool_tip_world_z_axis": [
+    -0.7779,
+    0.0385,
+    -0.6272
+   ]
+  },
+  "camera_intrinsics_in_code": {
+   "width": 640,
+   "height": 480,
+   "fx": 525.0,
+   "fy": 525.0
+  }
+ },
+ "b_meshes": {
+  "dice": {
+   "visual": {
+    "path": "/root/tampura-work/tampura_environments/models/srl/ycb/062_dice/google_16k/textured.obj",
+    "aabb_extent": [
+     0.0172,
+     0.0171,
+     0.0176
+    ],
+    "n_components": 2,
+    "visual_com": null,
+    "top_slice_3mm_extent_xy": [
+     0.0169,
+     0.0167
+    ]
+   },
+   "collision": {
+    "path": "/root/tampura-work/tampura_environments/models/srl/ycb/062_dice/google_16k/textured_vhacd.obj",
+    "aabb_extent": [
+     0.0176,
+     0.0173,
+     0.0178
+    ],
+    "n_components": 1,
+    "visual_com": [
+     -0.0112,
+     0.0092,
+     0.0084
+    ],
+    "top_slice_3mm_extent_xy": [
+     0.0173,
+     0.0164
+    ]
+   },
+   "class_mass_kg": 0.0052
+  },
+  "a_cups_ud": {
+   "visual": {
+    "path": "/root/tampura-work/tampura_environments/models/srl/ycb/065_a_cups_ud/google_16k/textured.obj",
+    "aabb_extent": [
+     0.0571,
+     0.0574,
+     0.0615
+    ],
+    "n_components": 2,
+    "visual_com": null,
+    "top_slice_3mm_extent_xy": [
+     0.0398,
+     0.0399
+    ],
+    "grid_step_m": 0.001,
+    "cavity_footprint_extent_xy": [
+     0.044,
+     0.045
+    ],
+    "cavity_max_height": 0.0542,
+    "footprint_extent_xy_with_clearance_0.0162": [
+     0.044,
+     0.044
+    ],
+    "footprint_extent_xy_with_clearance_0.02": [
+     0.044,
+     0.044
+    ],
+    "footprint_extent_xy_with_clearance_0.03": [
+     0.043,
+     0.043
+    ],
+    "rim_footprint_extent_xy": [
+     0.057,
+     0.057
+    ]
+   },
+   "collision": {
+    "path": "/root/tampura-work/tampura_environments/models/srl/ycb/065_a_cups_ud/google_16k/textured_vhacd.obj",
+    "aabb_extent": [
+     0.0576,
+     0.0586,
+     0.0625
+    ],
+    "n_components": 27,
+    "visual_com": null,
+    "top_slice_3mm_extent_xy": [
+     0.04,
+     0.041
+    ],
+    "grid_step_m": 0.001,
+    "cavity_footprint_extent_xy": [
+     0.05,
+     0.05
+    ],
+    "cavity_max_height": 0.0537,
+    "footprint_extent_xy_with_clearance_0.0162": [
+     0.04,
+     0.04
+    ],
+    "footprint_extent_xy_with_clearance_0.02": [
+     0.039,
+     0.039
+    ],
+    "footprint_extent_xy_with_clearance_0.03": [
+     0.038,
+     0.037
+    ],
+    "rim_footprint_extent_xy": [
+     0.058,
+     0.059
+    ]
+   },
+   "class_mass_kg": 0.013
+  },
+  "b_cups_ud": {
+   "visual": {
+    "path": "/root/tampura-work/tampura_environments/models/srl/ycb/065_b_cups_ud/google_16k/textured.obj",
+    "aabb_extent": [
+     0.061,
+     0.0609,
+     0.064
+    ],
+    "n_components": 2,
+    "visual_com": null,
+    "top_slice_3mm_extent_xy": [
+     0.044,
+     0.0441
+    ],
+    "grid_step_m": 0.001,
+    "cavity_footprint_extent_xy": [
+     0.049,
+     0.05
+    ],
+    "cavity_max_height": 0.0563,
+    "footprint_extent_xy_with_clearance_0.0162": [
+     0.048,
+     0.048
+    ],
+    "footprint_extent_xy_with_clearance_0.02": [
+     0.048,
+     0.048
+    ],
+    "footprint_extent_xy_with_clearance_0.03": [
+     0.047,
+     0.048
+    ],
+    "rim_footprint_extent_xy": [
+     0.06,
+     0.06
+    ]
+   },
+   "collision": {
+    "path": "/root/tampura-work/tampura_environments/models/srl/ycb/065_b_cups_ud/google_16k/textured_vhacd.obj",
+    "aabb_extent": [
+     0.0619,
+     0.0619,
+     0.065
+    ],
+    "n_components": 36,
+    "visual_com": null,
+    "top_slice_3mm_extent_xy": [
+     0.0457,
+     0.0447
+    ],
+    "grid_step_m": 0.001,
+    "cavity_footprint_extent_xy": [
+     0.061,
+     0.055
+    ],
+    "cavity_max_height": 0.0558,
+    "footprint_extent_xy_with_clearance_0.0162": [
+     0.045,
+     0.044
+    ],
+    "footprint_extent_xy_with_clearance_0.02": [
+     0.045,
+     0.043
+    ],
+    "footprint_extent_xy_with_clearance_0.03": [
+     0.043,
+     0.041
+    ],
+    "rim_footprint_extent_xy": [
+     0.062,
+     0.062
+    ]
+   },
+   "class_mass_kg": 0.014
+  },
+  "c_cups_ud": {
+   "visual": {
+    "path": "/root/tampura-work/tampura_environments/models/srl/ycb/065_c_cups_ud/google_16k/textured.obj",
+    "aabb_extent": [
+     0.065,
+     0.0651,
+     0.0666
+    ],
+    "n_components": 1,
+    "visual_com": null,
+    "top_slice_3mm_extent_xy": [
+     0.0485,
+     0.0486
+    ],
+    "grid_step_m": 0.001,
+    "cavity_footprint_extent_xy": [
+     0.054,
+     0.054
+    ],
+    "cavity_max_height": 0.0589,
+    "footprint_extent_xy_with_clearance_0.0162": [
+     0.053,
+     0.053
+    ],
+    "footprint_extent_xy_with_clearance_0.02": [
+     0.053,
+     0.053
+    ],
+    "footprint_extent_xy_with_clearance_0.03": [
+     0.052,
+     0.052
+    ],
+    "rim_footprint_extent_xy": [
+     0.064,
+     0.065
+    ]
+   },
+   "collision": {
+    "path": "/root/tampura-work/tampura_environments/models/srl/ycb/065_c_cups_ud/google_16k/textured_vhacd.obj",
+    "aabb_extent": [
+     0.0666,
+     0.0666,
+     0.0676
+    ],
+    "n_components": 29,
+    "visual_com": null,
+    "top_slice_3mm_extent_xy": [
+     0.0497,
+     0.0497
+    ],
+    "grid_step_m": 0.001,
+    "cavity_footprint_extent_xy": [
+     0.067,
+     0.06
+    ],
+    "cavity_max_height": 0.0591,
+    "footprint_extent_xy_with_clearance_0.0162": [
+     0.05,
+     0.048
+    ],
+    "footprint_extent_xy_with_clearance_0.02": [
+     0.05,
+     0.048
+    ],
+    "footprint_extent_xy_with_clearance_0.03": [
+     0.049,
+     0.048
+    ],
+    "rim_footprint_extent_xy": [
+     0.067,
+     0.067
+    ]
+   },
+   "class_mass_kg": 0.017
+  },
+  "d_cups_ud": {
+   "visual": {
+    "path": "/root/tampura-work/tampura_environments/models/srl/ycb/065_d_cups_ud/google_16k/textured.obj",
+    "aabb_extent": [
+     0.0707,
+     0.0707,
+     0.0689
+    ],
+    "n_components": 4,
+    "visual_com": null,
+    "top_slice_3mm_extent_xy": [
+     0.0529,
+     0.053
+    ],
+    "grid_step_m": 0.001,
+    "cavity_footprint_extent_xy": [
+     0.058,
+     0.058
+    ],
+    "cavity_max_height": 0.062,
+    "footprint_extent_xy_with_clearance_0.0162": [
+     0.057,
+     0.058
+    ],
+    "footprint_extent_xy_with_clearance_0.02": [
+     0.057,
+     0.058
+    ],
+    "footprint_extent_xy_with_clearance_0.03": [
+     0.057,
+     0.057
+    ],
+    "rim_footprint_extent_xy": [
+     0.07,
+     0.07
+    ]
+   },
+   "collision": {
+    "path": "/root/tampura-work/tampura_environments/models/srl/ycb/065_d_cups_ud/google_16k/textured_vhacd.obj",
+    "aabb_extent": [
+     0.0718,
+     0.0718,
+     0.0696
+    ],
+    "n_components": 28,
+    "visual_com": null,
+    "top_slice_3mm_extent_xy": [
+     0.0539,
+     0.0539
+    ],
+    "grid_step_m": 0.001,
+    "cavity_footprint_extent_xy": [
+     0.064,
+     0.068
+    ],
+    "cavity_max_height": 0.0606,
+    "footprint_extent_xy_with_clearance_0.0162": [
+     0.054,
+     0.054
+    ],
+    "footprint_extent_xy_with_clearance_0.02": [
+     0.053,
+     0.053
+    ],
+    "footprint_extent_xy_with_clearance_0.03": [
+     0.051,
+     0.051
+    ],
+    "rim_footprint_extent_xy": [
+     0.072,
+     0.072
+    ]
+   },
+   "class_mass_kg": 0.019
+  },
+  "e_cups_ud": {
+   "visual": {
+    "path": "/root/tampura-work/tampura_environments/models/srl/ycb/065_e_cups_ud/google_16k/textured.obj",
+    "aabb_extent": [
+     0.0755,
+     0.0753,
+     0.0708
+    ],
+    "n_components": 6,
+    "visual_com": null,
+    "top_slice_3mm_extent_xy": [
+     0.0574,
+     0.0575
+    ],
+    "grid_step_m": 0.001,
+    "cavity_footprint_extent_xy": [
+     0.069,
+     0.066
+    ],
+    "cavity_max_height": 0.0633,
+    "footprint_extent_xy_with_clearance_0.0162": [
+     0.062,
+     0.062
+    ],
+    "footprint_extent_xy_with_clearance_0.02": [
+     0.062,
+     0.062
+    ],
+    "footprint_extent_xy_with_clearance_0.03": [
+     0.062,
+     0.062
+    ],
+    "rim_footprint_extent_xy": [
+     0.075,
+     0.075
+    ]
+   },
+   "collision": {
+    "path": "/root/tampura-work/tampura_environments/models/srl/ycb/065_e_cups_ud/google_16k/textured_vhacd.obj",
+    "aabb_extent": [
+     0.0767,
+     0.0767,
+     0.0719
+    ],
+    "n_components": 39,
+    "visual_com": null,
+    "top_slice_3mm_extent_xy": [
+     0.0588,
+     0.0588
+    ],
+    "grid_step_m": 0.001,
+    "cavity_footprint_extent_xy": [
+     0.075,
+     0.076
+    ],
+    "cavity_max_height": 0.0624,
+    "footprint_extent_xy_with_clearance_0.0162": [
+     0.056,
+     0.057
+    ],
+    "footprint_extent_xy_with_clearance_0.02": [
+     0.055,
+     0.056
+    ],
+    "footprint_extent_xy_with_clearance_0.03": [
+     0.054,
+     0.054
+    ],
+    "rim_footprint_extent_xy": [
+     0.077,
+     0.077
+    ]
+   },
+   "class_mass_kg": 0.021
+  }
+ },
+ "c_d_layouts": [
+  {
+   "seed": 0,
+   "scene": "1747173591",
+   "executing_world": {
+    "client_map_key": 0,
+    "physics_client_id": 0
+   },
+   "belief_world": {
+    "client_map_key": 1,
+    "physics_client_id": 1
+   },
+   "categories": [
+    "d_cups_ud",
+    "dice"
+   ],
+   "engine_before": {
+    "fixedTimeStep": 0.004166666666666667,
+    "numSubSteps": 0,
+    "numSolverIterations": 50,
+    "gravityAccelerationX": 0.0,
+    "gravityAccelerationY": 0.0,
+    "gravityAccelerationZ": 0.0
+   },
+   "dynamics_before": [
+    {
+     "body": 10,
+     "category": "d_cups_ud",
+     "mass": -1.0,
+     "lateral_friction": 0.5,
+     "local_inertia_diagonal": [
+      -0.000930299504038125,
+      -0.0009302995511164809,
+      -0.0009582384255232669
+     ],
+     "pos": [
+      0.6727,
+      0.2161,
+      0.0493
+     ]
+    },
+    {
+     "body": 11,
+     "category": "dice",
+     "mass": -1.0,
+     "lateral_friction": 0.5,
+     "local_inertia_diagonal": [
+      -7.743130255587899e-05,
+      -7.843061864028476e-05,
+      -7.64298333805283e-05
+     ],
+     "pos": [
+      0.6727,
+      0.2161,
+      0.0493
+     ]
+    }
+   ],
+   "gravity_after_step_1": -9.81,
+   "dynamics_after_set_up": [
+    {
+     "body": 10,
+     "category": "d_cups_ud",
+     "mass": 0.019,
+     "lateral_friction": 1.0
+    },
+    {
+     "body": 11,
+     "category": "dice",
+     "mass": 0.0052,
+     "lateral_friction": 1.0
+    }
+   ],
+   "settle_50_steps": [
+    {
+     "body": 10,
+     "category": "d_cups_ud",
+     "dxyz": [
+      -0.0,
+      0.0,
+      -0.011
+     ],
+     "dxy_norm": 0.0,
+     "dyaw_deg": 0.0,
+     "tilt_deg": 0.0,
+     "speed_after": 0.0002,
+     "nan": false
+    },
+    {
+     "body": 11,
+     "category": "dice",
+     "dxyz": [
+      -0.0039,
+      -0.0005,
+      -0.0377
+     ],
+     "dxy_norm": 0.0039,
+     "dyaw_deg": -0.52,
+     "tilt_deg": 21.2,
+     "speed_after": 0.0694,
+     "nan": false
+    }
+   ],
+   "arm_drift_after_settle_rad": [
+    2e-06,
+    3e-05,
+    0.0,
+    0.0,
+    -5.4e-05,
+    -0.000119,
+    4.7e-05
+   ],
+   "arm_at_home_their_test_after_settle": true,
+   "die_in_wrist_segmentation_after_settle": false
+  },
+  {
+   "seed": 1,
+   "scene": "1747173590",
+   "executing_world": {
+    "client_map_key": 0,
+    "physics_client_id": 0
+   },
+   "belief_world": {
+    "client_map_key": 1,
+    "physics_client_id": 1
+   },
+   "categories": [
+    "dice",
+    "b_cups_ud",
+    "e_cups_ud",
+    "d_cups_ud",
+    "a_cups_ud"
+   ],
+   "engine_before": {
+    "fixedTimeStep": 0.004166666666666667,
+    "numSubSteps": 0,
+    "numSolverIterations": 50,
+    "gravityAccelerationX": 0.0,
+    "gravityAccelerationY": 0.0,
+    "gravityAccelerationZ": 0.0
+   },
+   "dynamics_before": [
+    {
+     "body": 10,
+     "category": "dice",
+     "mass": -1.0,
+     "lateral_friction": 0.5,
+     "local_inertia_diagonal": [
+      -7.743130255587899e-05,
+      -7.843061864028476e-05,
+      -7.64298333805283e-05
+     ],
+     "pos": [
+      0.592,
+      -0.2425,
+      0.0209
+     ]
+    },
+    {
+     "body": 11,
+     "category": "b_cups_ud",
+     "mass": -1.0,
+     "lateral_friction": 0.5,
+     "local_inertia_diagonal": [
+      -0.0007588169079652848,
+      -0.0007587839563151949,
+      -0.0007245377551889986
+     ],
+     "pos": [
+      0.5673,
+      -0.0576,
+      0.0459
+     ]
+    },
+    {
+     "body": 12,
+     "category": "e_cups_ud",
+     "mass": -1.0,
+     "lateral_friction": 0.5,
+     "local_inertia_diagonal": [
+      -0.001023922919857925,
+      -0.0010238691297122572,
+      -0.0010865181979875086
+     ],
+     "pos": [
+      0.4781,
+      -0.1776,
+      0.0523
+     ]
+    },
+    {
+     "body": 13,
+     "category": "d_cups_ud",
+     "mass": -1.0,
+     "lateral_friction": 0.5,
+     "local_inertia_diagonal": [
+      -0.000930299504038125,
+      -0.0009302995511164809,
+      -0.0009582384255232669
+     ],
+     "pos": [
+      0.5883,
+      -0.2278,
+      0.0493
+     ]
+    },
+    {
+     "body": 14,
+     "category": "a_cups_ud",
+     "mass": -1.0,
+     "lateral_friction": 0.5,
+     "local_inertia_diagonal": [
+      -0.0006948494261596284,
+      -0.0006847481807546265,
+      -0.0006427332720050835
+     ],
+     "pos": [
+      0.5148,
+      -0.0054,
+      0.0448
+     ]
+    }
+   ],
+   "gravity_after_step_1": -9.81,
+   "dynamics_after_set_up": [
+    {
+     "body": 10,
+     "category": "dice",
+     "mass": 0.0052,
+     "lateral_friction": 1.0
+    },
+    {
+     "body": 11,
+     "category": "b_cups_ud",
+     "mass": 0.014,
+     "lateral_friction": 1.0
+    },
+    {
+     "body": 12,
+     "category": "e_cups_ud",
+     "mass": 0.021,
+     "lateral_friction": 1.0
+    },
+    {
+     "body": 13,
+     "category": "d_cups_ud",
+     "mass": 0.019,
+     "lateral_friction": 1.0
+    },
+    {
+     "body": 14,
+     "category": "a_cups_ud",
+     "mass": 0.013,
+     "lateral_friction": 1.0
+    }
+   ],
+   "settle_50_steps": [
+    {
+     "body": 10,
+     "category": "dice",
+     "dxyz": [
+      -0.0015,
+      0.001,
+      -0.0111
+     ],
+     "dxy_norm": 0.0018,
+     "dyaw_deg": 13.73,
+     "tilt_deg": 0.28,
+     "speed_after": 0.0015,
+     "nan": false
+    },
+    {
+     "body": 11,
+     "category": "b_cups_ud",
+     "dxyz": [
+      0.0,
+      0.0,
+      -0.011
+     ],
+     "dxy_norm": 0.0,
+     "dyaw_deg": 0.0,
+     "tilt_deg": 0.0,
+     "speed_after": 0.0002,
+     "nan": false
+    },
+    {
+     "body": 12,
+     "category": "e_cups_ud",
+     "dxyz": [
+      0.0,
+      0.0,
+      -0.011
+     ],
+     "dxy_norm": 0.0,
+     "dyaw_deg": 0.0,
+     "tilt_deg": 0.0,
+     "speed_after": 0.0002,
+     "nan": false
+    },
+    {
+     "body": 13,
+     "category": "d_cups_ud",
+     "dxyz": [
+      -0.0,
+      -0.0,
+      -0.011
+     ],
+     "dxy_norm": 0.0001,
+     "dyaw_deg": -0.09,
+     "tilt_deg": 0.0,
+     "speed_after": 0.0002,
+     "nan": false
+    },
+    {
+     "body": 14,
+     "category": "a_cups_ud",
+     "dxyz": [
+      -0.0,
+      0.0,
+      -0.011
+     ],
+     "dxy_norm": 0.0,
+     "dyaw_deg": 0.0,
+     "tilt_deg": 0.02,
+     "speed_after": 0.0002,
+     "nan": false
+    }
+   ],
+   "arm_drift_after_settle_rad": [
+    2e-06,
+    3e-05,
+    0.0,
+    0.0,
+    -5.4e-05,
+    -0.000119,
+    4.7e-05
+   ],
+   "arm_at_home_their_test_after_settle": true,
+   "die_in_wrist_segmentation_after_settle": false
+  },
+  {
+   "seed": 5,
+   "scene": "1747173593",
+   "executing_world": {
+    "client_map_key": 0,
+    "physics_client_id": 0
+   },
+   "belief_world": {
+    "client_map_key": 1,
+    "physics_client_id": 1
+   },
+   "categories": [
+    "a_cups_ud",
+    "d_cups_ud",
+    "e_cups_ud",
+    "dice",
+    "b_cups_ud"
+   ],
+   "engine_before": {
+    "fixedTimeStep": 0.004166666666666667,
+    "numSubSteps": 0,
+    "numSolverIterations": 50,
+    "gravityAccelerationX": 0.0,
+    "gravityAccelerationY": 0.0,
+    "gravityAccelerationZ": 0.0
+   },
+   "dynamics_before": [
+    {
+     "body": 10,
+     "category": "a_cups_ud",
+     "mass": -1.0,
+     "lateral_friction": 0.5,
+     "local_inertia_diagonal": [
+      -0.0006948494261596284,
+      -0.0006847481807546265,
+      -0.0006427332720050835
+     ],
+     "pos": [
+      0.6842,
+      0.0001,
+      0.0448
+     ]
+    },
+    {
+     "body": 11,
+     "category": "d_cups_ud",
+     "mass": -1.0,
+     "lateral_friction": 0.5,
+     "local_inertia_diagonal": [
+      -0.000930299504038125,
+      -0.0009302995511164809,
+      -0.0009582384255232669
+     ],
+     "pos": [
+      0.5956,
+      0.3001,
+      0.0493
+     ]
+    },
+    {
+     "body": 12,
+     "category": "e_cups_ud",
+     "mass": -1.0,
+     "lateral_friction": 0.5,
+     "local_inertia_diagonal": [
+      -0.001023922919857925,
+      -0.0010238691297122572,
+      -0.0010865181979875086
+     ],
+     "pos": [
+      0.4863,
+      -0.1584,
+      0.0523
+     ]
+    },
+    {
+     "body": 13,
+     "category": "dice",
+     "mass": -1.0,
+     "lateral_friction": 0.5,
+     "local_inertia_diagonal": [
+      -7.743130255587899e-05,
+      -7.843061864028476e-05,
+      -7.64298333805283e-05
+     ],
+     "pos": [
+      0.4863,
+      -0.1584,
+      0.0523
+     ]
+    },
+    {
+     "body": 14,
+     "category": "b_cups_ud",
+     "mass": -1.0,
+     "lateral_friction": 0.5,
+     "local_inertia_diagonal": [
+      -0.0007588169079652848,
+      -0.0007587839563151949,
+      -0.0007245377551889986
+     ],
+     "pos": [
+      0.3899,
+      0.0433,
+      0.0459
+     ]
+    }
+   ],
+   "gravity_after_step_1": -9.81,
+   "dynamics_after_set_up": [
+    {
+     "body": 10,
+     "category": "a_cups_ud",
+     "mass": 0.013,
+     "lateral_friction": 1.0
+    },
+    {
+     "body": 11,
+     "category": "d_cups_ud",
+     "mass": 0.019,
+     "lateral_friction": 1.0
+    },
+    {
+     "body": 12,
+     "category": "e_cups_ud",
+     "mass": 0.021,
+     "lateral_friction": 1.0
+    },
+    {
+     "body": 13,
+     "category": "dice",
+     "mass": 0.0052,
+     "lateral_friction": 1.0
+    },
+    {
+     "body": 14,
+     "category": "b_cups_ud",
+     "mass": 0.014,
+     "lateral_friction": 1.0
+    }
+   ],
+   "settle_50_steps": [
+    {
+     "body": 10,
+     "category": "a_cups_ud",
+     "dxyz": [
+      -0.0,
+      -0.0,
+      -0.011
+     ],
+     "dxy_norm": 0.0,
+     "dyaw_deg": 0.01,
+     "tilt_deg": 0.02,
+     "speed_after": 0.0002,
+     "nan": false
+    },
+    {
+     "body": 11,
+     "category": "d_cups_ud",
+     "dxyz": [
+      0.0,
+      -0.0,
+      -0.011
+     ],
+     "dxy_norm": 0.0,
+     "dyaw_deg": -0.01,
+     "tilt_deg": 0.02,
+     "speed_after": 0.0003,
+     "nan": false
+    },
+    {
+     "body": 12,
+     "category": "e_cups_ud",
+     "dxyz": [
+      -0.0001,
+      -0.0,
+      -0.011
+     ],
+     "dxy_norm": 0.0001,
+     "dyaw_deg": 0.0,
+     "tilt_deg": 0.0,
+     "speed_after": 0.0004,
+     "nan": false
+    },
+    {
+     "body": 13,
+     "category": "dice",
+     "dxyz": [
+      -0.01,
+      -0.0025,
+      -0.0398
+     ],
+     "dxy_norm": 0.0103,
+     "dyaw_deg": -13.25,
+     "tilt_deg": 49.75,
+     "speed_after": 0.0089,
+     "nan": false
+    },
+    {
+     "body": 14,
+     "category": "b_cups_ud",
+     "dxyz": [
+      0.0,
+      0.0,
+      -0.011
+     ],
+     "dxy_norm": 0.0,
+     "dyaw_deg": 0.0,
+     "tilt_deg": 0.0,
+     "speed_after": 0.0002,
+     "nan": false
+    }
+   ],
+   "arm_drift_after_settle_rad": [
+    2e-06,
+    3e-05,
+    0.0,
+    0.0,
+    -5.4e-05,
+    -0.000119,
+    4.7e-05
+   ],
+   "arm_at_home_their_test_after_settle": true,
+   "die_in_wrist_segmentation_after_settle": false
+  }
+ ]
+}

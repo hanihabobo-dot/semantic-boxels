@@ -3953,7 +3953,8 @@ B0  [DONE 2026-10-26, BF#2, BF#3]  GATES AND LEDGER FIRST.  tools/bridge_gates.p
     tampura_bridge/ package; the G6 controls exist and fail until B2/B7 make
     them pass.  Effort 3 days.
 
-B1  [OPEN]  RECONNAISSANCE, NUMBERS INTO THE RECORD (BF#2).  PART 1 runs
+B1  [OPEN; part 1 (a) to (d) DONE 2026-10-26, BF#4; (g) and (j) on the
+    chair's cloud, BF#5]  RECONNAISSANCE, NUMBERS INTO THE RECORD.  PART 1 runs
     before B3 and is read-only: (a), (b), (c), (d), (g), (j).  PART 2 runs
     after B3, because it needs B3's RobotModel, adopt-client constructor and
     loop parameters at a recorded commit: (e), (f), (h), (i).  Probe scripts
@@ -5273,13 +5274,100 @@ BF#3 [DONE, user may override]  THEIR TREE IS NOT AS SHIPPED: ONE IMPORT FIX,
   environments 4167c35 does not import as shipped; one import fix in its
   package __init__ (the only change to their trees)".
   HONESTY CLASS: configuration.
-  DECISION 2026-10-26 (executor): keep the existing fix, pin it, disclose it.
+  DECISION 2026-10-26 (executor; confirmed by the user the same day: "keep
+  the existing import fix"): keep the existing fix, pin it, disclose it.
   H4 reads "never edit their tree beyond this declared import fix".
   Alternative not taken: replace it by the one-line deletion of the
   toy_discrete import, the smallest possible fix; it would change arm T's
-  environment relative to the 2026-05-26 baseline.  The user may choose it
-  before B1(g) runs; G13's pin then changes with its own BF#.
+  environment relative to the 2026-05-26 baseline.
   RESULT: G13 passes on both trees.
+
+BF#4 [DONE]  B1 PART 1 (a) TO (d): THEIR ROBOT, MESHES AND PHYSICS  (B1,
+      2026-10-26)
+  WHAT: tools/_probe_b1_tampura.py, run in their venv in its own clients
+  (their tree unchanged before and after, G13), measured:
+  (a) URDF models/srl/franka_panda/panda.urdf: 15 joints; arm 0 to 6;
+      fingers panda_finger_joint1/2 at 12 and 13, limits [0, 0.04] each, so
+      their OPEN_GRIPPER_POS 0.045 lies beyond the limit; links panda_hand 9,
+      panda_tool_tip 10, camera_frame 11, panda_grasptarget 14.  Ours
+      (pybullet_data) has fingers 9 and 10 and the grasp target 11, so B3(a)'s
+      RobotModel by name is needed, as planned.  Finger collision geometry in
+      the panda_grasptarget frame, fingers at 0.04: z from -0.0465 to +0.0072
+      (the pads end 7.2 mm beyond the grasp target along its axis), inner
+      faces at |y| = 0.0399.  At DEFAULT_ARM_POS: camera_frame at (0.1786,
+      0.0488, 0.5883) with its optical axis (0.621, -0.044, -0.782), 51.5 deg
+      below the horizontal toward +x; panda_tool_tip at (0.175, 0.014,
+      0.532).  Intrinsics in their code: 640 x 480, fx = fy = 525.
+  (b) Meshes (visual / VHACD collision, mm).  Die: 17.2 x 17.1 x 17.6 /
+      17.6 x 17.3 x 17.8, one convex piece (Calli et al. give 16.2).  Cups,
+      inverted (_ud), a to e:
+        AABB width      57.4/58.6  61.0/61.9  65.1/66.6  70.7/71.8  75.5/76.7
+        height          61.5/62.5  64.0/65.0  66.6/67.6  68.9/69.6  70.8/71.9
+        top face (3 mm) 39.9/41.0  44.1/45.7  48.6/49.7  53.0/53.9  57.5/58.8
+        cavity height   54.2/53.7  56.3/55.8  58.9/59.1  62.0/60.6  63.3/62.4
+        footprint with  44/40      48/45      53/50      58/54      62/57
+        >= 16.2 clear
+      (cavity by upward rays on a 1 mm grid; 27 to 39 VHACD pieces per cup).
+      The die fits inside every cup's collision cavity.  Against
+      GRASP_MAX_SPAN 0.076 by mesh AABB: cups a to d fit, cup e does not
+      (76.7 collision, 75.5 visual); its top face (58.8) does.  The die hides
+      under an e cup in layout 1747173593 (seeds 5, 6, 10, 17, 19), so D11's
+      branch (ii), M6, is likely; B1(e) decides on our ESTIMATED widths, as
+      pre-registered (R1).
+  (c) After env.initialize, in all three layouts: gravity 0, fixedTimeStep
+      1/240 (so D9 (2) changes nothing), every task body mass -1 with a
+      NEGATIVE inertia diagonal (e.g. -9.3e-4 for the d cup) and lateral
+      friction 0.5.  D9 (1) to (4) then 50 steps: gravity reads -9.81 after
+      (1); masses from Calli et al., "The YCB Object and Model Set", ICAR
+      2015, Table I (dice 5.2 g; cups a to e 13, 14, 17, 19, 21 g); inertia
+      from the VHACD pieces at one uniform density about the body origin
+      (create_ycb's visual centre of mass), degenerate pieces skipped.
+      Settle: every cup drops 11 mm (their 1 cm float), no tilt, no NaN.
+      Die: 1747173591 falls 37.7 mm inside its cup, 3.9 mm sideways, tilt
+      21 deg, still moving at 0.069 m/s after the 50 steps; 1747173590 (die
+      on the table) drops 11.1 mm, 1.8 mm sideways, yaw 13.7 deg; 1747173593
+      falls 39.8 mm inside its cup, 10.3 mm sideways (above the
+      pre-registered 1 cm disclosure threshold), tilt 49.8 deg.  The die is
+      absent from the wrist camera's segmentation after the settle in all
+      three (early warning only; B3(c)'s after_settle hook is the check).
+      Arm drift over the settle at most 1.19e-4 rad (joint 6); their
+      allclose at-home test still passes.
+  (d) Executing world: physics client 0 (CLIENT_MAP key 0); belief world:
+      client 1.  Both are pybullet_utils BulletClients (panda_env_utils.py:
+      847), so BF#2(a)'s BulletClient injection is needed; no physicsClientId
+      threading (B3(e) not triggered).
+  BEFORE / AFTER: assumptions in P4.2 / measured as above; P4.2's "die about
+  4 cm" and "cups float 1 cm" confirmed; the die's tilt and its residual
+  motion after main()'s settle are new and go to the disclosures.
+  CLAIM EFFECT: none yet; disclosures (settle displacement, die tilt and
+  residual motion in 1747173591 and 1747173593; cup e beyond the span).
+  HONESTY CLASS: measurement.  G9: every number here comes from the URDF, the
+  meshes, their own initialize and a cited dataset table; none from an
+  outcome.  The probe reads no problem file itself.
+  DECISION 2026-10-26 (executor): none beyond recording; D9's values are the
+  pre-registered ones.
+  RESULT: archive/tampura_bridge_plan_2026-10-25/bf/BF4_b1/probe_abcd.json.
+
+BF#5 [OPEN]  EVALUATION RUNS MOVE TO THE CHAIR'S CLOUD  (B1, 2026-10-26)
+  WHAT: User directive 2026-10-26: evaluation runs always run on the chair's
+  cloud, not on the laptop.  This binds every run under P4.6's MACHINE rule:
+  B1(g) (TAMPURA as shipped, seeds 0-19), B1(j) (the arm-O venv tests,
+  because the venv must live on the machine that runs arm O), B3's, B5's and
+  M6's A/A and A/B acceptance runs, B7's headless episodes and B8.  Both arms
+  run on the same cloud machine, serially, under the MACHINE rule as
+  written; campaign.json names the node and its CPU.  Probes such as BF#4's
+  and one-episode smokes may stay local.  The 2026-05-26 local TAMPURA block
+  stays a separate reference on other hardware and is reported as such;
+  P4.6's agreement rule compares B1(g) with the timed T block, both on the
+  cloud.  PYTHONHASHSEED is pinned to 0 for B1(g), both T repetitions and O.
+  BEFORE / AFTER: MACHINE = this laptop, implied / MACHINE = one node of the
+  chair's cluster (i6, gateway1/gateway2.ml.rwth-aachen.de, through the RWTH
+  VPN), named per run.
+  CLAIM EFFECT: the hardware sentence names the cluster node's CPU.
+  HONESTY CLASS: configuration.
+  DECISION 2026-10-26 (user).  OPEN until the first connection: scheduler,
+  node choice, install of both arms there, and B1(g) and B1(j) themselves.
+  RESULT: pending.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
