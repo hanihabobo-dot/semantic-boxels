@@ -5367,6 +5367,40 @@ BF#5 [OPEN]  EVALUATION RUNS MOVE TO THE CHAIR'S CLOUD  (B1, 2026-10-26)
   HONESTY CLASS: configuration.
   DECISION 2026-10-26 (user).  OPEN until the first connection: scheduler,
   node choice, install of both arms there, and B1(g) and B1(j) themselves.
+  RESULT: pending; the set-up is BF#6.
+
+BF#6 [OPEN]  BOTH ARMS ON THE CHAIR'S CLUSTER; B1(g) AND B1(j) SUBMITTED THERE
+      (B1, 2026-10-27)
+  WHAT: Access: gateway1.ml.rwth-aachen.de is a public SSH gateway (no VPN
+  needed); a new key (i6_ed25519) was authorized by the user on 2026-10-27
+  because the old key's passphrase is lost; jobs are submitted on the
+  cluster gateway cn-04 under Slurm account rleap.  The user's Unix group is
+  hiwi, not rleap, but /work/rleap1/hani.alassiri.alhabboub exists and is
+  writable.  Partition cpu_modern: 59 nodes of 2 x 24 cores (96 threads),
+  186 GB.  Everything lives under /work/rleap1/hani.alassiri.alhabboub/p4:
+  a tools venv on the system Python (uv, cmake), Python 3.11.15 from uv;
+  tampura-work (their repositories at cdddf14 and 4167c35, BF#3's file by
+  hash, a venv with the local arm T's exact package versions, tampura
+  installed from GitHub at cdddf14 so its own setup.py builds SymK, as
+  locally); armO-venvA, D12's candidate (A), holding exactly arm T's package
+  set with tampura_environments editable from THEIR tree; sb_<sha>, our code
+  as git archives of single commits; pddlstream_lib copied from the local
+  checkout without .git (its 54 modified files differ from commit 2c7d6f5 by
+  line endings only, 11974 lines in, 11974 out).  Scripts:
+  tools/cluster/{setup_arm_t,setup_arm_o,b1j_tests,b1g_tampura_as_shipped,
+  b1j_aa}.sbatch.  B1(g) runs tools/tampura_sweep_cluster.py, the 2026-05-26
+  driver plus four additions (root from $TAMPURA_WORK, scene file per seed,
+  the MACHINE process check before each seed, host/CPU/PYTHONHASHSEED/job
+  in the payload); their run_planner.py and find_dice.yml run unchanged.
+  MACHINE on the cluster: an exclusive node (--exclusive, --mem=0), one node
+  pinned for B1(g) and the A/A, serial episodes, PYTHONHASHSEED 0.
+  Known differences from the local arm T: the Python build (uv's standalone
+  3.11.15 against deadsnakes 3.11.15); pygraphviz possibly absent (no
+  graphviz headers; TAMPURA imports it only to draw graphs).
+  CLAIM EFFECT: none; the hardware sentence names the node's CPU.
+  HONESTY CLASS: configuration.
+  DECISION 2026-10-27 (executor, under the user's request to set up both
+  systems on the cluster and run B1(g) and B1(j) there).
   RESULT: pending.
 
 ================================================================================

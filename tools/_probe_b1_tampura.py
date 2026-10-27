@@ -326,6 +326,31 @@ def probe_layout(scene, seed):
     return res
 
 
+def layout_signature(scene, seed):
+    """B1(j) test 2: what a venv builds for one layout, as their
+    initialize() leaves it: every task body's AABB and the set of seg ids
+    in the t=0 wrist render.  Two venvs must agree exactly."""
+    from tampura.config import config as tconfig
+    import tempfile
+    cfg = tconfig.load_config(config_file='./env_configs/find_dice.yml',
+                              arg_dict={'config': './env_configs/find_dice.yml',
+                                        'global_seed': seed, 'vis': 0,
+                                        'save_dir': tempfile.mkdtemp()})
+    random.seed(cfg['global_seed'])
+    np.random.seed(cfg['global_seed'])
+    env = tconfig.get_env(cfg['task'])(config=cfg)
+    env.initialize()
+    w = env.world
+    c = w.client._client
+    aabbs = {f'{cat}#{b}': [list(v) for v in p.getAABB(b, physicsClientId=c)]
+             for b, cat in zip(w.objects, w.categories)}
+    img = w.robot.get_image(client=w.client)
+    seg = np.asarray(img.segmentationMaskBuffer)
+    ids = sorted(int(i) for i in np.unique(seg[..., 0] if seg.ndim == 3 else seg))
+    return {'scene': scene, 'seed': seed, 'aabbs': aabbs, 'seg_ids': ids,
+            'numpy': np.__version__}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', required=True)
@@ -361,5 +386,7 @@ if __name__ == '__main__':
     import sys
     if len(sys.argv) == 4 and sys.argv[1] == '--layout':
         print(json.dumps(probe_layout(sys.argv[2], int(sys.argv[3]))))
+    elif len(sys.argv) == 4 and sys.argv[1] == '--layout-sig':
+        print(json.dumps(layout_signature(sys.argv[2], int(sys.argv[3]))))
     else:
         main()
