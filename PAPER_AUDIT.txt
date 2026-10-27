@@ -3958,8 +3958,8 @@ B0  [DONE 2026-10-26, BF#2, BF#3]  GATES AND LEDGER FIRST.  tools/bridge_gates.p
     tampura_bridge/ package; the G6 controls exist and fail until B2/B7 make
     them pass.  Effort 3 days.
 
-B1  [OPEN; part 1 (a) to (d) DONE 2026-10-26, BF#4; (g) DONE 2026-10-27 on
-    the cluster, BF#9; (j) tests 1 to 4 PASS, BF#7, test 5 (the A/A) running]
+B1  [DONE 2026-10-27; part 1 (a) to (d) BF#4; (g) on the cluster, BF#9;
+    (j) all five tests PASS, BF#7; part 2 (e), (f), (h), (i) BF#11]
     RECONNAISSANCE, NUMBERS INTO THE RECORD.  PART 1 runs
     before B3 and is read-only: (a), (b), (c), (d), (g), (j).  PART 2 runs
     after B3, because it needs B3's RobotModel, adopt-client constructor and
@@ -5762,6 +5762,98 @@ BF#10 [OPEN, USER DECISION (Q13)]  B3: MAIN-PIPELINE PARAMETERISATION, EVERY
   re-run JSONs, ab_report.json and acceptance_report.json from
   tools/b3_acceptance_report.py, the three diagnostic jobs' JSONs in diag/,
   the five job logs; their prologs list only our jobs).
+
+BF#11 [DONE]  B1 PART 2 (e), (f), (h), (i): THE EYE, W, THE REACH, M1 AND THE
+      AT-HOME HOLD  (B1, 2026-10-27)
+  WHAT: tools/_probe_b1p2_tampura.py, run in the local arm T venv (the
+  package set of armO-venvA; their trees unchanged, G13) with our modules at
+  526b358 (B3's RobotModel resolves their Panda by name).  The empty table is
+  their own: setup_robot and setup_world with no objects (their Panda at the
+  origin, their 1.53 x 1.22 m table with its top at z = 0, its posts and
+  beams).  The layouts are built by their initialize() and feed disclosures
+  only.
+  (f) Reach: planning-side IK (BoxelStreams._pybullet_ik over the 8 seeds,
+      FK-gated at 10 mm and 10 deg) on a 5 cm grid, x -0.25 to 1.0, y -0.6
+      to 0.6, EE heights 0.045 to 0.30 m above the table, yaw 0 and pi/2.
+      The largest radius from the base that IK reaches is 0.808 m at
+      heights 0.045 to 0.20 m, 0.802 m at 0.245 m and 0.791 m at 0.30 m; a
+      sphere about a world height fitted to those radii has its centre at
+      z 0.124 m and radius 0.810 m (every height within 2 mm).  Targets
+      close to the base fail too: top-down IK does not reach under the
+      shoulder.  B6 sets the envelope from these numbers.
+  (e) The D4 eye from their get_image_at_pose path with the arm at
+      DEFAULT_ARM_POS: eye (0.1786, 0.0488, 0.5883), target 5 m along the
+      camera's +z (3.2858, -0.1698, -3.3229), up +z, vertical field of view
+      49.134 deg (2 atan(240/525)), 640 x 480, near 0.02, far 5.0; task_spec
+      declares exactly these.  The TinyRenderer render of the empty table
+      shows the table only: the arm at home has no pixel in the frame, so
+      the robot-occluded footprint is empty.  W, on 1 cm cells of their
+      shortened table (x 0.10 to 0.85, y -0.61 to 0.61, their
+      get_shortened_table_dims): 5016 cells have a column (0 to 71.9 mm,
+      the tallest class) that leaves the frame, no cell is occluded by the
+      arm or the table frame, 791 fail the reach test (IK for the post-place
+      lift over the tallest class, 0.167 m, at either yaw); the largest
+      axis-aligned rectangle of the remaining cells (histogram method) is
+      x 0.35 to 0.74, y -0.28 to 0.34 (39 x 62 cells), declared in task_spec
+      as provisional.  D11: our detector's estimated width of each cup
+      class at 9 cells of W, the largest per class: a 56.8, b 60.7, c 65.0,
+      d 70.5, e 75.2 mm, all within GRASP_MAX_SPAN 76 mm (e by 0.8 mm), so
+      D11 lands in branch (i) on these numbers; B6 decides.
+      Layout disclosures (no constant, no choice), after D9 and 50 steps:
+      the die is absent from the eye in all three layouts; every cup's AABB
+      projects entirely into the frame, so P4.6's planned disclosure "every
+      cup partly out of frame" does not hold for this eye and is dropped;
+      with the hiding cup parked away in turn the die shows 167 px
+      (1747173591, the d cup), 194 px (1747173590, the d cup) and 259 px
+      (1747173593, the e cup), with our box estimate within 8.1, 6.2 and
+      5.4 mm of its AABB; parking any other cup leaves it hidden.
+  (h) D5's rule: for each cup class at the 96 cells of a 5 cm grid over W,
+      the arm at the post-place lift pose over the cell (top-down, yaw 0,
+      0.10 m above the class's contact height) and the cavity footprint's
+      sense slices (perception.sense_ray_slices over the declared cavity)
+      tested on the render (first_surface_interceptors; out of view counts
+      as blocked): the worst blocked fraction is 1.0 (a_cups_ud at
+      (0.375, -0.105)), and 42 to 44 of the 96 cells exceed 0.05 in every
+      class.  M1 is ADOPTED by the pre-registered rule, as the plan
+      expected.  The 5 cm grid stands for "every cell of W": a 1 cm grid
+      would mean 12000 renders for the same verdict.
+  (i) At-home convergence: D9's gravity, timestep, pad friction and opening
+      on the empty table; from the post-place lift pose of the die class
+      (EE 0.135 m) over the 96 cells to DEFAULT_ARM_POS through
+      move_robot_smooth (one velocity-bounded segment with the endpoint
+      settle), then hold_at_config with the 2400-step probe cap, empty
+      handed and with a die-class box (17.6 x 17.3 x 17.8 mm, 5.2 g) closed
+      on by close_gripper_until_contact.  Today's settle never passes
+      TAMPURA's test (largest error 1.98e-3 rad, the settle's own 2e-3
+      stop); the hold passes in every trial within 26 steps (largest
+      residual 1.76e-4 rad, inside rtol + atol).  The payload stayed between
+      the pads in only 5 of its 96 trials (see the FINDING); those 5 passed
+      within 22 to 23 steps, the others ran effectively empty handed.  So
+      HOME_HOLD_STEP_CAP = 2 x 26 = 52 by D7 (vii)'s rule on the measured
+      maximum, with the payload measured in 5 trials only, and Q12 does not
+      arise; B6 freezes it.
+  FINDING (for B7): the die-class box was held by both pads once the grasp
+  had settled (7 to 10 N pad force) in all 96 trials, but left the pads on
+  the move home in 91 and lay on the table afterwards (the first run of (i),
+  probe_i_first.json, showed the same 91 losses; the second added the
+  held-state checkpoints).  With BF#10's finding (our cube rolled out of the
+  pads on a cargo move to REST_POSES) our friction grasp does not carry a
+  light body through a long move to the home configuration in these runs.
+  B7 meets this on every episode it reaches; any remedy is a main-pipeline
+  change with the B3 acceptance and its own BF#, never a bridge-side helper
+  or retry (R7).
+  BEFORE / AFTER: P4.2's assumptions / measured as above; task_spec now
+  holds the eye (final, from their code) and W (provisional until B6).
+  CLAIM EFFECT: none yet.  Disclosures: the cups are fully in frame (the
+  planned "partly out of frame" note is dropped); M1 is adopted.
+  HONESTY CLASS: measurement.  G9: every number comes from the URDF, the
+  meshes, their source constants or a probe on the empty table; the
+  layouts feed nothing.
+  DECISION 2026-10-27 (executor): M1 adopted and HOME_HOLD_STEP_CAP 52, by
+  the pre-registered rules; W, the reach envelope and D11's branch are
+  B6's to freeze from these numbers.
+  RESULT: archive/tampura_bridge_plan_2026-10-25/bf/BF11_b1p2/ (one JSON and
+  one console per item; probe_i_first.* is the first run of (i)).
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS

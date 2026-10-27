@@ -1,0 +1,6 @@
+pybullet build time: Jan 29 2025 23:17:20
+/root/tampura-work/tampura_environments/tampura_environments/__init__.py:20: UserWarning: tampura_environments: skipping subpackage 'toy_discrete': No module named 'tampura_environments.toy_discrete'
+  _warnings.warn(f"tampura_environments: skipping subpackage '{_name}': {_e}")
+/root/tampura-work/.venv/lib/python3.11/site-packages/trimesh/grouping.py:99: RuntimeWarning: invalid value encountered in cast
+  stacked = np.column_stack(stacked).round().astype(np.int64)
+{"item": "e_layout", "scene": "1747173591", "seed": 0, "eye": [0.17861445248126984, 0.048803217709064484, 0.5883188247680664], "bodies": {"d_cups_ud#10": {"pixels": 2721, "aabb_in_frame_fraction": 1.0}, "dice#11": {"pixels": 0, "aabb_in_frame_fraction": 1.0}}, "die_absent": true, "cup_parked_in_turn": {"d_cups_ud#10": {"die_pixels": 167, "aabb_error_m": 0.0081}}}
