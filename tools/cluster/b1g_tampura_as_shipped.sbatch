@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=p4-b1g-tampura
-#SBATCH --partition=cpu_modern
+#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --exclusive
 #SBATCH --mem=0

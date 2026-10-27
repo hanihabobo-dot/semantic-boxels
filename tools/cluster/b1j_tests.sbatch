@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=p4-b1j-tests
-#SBATCH --partition=cpu_modern
+#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8

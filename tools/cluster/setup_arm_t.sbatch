@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=p4-setup-armT
-#SBATCH --partition=cpu_modern
+#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
@@ -20,10 +20,11 @@ lscpu | grep -E 'Model name|Socket\(s\)|Core\(s\) per|Thread\(s\)'
 which g++ make git
 
 # 1. Tools on the system Python: uv (for Python 3.11) and cmake (for SymK).
-if [ ! -x $W/tools/bin/uv ]; then
-  python3 -m venv $W/tools
-  $W/tools/bin/pip install -q uv cmake
-fi
+# cmake is pinned to the 3.22 series, the local install's (Ubuntu 22.04's
+# 3.22.1): cmake 4 refuses SymK's cmake_minimum_required(VERSION 2.8.3).
+[ -x $W/tools/bin/pip ] || python3 -m venv $W/tools
+$W/tools/bin/pip install -q uv "cmake==3.22.*"
+$W/tools/bin/cmake --version | head -1
 export PATH=$W/tools/bin:$PATH
 export UV_PYTHON_INSTALL_DIR=$W/python UV_CACHE_DIR=$W/uv-cache
 uv python install 3.11.15

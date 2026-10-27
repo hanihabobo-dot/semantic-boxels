@@ -5376,8 +5376,13 @@ BF#6 [OPEN]  BOTH ARMS ON THE CHAIR'S CLUSTER; B1(g) AND B1(j) SUBMITTED THERE
   because the old key's passphrase is lost; jobs are submitted on the
   cluster gateway cn-04 under Slurm account rleap.  The user's Unix group is
   hiwi, not rleap, but /work/rleap1/hani.alassiri.alhabboub exists and is
-  writable.  Partition cpu_modern: 59 nodes of 2 x 24 cores (96 threads),
-  186 GB.  Everything lives under /work/rleap1/hani.alassiri.alhabboub/p4:
+  writable.  Partition: rleap_cpu (account rleap; cn-[101-116], 96 threads
+  and 190 GB each; the default partition cpu_modern admits only account hlt,
+  so the first submission sat in PartitionConfig and was cancelled before it
+  started; the snapshot's scripts say cpu_modern and were submitted with
+  -p rleap_cpu, the repository's copies are corrected).  B1(g) and the A/A
+  are pinned to cn-110.  Everything lives under
+  /work/rleap1/hani.alassiri.alhabboub/p4:
   a tools venv on the system Python (uv, cmake), Python 3.11.15 from uv;
   tampura-work (their repositories at cdddf14 and 4167c35, BF#3's file by
   hash, a venv with the local arm T's exact package versions, tampura
@@ -5395,8 +5400,11 @@ BF#6 [OPEN]  BOTH ARMS ON THE CHAIR'S CLUSTER; B1(g) AND B1(j) SUBMITTED THERE
   MACHINE on the cluster: an exclusive node (--exclusive, --mem=0), one node
   pinned for B1(g) and the A/A, serial episodes, PYTHONHASHSEED 0.
   Known differences from the local arm T: the Python build (uv's standalone
-  3.11.15 against deadsnakes 3.11.15); pygraphviz possibly absent (no
-  graphviz headers; TAMPURA imports it only to draw graphs).
+  3.11.15 against deadsnakes 3.11.15); cmake from a pip wheel pinned to the
+  3.22 series (local: Ubuntu's 3.22.1; the first set-up job, 4939971, took
+  pip's cmake 4.4.4, which refuses SymK's cmake_minimum_required(2.8.3), and
+  failed before building anything); pygraphviz possibly absent (no graphviz
+  headers; TAMPURA imports it only to draw graphs).
   CLAIM EFFECT: none; the hardware sentence names the node's CPU.
   HONESTY CLASS: configuration.
   DECISION 2026-10-27 (executor, under the user's request to set up both
