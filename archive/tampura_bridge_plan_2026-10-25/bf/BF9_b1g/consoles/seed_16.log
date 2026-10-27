@@ -1,0 +1,34 @@
+pybullet build time: Jan 29 2025 23:17:20
+/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/tampura_environments/tampura_environments/__init__.py:20: UserWarning: tampura_environments: skipping subpackage 'toy_discrete': No module named 'tampura_environments.toy_discrete'
+  _warnings.warn(f"tampura_environments: skipping subpackage '{_name}': {_e}")
+Loading scene from 1747173591.670785.json
+/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/trimesh/grouping.py:99: RuntimeWarning: invalid value encountered in cast
+  stacked = np.column_stack(stacked).round().astype(np.int64)
+
+==========t=0==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7be747284c50>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7be747270d10>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+Reward: 0.0
+[TampuraPolicy] Flat Action Parameter Sampling
+[TampuraPolicy] Outcome Sampling
+  0%|          | 0/200 [00:00<?, ?it/s] 10%|█         | 20/200 [00:07<01:05,  2.75it/s] 20%|██        | 40/200 [00:10<00:36,  4.33it/s] 30%|███       | 60/200 [00:16<00:39,  3.56it/s] 40%|████      | 80/200 [00:18<00:25,  4.76it/s] 50%|█████     | 100/200 [00:21<00:17,  5.66it/s] 60%|██████    | 120/200 [00:22<00:11,  7.06it/s] 70%|███████   | 140/200 [00:24<00:07,  8.53it/s] 80%|████████  | 160/200 [00:25<00:04,  9.86it/s] 90%|█████████ | 180/200 [00:26<00:01, 11.26it/s]100%|██████████| 200/200 [00:28<00:00, 11.44it/s]100%|██████████| 200/200 [00:28<00:00,  7.07it/s]
+Traceback (most recent call last):
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/tampura_environments/run_planner.py", line 138, in <module>
+    (_, _) = policy.rollout(env, b0, store)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/policy.py", line 120, in rollout
+    action, info, store = self.get_action(b, store)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/tampura_policy.py", line 147, in get_action
+    self.problem_spec.print_F(self.F)
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/spec.py", line 98, in print_F
+    for bp, prob in bs.ab_probs.items():
+                    ^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in ab_probs
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in <dictcomp>
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+               ~~^~~~~~~~~~~~~~
+ZeroDivisionError: float division by zero

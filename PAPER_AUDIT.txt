@@ -3473,7 +3473,8 @@ G18 Clock: between env.initialize() returning and the first env.step the
 G19 Seed hygiene on BOTH drivers: random.seed and np.random.seed(global_seed)
     precede env.initialize exactly as run_planner.py does; no bridge or
     driver code consumes the global RNG before get_scene_data; the loaded
-    problem file per seed equals the pinned map (P4.2) and is asserted;
+    problem file per seed equals the pinned map (P4.2; on the cluster,
+    BF#8's map) and is asserted;
     PYTHONHASHSEED is pinned to one value for B1(g), both T repetitions and O.
 G20 Camera: a module-level hook on pybullet.getCameraImage for every client
     checks that the view and projection matrices equal those their own
@@ -3527,6 +3528,9 @@ from" line; os.listdir order dependent):
   1747173590 (die + 4 cups) <- seeds 1,2,3,4,8,14,15,18   (TAMPURA 2/8)
   1747173591 (die + 1 cup)  <- seeds 0,7,9,11,12,13,16    (TAMPURA 6/7)
   1747173593 (die + 4 cups) <- seeds 5,6,10,17,19         (TAMPURA 3/5)
+(BF#8, 2026-10-27: this is the laptop run's map.  The cluster campaign pins
+the cluster's own map, where seeds 1,2,3,4,8,14,15,18 load 1747173593 and
+seeds 5,6,10,17,19 load 1747173590: tools/bridge_gates.py SCENE_MAP.)
 Actions: pick(o,g) [requires not moved(o)], place(o,g,p), look(o1,o2,q)
 ["look behind o2 for o1", depends moved(o2)], go-home [only while holding],
 no-op.  Streams sampled ONCE at t=0 (5 grasps from a saved per-mesh grasp
@@ -3953,8 +3957,9 @@ B0  [DONE 2026-10-26, BF#2, BF#3]  GATES AND LEDGER FIRST.  tools/bridge_gates.p
     tampura_bridge/ package; the G6 controls exist and fail until B2/B7 make
     them pass.  Effort 3 days.
 
-B1  [OPEN; part 1 (a) to (d) DONE 2026-10-26, BF#4; (g) and (j) on the
-    chair's cloud, BF#5]  RECONNAISSANCE, NUMBERS INTO THE RECORD.  PART 1 runs
+B1  [OPEN; part 1 (a) to (d) DONE 2026-10-26, BF#4; (g) DONE 2026-10-27 on
+    the cluster, BF#9; (j) tests 1 to 4 PASS, BF#7, test 5 (the A/A) running]
+    RECONNAISSANCE, NUMBERS INTO THE RECORD.  PART 1 runs
     before B3 and is read-only: (a), (b), (c), (d), (g), (j).  PART 2 runs
     after B3, because it needs B3's RobotModel, adopt-client constructor and
     loop parameters at a recorded commit: (e), (f), (h), (i).  Probe scripts
@@ -5452,7 +5457,7 @@ BF#7 [OPEN]  B1(j): D12'S VENV TESTS FOR CANDIDATE (A)  (B1, 2026-10-27)
   the six layout signatures, the test-3 console, the test-4 ledger, the job
   log).
 
-BF#8 [OPEN, USER DECISION]  THE SEED-TO-SCENE MAP DEPENDS ON THE FILESYSTEM
+BF#8 [DONE, option (A)]  THE SEED-TO-SCENE MAP DEPENDS ON THE FILESYSTEM
       (B1, 2026-10-27)
   WHAT: TAMPURA picks a seed's scene with random.choice(os.listdir(problems))
   (env.py:801-811), so the map from seed to scene depends on the order in
@@ -5492,9 +5497,70 @@ BF#8 [OPEN, USER DECISION]  THE SEED-TO-SCENE MAP DEPENDS ON THE FILESYSTEM
   CLAIM EFFECT: the paper states the seed-to-scene map of the campaign and
   that it differs from the laptop run's.
   HONESTY CLASS: configuration.
-  DECISION: pending (user).  B1(g) keeps running meanwhile; under (A) it is
-  arm T's cluster reference, under (B) it is reported as a separate block.
-  RESULT: pending.
+  DECISION 2026-10-27 (user): option (A), the cluster's own map; re-pin G19
+  from B1(g); keep the May laptop block as a per-layout reference.  What
+  follows from it: tools/bridge_gates.py SCENE_MAP is the cluster map and
+  SCENE_MAP_LAPTOP_2026_05_26 keeps the laptop map, used only to group that
+  block by layout; P4.6's per-layout counts read 8 (1747173593), 7
+  (1747173591) and 5 (1747173590); P4.6's agreement rule between the timed T
+  block and B1(g) ("may differ only on seeds that also flipped between the
+  2026-05-26 block and B1(g)") keeps its per-seed form for the seven seeds of
+  1747173591, the only ones that loaded the same scene in both runs; for the
+  other thirteen the laptop block gives no per-seed reference, so a per-seed
+  difference between B1(g) and the timed block there falls under the rule's
+  own fallback: both blocks are reported and neither is chosen.
+  RESULT: all 20 B1(g) consoles show the predicted cluster map (seeds 0, 7,
+  9, 11, 12, 13, 16 load 1747173591; 1, 2, 3, 4, 8, 14, 15, 18 load
+  1747173593; 5, 6, 10, 17, 19 load 1747173590).  SCENE_MAP re-pinned from
+  them; test_scene_map_g19_is_the_cluster_map added; 34 tests pass and the
+  static gates are green.
+
+BF#9 [DONE]  B1(g): TAMPURA AS SHIPPED ON THE CLUSTER, SEEDS 0-19  (B1,
+      2026-10-27)
+  WHAT: Job 4940012 on cn-110 (Intel Xeon Platinum 8160 at 2.10 GHz, an
+  exclusive node), 10:53 to 11:48 (54:51), PYTHONHASHSEED 0, 900 s cap per
+  episode, their run_planner.py and find_dice.yml unchanged, driven by
+  tools/tampura_sweep_cluster.py.  Their commits cdddf14 and 4167c35, BF#3's
+  file the only modified tracked file, and the pip freeze (sha256
+  0cdfcf0c...) identical before and after the block (G13).  The MACHINE
+  check saw no other pipeline process before any seed; no episode timed out.
+  RESULT: 13/20 succeed (Wilson 95 % 0.43 to 0.82): seeds 0, 4, 5, 6, 7, 8,
+  9, 11, 12, 13, 15, 18, 19.  Seeds 1, 2, 3, 10, 14, 17 ran their 20 steps
+  without the reward.  Seed 16 CRASHED at t=0 inside TAMPURA: after the
+  first outcome sampling, print_F (tampura_policy.py:147) reached ab_probs
+  (structs.py:257), whose count total was 0 (ZeroDivisionError); rc 1, no
+  RolloutHistory, so no reward: a failure of arm T as shipped (P4.6
+  SUCCESS).  In the 2026-05-26 laptop run the same seed on the same scene
+  ran its 20 steps and failed without crashing (loop 143.6 s); the Python
+  build, PYTHONHASHSEED 0 and the CPU are candidate causes, none
+  established; B8's two T repetitions show whether it recurs.  Loop time
+  (time_deltas[-1]) over the 19 episodes with a history: mean 155.9 s, std
+  95.7, median 159.4; over the 13 successes: mean 115.4 s, std 70.4, median
+  88.8; first rewarded step 5 to 10.  Under D10 a crashed episode enters the
+  campaign's time statistics at the cap, censored; this block reports it
+  separately.
+  Per layout (cluster map) beside the laptop block (laptop map; the seeds
+  behind each layout differ, BF#8):
+    1747173590  cluster 3/5 (seeds 5, 6, 10, 17, 19)        laptop 2/8
+    1747173591  cluster 6/7 (seeds 0, 7, 9, 11, 12, 13, 16) laptop 6/7,
+                the same seven seeds on the same scene, no outcome flip
+    1747173593  cluster 4/8 (seeds 1, 2, 3, 4, 8, 14, 15, 18) laptop 3/5
+    pooled      cluster 13/20                               laptop 11/20
+                (0.34 to 0.74): no difference at n = 20.
+  Loop times are lower on the cluster (155.9 s against 239.9 s over all
+  episodes), on other hardware and with two layouts on other seeds, so no
+  speed statement follows.
+  BEFORE / AFTER: arm T's reference was the 2026-05-26 laptop block / it is
+  this block (P4.6 ARMS); the laptop block stays a per-layout reference.
+  CLAIM EFFECT: none yet; the campaign measures arm T again in B8 (timed
+  policy, two repetitions).  The thesis' 11/20 stays the laptop result until
+  the campaign replaces it.
+  HONESTY CLASS: measurement.
+  DECISION 2026-10-27 (executor): recorded as measured; the crash counts as
+  a failure, as P4.6 SUCCESS defines.
+  RESULT: archive/tampura_bridge_plan_2026-10-25/bf/BF9_b1g/ (the sweep JSON,
+  the 20 consoles, the job log with other users' prolog rows stripped, and
+  b1g_report.json from tools/_b1g_report.py).
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS

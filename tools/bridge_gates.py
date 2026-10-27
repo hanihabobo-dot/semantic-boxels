@@ -81,13 +81,26 @@ G7_EXEMPT_FILES = ('tampura_bridge/task_spec.py',)
 LOG_CALLS = frozenset(('print', 'debug', 'info', 'warning', 'error',
                        'exception', 'ledger_event', 'note'))
 
-# G19: the pinned seed-to-scene map of the 2026-05-26 run (P4.2).
+# G19: the pinned seed-to-scene map of the campaign (BF#8, option A): the
+# cluster's own, read from B1(g)'s consoles (job 4940012, "Loading scene
+# from" in results/b1g/consoles/seed_N.log on /work/rleap1).  TAMPURA picks
+# the scene by random.choice(os.listdir(problems)), and the cluster's NFS
+# lists [1747173593, 1747173591, 1747173590].
 SCENE_MAP = {}
+for _scene, _seeds in (('1747173593', (1, 2, 3, 4, 8, 14, 15, 18)),
+                       ('1747173591', (0, 7, 9, 11, 12, 13, 16)),
+                       ('1747173590', (5, 6, 10, 17, 19))):
+    for _s in _seeds:
+        SCENE_MAP[_s] = _scene
+# The 2026-05-26 laptop run's map (P4.2; ext4 lists [1747173590,
+# 1747173591, 1747173593]).  Used only to group that block by layout; it
+# pins no campaign episode.
+SCENE_MAP_LAPTOP_2026_05_26 = {}
 for _scene, _seeds in (('1747173590', (1, 2, 3, 4, 8, 14, 15, 18)),
                        ('1747173591', (0, 7, 9, 11, 12, 13, 16)),
                        ('1747173593', (5, 6, 10, 17, 19))):
     for _s in _seeds:
-        SCENE_MAP[_s] = _scene
+        SCENE_MAP_LAPTOP_2026_05_26[_s] = _scene
 
 # G5: the enumerated channels behind a SHADOW boxel's belief change.
 G5_CHANNELS = ('planned_sense_render', 'sweep_render', 'lost_caster_render',

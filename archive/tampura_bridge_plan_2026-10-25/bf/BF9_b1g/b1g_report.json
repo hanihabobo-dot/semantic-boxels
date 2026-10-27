@@ -1,0 +1,464 @@
+{
+ "cluster_machine": {
+  "host": "cn-110",
+  "cpu_model": "Intel(R) Xeon(R) Platinum 8160 CPU @ 2.10GHz",
+  "nproc": 96,
+  "pythonhashseed": "0",
+  "slurm_job_id": "4940012",
+  "tampura_work": "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work"
+ },
+ "per_layout": {
+  "1747173590": {
+   "cluster": {
+    "n": 5,
+    "success": 3,
+    "rate": 0.6,
+    "wilson95": [
+     0.231,
+     0.882
+    ],
+    "loop_s_all": {
+     "mean": 194.4,
+     "std": 67.1,
+     "median": 216.7,
+     "n": 5
+    },
+    "loop_s_success": {
+     "mean": 177.6,
+     "std": 82.4,
+     "median": 159.4,
+     "n": 3
+    },
+    "seeds": [
+     5,
+     6,
+     10,
+     17,
+     19
+    ]
+   },
+   "laptop_2026_05_26": {
+    "n": 8,
+    "success": 2,
+    "rate": 0.25,
+    "wilson95": [
+     0.071,
+     0.591
+    ],
+    "loop_s_all": {
+     "mean": 327.1,
+     "std": 178.6,
+     "median": 266.0,
+     "n": 8
+    },
+    "loop_s_success": {
+     "mean": 172.4,
+     "std": 71.1,
+     "median": 172.4,
+     "n": 2
+    },
+    "seeds": [
+     1,
+     2,
+     3,
+     4,
+     8,
+     14,
+     15,
+     18
+    ]
+   }
+  },
+  "1747173591": {
+   "cluster": {
+    "n": 7,
+    "success": 6,
+    "rate": 0.857,
+    "wilson95": [
+     0.487,
+     0.974
+    ],
+    "loop_s_all": {
+     "mean": 67.3,
+     "std": 22.7,
+     "median": 54.8,
+     "n": 6
+    },
+    "loop_s_success": {
+     "mean": 67.3,
+     "std": 22.7,
+     "median": 54.8,
+     "n": 6
+    },
+    "seeds": [
+     0,
+     7,
+     9,
+     11,
+     12,
+     13,
+     16
+    ]
+   },
+   "laptop_2026_05_26": {
+    "n": 7,
+    "success": 6,
+    "rate": 0.857,
+    "wilson95": [
+     0.487,
+     0.974
+    ],
+    "loop_s_all": {
+     "mean": 111.3,
+     "std": 21.3,
+     "median": 111.3,
+     "n": 7
+    },
+    "loop_s_success": {
+     "mean": 105.9,
+     "std": 18.1,
+     "median": 108.2,
+     "n": 6
+    },
+    "seeds": [
+     0,
+     7,
+     9,
+     11,
+     12,
+     13,
+     16
+    ]
+   }
+  },
+  "1747173593": {
+   "cluster": {
+    "n": 8,
+    "success": 4,
+    "rate": 0.5,
+    "wilson95": [
+     0.215,
+     0.785
+    ],
+    "loop_s_all": {
+     "mean": 198.3,
+     "std": 99.8,
+     "median": 186.4,
+     "n": 8
+    },
+    "loop_s_success": {
+     "mean": 140.8,
+     "std": 56.7,
+     "median": 124.9,
+     "n": 4
+    },
+    "seeds": [
+     1,
+     2,
+     3,
+     4,
+     8,
+     14,
+     15,
+     18
+    ]
+   },
+   "laptop_2026_05_26": {
+    "n": 5,
+    "success": 3,
+    "rate": 0.6,
+    "wilson95": [
+     0.231,
+     0.882
+    ],
+    "loop_s_all": {
+     "mean": 280.5,
+     "std": 51.5,
+     "median": 279.9,
+     "n": 5
+    },
+    "loop_s_success": {
+     "mean": 282.1,
+     "std": 38.9,
+     "median": 279.9,
+     "n": 3
+    },
+    "seeds": [
+     5,
+     6,
+     10,
+     17,
+     19
+    ]
+   }
+  }
+ },
+ "pooled": {
+  "cluster": {
+   "n": 20,
+   "success": 13,
+   "rate": 0.65,
+   "wilson95": [
+    0.433,
+    0.819
+   ],
+   "loop_s_all": {
+    "mean": 155.9,
+    "std": 95.7,
+    "median": 159.4,
+    "n": 19
+   },
+   "loop_s_success": {
+    "mean": 115.4,
+    "std": 70.4,
+    "median": 88.8,
+    "n": 13
+   },
+   "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+   ]
+  },
+  "laptop_2026_05_26": {
+   "n": 20,
+   "success": 11,
+   "rate": 0.55,
+   "wilson95": [
+    0.342,
+    0.742
+   ],
+   "loop_s_all": {
+    "mean": 239.9,
+    "std": 151.1,
+    "median": 239.6,
+    "n": 20
+   },
+   "loop_s_success": {
+    "mean": 166.1,
+    "std": 84.7,
+    "median": 113.0,
+    "n": 11
+   },
+   "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+   ]
+  }
+ },
+ "same_scene_seeds": [
+  {
+   "seed": 0,
+   "layout": "1747173591",
+   "cluster_success": true,
+   "laptop_success": true,
+   "cluster_loop_s": 96.664,
+   "laptop_loop_s": 81.794
+  },
+  {
+   "seed": 7,
+   "layout": "1747173591",
+   "cluster_success": true,
+   "laptop_success": true,
+   "cluster_loop_s": 51.183,
+   "laptop_loop_s": 136.736
+  },
+  {
+   "seed": 9,
+   "layout": "1747173591",
+   "cluster_success": true,
+   "laptop_success": true,
+   "cluster_loop_s": 50.192,
+   "laptop_loop_s": 105.141
+  },
+  {
+   "seed": 11,
+   "layout": "1747173591",
+   "cluster_success": true,
+   "laptop_success": true,
+   "cluster_loop_s": 58.319,
+   "laptop_loop_s": 113.047
+  },
+  {
+   "seed": 12,
+   "layout": "1747173591",
+   "cluster_success": true,
+   "laptop_success": true,
+   "cluster_loop_s": 101.063,
+   "laptop_loop_s": 111.287
+  },
+  {
+   "seed": 13,
+   "layout": "1747173591",
+   "cluster_success": true,
+   "laptop_success": true,
+   "cluster_loop_s": 46.144,
+   "laptop_loop_s": 87.392
+  },
+  {
+   "seed": 16,
+   "layout": "1747173591",
+   "cluster_success": false,
+   "laptop_success": false,
+   "cluster_loop_s": null,
+   "laptop_loop_s": 143.55
+  }
+ ],
+ "scene_check": [
+  {
+   "seed": 0,
+   "loaded": "1747173591",
+   "pinned_cluster_map": "1747173591",
+   "match": true
+  },
+  {
+   "seed": 1,
+   "loaded": "1747173593",
+   "pinned_cluster_map": "1747173593",
+   "match": true
+  },
+  {
+   "seed": 2,
+   "loaded": "1747173593",
+   "pinned_cluster_map": "1747173593",
+   "match": true
+  },
+  {
+   "seed": 3,
+   "loaded": "1747173593",
+   "pinned_cluster_map": "1747173593",
+   "match": true
+  },
+  {
+   "seed": 4,
+   "loaded": "1747173593",
+   "pinned_cluster_map": "1747173593",
+   "match": true
+  },
+  {
+   "seed": 5,
+   "loaded": "1747173590",
+   "pinned_cluster_map": "1747173590",
+   "match": true
+  },
+  {
+   "seed": 6,
+   "loaded": "1747173590",
+   "pinned_cluster_map": "1747173590",
+   "match": true
+  },
+  {
+   "seed": 7,
+   "loaded": "1747173591",
+   "pinned_cluster_map": "1747173591",
+   "match": true
+  },
+  {
+   "seed": 8,
+   "loaded": "1747173593",
+   "pinned_cluster_map": "1747173593",
+   "match": true
+  },
+  {
+   "seed": 9,
+   "loaded": "1747173591",
+   "pinned_cluster_map": "1747173591",
+   "match": true
+  },
+  {
+   "seed": 10,
+   "loaded": "1747173590",
+   "pinned_cluster_map": "1747173590",
+   "match": true
+  },
+  {
+   "seed": 11,
+   "loaded": "1747173591",
+   "pinned_cluster_map": "1747173591",
+   "match": true
+  },
+  {
+   "seed": 12,
+   "loaded": "1747173591",
+   "pinned_cluster_map": "1747173591",
+   "match": true
+  },
+  {
+   "seed": 13,
+   "loaded": "1747173591",
+   "pinned_cluster_map": "1747173591",
+   "match": true
+  },
+  {
+   "seed": 14,
+   "loaded": "1747173593",
+   "pinned_cluster_map": "1747173593",
+   "match": true
+  },
+  {
+   "seed": 15,
+   "loaded": "1747173593",
+   "pinned_cluster_map": "1747173593",
+   "match": true
+  },
+  {
+   "seed": 16,
+   "loaded": "1747173591",
+   "pinned_cluster_map": "1747173591",
+   "match": true
+  },
+  {
+   "seed": 17,
+   "loaded": "1747173590",
+   "pinned_cluster_map": "1747173590",
+   "match": true
+  },
+  {
+   "seed": 18,
+   "loaded": "1747173593",
+   "pinned_cluster_map": "1747173593",
+   "match": true
+  },
+  {
+   "seed": 19,
+   "loaded": "1747173590",
+   "pinned_cluster_map": "1747173590",
+   "match": true
+  }
+ ]
+}

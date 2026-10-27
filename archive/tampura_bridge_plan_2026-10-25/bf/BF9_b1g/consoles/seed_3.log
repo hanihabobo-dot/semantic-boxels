@@ -1,0 +1,275 @@
+pybullet build time: Jan 29 2025 23:17:20
+/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/tampura_environments/tampura_environments/__init__.py:20: UserWarning: tampura_environments: skipping subpackage 'toy_discrete': No module named 'tampura_environments.toy_discrete'
+  _warnings.warn(f"tampura_environments: skipping subpackage '{_name}': {_e}")
+Loading scene from 1747173593.826745.json
+/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/trimesh/grouping.py:99: RuntimeWarning: invalid value encountered in cast
+  stacked = np.column_stack(stacked).round().astype(np.int64)
+
+==========t=0==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d276b550>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695d30d8850>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3']), Atom(pred_name='at-home', args=[])])
+Reward: 0.0
+[TampuraPolicy] Flat Action Parameter Sampling
+[TampuraPolicy] Outcome Sampling
+  0%|          | 0/200 [00:00<?, ?it/s] 10%|█         | 20/200 [00:11<01:41,  1.78it/s] 20%|██        | 40/200 [00:22<01:31,  1.76it/s] 30%|███       | 60/200 [00:28<01:00,  2.30it/s] 40%|████      | 80/200 [00:30<00:37,  3.24it/s] 50%|█████     | 100/200 [00:34<00:27,  3.68it/s] 60%|██████    | 120/200 [00:40<00:21,  3.64it/s] 70%|███████   | 140/200 [00:43<00:14,  4.24it/s] 80%|████████  | 160/200 [00:48<00:09,  4.10it/s] 90%|█████████ | 180/200 [00:51<00:04,  4.54it/s]100%|██████████| 200/200 [00:55<00:00,  4.93it/s]100%|██████████| 200/200 [00:55<00:00,  3.62it/s]
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_9)
+Solutions (1): [(16, 6.138)] | Time: 0.018
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695d0506f90>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=1==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695cc25d010>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695d0506f90>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] Flat Action Parameter Sampling
+[TampuraPolicy] Outcome Sampling
+  0%|          | 0/200 [00:00<?, ?it/s] 10%|█         | 20/200 [00:12<01:51,  1.61it/s] 20%|██        | 40/200 [00:24<01:36,  1.67it/s] 30%|███       | 60/200 [00:29<01:04,  2.18it/s] 40%|████      | 80/200 [00:32<00:40,  2.99it/s] 50%|█████     | 100/200 [00:38<00:32,  3.12it/s] 60%|██████    | 120/200 [00:41<00:20,  3.84it/s] 70%|███████   | 140/200 [00:47<00:16,  3.60it/s] 80%|████████  | 160/200 [00:50<00:09,  4.22it/s] 90%|█████████ | 180/200 [00:57<00:05,  3.86it/s]100%|██████████| 200/200 [01:00<00:00,  4.33it/s]100%|██████████| 200/200 [01:00<00:00,  3.31it/s]
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Solutions (1): [(25, 9.952)] | Time: 0.026
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae51aa50>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=2==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695ae760ad0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae51aa50>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695d033f150>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=3==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695ae59f350>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695d033f150>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae506a90>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=4==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695ccf03e10>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae506a90>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae431c90>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=5==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695ccc679d0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae431c90>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae44f350>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=6==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695ae5da810>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae44f350>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695cc4f7110>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=7==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695cc4f7c10>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695cc4f7110>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695cc4b4450>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=8==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695cc427090>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695cc4b4450>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695cd043710>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=9==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695cc2653d0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695cd043710>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae47d450>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=10==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695cc3fc990>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae47d450>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ccccd050>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=11==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695cc457350>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ccccd050>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ccc7e490>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=12==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695cc4cd3d0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ccc7e490>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695cce32150>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=13==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695cc3d5010>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695cce32150>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae4ac150>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=14==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695ccd4f8d0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae4ac150>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae4e8250>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=15==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695cc52dfd0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae4e8250>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695cc3357d0>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=16==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695b11701d0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695cc3357d0>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695cccf9dd0>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=17==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695ae7aa8d0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695cccf9dd0>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695cc627510>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=18==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695cc627350>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695cc627510>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae3161d0>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+
+==========t=19==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695ccd4e850>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae3161d0>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Reward: 0.0
+[TampuraPolicy] MDP Solving
+Action: look(o_ph_3, o_ph_4, o_co_14)
+Observation: SceneObservation(...)
+Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7695d23f3ed0>, environment=[1, 10, 11, 12, 13, 14], floor=1, objects=[10, 11, 12, 13, 14], categories=['a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud'], regions=[]), grasp=None)
+Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7695ae34c490>
+Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='known-pose', args=['o_ph_2']), Atom(pred_name='known-pose', args=['o_ph_4']), Atom(pred_name='known-pose', args=['o_ph_1']), Atom(pred_name='is-target', args=['o_ph_3'])])
+Next Reward: 0.0
+====================

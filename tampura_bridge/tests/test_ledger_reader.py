@@ -126,6 +126,19 @@ def test_scene_map_g19(tmp_path):
     assert run(tmp_path, rows)['G19'] == 'FAIL'
 
 
+def test_scene_map_g19_is_the_cluster_map(tmp_path):
+    # BF#8, option A: on the cluster seed 1 loads 1747173593; the laptop
+    # run's 1747173590 for seed 1 now fails G19.
+    rows = clean()
+    rows.insert(1, {'kind': 'episode', 'seed': 1,
+                    'scene_file': '1747173593.826745.json'})
+    assert run(tmp_path, rows)['G19'] == 'PASS'
+    rows[1]['scene_file'] = '1747173590.312597.json'
+    assert run(tmp_path, rows)['G19'] == 'FAIL'
+    assert bg.SCENE_MAP_LAPTOP_2026_05_26[1] == '1747173590'
+    assert len(bg.SCENE_MAP) == len(bg.SCENE_MAP_LAPTOP_2026_05_26) == 20
+
+
 def test_runtime_counts_reach_g11_and_g21(tmp_path):
     rows = clean()
     rows.insert(-1, {'kind': 'gate_record', 'counts': {'G14': 1},
