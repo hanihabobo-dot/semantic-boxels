@@ -1,0 +1,144 @@
+--------------------- Slurm Task Prolog ------------------------
+Job ID: 4940010
+Job name: p4-setup-armO
+Host: cn-102
+Date: Tue Oct 27 10:47:46 CET 2026
+User: hani.alassiri.alhabboub
+Slurm account: rleap
+Slurm partition: rleap_cpu
+Work dir: 
+------------------
+Node usage:
+------------------
+Show launch script with:
+sacct -B -j 
+------------------
+--------------------- Slurm Task Prolog ------------------------
+host cn-102  job 4940010  2026-10-27T10:47:46+01:00
+snapshot sb_3850dd1: 28 entries
+snapshot sb_943ea9e: 28 entries
+snapshot sb_c31cbdd: 27 entries
+Help:
+Help for AbstractTask
+  error: subprocess-exited-with-error
+  
+  × Building wheel for pygraphviz (pyproject.toml) did not run successfully.
+  │ exit code: 1
+  ╰─> [97 lines of output]
+      /tmp/pip-build-env-43vr2is4/overlay/lib/python3.11/site-packages/setuptools/config/_apply_pyprojecttoml.py:82: SetuptoolsDeprecationWarning: `project.license` as a TOML table is deprecated
+      !!
+      
+              ********************************************************************************
+              Please use a simple string containing a SPDX expression for `project.license`. You can also use `project.license-files`. (Both options available on setuptools>=77.0.0).
+      
+              By 2027-Feb-18, you need to update your project and remove deprecated calls
+              or your builds will no longer be supported.
+      
+              See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+              ********************************************************************************
+      
+      !!
+        corresp(dist, value, root_dir)
+      /tmp/pip-build-env-43vr2is4/overlay/lib/python3.11/site-packages/setuptools/config/_apply_pyprojecttoml.py:61: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+      !!
+      
+              ********************************************************************************
+              Please consider removing the following classifiers in favor of a SPDX license expression:
+      
+              License :: OSI Approved :: BSD License
+      
+              See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+              ********************************************************************************
+      
+      !!
+        dist._finalize_license_expression()
+      /tmp/pip-build-env-43vr2is4/overlay/lib/python3.11/site-packages/setuptools/dist.py:765: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+      !!
+      
+              ********************************************************************************
+              Please consider removing the following classifiers in favor of a SPDX license expression:
+      
+              License :: OSI Approved :: BSD License
+      
+              See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+              ********************************************************************************
+      
+      !!
+        self._finalize_license_expression()
+      running bdist_wheel
+      running build
+      running build_py
+      creating build/lib.linux-x86_64-cpython-311/pygraphviz
+      copying pygraphviz/__init__.py -> build/lib.linux-x86_64-cpython-311/pygraphviz
+      copying pygraphviz/agraph.py -> build/lib.linux-x86_64-cpython-311/pygraphviz
+      copying pygraphviz/graphviz.py -> build/lib.linux-x86_64-cpython-311/pygraphviz
+      copying pygraphviz/scraper.py -> build/lib.linux-x86_64-cpython-311/pygraphviz
+      copying pygraphviz/testing.py -> build/lib.linux-x86_64-cpython-311/pygraphviz
+      creating build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      copying pygraphviz/tests/test_attribute_defaults.py -> build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      copying pygraphviz/tests/__init__.py -> build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      copying pygraphviz/tests/test_unicode.py -> build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      copying pygraphviz/tests/test_string.py -> build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      copying pygraphviz/tests/test_graph.py -> build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      copying pygraphviz/tests/test_edge_attributes.py -> build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      copying pygraphviz/tests/test_node_attributes.py -> build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      copying pygraphviz/tests/test_drawing.py -> build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      copying pygraphviz/tests/test_scraper.py -> build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      copying pygraphviz/tests/test_layout.py -> build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      copying pygraphviz/tests/test_close.py -> build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      copying pygraphviz/tests/test_readwrite.py -> build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      copying pygraphviz/tests/test_subgraph.py -> build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      copying pygraphviz/tests/test_clear.py -> build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      copying pygraphviz/tests/test_repr_mimebundle.py -> build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      copying pygraphviz/tests/test_html.py -> build/lib.linux-x86_64-cpython-311/pygraphviz/tests
+      running egg_info
+      writing pygraphviz.egg-info/PKG-INFO
+      writing dependency_links to pygraphviz.egg-info/dependency_links.txt
+      writing top-level names to pygraphviz.egg-info/top_level.txt
+      reading manifest file 'pygraphviz.egg-info/SOURCES.txt'
+      reading manifest template 'MANIFEST.in'
+      warning: no files found matching '*.swg'
+      warning: no files found matching '*.png' under directory 'doc'
+      warning: no files found matching '*.html' under directory 'doc'
+      warning: no files found matching '*.txt' under directory 'doc'
+      warning: no files found matching '*.css' under directory 'doc'
+      warning: no previously-included files matching '*~' found anywhere in distribution
+      warning: no previously-included files matching '*.pyc' found anywhere in distribution
+      warning: no previously-included files matching '.svn' found anywhere in distribution
+      no previously-included directories found matching 'doc/build'
+      adding license file 'LICENSE'
+      writing manifest file 'pygraphviz.egg-info/SOURCES.txt'
+      copying pygraphviz/graphviz.i -> build/lib.linux-x86_64-cpython-311/pygraphviz
+      copying pygraphviz/graphviz_wrap.c -> build/lib.linux-x86_64-cpython-311/pygraphviz
+      running build_ext
+      building 'pygraphviz._graphviz' extension
+      cc -pthread -Wsign-compare -Wunreachable-code -DNDEBUG -g -fwrapv -O3 -Wall -O3 -fstack-protector -fstack-clash-protection -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -fPIC -fPIC -DSWIG_PYTHON_STRICT_BYTE_CHAR -I/work/rleap1/hani.alassiri.alhabboub/p4/armO-venvA/include -I/work/rleap1/hani.alassiri.alhabboub/p4/python/cpython-3.11.15-linux-x86_64-gnu/include/python3.11 -c pygraphviz/graphviz_wrap.c -o build/temp.linux-x86_64-cpython-311/pygraphviz/graphviz_wrap.o
+      pygraphviz/graphviz_wrap.c:9: warning: "SWIG_PYTHON_STRICT_BYTE_CHAR" redefined
+          9 | #define SWIG_PYTHON_STRICT_BYTE_CHAR
+            |
+      <command-line>: note: this is the location of the previous definition
+      pygraphviz/graphviz_wrap.c:3023:10: fatal error: graphviz/cgraph.h: No such file or directory
+       3023 | #include "graphviz/cgraph.h"
+            |          ^~~~~~~~~~~~~~~~~~~
+      compilation terminated.
+      error: Command '['cc', '-pthread', '-Wsign-compare', '-Wunreachable-code', '-DNDEBUG', '-g', '-fwrapv', '-O3', '-Wall', '-O3', '-fstack-protector', '-fstack-clash-protection', '-U_FORTIFY_SOURCE', '-D_FORTIFY_SOURCE=2', '-fno-omit-frame-pointer', '-mno-omit-leaf-frame-pointer', '-fPIC', '-fPIC', '-DSWIG_PYTHON_STRICT_BYTE_CHAR', '-I/work/rleap1/hani.alassiri.alhabboub/p4/armO-venvA/include', '-I/work/rleap1/hani.alassiri.alhabboub/p4/python/cpython-3.11.15-linux-x86_64-gnu/include/python3.11', '-c', 'pygraphviz/graphviz_wrap.c', '-o', 'build/temp.linux-x86_64-cpython-311/pygraphviz/graphviz_wrap.o']' returned non-zero exit status 1.
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+  ERROR: Failed building wheel for pygraphviz
+error: failed-wheel-build-for-install
+
+× Failed to build installable wheels for some pyproject.toml based projects
+╰─> pygraphviz
+[note] pygraphviz not installed: no graphviz headers on this node
+ARM O VENV (A) HOLDS EXACTLY ARM T'S PACKAGE SET
+0cdfcf0c5ae35ee4d4d95fc74b7dc0820980c1c8e97f59c4eae61d94eccfaf80  /work/rleap1/hani.alassiri.alhabboub/p4/logs/armO_venvA_pip_freeze.txt
+SETUP_ARMO_DONE
+--------------------- Slurm Task Epilog ------------------------
+Job ID: 4940010
+Time: Tue Oct 27 10:52:49 CET 2026
+Elapsed Time: 00:05:03
+Billing per second for TRES: billing=288,cpu=8,mem=32G,node=1
+Show resource usage with e.g.:
+sacct -j 4940010 -o Elapsed,TotalCPU,UserCPU,SystemCPU,MaxRSS,ReqTRES%60,MaxDiskRead,MaxDiskWrite
+--------------------- Slurm Task Epilog ------------------------
