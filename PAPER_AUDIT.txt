@@ -5856,7 +5856,7 @@ BF#11 [DONE]  B1 PART 2 (e), (f), (h), (i): THE EYE, W, THE REACH, M1 AND THE
   RESULT: archive/tampura_bridge_plan_2026-10-25/bf/BF11_b1p2/ (one JSON and
   one console per item; probe_i_first.* is the first run of (i)).
 
-BF#12 [OPEN, deliverable pending]  B2: THE HARNESS  (B2, 2026-10-27)
+BF#12 [DONE, review gate 1 pending]  B2: THE HARNESS  (B2, 2026-10-27)
   WHAT: tampura_bridge/ gains, nothing imported from the archive:
   task_spec.py (the declared task knowledge: target category, class sizes,
   hollow cavities, masses, inertia and frictions, the D4 eye, W, the D9
@@ -5922,8 +5922,31 @@ BF#12 [OPEN, deliverable pending]  B2: THE HARNESS  (B2, 2026-10-27)
   CLAIM EFFECT: none.
   HONESTY CLASS: translation.
   DECISION 2026-10-27 (executor): as above.
-  RESULT: pending: B2's deliverable (seeds 0 and 1 in armO-venvA on
-  cn-110, stop_before_planning) and review gate 1.
+  RESULT: B2's deliverable is met.  Job 4942078 on cn-110, snapshot
+  sb_852b319 (this commit), armO-venvA, PYTHONHASHSEED 0, run from their
+  tampura_environments directory, stop_before_planning, seeds 0 and 1
+  (tools/cluster/b2_deliverable.sbatch):
+  seed 0, 1747173591 (the pinned scene): the d cup's OBJECT boxel and one
+  lateral shadow from the first render, 8 boxels, no boxel for the die.
+  seed 1, 1747173593 (the cluster map's scene for seed 1): 28 boxels, the
+  four cups' OBJECT boxels within 4 to 7 mm and four lateral shadows, no
+  boxel for the die; after D9 and the 50 steps the die lies 10.3 mm
+  sideways, 39.8 mm lower and tilted 49.8 deg (above the 1 cm disclosure
+  threshold, as BF#4 (c) found), still absent from the eye
+  (scene_changed_by_settle false in both seeds).
+  Every shadow cast hit the plan twin (4 rayTestBatch calls on client 2 in
+  seed 1, none on the executing client); G8(c) held at both syncs of each
+  seed (10 body checks in seed 1); the executing client kept its body count
+  (12 and 15 bodies); every runtime gate count is 0, with 50 steps inside
+  main() and none after it; the ledger reader passes G3, G4, G5, G11, G15,
+  G19 and G21 for both seeds; their trees are unchanged across the runs
+  (G13, run before and after on the cluster with TAMPURA_WORK) and the
+  static gates are green on the snapshot (G1 46 and G2 36 hits reviewed,
+  G7, G11(i), G17).  Their reward stays 0.0: nothing is planned, as B2
+  intends.
+  Evidence: archive/tampura_bridge_plan_2026-10-25/bf/BF12_b2/ (both
+  consoles, bridge_episode.json and ledger.jsonl per seed, the ledger and
+  static gate outputs, G13 before and after, the job log).
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS

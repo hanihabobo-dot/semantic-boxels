@@ -1,0 +1,57 @@
+--------------------- Slurm Task Prolog ------------------------
+Job ID: 4942078
+Job name: p4-b2
+Host: cn-110
+Date: Tue Oct 27 13:38:22 CET 2026
+User: hani.alassiri.alhabboub
+Slurm account: rleap
+Slurm partition: rleap_cpu
+Work dir: 
+------------------
+Node usage:
+JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
+4942078 rleap_cpu    p4-b2 hani.ala  R       0:00      1 cn-110
+------------------
+Show launch script with:
+sacct -B -j 
+------------------
+--------------------- Slurm Task Prolog ------------------------
+host cn-110  job 4942078  2026-10-27T13:38:22+01:00  snapshot /work/rleap1/hani.alassiri.alhabboub/p4/sb_852b319
+model name	: Intel(R) Xeon(R) Platinum 8160 CPU @ 2.10GHz
+seed 0 rc=1 (1 expected: nothing is planned, their reward stays 0)
+ledger   PASS  13 rows, complete
+G3       PASS  0 steps over 0 plans, all as planned; 0 labelled early ends
+G4       PASS  0 places at the planned centre
+G5       PASS  no fragment change
+G15      PASS  0 senses, each classified on its planned region
+G19      PASS  scene file matches the pinned map
+G11      PASS  0 solve calls, 0 plan rows
+G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50}
+seed 1 rc=1 (1 expected: nothing is planned, their reward stays 0)
+ledger   PASS  13 rows, complete
+G3       PASS  0 steps over 0 plans, all as planned; 0 labelled early ends
+G4       PASS  0 places at the planned centre
+G5       PASS  no fragment change
+G15      PASS  0 senses, each classified on its planned region
+G19      PASS  scene file matches the pinned map
+G11      PASS  0 solve calls, 0 plan rows
+G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50}
+G13 tree unchanged across the runs
+G13      PASS  tampura: HEAD cdddf14, tree fbc0cd060ddbb4af, 0 declared change(s) (BF#3), nothing else modified
+G13      PASS  tampura_environments: HEAD 4167c35, tree e339e7b865a82c1b, 1 declared change(s) (BF#3), nothing else modified
+G13      INFO  arm T pip freeze 0cdfcf0c5ae35ee4
+graph    INFO  29 modules; roots not present yet: none
+G1       PASS  46 hits, all reviewed
+G2       PASS  36 hits, all reviewed
+G7       PASS  no scene literal
+G11(i)   PASS  pddlstream imported only by pddlstream_planner.py and streams.py
+G17      PASS  clean
+B2_DONE
+--------------------- Slurm Task Epilog ------------------------
+Job ID: 4942078
+Time: Tue Oct 27 13:41:20 CET 2026
+Elapsed Time: 00:02:58
+Billing per second for TRES: billing=762,cpu=1,mem=190000M,node=1
+Show resource usage with e.g.:
+sacct -j 4942078 -o Elapsed,TotalCPU,UserCPU,SystemCPU,MaxRSS,ReqTRES%60,MaxDiskRead,MaxDiskWrite
+--------------------- Slurm Task Epilog ------------------------

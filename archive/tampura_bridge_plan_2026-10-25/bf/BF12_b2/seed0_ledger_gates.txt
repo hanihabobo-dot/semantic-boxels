@@ -1,0 +1,8 @@
+ledger   PASS  13 rows, complete
+G3       PASS  0 steps over 0 plans, all as planned; 0 labelled early ends
+G4       PASS  0 places at the planned centre
+G5       PASS  no fragment change
+G15      PASS  0 senses, each classified on its planned region
+G19      PASS  scene file matches the pinned map
+G11      PASS  0 solve calls, 0 plan rows
+G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50}
