@@ -110,7 +110,8 @@ G5_UNRENDERED = 'superseded_unrendered'
 # 'unlabelled', which always fails).
 G3_STATUSES = ('ok', 'sense_outcome', 'integrity_replan',
                'motion_resolve_failed', 'pick_failure', 'place_failure',
-               'stack_failure', 'empty_hand', 'stale_precondition')
+               'stack_failure', 'empty_hand', 'stale_precondition',
+               'home_not_reached')
 G4_TOL_M = 1e-6
 
 

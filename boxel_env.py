@@ -12,6 +12,7 @@ from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 
+import robot_utils
 import telemetry          # #P1 F17 world telemetry (no-op unless armed)
 from boxel_types import ObjectInfo, CameraObservation
 from boxel_data import BoxelData, BoxelType
@@ -41,6 +42,19 @@ _DEFAULT_DEBUG_VIS_PITCH = -14.04
 
 _DEFAULT_SEMANTIC_EYE = np.array([0.1, -0.8, 0.7])
 _DEFAULT_SEMANTIC_TARGET = np.array([0.1, 0.0, 0.5])
+
+
+class _ObjectBoxLookup:
+    """The one registry method sync_to_plan_client reads (get_boxel),
+    over OBJECT boxels that are not in a registry yet (#P4 B3(c): the
+    first observation's estimates, posed in the plan twin before the
+    first shadow cast)."""
+
+    def __init__(self, boxels):
+        self._by_id = {b.id: b for b in boxels}
+
+    def get_boxel(self, boxel_id):
+        return self._by_id.get(boxel_id)
 
 
 # ---------------------------------------------------------------------------
@@ -445,11 +459,22 @@ class BoxelTestEnv:
         near_plane: float = 0.01,
         far_plane: float = 5.0,
         window_width: int = 1280,
-        window_height: int = 600
+        window_height: int = 600,
+        adopt_client: Optional[int] = None,
     ):
         """
         Initialize the Boxel test environment.
-        
+
+        #P4 B3(b): with ``adopt_client`` the env ADOPTS an existing
+        executing world instead of building one: it connects nothing,
+        never calls resetSimulation or setGravity there and never runs
+        _setup_scene; a subclass's _adopt_scene() registers the world's
+        bodies from its name-to-id table and builds their plan-twin
+        copies with the plan-client-only helpers (_plan_load_urdf,
+        _plan_spawn_object, _plan_register_twin).  The executing client's
+        body count is asserted unchanged, and close() disconnects only
+        the plan twin.  The caller does the world's physics set-up.
+
         Args:
             gui: Whether to show the PyBullet GUI
             scene_config: Scene layout and object specifications.
@@ -464,6 +489,8 @@ class BoxelTestEnv:
             far_plane: Far clipping plane distance
             window_width: Width of the PyBullet GUI window
             window_height: Height of the PyBullet GUI window
+            adopt_client: An existing physics client to adopt as the
+                executing world (None: build our own scene, as always).
         """
         self.scene_config = scene_config or default_scene()
         # Store camera parameters
@@ -484,9 +511,25 @@ class BoxelTestEnv:
         self.camera_position = camera_position
         self.camera_target = camera_target
         self.camera_up = camera_up
-        
+
+        # #P4 B3(c): the client every shadow cast raycasts.  None keeps
+        # today's default-client rays (PAPER_AUDIT item (h) unchanged on
+        # our scenes); set to the plan twin, the twin is synced to the
+        # OBJECT boxes known at that moment before each cast.
+        self.shadow_raycast_client: Optional[int] = None
+        # #P4 B3(d) / D8: task inputs a scene may declare.  The lowest
+        # pinch contact above the table (None: execution.py's 35 mm
+        # finger-tip depth) and the arm's reach envelope as (flat limit,
+        # sphere centre world z, sphere radius) (None: streams.REACH_*).
+        self.pick_contact_floor: Optional[float] = None
+        self.reach_envelope: Optional[Tuple[float, float, float]] = None
+
+        self._adopted = adopt_client is not None
         # Connect to PyBullet with window size options
-        if gui:
+        if self._adopted:
+            self.client_id = adopt_client
+            _adopted_bodies = p.getNumBodies(physicsClientId=adopt_client)
+        elif gui:
             self.client_id = p.connect(p.GUI, options=f"--width={window_width} --height={window_height}")
             # Disable mouse picking so left-click rotates camera instead of grabbing objects
             p.configureDebugVisualizer(p.COV_ENABLE_MOUSE_PICKING, 0)
@@ -506,12 +549,14 @@ class BoxelTestEnv:
             self.client_id = p.connect(p.DIRECT)
         self._gui = gui
 
-        # Reset simulation
-        p.resetSimulation(physicsClientId=self.client_id)
-        p.setGravity(0, 0, -9.81, physicsClientId=self.client_id)
-        p.setRealTimeSimulation(0, physicsClientId=self.client_id)
-        p.setAdditionalSearchPath(pybullet_data.getDataPath(),
-                                  physicsClientId=self.client_id)
+        # Reset simulation (our own world only; an adopted one is the
+        # caller's)
+        if not self._adopted:
+            p.resetSimulation(physicsClientId=self.client_id)
+            p.setGravity(0, 0, -9.81, physicsClientId=self.client_id)
+            p.setRealTimeSimulation(0, physicsClientId=self.client_id)
+            p.setAdditionalSearchPath(pybullet_data.getDataPath(),
+                                      physicsClientId=self.client_id)
 
         # Plan client (audit #46): a separate DIRECT-mode PyBullet world that
         # mirrors the live scene.  All planning-time work — IK, RRT-Connect,
@@ -537,9 +582,14 @@ class BoxelTestEnv:
         # hidden-target budget is exhausted at an unlucky seed) we'd
         # otherwise leak the two PyBullet clients already opened above;
         # disconnect them so the caller's retry layer can reseed and
-        # rebuild without accumulating dead physics servers.
+        # rebuild without accumulating dead physics servers.  (An
+        # adopted executing client is never disconnected, B3(b).)
         try:
-            self._setup_scene()
+            if self._adopted:
+                self._adopt_scene()
+                self._finish_adoption(_adopted_bodies)
+            else:
+                self._setup_scene()
         except Exception:
             self.close()
             raise
@@ -607,8 +657,12 @@ class BoxelTestEnv:
         print("Boxel Test Environment initialized successfully!")
         print(f"Camera position: {self.camera_position}")
         print(f"Camera target: {self.camera_target}")
-        print(f"Occluders: {len(occ_shapes)} ({', '.join(occ_shapes)})")
-        print(f"Targets:   {len(tgt_shapes)} ({', '.join(tgt_shapes)})")
+        if self._adopted:
+            print(f"Adopted executing client {self.client_id}; plan twin "
+                  f"client {self.plan_client_id}")
+        else:
+            print(f"Occluders: {len(occ_shapes)} ({', '.join(occ_shapes)})")
+            print(f"Targets:   {len(tgt_shapes)} ({', '.join(tgt_shapes)})")
         print(f"Objects in scene: {list(self.objects.keys())}")
 
     # ------------------------------------------------------------------
@@ -682,6 +736,52 @@ class BoxelTestEnv:
         self._gui_to_plan[gid] = pid
         return gid
 
+    # #P4 B3(b): plan-client-only variants for an ADOPTED executing world,
+    # whose bodies exist already: the twin is created in the plan client
+    # alone and recorded against the executing body's id.  The mirror
+    # helpers above would add a second copy to the executing world.
+
+    def _plan_load_urdf(self, gui_id: int, *args, **kwargs) -> int:
+        """Load a URDF into the plan client only, as the twin of the
+        executing-client body ``gui_id``; returns the plan-side id."""
+        kwargs.pop("physicsClientId", None)
+        pid = p.loadURDF(*args, **kwargs, physicsClientId=self.plan_client_id)
+        self._gui_to_plan[gui_id] = pid
+        return pid
+
+    def _plan_register_twin(self, gui_id: int, plan_id: int) -> None:
+        """Record ``plan_id``, a body the caller created in the plan
+        client, as the twin of the executing-client body ``gui_id``."""
+        self._gui_to_plan[gui_id] = plan_id
+
+    def _adopt_scene(self) -> None:
+        """Register an adopted world's bodies (B3(b)).  The adopting
+        subclass implements it: self.objects from its name-to-id table
+        (plane, table and robot by those names), the plan twin through
+        the plan-client-only helpers, self.plan_robot_id, the table
+        surface and the table / safe workspace ranges."""
+        raise NotImplementedError(
+            "adopt_client needs a subclass that registers the adopted "
+            "world's bodies (_adopt_scene)")
+
+    def _finish_adoption(self, bodies_before: int) -> None:
+        """Checks after _adopt_scene: the executing world gained or lost
+        no body, and both robots resolve by name to the same model,
+        which is installed for every index consumer."""
+        after = p.getNumBodies(physicsClientId=self.client_id)
+        if after != bodies_before:
+            raise RuntimeError(
+                f"adopting client {self.client_id} changed its body count "
+                f"from {bodies_before} to {after}")
+        model = robot_utils.resolve_robot_model(
+            self.objects["robot"].object_id, self.client_id)
+        twin = robot_utils.resolve_robot_model(
+            self.plan_robot_id, self.plan_client_id)
+        if twin != model:
+            raise RuntimeError("the plan-twin robot resolves to a different "
+                               "robot model than the executing robot")
+        robot_utils.use_robot_model(model)
+
     def plan_body_id(self, gui_id: int) -> int:
         """Translate a GUI-client body id to the plan client's body id.
 
@@ -732,7 +832,8 @@ class BoxelTestEnv:
             static = {"plane", "table", "robot"}
             ee_pos = None
             if held_body_id is not None and "robot" in self.objects:
-                ee_pos = p.getLinkState(self.objects["robot"].object_id, 11,
+                ee_pos = p.getLinkState(self.objects["robot"].object_id,
+                                        robot_utils.robot_model().ee_link,
                                         physicsClientId=self.client_id)[0]
             for name, info in self.objects.items():
                 gid = info.object_id
@@ -799,6 +900,12 @@ class BoxelTestEnv:
         robot_id = self._mirror_load_urdf("franka_panda/panda.urdf", robot_pos,
                                           [0, 0, 0, 1], useFixedBase=True)
         self.plan_robot_id = self._gui_to_plan[robot_id]
+        # #P4 B3(a): the robot model by name; pybullet_data's Panda must
+        # resolve to the indices this pipeline always used.
+        model = robot_utils.resolve_robot_model(robot_id, self.client_id)
+        assert model == robot_utils.PANDA_PYBULLET_DATA, model
+        robot_utils.use_robot_model(model)
+        fingers = model.finger_joints
         # #P1 friction grasp: the finger pads are the load path now — the
         # JOINT_FIXED weld that used to carry the held object is gone, so
         # the pad–object friction cone must hold the grasp on its own.
@@ -807,7 +914,7 @@ class BoxelTestEnv:
         # capacity per pad under the 40 N close force, against ≤ 5 N of
         # object weight.  Physics client only — the DIRECT plan client is
         # used for collision queries, never contact simulation.
-        for finger_link in (9, 10):  # robot_utils.FINGER_JOINTS
+        for finger_link in fingers:
             p.changeDynamics(robot_id, finger_link, lateralFriction=1.2,
                              physicsClientId=self.client_id)
         # #P1 F1 (field bug, archive/p1_field_reports_2026-08-20/
@@ -821,7 +928,7 @@ class BoxelTestEnv:
         # grasp-path teleport.  sync_to_plan_client copies finger
         # joints before every plan; the plan client is mirrored here
         # anyway so the two worlds never start divergent.
-        for fj in (9, 10):  # robot_utils.FINGER_JOINTS
+        for fj in fingers:
             p.resetJointState(robot_id, fj, 0.04,
                               physicsClientId=self.client_id)
             p.resetJointState(self.plan_robot_id, fj, 0.04,
@@ -1503,6 +1610,11 @@ class BoxelTestEnv:
         # other shadow's name.  Iteration order is sorted by parent
         # object name so the carve is deterministic across runs.
         shadow_boxels: List[BoxelData] = []
+        # #P4 B3(c): with a shadow-raycast client the rays hit the plan
+        # twin, posed from these estimates (boxel-less bodies parked),
+        # never the executing world.  Nothing moves between the casts.
+        if self.shadow_raycast_client is not None:
+            self.sync_to_plan_client(registry=_ObjectBoxLookup(object_boxels))
         for obj_boxel in sorted(object_boxels, key=lambda b: b.id):
             obj_info = self.objects.get(obj_boxel.id)
             if obj_info is not None and obj_info.is_tray:
@@ -1510,7 +1622,8 @@ class BoxelTestEnv:
             obstacles = [b for b in object_boxels if b.id != obj_boxel.id]
             obstacles.extend(shadow_boxels)
             shadow_parts = self.shadow_calculator.calculate_shadow_boxel(
-                obj_boxel, obstacles)
+                obj_boxel, obstacles,
+                physics_client=self.shadow_raycast_client)
 
             if shadow_parts:
                 obj_boxel.is_occluder = True
@@ -1896,11 +2009,14 @@ class BoxelTestEnv:
         self._setup_scene()
 
     def close(self):
-        """Close both PyBullet connections (GUI + plan client)."""
-        try:
-            p.disconnect(self.client_id)
-        except Exception:
-            pass
+        """Close both PyBullet connections (GUI + plan client).  An
+        adopted executing client (B3(b)) belongs to the caller and stays
+        connected; only the plan twin is closed."""
+        if not getattr(self, "_adopted", False):
+            try:
+                p.disconnect(self.client_id)
+            except Exception:
+                pass
         try:
             p.disconnect(self.plan_client_id)
         except Exception:

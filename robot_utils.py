@@ -7,6 +7,9 @@ here once. Every module that needs robot parameters imports from this file.
 
 import logging
 import math
+from dataclasses import dataclass
+from typing import FrozenSet, Tuple
+
 import numpy as np
 import pybullet as p
 
@@ -19,6 +22,10 @@ logger = logging.getLogger(__name__)
 # Franka Panda Constants (from the Franka Emika Panda datasheet)
 # =============================================================================
 
+# The indices of pybullet_data's franka_panda/panda.urdf, the robot of our
+# scenes.  Runtime code reads them from robot_model() (#P4 B3(a)), which
+# resolves them by name from whichever Panda URDF the env loaded; these
+# constants remain for tools and probes that load pybullet_data's Panda.
 ARM_JOINT_INDICES = [0, 1, 2, 3, 4, 5, 6]
 FINGER_JOINTS = [9, 10]  # panda_finger_joint1, panda_finger_joint2
 END_EFFECTOR_LINK = 11   # panda_grasptarget
@@ -111,6 +118,124 @@ _PANDA_GRIPPER_LINKS = frozenset({6, 7, 8, 9, 10, 11})
 
 
 # =============================================================================
+# Robot model, resolved by name (#P4 B3(a))
+# =============================================================================
+# The pipeline drives one Panda per process, but not always the same URDF:
+# pybullet_data's (our scenes) has its fingers at joints 9 and 10 and
+# panda_grasptarget at link 11, while TAMPURA's find_dice Panda carries a
+# tool tip, a camera frame and an extra hand link, so the same names sit
+# at 12, 13 and 14 (PAPER_AUDIT BF#4 (a)).  The env resolves the model by
+# NAME when it builds or adopts the robot and installs it with
+# use_robot_model(); every index consumer reads robot_model() at call
+# time.  The plan twin loads the same URDF, so one model serves both
+# clients.
+
+ARM_JOINT_NAMES = tuple(f"panda_joint{k}" for k in range(1, 8))
+FINGER_JOINT_NAMES = ("panda_finger_joint1", "panda_finger_joint2")
+EE_LINK_NAME = "panda_grasptarget"
+# The gripper cluster (allow_gripper_collisions) is this link and every
+# link below it; the hand's child links (fingers, frames) overlap one
+# another by construction, so their pairs are ignored self-contacts.
+WRIST_LINK_NAME = "panda_link7"
+HAND_LINK_NAME = "panda_hand"
+
+
+@dataclass(frozen=True)
+class RobotModel:
+    """Joint and link indices of the Panda this process drives."""
+    arm_joints: Tuple[int, ...]
+    finger_joints: Tuple[int, ...]
+    ee_link: int
+    gripper_links: FrozenSet[int]
+    ignored_self_pairs: FrozenSet[Tuple[int, int]]
+    finger_limits: Tuple[Tuple[float, float], ...]
+
+
+def resolve_robot_model(robot_id: int, physics_client: int = 0) -> RobotModel:
+    """Resolve a RobotModel from a loaded Panda by joint and link NAMES.
+
+    Ignored self pairs are every parent-child link pair plus every pair of
+    the hand's child links; the gripper links are panda_link7 and all its
+    descendants.  For pybullet_data's Panda this reproduces the hand-written
+    sets above, plus the pair (8, 11) of the hand and panda_grasptarget,
+    which has no collision shape, so no contact can name it.
+    """
+    n = p.getNumJoints(robot_id, physicsClientId=physics_client)
+    joints, links, parent = {}, {}, {}
+    for j in range(n):
+        info = p.getJointInfo(robot_id, j, physicsClientId=physics_client)
+        joints[info[1].decode()] = j
+        links[info[12].decode()] = j
+        parent[j] = info[16]
+
+    def find(table, name, what):
+        if name not in table:
+            raise ValueError(f"{what} {name!r} not found in robot body "
+                             f"{robot_id} (client {physics_client})")
+        return table[name]
+
+    arm = tuple(find(joints, nm, "arm joint") for nm in ARM_JOINT_NAMES)
+    fingers = tuple(find(joints, nm, "finger joint")
+                    for nm in FINGER_JOINT_NAMES)
+    ee = find(links, EE_LINK_NAME, "end-effector link")
+    wrist = find(links, WRIST_LINK_NAME, "wrist link")
+    hand = find(links, HAND_LINK_NAME, "hand link")
+
+    def below(j, root):
+        while j != -1:
+            if j == root:
+                return True
+            j = parent[j]
+        return False
+
+    gripper = frozenset(j for j in range(n) if below(j, wrist))
+    pairs = {(min(parent[j], j), max(parent[j], j)) for j in range(n)}
+    hand_children = sorted(j for j in range(n) if parent[j] == hand)
+    pairs |= {(a, b) for k, a in enumerate(hand_children)
+              for b in hand_children[k + 1:]}
+    limits = tuple(
+        tuple(float(v) for v in p.getJointInfo(
+            robot_id, fj, physicsClientId=physics_client)[8:10])
+        for fj in fingers)
+    return RobotModel(arm_joints=arm, finger_joints=fingers, ee_link=ee,
+                      gripper_links=gripper,
+                      ignored_self_pairs=frozenset(pairs),
+                      finger_limits=limits)
+
+
+# What resolve_robot_model returns for pybullet_data's Panda; the env
+# asserts it when it loads that robot.
+PANDA_PYBULLET_DATA = RobotModel(
+    arm_joints=tuple(ARM_JOINT_INDICES),
+    finger_joints=tuple(FINGER_JOINTS),
+    ee_link=END_EFFECTOR_LINK,
+    gripper_links=_PANDA_GRIPPER_LINKS,
+    ignored_self_pairs=_PANDA_IGNORED_SELF_PAIRS | {(8, 11)},
+    finger_limits=((0.0, 0.04), (0.0, 0.04)),
+)
+
+_robot_model = PANDA_PYBULLET_DATA
+
+
+def robot_model() -> RobotModel:
+    """The model of the robot this process drives (the env installs it)."""
+    return _robot_model
+
+
+def use_robot_model(model: RobotModel) -> None:
+    """Install the model every index consumer reads from now on."""
+    global _robot_model
+    _robot_model = model
+
+
+def arm_joint_positions(robot_id: int, physics_client=None) -> np.ndarray:
+    """The 7 arm joint angles of ``robot_id``, in arm order."""
+    kw = {} if physics_client is None else {"physicsClientId": physics_client}
+    return np.array([p.getJointState(robot_id, j, **kw)[0]
+                     for j in robot_model().arm_joints])
+
+
+# =============================================================================
 # Reference-counted rendering lock
 # =============================================================================
 # PyBullet's COV_ENABLE_RENDERING toggle forces an OpenGL buffer swap.
@@ -174,7 +299,7 @@ def is_config_collision_free(robot_id: int, joint_positions,
     original state.  Contacts are filtered:
 
     * Self-contacts between adjacent / structurally overlapping links
-      (defined in ``_PANDA_IGNORED_SELF_PAIRS``) are ignored.
+      (the robot model's ``ignored_self_pairs``) are ignored.
     * The base link (-1) is excluded — it is fixed and rests on the
       mounting surface.
     * Bodies listed in *ignored_bodies* (e.g. a held object) are skipped.
@@ -223,20 +348,21 @@ def is_config_collision_free(robot_id: int, joint_positions,
         ignored_bodies = frozenset()
     if held_body_ids is None:
         held_body_ids = frozenset()
+    rm = robot_model()
 
     saved = None
     saved_held = {}
     with RenderingLock(physics_client):
         try:
             saved = [p.getJointState(robot_id, i, physicsClientId=physics_client)[0]
-                     for i in ARM_JOINT_INDICES]
+                     for i in rm.arm_joints]
 
-            for i, angle in zip(ARM_JOINT_INDICES, joint_positions):
+            for i, angle in zip(rm.arm_joints, joint_positions):
                 p.resetJointState(robot_id, i, angle,
                                   physicsClientId=physics_client)
 
             if held_body_ids:
-                ee_state = p.getLinkState(robot_id, END_EFFECTOR_LINK,
+                ee_state = p.getLinkState(robot_id, rm.ee_link,
                                          computeForwardKinematics=True,
                                          physicsClientId=physics_client)
                 ee_pos = ee_state[4]
@@ -279,7 +405,7 @@ def is_config_collision_free(robot_id: int, joint_positions,
 
                 if body_a == robot_id and body_b == robot_id:
                     pair = (min(link_a, link_b), max(link_a, link_b))
-                    if pair not in _PANDA_IGNORED_SELF_PAIRS:
+                    if pair not in rm.ignored_self_pairs:
                         if log_collisions:
                             logger.debug("collision: self-contact links (%d, %d)",
                                          link_a, link_b)
@@ -293,7 +419,7 @@ def is_config_collision_free(robot_id: int, joint_positions,
                     continue
                 if robot_link == -1:
                     continue
-                if allow_gripper_collisions and robot_link in _PANDA_GRIPPER_LINKS:
+                if allow_gripper_collisions and robot_link in rm.gripper_links:
                     continue
 
                 if log_collisions:
@@ -320,7 +446,7 @@ def is_config_collision_free(robot_id: int, joint_positions,
             return True
         finally:
             if saved is not None:
-                for i, angle in zip(ARM_JOINT_INDICES, saved):
+                for i, angle in zip(rm.arm_joints, saved):
                     p.resetJointState(robot_id, i, angle,
                                       physicsClientId=physics_client)
             for hid, (pos, orn) in saved_held.items():
@@ -470,7 +596,7 @@ def detect_execution_collisions(robot_id: int,
         body_a, body_b, link_a, link_b = c[1], c[2], c[3], c[4]
         if body_a == robot_id and body_b == robot_id:
             pair = (min(link_a, link_b), max(link_a, link_b))
-            if pair in _PANDA_IGNORED_SELF_PAIRS:
+            if pair in robot_model().ignored_self_pairs:
                 continue
             msg = f"robot self-collision links ({link_a}, {link_b})"
             collisions.append(msg)
@@ -554,20 +680,21 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
                 else list(target_orn))
 
     seed_poses = (list(seed) if seed is not None else list(REST_POSES))
+    rm = robot_model()
 
     saved = None
     with RenderingLock(physics_client):
         try:
             saved = [p.getJointState(robot_id, i,
                                      physicsClientId=physics_client)[0]
-                     for i in ARM_JOINT_INDICES]
+                     for i in rm.arm_joints]
 
-            for i, angle in zip(ARM_JOINT_INDICES, seed_poses):
+            for i, angle in zip(rm.arm_joints, seed_poses):
                 p.resetJointState(robot_id, i, angle,
                                   physicsClientId=physics_client)
 
             joint_positions = p.calculateInverseKinematics(
-                robot_id, END_EFFECTOR_LINK,
+                robot_id, rm.ee_link,
                 target_pos.tolist(), orn_list,
                 lowerLimits=JOINT_LIMITS_LOW.tolist(),
                 upperLimits=JOINT_LIMITS_HIGH.tolist(),
@@ -614,7 +741,7 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
             fk_err = None
             orn_err = None
             for refine_round in range(3):
-                for i, angle in zip(ARM_JOINT_INDICES, arm_joints):
+                for i, angle in zip(rm.arm_joints, arm_joints):
                     p.resetJointState(robot_id, i, angle,
                                       physicsClientId=physics_client)
                 # computeForwardKinematics=True is mandatory: without it,
@@ -623,7 +750,7 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
                 # call), decoupling fk_err from the candidate solution.
                 # Same idiom as the reset-then-read block in
                 # is_config_collision_free above.
-                fk_state = p.getLinkState(robot_id, END_EFFECTOR_LINK,
+                fk_state = p.getLinkState(robot_id, rm.ee_link,
                                           computeForwardKinematics=True,
                                           physicsClientId=physics_client)
                 fk_err = float(np.linalg.norm(
@@ -636,7 +763,7 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
                 if refine_round == 2:
                     break  # last candidate already checked — done
                 refined = p.calculateInverseKinematics(
-                    robot_id, END_EFFECTOR_LINK,
+                    robot_id, rm.ee_link,
                     target_pos.tolist(), orn_list,
                     lowerLimits=JOINT_LIMITS_LOW.tolist(),
                     upperLimits=JOINT_LIMITS_HIGH.tolist(),
@@ -667,7 +794,7 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
             return None
         finally:
             if saved is not None:
-                for i, angle in zip(ARM_JOINT_INDICES, saved):
+                for i, angle in zip(rm.arm_joints, saved):
                     p.resetJointState(robot_id, i, angle,
                                       physicsClientId=physics_client)
 
@@ -721,7 +848,8 @@ def move_robot_smooth(robot_id: int, target_joints, gui: bool = False,
             follow_trajectory docstring warns about.
     """
     import time
-    current = [p.getJointState(robot_id, i)[0] for i in range(7)]
+    arm = robot_model().arm_joints
+    current = [p.getJointState(robot_id, i)[0] for i in arm]
 
     # Stretch the schedule until no joint is commanded past its datasheet
     # velocity.  steps_needed = |delta_i| / (v_max_i * dt), worst joint
@@ -748,11 +876,11 @@ def move_robot_smooth(robot_id: int, target_joints, gui: bool = False,
         alpha = (t + 1) / steps
         interp = [(1 - alpha) * c + alpha * tgt
                    for c, tgt in zip(current, target_joints)]
-        for i in range(7):
+        for k, i in enumerate(arm):
             # 240 N·m is the Franka Emika Panda's peak joint torque for
             # joints 1-4 (per datasheet); sufficient for position control.
             p.setJointMotorControl2(robot_id, i, p.POSITION_CONTROL,
-                                    targetPosition=interp[i], force=240)
+                                    targetPosition=interp[k], force=240)
         p.stepSimulation()
         telemetry.tick()
         if gui:
@@ -776,14 +904,46 @@ def move_robot_smooth(robot_id: int, target_joints, gui: bool = False,
         return
     target = [float(v) for v in target_joints]
     for _ in range(120):
-        cur = [p.getJointState(robot_id, i)[0] for i in range(7)]
+        cur = [p.getJointState(robot_id, i)[0] for i in arm]
         if max(abs(c - t) for c, t in zip(cur, target)) < 2e-3:
             break
-        for i in range(7):
+        for k, i in enumerate(arm):
             p.setJointMotorControl2(robot_id, i, p.POSITION_CONTROL,
-                                    targetPosition=target[i], force=240)
+                                    targetPosition=target[k], force=240)
         p.stepSimulation()
         telemetry.tick()
+        if gui:
+            time.sleep(1 / 120)
+
+
+def hold_at_config(robot_id: int, target_joints, step_cap: int,
+                   rtol: float = 1e-4, atol: float = 1e-4,
+                   gui: bool = False) -> Tuple[bool, int]:
+    """Final hold of a move to the goal configuration (#P4 B3(d), D7
+    (vii)): position control toward ``target_joints`` with
+    move_robot_smooth's gains and force, stepped until the 7-joint
+    readback passes np.allclose(readback, target, rtol, atol) or
+    ``step_cap`` steps have run.  The test is the caller's at-home test
+    (TAMPURA's, rtol = atol = 1e-4); the hold only gives the arm the time
+    to meet it.  Returns (passed, steps run).
+    """
+    import time
+    arm = robot_model().arm_joints
+    target = np.asarray([float(v) for v in target_joints])
+    steps = 0
+    while True:
+        cur = np.array([p.getJointState(robot_id, i)[0] for i in arm])
+        if np.allclose(cur, target, rtol=rtol, atol=atol):
+            return True, steps
+        if steps >= step_cap:
+            return False, steps
+        for k, i in enumerate(arm):
+            p.setJointMotorControl2(robot_id, i, p.POSITION_CONTROL,
+                                    targetPosition=float(target[k]),
+                                    force=240)
+        p.stepSimulation()
+        telemetry.tick()
+        steps += 1
         if gui:
             time.sleep(1 / 120)
 
@@ -813,18 +973,19 @@ def open_gripper(robot_id: int, gui: bool = False):
     fails the release if the fingers did not physically open.
     """
     import time
+    fingers = robot_model().finger_joints
     for _ in range(160):
-        p.setJointMotorControl2(robot_id, FINGER_JOINTS[0],
+        p.setJointMotorControl2(robot_id, fingers[0],
                                 p.POSITION_CONTROL,
                                 targetPosition=0.04, force=200)
-        p.setJointMotorControl2(robot_id, FINGER_JOINTS[1],
+        p.setJointMotorControl2(robot_id, fingers[1],
                                 p.POSITION_CONTROL,
                                 targetPosition=0.04, force=200)
         p.stepSimulation()
         telemetry.tick()
         if gui:
             time.sleep(1 / 120)
-    finger_pos = [p.getJointState(robot_id, fj)[0] for fj in FINGER_JOINTS]
+    finger_pos = [p.getJointState(robot_id, fj)[0] for fj in fingers]
     if min(finger_pos) < 0.038:
         print(f"    WARNING: open_gripper fingers stalled at "
               f"[{finger_pos[0]:.4f}, {finger_pos[1]:.4f}] "
@@ -863,12 +1024,13 @@ def close_gripper(robot_id: int, gui: bool = False,
     weld stopped carrying the load, hence 40 N.
     """
     import time
+    fingers = robot_model().finger_joints
     for _ in range(60):
-        p.setJointMotorControl2(robot_id, FINGER_JOINTS[0],
+        p.setJointMotorControl2(robot_id, fingers[0],
                                 p.POSITION_CONTROL,
                                 targetPosition=target_finger_pos,
                                 force=force)
-        p.setJointMotorControl2(robot_id, FINGER_JOINTS[1],
+        p.setJointMotorControl2(robot_id, fingers[1],
                                 p.POSITION_CONTROL,
                                 targetPosition=target_finger_pos,
                                 force=force)
@@ -903,10 +1065,11 @@ def close_gripper_until_contact(robot_id: int, gui: bool = False,
     zero without both pads touching, i.e. nothing was between them.
     """
     import time
-    target = min(p.getJointState(robot_id, fj)[0] for fj in FINGER_JOINTS)
+    fingers = robot_model().finger_joints
+    target = min(p.getJointState(robot_id, fj)[0] for fj in fingers)
     for _ in range(max_steps):
         target = max(0.0, target - step)
-        for fj in FINGER_JOINTS:
+        for fj in fingers:
             p.setJointMotorControl2(robot_id, fj, p.POSITION_CONTROL,
                                     targetPosition=target, force=force)
         p.stepSimulation()
@@ -915,15 +1078,15 @@ def close_gripper_until_contact(robot_id: int, gui: bool = False,
             time.sleep(1 / 120)
         pads = set()
         for c in p.getContactPoints(bodyA=robot_id):
-            if (c[3] in FINGER_JOINTS and c[2] != robot_id
+            if (c[3] in fingers and c[2] != robot_id
                     and c[2] not in ignore_body_ids and c[8] <= 0.0005):
                 pads.add(c[3])
-        finger_pos = [p.getJointState(robot_id, fj)[0] for fj in FINGER_JOINTS]
-        if pads == set(FINGER_JOINTS):
+        finger_pos = [p.getJointState(robot_id, fj)[0] for fj in fingers]
+        if pads == set(fingers):
             width = float(np.mean(finger_pos))
             hold = max(0.0, width - squeeze)
             for _ in range(60):
-                for fj in FINGER_JOINTS:
+                for fj in fingers:
                     p.setJointMotorControl2(robot_id, fj, p.POSITION_CONTROL,
                                             targetPosition=hold, force=force)
                 p.stepSimulation()

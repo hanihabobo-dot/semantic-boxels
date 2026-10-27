@@ -75,8 +75,12 @@ NOMINAL_HIDDEN_EXTENTS = np.array([0.04, 0.04, 0.04])
 # one is hidden while a 4 cm box would not fit.
 NOMINAL_HIDDEN_EXTENTS_MIN = np.array([0.03, 0.03, 0.03])
 
+# #P4 B3(d), D7 (iii): the boxel name a declared goal configuration is
+# certified for, (config_for_boxel q_home home).  Not a registry boxel.
+HOME_PSEUDO_BOXEL = 'home'
+
 from boxel_data import BoxelRegistry, BoxelData, BoxelType
-from robot_utils import (ARM_JOINT_INDICES, END_EFFECTOR_LINK, FINGER_JOINTS,
+from robot_utils import (robot_model,
                          JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH, JOINT_RANGES,
                          REST_POSES, RenderingLock, IK_ORN_TOL_DEG,
                          quat_angle_deg, PATH_CHECK_MAX_STEP_RAD,
@@ -249,9 +253,13 @@ class BoxelStreams:
         self._robot_base_xy = np.asarray(base_pos[:2], dtype=float)
         self._reach_center = np.array([float(base_pos[0]), float(base_pos[1]),
                                        REACH_SPHERE_CENTER_Z_WORLD])
+        self.reach_limit_m = REACH_LIMIT_M
+        self.reach_sphere_r_m = REACH_SPHERE_R_M
 
         # Home configuration — the Panda's neutral rest pose, used as the
-        # default start/end for transit motions.
+        # default start/end for transit motions.  #P4 B3(d), D7 (ii): a
+        # task may declare other home joints (set_home_joints); the symbol
+        # stays q_home.
         self.home_config = RobotConfig(
             joint_positions=np.array(REST_POSES),
             name="q_home"
@@ -341,6 +349,7 @@ class BoxelStreams:
             seed = REST_POSES
         saved_joints = None
         pc = self.physics_client
+        rm = robot_model()
         # RenderingLock suppresses OpenGL buffer swaps — without it, the
         # thousands of resetJointState calls during planning cause visible
         # scene flickering.  Nestable: inner locks are no-ops.
@@ -350,13 +359,13 @@ class BoxelStreams:
                 saved_joints = [
                     p.getJointState(self.robot_id, i,
                                     physicsClientId=pc)[0]
-                    for i in ARM_JOINT_INDICES
+                    for i in rm.arm_joints
                 ]
 
                 # 2. Reset joints to seed — this steers the iterative IK
                 #    solver toward a specific local minimum.  Different seeds
                 #    produce different arm configs (elbow-up vs elbow-down etc.)
-                for i, angle in zip(ARM_JOINT_INDICES, seed):
+                for i, angle in zip(rm.arm_joints, seed):
                     p.resetJointState(self.robot_id, i, angle,
                                       physicsClientId=pc)
 
@@ -365,7 +374,7 @@ class BoxelStreams:
                 #    the solver toward the seed when multiple solutions exist.
                 joint_positions = p.calculateInverseKinematics(
                     bodyUniqueId=self.robot_id,
-                    endEffectorLinkIndex=END_EFFECTOR_LINK,
+                    endEffectorLinkIndex=rm.ee_link,
                     targetPosition=ee_pos.tolist(),
                     targetOrientation=ee_orn.tolist(),
                     lowerLimits=JOINT_LIMITS_LOW.tolist(),
@@ -413,14 +422,14 @@ class BoxelStreams:
                 fk_err = None
                 orn_err = None
                 for refine_round in range(3):
-                    for i, angle in zip(ARM_JOINT_INDICES, arm_joints):
+                    for i, angle in zip(rm.arm_joints, arm_joints):
                         p.resetJointState(self.robot_id, i, angle,
                                           physicsClientId=pc)
                     # computeForwardKinematics=True is mandatory — without
                     # it getLinkState can return the transform cached from
                     # the last simulation step, decoupling fk_err from the
                     # candidate solution (see robot_utils.solve_ik's gate).
-                    fk_state = p.getLinkState(self.robot_id, END_EFFECTOR_LINK,
+                    fk_state = p.getLinkState(self.robot_id, rm.ee_link,
                                               computeForwardKinematics=True,
                                               physicsClientId=pc)
                     fk_err = float(np.linalg.norm(
@@ -434,7 +443,7 @@ class BoxelStreams:
                         break  # last candidate already checked — done
                     refined = p.calculateInverseKinematics(
                         bodyUniqueId=self.robot_id,
-                        endEffectorLinkIndex=END_EFFECTOR_LINK,
+                        endEffectorLinkIndex=rm.ee_link,
                         targetPosition=ee_pos.tolist(),
                         targetOrientation=ee_orn.tolist(),
                         lowerLimits=JOINT_LIMITS_LOW.tolist(),
@@ -468,9 +477,29 @@ class BoxelStreams:
                 # Always restore original joint state so IK calls don't
                 # mutate the simulation — critical for deterministic planning.
                 if saved_joints is not None:
-                    for i, angle in zip(ARM_JOINT_INDICES, saved_joints):
+                    for i, angle in zip(rm.arm_joints, saved_joints):
                         p.resetJointState(self.robot_id, i, angle,
                                           physicsClientId=pc)
+
+    def set_reach(self, limit_m: float, sphere_center_z_world: float,
+                  sphere_r_m: float) -> None:
+        """Replace the reach envelope (#P4 B3(d)): the flat horizontal
+        limit and the sphere about a WORLD height above the base XY.  The
+        defaults are REACH_LIMIT_M and REACH_SPHERE_* (our Panda on our
+        table); another robot mounting declares its own, measured with
+        tools/_probe_reach_envelope.py."""
+        self.reach_limit_m = float(limit_m)
+        self.reach_sphere_r_m = float(sphere_r_m)
+        self._reach_center = np.array([self._robot_base_xy[0],
+                                       self._robot_base_xy[1],
+                                       float(sphere_center_z_world)])
+
+    def set_home_joints(self, joints) -> None:
+        """Give the home configuration (symbol q_home) the task's declared
+        home joints (#P4 B3(d), D7 (ii)); the default is REST_POSES.  The
+        planner's home_config is this same object."""
+        self.home_config.joint_positions = np.array(
+            [float(v) for v in joints])
 
     def ee_reachable(self, target_pos) -> bool:
         """#P3(c): can the top-down end effector reach ``target_pos``?
@@ -482,9 +511,9 @@ class BoxelStreams:
         would reject.
         """
         t = np.asarray(target_pos, dtype=float)
-        if float(np.linalg.norm(t[:2] - self._robot_base_xy)) > REACH_LIMIT_M:
+        if float(np.linalg.norm(t[:2] - self._robot_base_xy)) > self.reach_limit_m:
             return False
-        return float(np.linalg.norm(t - self._reach_center)) <= REACH_SPHERE_R_M
+        return float(np.linalg.norm(t - self._reach_center)) <= self.reach_sphere_r_m
 
     def _ik_seeds(self):
         """Yield IK seed configurations: REST_POSES first, then perturbations."""
@@ -1358,6 +1387,11 @@ class BoxelStreams:
         Yields:
             Tuples of (config,) for grasping — one per successful IK seed.
         """
+        # #P4 B3(d): the goal configuration's pseudo-boxel holds no object
+        # and admits no placement; nothing is picked from or placed there.
+        if boxel_id == HOME_PSEUDO_BOXEL:
+            return
+
         # --- Look up the boxel's 3D center from the grid registry ---------------
         boxel = self.registry.get_boxel(boxel_id)
         if boxel is None:

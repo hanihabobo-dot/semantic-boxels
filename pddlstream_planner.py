@@ -39,7 +39,7 @@ from boxel_data import BoxelRegistry, BoxelType
 from perception import (sense_ray_slices, segment_aabb_hit_mask,
                         SENSE_MARGINAL_BLOCKED_FRACTION)
 from streams import (BoxelStreams, RobotConfig, Trajectory, Grasp,
-                     REACH_LIMIT_M, NOMINAL_HIDDEN_EXTENTS)
+                     NOMINAL_HIDDEN_EXTENTS, HOME_PSEUDO_BOXEL)
 from robot_utils import REST_POSES
 
 
@@ -118,7 +118,8 @@ class PDDLStreamPlanner:
                  object_body_ids: Dict[str, int] = None,
                  support_body_ids: frozenset = None,
                  camera_pos: 'np.ndarray' = None,
-                 tray_name: Optional[str] = None):
+                 tray_name: Optional[str] = None,
+                 domain_file: Optional[str] = None):
         """
         Initialize the planner.
 
@@ -141,6 +142,8 @@ class PDDLStreamPlanner:
                 When set, _build_init emits (Obj <tray>) + (is_tray
                 <tray>); (clear <tray>) and (on_table <tray>) fall out
                 of the existing clear / on_table loop.
+            domain_file: Path of the PDDL domain to plan with (#P4
+                B3(c)); None reads pddl/domain_pddlstream.pddl as before.
         """
         self.registry = registry
         self.robot_id = robot_id
@@ -172,9 +175,18 @@ class PDDLStreamPlanner:
             support_body_ids=support_body_ids,
         )
         self.home_config = self.streams.home_config
-        
+        # #P4 B3(d), D7 (iii): with a declared goal configuration (main()
+        # sets this to home_config), _build_init emits (Config q_home),
+        # (Boxel home) and (config_for_boxel q_home home), so a move can
+        # reach q_home from any configuration.  None: no such facts.
+        self.goal_config: Optional[RobotConfig] = None
+
         # Load PDDL files (use PDDLStream-compatible untyped domain)
-        self.domain_pddl = read_pddl_file('domain_pddlstream.pddl')
+        if domain_file is None:
+            self.domain_pddl = read_pddl_file('domain_pddlstream.pddl')
+        else:
+            with open(domain_file, 'r') as f:
+                self.domain_pddl = f.read()
         self.stream_pddl = read_pddl_file('stream.pddl')
 
         # Audit #73 step 1(b): cache the most recent _build_init output
@@ -852,7 +864,7 @@ class PDDLStreamPlanner:
             if b.boxel_type == BoxelType.FREE_SPACE
             and float(np.linalg.norm(
                 np.asarray(b.center[:2], dtype=float)
-                - self.streams._robot_base_xy)) <= REACH_LIMIT_M
+                - self.streams._robot_base_xy)) <= self.streams.reach_limit_m
         ]
         shadow_ids = [
             b.id for b in self.registry.boxels.values()
@@ -888,6 +900,19 @@ class PDDLStreamPlanner:
 
         init.append(('Config', current_config))
         init.append(('at_config', current_config))
+        if self.goal_config is not None:
+            # #P4 B3(d), D7 (iii): the goal configuration and its home
+            # pseudo-boxel, so move (config_for_boxel ?q2 ?b) can reach
+            # it.  "home" is not a registry boxel, so no registry loop
+            # above named it; asserted below once init is complete.
+            if self.registry.get_boxel(HOME_PSEUDO_BOXEL) is not None:
+                raise ValueError(f"a registry boxel is named "
+                                 f"{HOME_PSEUDO_BOXEL!r}")
+            if current_config != self.goal_config:
+                init.append(('Config', self.goal_config))
+            init.append(('Boxel', HOME_PSEUDO_BOXEL))
+            init.append(('config_for_boxel', self.goal_config,
+                         HOME_PSEUDO_BOXEL))
         if held_obj is None:
             init.append(('handempty',))
         else:
@@ -933,6 +958,13 @@ class PDDLStreamPlanner:
         if stackable_objects is not None:
             for stacked, support in on_relations.items():
                 init.append(('on', stacked, support))
+
+        if self.goal_config is not None:
+            _named = [f for f in init if HOME_PSEUDO_BOXEL in
+                      [str(x) for x in f[1:]]]
+            assert sorted(f[0] for f in _named) == [
+                'Boxel', 'config_for_boxel'], (
+                f"the home pseudo-boxel appears in other facts: {_named}")
 
         random.shuffle(init)
         return init

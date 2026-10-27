@@ -4046,7 +4046,8 @@ B2  [OPEN]  HARNESS: tampura_bridge/ (fresh package; nothing imported from the
     $VO/bin/python $SB/tampura_bridge/run_bridge_on_finddice.py
     --global-seed 0 --vis 1'.  Effort 5 to 7 days.
 
-B3  [OPEN]  MAIN-PIPELINE PARAMETERISATION, NO BEHAVIOUR CHANGE ON OUR SCENES.
+B3  [OPEN; code and tests 2026-10-27, BF#10; acceptance pending]
+    MAIN-PIPELINE PARAMETERISATION, NO BEHAVIOUR CHANGE ON OUR SCENES.
     Runs after B1 part 1 and before B1 part 2 and B2.
     (a) robot_utils gains a RobotModel (arm joints, finger joints, EE link,
         gripper links, ignored self pairs, finger limits) resolved by NAME at
@@ -5561,6 +5562,136 @@ BF#9 [DONE]  B1(g): TAMPURA AS SHIPPED ON THE CLUSTER, SEEDS 0-19  (B1,
   RESULT: archive/tampura_bridge_plan_2026-10-25/bf/BF9_b1g/ (the sweep JSON,
   the 20 consoles, the job log with other users' prolog rows stripped, and
   b1g_report.json from tools/_b1g_report.py).
+
+BF#10 [OPEN, acceptance pending]  B3: MAIN-PIPELINE PARAMETERISATION, EVERY
+      NEW BEHAVIOUR DEFAULT OFF  (B3, 2026-10-27)
+  WHAT: B3 (a) to (f) in code, with its tests.
+  (a) robot_utils.RobotModel (arm joints, finger joints, EE link, gripper
+      links, ignored self pairs, finger limits), resolved by NAME in
+      resolve_robot_model: panda_joint1 to 7, panda_finger_joint1/2,
+      panda_grasptarget; the gripper links are panda_link7 and every link
+      below it; the ignored self pairs are every parent-child pair plus
+      every pair of panda_hand's child links.  The env installs the model
+      with use_robot_model() when it loads or adopts the robot, and every
+      index consumer reads robot_model() at call time: robot_utils
+      (collision checks, solve_ik, move_robot_smooth, the gripper),
+      streams (IK), execution, test_full_pipeline, boxel_env (the finger
+      set-up, the plan twin's EE) and world_eye; main() hands telemetry the
+      indices.  pybullet_data's Panda resolves to today's 9/10/11, asserted
+      at every env build.  The derived pair set adds one pair, (8, 11), the
+      hand and panda_grasptarget, which has no collision shape (tested), so
+      the self-collision filter behaves as before.  TAMPURA's Panda resolves
+      to fingers 12/13, EE 14 and gripper links 6 to 14, and shows no
+      self-contact outside its ignored pairs at REST_POSES with the fingers
+      open (tested on /root/tampura-work's URDF).
+  (b) BoxelTestEnv(adopt_client=c): no connect, no resetSimulation, no
+      setGravity and no _setup_scene for the executing client.  A
+      subclass's _adopt_scene registers the bodies from its name-to-id
+      table and builds the plan twin through the plan-client-only helpers
+      _plan_load_urdf and _plan_register_twin (the bridge makes its YCB
+      twins with their create_ycb in the plan client and registers them).
+      _finish_adoption asserts that the executing client's body count is
+      unchanged and that the executing robot and its twin resolve to the
+      same model, which it installs.  close() disconnects only the plan
+      twin when the client is adopted, on the constructor's failure path
+      too.
+  (c) main() keyword arguments, each default today's behaviour: env;
+      target_name (None keeps Phase 4's random.choice); oracle_phases
+      (False skips the post-settle oracle check and Phase 4's oracle; the
+      target's boxel then comes from perception alone); domain_file
+      (PDDLStreamPlanner(domain_file=...)); after_settle (called once,
+      after_settle(env), between main()'s 50-step settle and the first
+      render); stop_before_planning (returns None right after the first
+      plan-twin sync, before the problem export, which runs _build_init);
+      gui_hold_s (4.0).  BoxelTestEnv.shadow_raycast_client (None) reaches
+      the three cast sites: generate_boxels, register_new_detections and
+      the rediscovery path.  When it is set, the plan twin is synced before
+      the cast from the OBJECT boxes known then (in generate_boxels, from
+      the first observation's estimates through a get_boxel lookup), every
+      boxel-less body parked and the held body at the EE
+      (register_new_detections now receives the dispatcher's held body).
+  (d) env.pick_contact_floor (None: execution's 35 mm finger-tip depth,
+      now the module constant _FINGER_TIP_DEPTH that execute_pick and
+      _grasp_ee_to_obj_z read through pick_contact_floor(env)) and
+      env.reach_envelope (None: streams.REACH_*; main() hands a declared
+      envelope to BoxelStreams.set_reach, and the placement filter in
+      _build_init reads the streams' limit).  D7 (i) to (vii), all off by
+      default: home_joints (BoxelStreams.set_home_joints; the symbol stays
+      q_home); goal_at_home (main() conjoins ('at_config', q_home) to
+      ('holding', T); PDDLStreamPlanner.goal_config makes _build_init emit
+      (Config q_home) (Boxel home) (config_for_boxel q_home home), asserted
+      to be the only facts that name "home", and compute-kin yields nothing
+      for "home"; after every move to q_home TAMPURA's test, np.allclose on
+      the 7-joint readback with rtol = atol = 1e-4, decides whether
+      current_config is named q_home or a fresh q_readback_k; the loop's
+      goal test needs the target held AND the last move to q_home passing;
+      two consecutive planned moves to q_home that fail it end the episode
+      home_not_reached, a new labelled step end in run_logger and in G3);
+      held_cargo_resolve (the post-pick readback and every readback while
+      holding carry the held body's plan-twin id as held_body_ids and
+      ignored_body_ids and the offset the pick established; every move
+      made while holding is re-solved from that readback whatever the
+      drift; the ledger's move_resolve row names the cargo);
+      home_hold_step_cap (robot_utils.hold_at_config: position control
+      toward q_home with move_robot_smooth's force, stepped until the
+      at-home test passes or the cap runs out; the value is task_spec's,
+      B6).
+  (e) not triggered (BF#4 (d)).  (f) armO-venvA (BF#6), closed by BF#7.
+  DECISIONS TAKEN HERE, beyond the plan text:
+  (1) One active RobotModel per process, not a model argument on every
+      function: the pipeline drives one robot, its plan twin loads the
+      same URDF, and _finish_adoption asserts that both resolve equal.
+      Every signature stays as it was.
+  (2) With a declared goal configuration the INITIAL configuration is
+      judged like an arrival: q_home only if the readback passes the
+      at-home test, else q_readback_0.  D7 (v) names only moves; without
+      this, the first init would assert at_config(q_home) for an arm the
+      test never judged.
+  (3) The cargo offset is the one the pick established (the plan grasp's
+      xy, and _grasp_ee_to_obj_z on the held object's estimated box, the
+      rule execute_place already uses), not q1's grasp.position, which
+      today's re-solve copies and which puts the cargo at the approach
+      height, 10 cm below the EE instead of about 2 cm.
+  (4) D7 (iv) keeps plan_motion's semantics: a configuration that ignores
+      a body is a pick or place configuration, so a cargo move relaxes the
+      gripper at its endpoints and ignores the supports, as every move
+      made while holding does today.
+  EVIDENCE: tampura_bridge/tests/test_b3_parameterisation.py, 4 tests,
+  all pass: (1) pybullet_data's Panda resolves to today's model; (2)
+  TAMPURA's Panda by name; (3) an adopted world (our random-pairs seed 1
+  built in client 0, its twin dropped, adopted with a fresh twin):
+  stop_before_planning returns with no plan() call and no plan row,
+  after_settle runs once after the 50 settle steps and nothing steps or
+  moves between it and the first render, every shadow ray goes to the plan
+  twin, the adopted client stays connected, the twin closes and the
+  executing body count is unchanged; (4) a full adopted episode with
+  goal_at_home, held_cargo_resolve and a 2400-step hold cap (home =
+  REST_POSES): the post-pick move to q_home is re-solved with the target as
+  cargo and keeps its goal configuration; an injected 5 mrad miss names the
+  readback q_readback_1; the planner then plans move(q_readback_1, q_home)
+  while holding, re-solved with the cargo; that move passes the test
+  (9.8e-5 rad after an 8-step hold); no ray reaches the executing client;
+  the adopted client survives main().  bridge_gates.py all green (G1 41
+  hits; the new one, _plan_load_urdf, is a plan-client entry); 34 hook and
+  ledger tests pass; the 7 G6 controls still fail by design.  Local paired
+  smokes of HEAD fd7eabd and this tree, random-pairs seeds 0 and 1: the
+  same targets, outcomes and plan counts (laptop runs vary from run to run;
+  the acceptance is the cluster's).
+  FINDING (for B1(i) and B7; the D7 path is off on our scenes): in test (4)
+  the held 3.1 cm cube grazed the top corner of a 13.6 cm occluder on the
+  cargo-planned move to REST_POSES and toppled it, then rolled out of the
+  pads during the corrective move (telemetry GRIP_LOST); the episode ended
+  physics_mismatch.  The cargo check keeps the held body's own orientation
+  (#P1 F10) while the wrist yawed by 1.45 rad, so the swept corners leave
+  the checked box by a few mm.  Today's pipeline never moves the held
+  target after the pick; the bridge does, so B1(i) and B7 measure it in
+  their world.
+  BEFORE / AFTER: as listed; every default reproduces today's pipeline.
+  CLAIM EFFECT: none on the thesis scenes (every new behaviour is off).
+  HONESTY CLASS: refactor.
+  DECISION 2026-10-27 (executor): as above.
+  RESULT: acceptance pending: the A/A of c31cbdd (job 4940013) and the A/B
+  of this commit against it, both on cn-110.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS

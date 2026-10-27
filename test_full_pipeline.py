@@ -85,9 +85,9 @@ from perception import grid_would_hit
 from free_space import split_free_boxel  # noqa: F401  (kept for future use)
 from pddlstream_planner import PDDLStreamPlanner
 from streams import RobotConfig
-from robot_utils import (move_robot_smooth,
+from robot_utils import (move_robot_smooth, hold_at_config,
                          detect_execution_collisions,
-                         FINGER_JOINTS)
+                         robot_model, arm_joint_positions)
 from run_logger import (RunLogger, parse_pipeline_args, report_run_outcome,
                         dispatch_begin, dispatch_end, ledger_event,
                         ledger_plan)
@@ -102,7 +102,8 @@ from execution import (audit_robot_held_state,
                        retire_lost_objects,
                        execute_pick, execute_place, execute_stack,
                        handle_sense_action, EmptyHandError,
-                       world_integrity_check, register_new_detections)
+                       world_integrity_check, register_new_detections,
+                       held_cargo_config)
 
 
 def goal_satisfied(goal, on_relations=None, target_found=False) -> bool:
@@ -282,14 +283,15 @@ def _verify_holding(env, target_name, held_body_id):
         return False, (f"held body={held_body_id} ≠ "
                        f"target body={target_body} ('{target_name}')")
     robot_id = env.objects["robot"].object_id
+    fingers = robot_model().finger_joints
     pad_contacts = [c for c in p.getContactPoints(bodyA=robot_id,
                                                   bodyB=target_body)
-                    if c[3] in FINGER_JOINTS]
+                    if c[3] in fingers]
     pad_links = {c[3] for c in pad_contacts}
-    if pad_links != set(FINGER_JOINTS):
+    if pad_links != set(fingers):
         return False, (f"finger-pad contact incomplete: links "
                        f"{sorted(pad_links) or 'none'} (need both "
-                       f"{FINGER_JOINTS})")
+                       f"{list(fingers)})")
     pad_nf = sum(c[9] for c in pad_contacts)
     if pad_nf < 0.5:
         return False, (f"pads touch but squeeze force {pad_nf:.2f} N "
@@ -463,7 +465,51 @@ def main(gui=True, run_logger=None, scene_config=None,
          run_config: Optional[Dict[str, Any]] = None,
          telemetry_enabled: Optional[bool] = None,   # #P1 F17
          telemetry_period: float = 0.05,
-         telemetry_heartbeat: float = 0.5):
+         telemetry_heartbeat: float = 0.5,
+         env: Optional[BoxelTestEnv] = None,
+         target_name: Optional[str] = None,
+         oracle_phases: bool = True,
+         domain_file: Optional[str] = None,
+         after_settle=None,
+         stop_before_planning: bool = False,
+         gui_hold_s: float = 4.0,
+         home_joints=None,
+         goal_at_home: bool = False,
+         held_cargo_resolve: bool = False,
+         home_hold_step_cap: Optional[int] = None):
+    """Run one episode: set-up, boxelization, the plan-act-sense loop.
+
+    #P4 B3 parameters (PAPER_AUDIT P4.4), every default today's
+    behaviour:
+      env               an env built by the caller (B3(b)'s adopt path);
+                        None builds BoxelTestEnv(gui, scene_config).
+      target_name       the target symbol; None keeps Phase 4's choice
+                        (its random.choice included, so our scenes' RNG
+                        stream is unchanged).
+      oracle_phases     False skips the hidden-target oracle check after
+                        the settle and Phase 4's oracle; the target's
+                        boxel then comes from perception alone.
+      domain_file       the PDDL domain (None: pddl/domain_pddlstream.pddl).
+      after_settle      a read-only callable, after_settle(env), run once
+                        between the Phase-1 settle and the first render.
+      stop_before_planning  return right after the first plan-twin sync.
+      gui_hold_s        the GUI window hold after the episode.
+    D7 (i) to (vii), all off by default:
+      home_joints       the joints of the home configuration q_home
+                        (None: REST_POSES).
+      goal_at_home      the goal becomes (and (holding T) (at_config
+                        q_home)): q_home gets its init facts, every move
+                        to q_home is judged by TAMPURA's at-home test
+                        (np.allclose, rtol = atol = 1e-4) on the readback,
+                        the loop ends on that goal test, and two
+                        consecutive planned moves to q_home that fail it
+                        end the episode (home_not_reached).
+      held_cargo_resolve  every move made while holding is re-solved
+                        from the readback with the held body as cargo.
+      home_hold_step_cap  a move to q_home ends with a final hold of at
+                        most this many steps (None: no hold).
+    There is no goal argument: main() builds the goal.
+    """
     print("=" * 60)
     print("FULL PIPELINE: PDDLStream + Replanning")
     print("=" * 60)
@@ -480,7 +526,11 @@ def main(gui=True, run_logger=None, scene_config=None,
     # PHASE 1: Setup Environment
     # =========================================================
     print("\n--- Phase 1: Environment Setup ---")
-    env = BoxelTestEnv(gui=gui, scene_config=scene_config)
+    if not oracle_phases and (goal_kind != 'holding' or target_name is None):
+        raise ValueError("oracle_phases=False needs goal_kind 'holding' "
+                         "and a target_name")
+    if env is None:
+        env = BoxelTestEnv(gui=gui, scene_config=scene_config)
 
     # audit #10 — uniform-grid baseline.  Toggle BoxelTestEnv's
     # free-space dispatch and (re)build the lattice at the requested
@@ -574,7 +624,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     # a placement-vs-oracle logic bug worth investigating, or sub-mm
     # settling drift that does not affect downstream behaviour.
     required_hidden = int(getattr(scene_config, 'n_hidden_targets', 0) or 0)
-    if required_hidden > 0:
+    if required_hidden > 0 and oracle_phases:
         visible, _ = env.oracle_detect_objects()
         target_names = [
             name for name, info in env.objects.items()
@@ -596,6 +646,11 @@ def main(gui=True, run_logger=None, scene_config=None,
 
     robot_id = env.objects["robot"].object_id
     print(f"Robot ID: {robot_id}")
+
+    # #P4 B3(c): the caller's read-only check between the settle and the
+    # first render (the bridge's D9 hook; it steps and moves nothing).
+    if after_settle is not None:
+        after_settle(env)
 
     # =========================================================
     # PHASE 2: Boxel Calculation (fast, no visualization)
@@ -691,9 +746,13 @@ def main(gui=True, run_logger=None, scene_config=None,
     # guardrail removed): a camera-occluded target may sit outside every
     # shadow fragment — sensing cannot reach it, but clearing its
     # occluders and re-detecting it can, so the episode still runs.
-    visible_now, _ = env.oracle_detect_objects()
-    hidden_targets_set = set(all_targets) - set(visible_now)
+    # #P4 B3(c): oracle_phases=False runs none of this; the robot then
+    # knows of the target only what perception registered.
+    hidden_targets_set = set()
     target_to_shadow = {}
+    if oracle_phases:
+        visible_now, _ = env.oracle_detect_objects()
+        hidden_targets_set = set(all_targets) - set(visible_now)
     for tname in hidden_targets_set:
         tpos = np.array(env.objects[tname].position)
         t_min, t_max = p.getAABB(env.objects[tname].object_id)
@@ -728,7 +787,22 @@ def main(gui=True, run_logger=None, scene_config=None,
     stack_target_objects = []              # populated only for --goal stack
 
     if goal_kind == 'holding':
-        if hidden_targets_set:
+        if target_name is not None:
+            # #P4 B3(c): the caller names the target symbol; whether its
+            # location is known is perception's: a registered OBJECT
+            # boxel from the first observation.
+            for boxel in registry.boxels.values():
+                if boxel.object_name == target_name:
+                    visible_target_locations[target_name] = boxel.id
+                    break
+            if target_name in visible_target_locations:
+                print(f"  Target: {target_name} at boxel "
+                      f"{visible_target_locations[target_name]} (given; in "
+                      f"the first observation, direct pick)")
+            else:
+                print(f"  Target: {target_name} (given; not in the first "
+                      f"observation; the robot must search)")
+        elif hidden_targets_set:
             hidden_targets_ordered = [t for t in all_targets
                                       if t in hidden_targets_set]
             target_name = random.choice(hidden_targets_ordered)
@@ -932,10 +1006,13 @@ def main(gui=True, run_logger=None, scene_config=None,
     # -----------------------------------------------------------------
     _tele_on = (not gui) if telemetry_enabled is None else telemetry_enabled
     if _tele_on and run_logger is not None:
+        _rm = robot_model()
         telemetry.enable(
             env.client_id, robot_id, body_id_to_name, run_logger.run_dir,
             frame_period_s=telemetry_period,
             heartbeat_period_s=telemetry_heartbeat,
+            ee_link=_rm.ee_link, arm_joints=_rm.arm_joints,
+            finger_joints=_rm.finger_joints,
         )
         print(f"  [F17] world telemetry recording to "
               f"{run_logger.run_dir}/telemetry.log "
@@ -957,7 +1034,18 @@ def main(gui=True, run_logger=None, scene_config=None,
                                 object_body_ids=object_body_ids,
                                 support_body_ids=planner_support_body_ids,
                                 camera_pos=env.camera_position,
-                                tray_name=tray_name)
+                                tray_name=tray_name,
+                                domain_file=domain_file)
+    # #P4 B3(d): the scene's reach envelope (None: streams' constants),
+    # and D7 (i) to (iii): the home joints, and with a declared goal
+    # configuration its init facts and the goal conjunct.
+    if env.reach_envelope is not None:
+        planner.streams.set_reach(*env.reach_envelope)
+    if home_joints is not None:
+        planner.streams.set_home_joints(home_joints)
+    if goal_at_home:
+        planner.goal_config = planner.home_config
+        goal = ('and', goal, ('at_config', planner.home_config))
     # F6: the meaning of the sense hideability fact is a CLI choice
     # until the A/B settles the default (see run_logger --sense-gate).
     planner.sense_gate = getattr(args, 'sense_gate', 'off')
@@ -998,6 +1086,13 @@ def main(gui=True, run_logger=None, scene_config=None,
     # plan client — pose it from the belief first, exactly as the loop
     # does before every plan(), so the artefact is the planner's init.
     env.sync_to_plan_client(registry=registry)
+    if stop_before_planning:
+        # #P4 B3(c): B2's deliverable stops here, before any plan() call
+        # (and before the problem export, which runs _build_init).
+        print("\n  stop_before_planning: returning after the first "
+              "plan-twin sync")
+        env.close()
+        return None
     problem_path = planner.export_problem_pddl(
         target_objects=planner_target_objects,
         goal=goal,
@@ -1107,6 +1202,46 @@ def main(gui=True, run_logger=None, scene_config=None,
     disturbed_counts: Dict[str, int] = {}   # reset every plan
     target_lost_seen = False                # a goal object's region observed empty
     episode_over = False
+    # #P4 B3(d), D7 (iv)-(vi): the held body's cargo data (the plan's
+    # grasp offset in xy, set by a verified pick), the at-home state of
+    # the last move (True only right after a move to q_home that passed
+    # the at-home test), consecutive planned moves to q_home that failed
+    # it, and the counter behind the fresh q_readback_k symbols.
+    held_grasp_xy = None
+    at_home_ok = False
+    home_misses = 0
+    readback_count = 0
+
+    def _at_home(joints) -> bool:
+        """TAMPURA's at-home test on the 7-joint readback (D7 (v))."""
+        return bool(np.allclose(np.asarray(joints, dtype=float),
+                                np.asarray(planner.home_config.joint_positions,
+                                           dtype=float),
+                                rtol=1e-4, atol=1e-4))
+
+    def _readback_config(joints, name):
+        """A readback configuration; while holding (D7 (iv) on) it carries
+        the held body as cargo."""
+        if (held_cargo_resolve and held_body_id is not None
+                and held_grasp_xy is not None):
+            _hbd = registry.get_boxel(body_id_to_name.get(held_body_id))
+            if _hbd is not None:
+                return held_cargo_config(
+                    joints, name, env, held_body_id,
+                    (np.asarray(_hbd.min_corner, dtype=float),
+                     np.asarray(_hbd.max_corner, dtype=float)),
+                    held_grasp_xy)
+        return RobotConfig(joint_positions=np.asarray(joints), name=name)
+
+    if goal_at_home:
+        # D7 (v) at the start: the initial configuration is q_home only
+        # if the readback passes the at-home test.
+        _q0 = arm_joint_positions(robot_id)
+        if not _at_home(_q0):
+            current_config = RobotConfig(joint_positions=_q0,
+                                         name="q_readback_0")
+            print(f"  [D7] initial arm readback is not at q_home "
+                  f"(max |dq| {np.max(np.abs(_q0 - planner.home_config.joint_positions)):.2e} rad)")
 
     def _integrity_after(label: str) -> bool:
         """Run the world-integrity monitor after an executed action and
@@ -1140,7 +1275,7 @@ def main(gui=True, run_logger=None, scene_config=None,
             boxel_centers=boxel_centers, boxel_to_pybullet=boxel_to_pybullet,
             object_body_ids=object_body_ids,
             skip_names=frozenset([_held_name] if _held_name else []),
-            render=_render)
+            render=_render, held_body_id=held_body_id)
         for e in events:
             e["plan"] = plan_count
         integrity_events.extend(events)
@@ -1203,9 +1338,13 @@ def main(gui=True, run_logger=None, scene_config=None,
     def _loop_done() -> bool:
         # Holding goals stop when the target body is held; stack goals
         # stop when every (on a b) clause is satisfied (audit #30).
+        # #P4 B3(d), D7 (vi): with a declared goal configuration the
+        # goal test also needs the last move to q_home to have passed
+        # the at-home test.
         if goal_kind == 'holding':
             return (held_body_id is not None
-                    and held_body_id == _target_body_id)
+                    and held_body_id == _target_body_id
+                    and (at_home_ok or not goal_at_home))
         return goal_satisfied(goal, on_relations)
 
     while not _loop_done():
@@ -1520,6 +1659,10 @@ def main(gui=True, run_logger=None, scene_config=None,
                       if held_body_id is not None else None),
                 on_relations=on_relations,
                 shadow_occluder_map=shadow_occluder_map)
+            # #P4 B3(d), D7 (vi): any action but a sense may move the arm,
+            # so the at-home state holds only until the next one.
+            if action_name != 'sense':
+                at_home_ok = False
             # #P1 F17: segment the telemetry stream by dispatched action,
             # so every frame, event and summary is attributable to the
             # action that produced it.
@@ -1552,18 +1695,32 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # invoked it.  On replan failure, break the dispatch loop and
                 # let the outer replan recover from current_config — same
                 # path as IK failures during pick/place.
+                # #P4 B3(d), D7 (iv): with held_cargo_resolve, every move
+                # made while holding is re-solved from the readback with
+                # the held body as cargo, whatever the drift, toward the
+                # planned goal configuration.
+                _cargo = held_cargo_resolve and held_body_id is not None
                 if current_config is not None and len(traj.waypoints) > 0:
                     diff = float(np.linalg.norm(
                         np.asarray(current_config.joint_positions)
                         - np.asarray(traj.waypoints[0].joint_positions)))
-                    if diff > 1e-2:
-                        q1_runtime = RobotConfig(
-                            joint_positions=np.asarray(current_config.joint_positions),
-                            name=f"{current_config.name}_runtime",
-                            ignored_body_ids=q1.ignored_body_ids,
-                            held_body_ids=q1.held_body_ids,
-                            grasp_ee_offset=q1.grasp_ee_offset,
-                        )
+                    if diff > 1e-2 or _cargo:
+                        if _cargo:
+                            q1_runtime = _readback_config(
+                                current_config.joint_positions,
+                                f"{current_config.name}_runtime")
+                            if not q1_runtime.held_body_ids:
+                                print(f"    WARNING: no estimated box for "
+                                      f"the held body; the re-solve runs "
+                                      f"without cargo (D7 (iv))")
+                        else:
+                            q1_runtime = RobotConfig(
+                                joint_positions=np.asarray(current_config.joint_positions),
+                                name=f"{current_config.name}_runtime",
+                                ignored_body_ids=q1.ignored_body_ids,
+                                held_body_ids=q1.held_body_ids,
+                                grasp_ee_offset=q1.grasp_ee_offset,
+                            )
                         try:
                             (new_traj,) = next(planner.streams.plan_motion(q1_runtime, q2))
                             # print(f"    [#60-fix(i)] replanned motion from runtime pose "
@@ -1577,7 +1734,8 @@ def main(gui=True, run_logger=None, scene_config=None,
                                 goal_equal=bool(np.array_equal(
                                     np.asarray(new_traj.waypoints[-1].joint_positions),
                                     np.asarray(q2.joint_positions))),
-                                start_diff=diff)
+                                start_diff=diff,
+                                cargo=sorted(q1_runtime.held_body_ids))
                         except StopIteration:
                             # print(f"    [#60-fix(i)] plan_motion could not replan from "
                             #       f"runtime pose (diff={diff:.4f}) — breaking dispatch "
@@ -1600,7 +1758,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                     # jump — the quantity behind a thrown cargo.
                     if telemetry.is_active():
                         _q_now = np.array([p.getJointState(robot_id, j)[0]
-                                           for j in range(7)])
+                                           for j in robot_model().arm_joints])
                         _dq = np.asarray(wp.joint_positions) - _q_now
                         telemetry.note(
                             f"waypoint {wi}/{last_wp_idx} -> "
@@ -1616,13 +1774,44 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # used the planned q2 directly, errors would accumulate
                 # across chained actions and confuse the next replan
                 # (audit #86).
-                actual_joints = np.array(
-                    [p.getJointState(robot_id, i)[0] for i in range(7)]
-                )
-                current_config = RobotConfig(
-                    joint_positions=actual_joints,
-                    name=q2.name
-                )
+                if goal_at_home and q2 == planner.home_config:
+                    # #P4 B3(d), D7 (vii) and (v): a move to the goal
+                    # configuration ends with the final hold (when a cap
+                    # is declared), then TAMPURA's at-home test judges the
+                    # readback.  A miss names the readback q_readback_k,
+                    # never q_home, so the planner plans the correction.
+                    _hold_steps = 0
+                    if home_hold_step_cap is not None:
+                        _, _hold_steps = hold_at_config(
+                            robot_id, planner.home_config.joint_positions,
+                            int(home_hold_step_cap), gui=gui)
+                    actual_joints = arm_joint_positions(robot_id)
+                    at_home_ok = _at_home(actual_joints)
+                    _max_err = float(np.max(np.abs(
+                        actual_joints - np.asarray(
+                            planner.home_config.joint_positions, dtype=float))))
+                    if at_home_ok:
+                        home_misses = 0
+                        current_config = _readback_config(actual_joints,
+                                                          q2.name)
+                    else:
+                        home_misses += 1
+                        readback_count += 1
+                        current_config = _readback_config(
+                            actual_joints, f"q_readback_{readback_count}")
+                    ledger_event('at_home_test', passed=at_home_ok,
+                                 max_abs_err=_max_err, hold_steps=_hold_steps,
+                                 consecutive_misses=home_misses,
+                                 config=current_config.name)
+                    print(f"    [D7] at-home test "
+                          f"{'passed' if at_home_ok else 'FAILED'}: max "
+                          f"|dq| {_max_err:.2e} rad after a {_hold_steps}-step "
+                          f"hold (config {current_config.name})")
+                else:
+                    actual_joints = np.array(
+                        [p.getJointState(robot_id, i)[0] for i in robot_model().arm_joints]
+                    )
+                    current_config = _readback_config(actual_joints, q2.name)
                 detect_execution_collisions(
                     robot_id, env.client_id,
                     held_body_id=held_body_id,
@@ -1630,6 +1819,14 @@ def main(gui=True, run_logger=None, scene_config=None,
                     label=f"move to {dest_boxel_id}",
                     body_names=body_id_to_name)
                 print(f"    -> Arrived at {dest_boxel_id}")
+                if goal_at_home and home_misses >= 2:
+                    exit_reason = "home_not_reached"
+                    episode_over = True
+                    print(f"ERROR: two consecutive planned moves to q_home "
+                          f"left TAMPURA's at-home test false; ending the "
+                          f"episode (home_not_reached, D7 (vi)).")
+                    dispatch_end('home_not_reached')
+                    break
                 # #P2 (a): a transit is the action that most often
                 # disturbs bystanders (F18, F10) and nothing re-read the
                 # scene after it until now.
@@ -1779,6 +1976,11 @@ def main(gui=True, run_logger=None, scene_config=None,
                     dispatch_end('pick_failure')
                     break
                 held_body_id, current_config = result
+                # #P4 B3(d), D7 (iv): the cargo offset in xy is the plan's
+                # grasp; the post-pick readback carries the held body.
+                held_grasp_xy = np.array(grasp.position[:2], dtype=float)
+                current_config = _readback_config(
+                    current_config.joint_positions, current_config.name)
                 # #P1 F2: a successful pick proves the object is
                 # graspable from its current pose — reset its strike
                 # counter so unrelated later failures start fresh.
@@ -1916,7 +2118,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                     # ≥ 0.035 per finger means the release ran.
                     fingers_open = all(
                         p.getJointState(robot_id, fj)[0] >= 0.035
-                        for fj in FINGER_JOINTS)
+                        for fj in robot_model().finger_joints)
                     if fingers_open:
                         print(f"    drop-verify failed for {obj_str}; "
                               f"clearing held state and replanning "
@@ -2157,7 +2359,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                     # failure was IK, grip intact.
                     fingers_open = all(
                         p.getJointState(robot_id, fj)[0] >= 0.035
-                        for fj in FINGER_JOINTS)
+                        for fj in robot_model().finger_joints)
                     if fingers_open:
                         print(f"    drop-verify failed for {obj_str} on "
                               f"{on_obj_str}; clearing held state and "
@@ -2331,6 +2533,10 @@ def main(gui=True, run_logger=None, scene_config=None,
         # holding-goal path matches the stack-goal path's audit-#40
         # rigour.
         symbolic_ok = belief.is_target_found()
+        # #P4 B3(d), D7 (vi): with a declared goal configuration the goal
+        # also needs the arm at q_home by TAMPURA's test.
+        if goal_at_home and not at_home_ok:
+            symbolic_ok = False
         if symbolic_ok:
             ok, reason = _verify_holding(env, target_name, held_body_id)
             if not ok:
@@ -2408,9 +2614,9 @@ def main(gui=True, run_logger=None, scene_config=None,
 
     # Keep the GUI visible briefly so the user can inspect the final
     # state, then tear down the simulation cleanly.
-    if gui:
-        print("\nWindow closing in 4 seconds...")
-        end_time = time.time() + 4
+    if gui and gui_hold_s > 0:
+        print(f"\nWindow closing in {gui_hold_s:g} seconds...")
+        end_time = time.time() + gui_hold_s
         while time.time() < end_time:
             env.step_simulation()
             time.sleep(1.0 / 240.0)

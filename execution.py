@@ -50,9 +50,15 @@ from perception import (DETECTION_MIN_PIXELS, DETECTION_SUPPORT_SNAP,
                         first_surface_interceptors, sense_ray_slices)
 from reboxelize import reboxelize_free_space
 from streams import NOMINAL_HIDDEN_EXTENTS, RobotConfig
-from robot_utils import (END_EFFECTOR_LINK, FINGER_JOINTS, solve_ik,
+from robot_utils import (robot_model, solve_ik,
                          move_robot_smooth, open_gripper, close_gripper,
                          close_gripper_until_contact, pinch_axis)
+
+
+# The pick's contact floor above the table (#P1 F24): the pads reach
+# 35 mm below panda_grasptarget, so a pinch lower than this grinds the
+# fingertips into the table.  A scene may declare its own (D8).
+_FINGER_TIP_DEPTH = 0.035
 
 
 def _capture_freeze(label: str) -> None:
@@ -523,12 +529,13 @@ def _assert_held_contact(robot_id, held_body_id, obj_name, gui, action):
     air) and raise EmptyHandError for the dispatcher's dedicated path.
     """
     contacts = p.getContactPoints(bodyA=robot_id, bodyB=held_body_id)
-    pad_links = {c[3] for c in contacts if c[3] in FINGER_JOINTS}
-    if pad_links != set(FINGER_JOINTS):
-        nf = sum(c[9] for c in contacts if c[3] in FINGER_JOINTS)
+    fingers = robot_model().finger_joints
+    pad_links = {c[3] for c in contacts if c[3] in fingers}
+    if pad_links != set(fingers):
+        nf = sum(c[9] for c in contacts if c[3] in fingers)
         print(f"    ERROR: {action} entry assert failed for {obj_name} — "
               f"held object not in the gripper (pad contacts="
-              f"{sorted(pad_links) or 'none'}, need both {FINGER_JOINTS}, "
+              f"{sorted(pad_links) or 'none'}, need both {list(fingers)}, "
               f"pad_normal_force={nf:.2f}N).  Opening gripper (#P1 F1).")
         open_gripper(robot_id, gui)
         raise EmptyHandError(
@@ -629,7 +636,7 @@ def _release_and_verify_drop(
         # the analog of the old getConstraintInfo probe; open_gripper
         # already warned if the motors stalled, this gates on it).
         finger_pos = [p.getJointState(robot_id, fj)[0]
-                       for fj in FINGER_JOINTS]
+                       for fj in robot_model().finger_joints]
         fingers_open = min(finger_pos) >= 0.038
 
         # (iv) robot-link contacts; also collect non-robot contacts (a
@@ -824,7 +831,7 @@ def release_held_object_in_place(
         if det is not None and det.pixel_count >= DETECTION_MIN_PIXELS:
             refresh_object_aabbs(env, registry, viz=viz, detections=dets)
         else:
-            ee = p.getLinkState(robot_id, END_EFFECTOR_LINK)[0]
+            ee = p.getLinkState(robot_id, robot_model().ee_link)[0]
             ext = (np.asarray(obj_bd.max_corner, dtype=float)
                    - np.asarray(obj_bd.min_corner, dtype=float))
             obj_bd.min_corner = np.array([ee[0] - ext[0] / 2.0,
@@ -852,7 +859,7 @@ def release_held_object_in_place(
     planner.shadow_occluder_map = state_updates["shadow_occluder_map"]
 
     actual_joints = np.array(
-        [p.getJointState(robot_id, i)[0] for i in range(7)]
+        [p.getJointState(robot_id, i)[0] for i in robot_model().arm_joints]
     )
     state_updates["current_config"] = RobotConfig(
         joint_positions=actual_joints,
@@ -1032,9 +1039,8 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     pinch_half = (x_half, y_half)[_pinch]
 
     _GRASP_MARGIN_FROM_TOP = 0.005  # 5 mm below cube top
-    _FINGER_TIP_DEPTH = 0.035
     table_z = env.table_surface_height
-    min_contact_z = table_z + _FINGER_TIP_DEPTH
+    min_contact_z = table_z + pick_contact_floor(env)
     contact_z = max(cube_top_z - _GRASP_MARGIN_FROM_TOP, min_contact_z)
 
     # The descent aims at the (re-observed) estimate centre; contact_z
@@ -1075,7 +1081,7 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     pregrasp_aperture = min(0.04, pinch_half + 0.008)
     close_gripper(robot_id, gui, target_finger_pos=pregrasp_aperture)
 
-    live_ee_now = p.getLinkState(robot_id, END_EFFECTOR_LINK)[0]
+    live_ee_now = p.getLinkState(robot_id, robot_model().ee_link)[0]
     above_ee = np.array([contact_ee[0], contact_ee[1],
                          max(float(live_ee_now[2]), contact_z + 0.05)])
     above_joints = solve_ik(robot_id, above_ee, grasp.orientation, pc,
@@ -1127,7 +1133,7 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     # failed grips are attributable from headless logs.  Print-only
     # GROUND-TRUTH diagnostic (p.getBasePositionAndOrientation):
     # nothing here feeds control.
-    live_ee_pos = p.getLinkState(robot_id, END_EFFECTOR_LINK)[0]
+    live_ee_pos = p.getLinkState(robot_id, robot_model().ee_link)[0]
     ee_xy_err = float(np.hypot(live_ee_pos[0] - contact_ee[0],
                                 live_ee_pos[1] - contact_ee[1]))
     obj_live_pos = p.getBasePositionAndOrientation(obj_id)[0]
@@ -1169,12 +1175,13 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     # close_gripper target).
     grip_contacts = p.getContactPoints(bodyA=robot_id, bodyB=obj_id)
     pad_links = {c[3] for c in grip_contacts
-                 if c[3] in FINGER_JOINTS}
-    grip_nf = sum(c[9] for c in grip_contacts if c[3] in FINGER_JOINTS)
-    if pad_links != set(FINGER_JOINTS):
+                 if c[3] in robot_model().finger_joints}
+    grip_nf = sum(c[9] for c in grip_contacts
+                  if c[3] in robot_model().finger_joints)
+    if pad_links != set(robot_model().finger_joints):
         print(f"    ERROR: grip verification failed for {obj_name} — "
               f"pad contacts={sorted(pad_links) or 'none'} (need both "
-              f"{FINGER_JOINTS}), pad_normal_force={grip_nf:.2f}N. "
+              f"{list(robot_model().finger_joints)}), pad_normal_force={grip_nf:.2f}N. "
               f"Opening gripper.")
         open_gripper(robot_id, gui)
         if not _retry:
@@ -1203,7 +1210,8 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     # pinch half-extent + 8 mm (the estimate over-approximates by at
     # most a few mm; wider means the pads closed on something else or
     # across the wrong axis).
-    finger_pos = [p.getJointState(robot_id, fj)[0] for fj in FINGER_JOINTS]
+    finger_pos = [p.getJointState(robot_id, fj)[0]
+                  for fj in robot_model().finger_joints]
     width = (measured_half if measured_half is not None
              else float(np.mean(finger_pos)))
     width_lo, width_hi = 0.005, pinch_half + 0.008
@@ -1254,14 +1262,15 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     # behind while the EE rises.  Re-check both pads against obj_id and
     # abort into the dispatcher's replan path on loss.
     lift_contacts = p.getContactPoints(bodyA=robot_id, bodyB=obj_id)
-    lift_pads = {c[3] for c in lift_contacts if c[3] in FINGER_JOINTS}
-    if lift_pads != set(FINGER_JOINTS):
+    _fingers = robot_model().finger_joints
+    lift_pads = {c[3] for c in lift_contacts if c[3] in _fingers}
+    if lift_pads != set(_fingers):
         lift_nf = sum(c[9] for c in lift_contacts
-                      if c[3] in FINGER_JOINTS)
+                      if c[3] in _fingers)
         obj_z_now = p.getBasePositionAndOrientation(obj_id)[0][2]
         print(f"    ERROR: grip lost after post-pick lift for {obj_name} — "
               f"pad contacts={sorted(lift_pads) or 'none'} (need both "
-              f"{FINGER_JOINTS}), pad_normal_force={lift_nf:.2f}N, "
+              f"{list(_fingers)}), pad_normal_force={lift_nf:.2f}N, "
               f"obj_z={obj_z_now:.4f}. Opening gripper and replanning "
               f"(#P1 F1).")
         open_gripper(robot_id, gui)
@@ -1272,14 +1281,41 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     # drift from compounding across chained actions within a plan
     # (audit #86).
     actual_joints = np.array(
-        [p.getJointState(robot_id, i)[0] for i in range(7)]
+        [p.getJointState(robot_id, i)[0] for i in robot_model().arm_joints]
     )
     final_config = RobotConfig(joint_positions=actual_joints,
                                name="post_pick_contact")
     return obj_id, final_config
 
 
-def _grasp_ee_to_obj_z(held_aabb, table_z: float) -> float:
+def pick_contact_floor(env) -> float:
+    """The pick's lowest contact height above the table: our Panda's
+    35 mm finger-tip depth, unless the scene declares its own (#P4
+    B3(d), D8: env.pick_contact_floor)."""
+    floor = getattr(env, "pick_contact_floor", None)
+    return _FINGER_TIP_DEPTH if floor is None else float(floor)
+
+
+def held_cargo_config(joints, name, env, held_body_id, held_aabb,
+                      grasp_xy) -> RobotConfig:
+    """A configuration read back while holding, carrying the held body
+    as plan_motion's cargo (#P4 B3(d), D7 (iv)): its plan-twin id as
+    held_body_ids and ignored_body_ids, and the EE-to-body offset the
+    pick established (grasp_xy from the plan's grasp, the height from
+    _grasp_ee_to_obj_z on the held object's estimated box; no pose of
+    the held body is read)."""
+    pid = env.plan_body_id(held_body_id)
+    ee_to_obj_z = _grasp_ee_to_obj_z(held_aabb, env.table_surface_height,
+                                     pick_contact_floor(env))
+    return RobotConfig(
+        joint_positions=np.asarray(joints, dtype=float), name=name,
+        ignored_body_ids=frozenset({pid}), held_body_ids=frozenset({pid}),
+        grasp_ee_offset=np.array([float(grasp_xy[0]), float(grasp_xy[1]),
+                                  -ee_to_obj_z]))
+
+
+def _grasp_ee_to_obj_z(held_aabb, table_z: float,
+                       contact_floor: float = None) -> float:
     """EE-to-object-centre vertical offset the pick established (#P1
     WP2b, 2026-09-19).  execute_pick descends to max(top - 5 mm,
     table + 35 mm finger-tip depth) and pinches there, so with the
@@ -1288,10 +1324,12 @@ def _grasp_ee_to_obj_z(held_aabb, table_z: float) -> float:
     the object's centre hangs below the EE.  A vertical slip inside the
     pads is the residual the drop observation catches.
     """
+    if contact_floor is None:
+        contact_floor = _FINGER_TIP_DEPTH
     top = float(held_aabb[1][2])
     bottom = float(held_aabb[0][2])
     half_h = (top - bottom) / 2.0
-    contact_z = max(top - 0.005, table_z + 0.035)   # mirrors execute_pick
+    contact_z = max(top - 0.005, table_z + contact_floor)   # mirrors execute_pick
     return (top - half_h) - contact_z
 
 
@@ -1358,7 +1396,8 @@ def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
         rigid_ext = (np.asarray(held_aabb[1], dtype=float)
                      - np.asarray(held_aabb[0], dtype=float))
         obj_half_height = float(rigid_ext[2]) / 2.0
-        ee_to_obj_z = _grasp_ee_to_obj_z(held_aabb, table_z)
+        ee_to_obj_z = _grasp_ee_to_obj_z(held_aabb, table_z,
+                                         pick_contact_floor(env))
 
         target_obj_z = table_z + obj_half_height
         contact_z = target_obj_z - ee_to_obj_z
@@ -1461,7 +1500,7 @@ def execute_place(robot_id, env, obj_name, place_pos, grasp, config,
 
     # Read actual joint state to prevent drift accumulation (audit #86).
     actual_joints = np.array(
-        [p.getJointState(robot_id, i)[0] for i in range(7)]
+        [p.getJointState(robot_id, i)[0] for i in robot_model().arm_joints]
     )
     return RobotConfig(joint_positions=actual_joints,
                        name="post_place_contact")
@@ -1550,7 +1589,8 @@ def execute_stack(robot_id, env, obj_name, on_obj_name, grasp, config,
     rigid_ext = (np.asarray(held_aabb[1], dtype=float)
                  - np.asarray(held_aabb[0], dtype=float))
     held_half_height = float(rigid_ext[2]) / 2.0
-    ee_to_obj_z = _grasp_ee_to_obj_z(held_aabb, env.table_surface_height)
+    ee_to_obj_z = _grasp_ee_to_obj_z(held_aabb, env.table_surface_height,
+                                     pick_contact_floor(env))
 
     target_obj_z = sup_top_z + held_half_height
     contact_z = target_obj_z - ee_to_obj_z
@@ -1605,7 +1645,7 @@ def execute_stack(robot_id, env, obj_name, on_obj_name, grasp, config,
         # joint); otherwise abort to a replan, which re-derives the
         # kinematics through the refined stream IK anyway.
         if contact_joints is not None:
-            _cur = [p.getJointState(robot_id, i)[0] for i in range(7)]
+            _cur = [p.getJointState(robot_id, i)[0] for i in robot_model().arm_joints]
             _max_dj = max(abs(c - t)
                           for c, t in zip(_cur, contact_joints))
             if _max_dj > 0.9:
@@ -1627,7 +1667,7 @@ def execute_stack(robot_id, env, obj_name, on_obj_name, grasp, config,
     # or grasp-tilt drift between contact_z compute and arm arrival.
     # >5 mm overshoot OR >5 deg tilt drift flips the prefix to
     # "arrival-deviation" for easy greppability.
-    live_ee_pos = p.getLinkState(robot_id, END_EFFECTOR_LINK)[0]
+    live_ee_pos = p.getLinkState(robot_id, robot_model().ee_link)[0]
     live_obj_pos, live_obj_orn = p.getBasePositionAndOrientation(held_body_id)
     ee_xy_err = float(np.hypot(live_ee_pos[0] - contact_ee[0],
                                 live_ee_pos[1] - contact_ee[1]))
@@ -1717,7 +1757,7 @@ def execute_stack(robot_id, env, obj_name, on_obj_name, grasp, config,
             [0.0, 0.0, 0.0, 1.0], physicsClientId=env.plan_client_id)
 
     actual_joints = np.array(
-        [p.getJointState(robot_id, i)[0] for i in range(7)]
+        [p.getJointState(robot_id, i)[0] for i in robot_model().arm_joints]
     )
     return RobotConfig(joint_positions=actual_joints,
                        name=f"post_stack_{obj_name}_on_{on_obj_name}")
@@ -2259,7 +2299,7 @@ def register_new_detections(*, env, registry, belief, viz, detections,
                             target_name, shadows, occluders,
                             shadow_occluder_map, boxel_centers,
                             boxel_to_pybullet, object_body_ids, render=None,
-                            skip_names=frozenset()):
+                            skip_names=frozenset(), held_body_id=None):
     """Register every detected object that has no registry boxel (#P1 F20).
 
     The sense action observes the WHOLE workspace: its render detects
@@ -2356,8 +2396,14 @@ def register_new_detections(*, env, registry, belief, viz, detections,
                          if bd.boxel_type == BoxelType.OBJECT
                          and bd.id != name]
             obstacles.extend(registry.get_shadow_boxels())
+            # #P4 B3(c): with a shadow-raycast client the rays hit the
+            # plan twin, posed from the belief just updated.
+            if env.shadow_raycast_client is not None:
+                env.sync_to_plan_client(held_body_id=held_body_id,
+                                        registry=registry)
             shadow_parts = env.shadow_calculator.calculate_shadow_boxel(
-                obj_bd, obstacles)
+                obj_bd, obstacles,
+                physics_client=env.shadow_raycast_client)
             if shadow_parts:
                 obj_bd.is_occluder = True
             for sp in shadow_parts:
@@ -2984,9 +3030,14 @@ def handle_sense_action(
                         if (bd.boxel_type == BoxelType.OBJECT
                             and bd.id != obj_name)
                     ]
+                    # #P4 B3(c): the plan twin, posed from the belief
+                    # (the hand is empty: sense needs handempty).
+                    if env.shadow_raycast_client is not None:
+                        env.sync_to_plan_client(registry=registry)
                     shadow_parts = \
                         env.shadow_calculator.calculate_shadow_boxel(
-                            obj_bd, other_solids)
+                            obj_bd, other_solids,
+                            physics_client=env.shadow_raycast_client)
 
                 if shadow_parts:
                     obj_bd.is_occluder = True

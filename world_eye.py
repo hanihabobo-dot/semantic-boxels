@@ -43,10 +43,8 @@ import pybullet as p
 import telemetry
 from boxel_data import BoxelType
 from perception import first_surface_interceptors
+from robot_utils import robot_model   # #P4 B3(a): indices by name
 
-EE_LINK = 11            # panda_grasptarget (robot_utils.END_EFFECTOR_LINK)
-ARM_JOINTS = (0, 1, 2, 3, 4, 5, 6)
-FINGER_JOINTS = (9, 10)
 _SUPPORTS = ("plane", "table", "robot")
 
 # Init predicates worth spelling out verbatim in a snapshot.  The rest
@@ -137,10 +135,11 @@ class WorldEye:
         if self.robot_id is None:
             return None
         try:
-            st = p.getLinkState(self.robot_id, EE_LINK)
-            q = [p.getJointState(self.robot_id, j)[0] for j in ARM_JOINTS]
+            rm = robot_model()
+            st = p.getLinkState(self.robot_id, rm.ee_link)
+            q = [p.getJointState(self.robot_id, j)[0] for j in rm.arm_joints]
             fingers = [p.getJointState(self.robot_id, j)[0]
-                       for j in FINGER_JOINTS]
+                       for j in rm.finger_joints]
         except Exception:
             return None
         return {"ee_pos": _r(st[0]), "q": _r(q, 4), "fingers": _r(fingers, 4)}

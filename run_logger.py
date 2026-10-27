@@ -230,10 +230,12 @@ _provenance = []
 # dispatcher go on to the next step of the same plan; every other value is
 # a logged early end (gate G3).  'unlabelled' is written only when the
 # dispatcher left a step without saying why, and fails G3.
+# 'home_not_reached' is D7 (vi)'s bound (#P4 B3(d)): the second
+# consecutive planned move to q_home that fails the at-home test.
 STEP_END_STATUSES = (
     'ok', 'sense_outcome', 'integrity_replan', 'motion_resolve_failed',
     'pick_failure', 'place_failure', 'stack_failure', 'empty_hand',
-    'stale_precondition', 'unlabelled',
+    'stale_precondition', 'home_not_reached', 'unlabelled',
 )
 
 
