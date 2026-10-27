@@ -3938,7 +3938,8 @@ D12 INTERPRETER FOR ARM O: its OWN venv, never their venv and never one that
     otherwise (B) if it passes all but the pickle round trip; otherwise the
     user decides.  campaign.json records the choice and a pip-freeze hash of
     both venvs; G13 asserts arm T's freeze unchanged before and after every
-    run.
+    run.  DECIDED 2026-10-27 (BF#7): candidate (A), armO-venvA, passed all
+    five tests.
 
 --------------------------------------------------------------------------------
 P4.4  WORK PACKAGES B0-B9 (each ends with a BF# record)
@@ -5426,7 +5427,7 @@ BF#6 [OPEN]  BOTH ARMS ON THE CHAIR'S CLUSTER; B1(g) AND B1(j) SUBMITTED THERE
   freezes: archive/tampura_bridge_plan_2026-10-25/bf/BF7_b1j/ (other users'
   job rows stripped from the Slurm prologs).
 
-BF#7 [OPEN]  B1(j): D12'S VENV TESTS FOR CANDIDATE (A)  (B1, 2026-10-27)
+BF#7 [DONE]  B1(j): D12'S VENV TESTS FOR CANDIDATE (A)  (B1, 2026-10-27)
   WHAT: D12's five tests for candidate (A), arm O's own venv holding exactly
   arm T's package set.  Tests 1 to 4 ran as job 4940011 on cn-102 against
   snapshot 3850dd1:
@@ -5449,14 +5450,34 @@ BF#7 [OPEN]  B1(j): D12'S VENV TESTS FOR CANDIDATE (A)  (B1, 2026-10-27)
       ledger reader passes G3, G4, G5 and G15 (13 steps in 2 plans, one
       labelled early end).  Our pipeline is validated on numpy 2.2.6; this is
       its first run on 1.24.4 and nothing differed in kind.
-  (5) OPEN: the A/A of c31cbdd, job 4940013, queued on cn-110 after B1(g).
-  BEFORE / AFTER: D12 undecided / candidate (A) passes tests 1 to 4.
+  (5) PASS: the A/A of c31cbdd under (A), job 4940013 on cn-110 (Xeon
+      Platinum 8160), 11:48 to 12:03, tools/_eval_ab.py on our holding
+      scene, seeds 0-19 and 100-119, two repetitions from the immutable
+      snapshot sb_c31cbdd, PYTHONHASHSEED 0.  All 80 episodes reached a
+      logged end.  Repetition 1: 31/40 (15/20 and 16/20); repetition 2:
+      30/40 (15/20 and 15/20).  Three outcome flips: 108 (fail, then
+      success), 116 and 119 (success, then fail).  Plan counts differ in 16
+      of the 35 seeds that ran; the Phase-4 target is the same in both
+      repetitions of every one of them.  Seeds 4, 6, 12, 106 and 115 never
+      run: the pre-flight rejects their scenes in both repetitions ("Could
+      not place 3 hidden targets with 3 occluders"), exactly as wsl_env on
+      the laptop does, so this is scene construction, not the venv.  These
+      counts are the noise floor of B3's acceptance (BF#10): 3 outcome
+      flips and 16 plan-count differences.
+  BEFORE / AFTER: D12 undecided / candidate (A), armO-venvA, passes all
+  five tests.
   CLAIM EFFECT: none.
   HONESTY CLASS: measurement.
-  DECISION: pending test 5; D12 uses (A) if it passes all five.
+  DECISION 2026-10-27 (executor, by D12's pre-registered rule): arm O runs
+  in candidate (A), armO-venvA (Python 3.11.15, numpy 1.24.4, arm T's exact
+  package set; pip freeze sha256 0cdfcf0c..., byte-identical to arm T's
+  cluster venv, BF#6).  The pickle check of G6 therefore runs in their
+  venv, as planned; campaign.json records the choice and both freeze
+  hashes.
   RESULT: archive/tampura_bridge_plan_2026-10-25/bf/BF7_b1j/ (summary.txt,
   the six layout signatures, the test-3 console, the test-4 ledger, the job
-  log).
+  log); test 5 in aa/: the four harness JSONs, the job log (no other user's
+  row in its prolog) and aa_report.json from tools/b3_acceptance_report.py.
 
 BF#8 [DONE, option (A)]  THE SEED-TO-SCENE MAP DEPENDS ON THE FILESYSTEM
       (B1, 2026-10-27)
