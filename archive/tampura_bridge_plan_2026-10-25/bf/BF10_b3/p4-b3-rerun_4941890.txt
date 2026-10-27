@@ -1,0 +1,147 @@
+--------------------- Slurm Task Prolog ------------------------
+Job ID: 4941890
+Job name: p4-b3-rerun
+Host: cn-110
+Date: Tue Oct 27 12:58:21 CET 2026
+User: hani.alassiri.alhabboub
+Slurm account: rleap
+Slurm partition: rleap_cpu
+Work dir: 
+------------------
+Node usage:
+JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
+4941890 rleap_cpu p4-b3-re hani.ala  R       0:01      1 cn-110
+------------------
+Show launch script with:
+sacct -B -j 
+------------------
+--------------------- Slurm Task Prolog ------------------------
+host cn-110  job 4941890  2026-10-27T12:58:22+01:00  seeds 2 5 7 10 14 15 100 102 103 105 108 110 113 116 119
+model name	: Intel(R) Xeon(R) Platinum 8160 CPU @ 2.10GHz
+[ab] arm=rr_c31cbdd branch=(detached) head= scene=random-pairs goal=holding seeds=2
+[ab] seed    2 -> eff 2 OK  plans=3 plan_t=2.251s wall=10.9s  
+[ab] DONE rr_c31cbdd: success 1/1  mean plan_t 2.3s  median 2.3s
+[ab] arm=rr_526b358 branch=(detached) head= scene=random-pairs goal=holding seeds=2
+[ab] seed    2 -> eff 2 OK  plans=4 plan_t=2.785s wall=14.4s  
+[ab] DONE rr_526b358: success 1/1  mean plan_t 2.8s  median 2.8s
+[ab] arm=rr_c31cbdd branch=(detached) head= scene=random-pairs goal=holding seeds=5
+[ab] resuming: 1 episode(s) already banked
+[ab] seed    5 -> eff 5 OK  plans=1 plan_t=0.974s wall=6.5s  
+[ab] DONE rr_c31cbdd: success 2/2  mean plan_t 1.6s  median 2.3s
+[ab] arm=rr_526b358 branch=(detached) head= scene=random-pairs goal=holding seeds=5
+[ab] resuming: 1 episode(s) already banked
+[ab] seed    5 -> eff 5 OK  plans=2 plan_t=2.005s wall=10.4s  
+[ab] DONE rr_526b358: success 2/2  mean plan_t 2.4s  median 2.8s
+[ab] arm=rr_c31cbdd branch=(detached) head= scene=random-pairs goal=holding seeds=7
+[ab] resuming: 2 episode(s) already banked
+[ab] seed    7 -> eff 7 OK  plans=4 plan_t=3.409s wall=13.8s  
+[ab] DONE rr_c31cbdd: success 3/3  mean plan_t 2.2s  median 2.3s
+[ab] arm=rr_526b358 branch=(detached) head= scene=random-pairs goal=holding seeds=7
+[ab] resuming: 2 episode(s) already banked
+[ab] seed    7 -> eff 7 OK  plans=3 plan_t=2.612s wall=10.5s  
+[ab] DONE rr_526b358: success 3/3  mean plan_t 2.5s  median 2.6s
+[ab] arm=rr_c31cbdd branch=(detached) head= scene=random-pairs goal=holding seeds=10
+[ab] resuming: 3 episode(s) already banked
+[ab] seed   10 -> eff 10 OK  plans=2 plan_t=1.739s wall=9.8s  
+[ab] DONE rr_c31cbdd: success 4/4  mean plan_t 2.1s  median 2.3s
+[ab] arm=rr_526b358 branch=(detached) head= scene=random-pairs goal=holding seeds=10
+[ab] resuming: 3 episode(s) already banked
+[ab] seed   10 -> eff 10 FAIL plans=4 plan_t=33.531s wall=43.8s  planner_failed) | held=none | unknown shadows=1 | red_object@(0.119,0.157)[bel 2mm] green_object@(-0.052,-0.250)[bel 1mm] orange_object@(0.149,0.050)[bel 1mm] blue_object@(0.118,0.230)[NO BOXEL] cyan_object@(0.250,0.049)[bel 1mm]
+[ab] DONE rr_526b358: success 3/4  mean plan_t 10.2s  median 2.8s
+[ab] arm=rr_c31cbdd branch=(detached) head= scene=random-pairs goal=holding seeds=14
+[ab] resuming: 4 episode(s) already banked
+[ab] seed   14 -> eff 14 OK  plans=3 plan_t=2.729s wall=8.9s  
+[ab] DONE rr_c31cbdd: success 5/5  mean plan_t 2.2s  median 2.3s
+[ab] arm=rr_526b358 branch=(detached) head= scene=random-pairs goal=holding seeds=14
+[ab] resuming: 4 episode(s) already banked
+[ab] seed   14 -> eff 14 OK  plans=3 plan_t=3.11s wall=11.8s  
+[ab] DONE rr_526b358: success 4/5  mean plan_t 8.8s  median 2.8s
+[ab] arm=rr_c31cbdd branch=(detached) head= scene=random-pairs goal=holding seeds=15
+[ab] resuming: 5 episode(s) already banked
+[ab] seed   15 -> eff 15 OK  plans=2 plan_t=2.542s wall=10.3s  
+[ab] DONE rr_c31cbdd: success 6/6  mean plan_t 2.3s  median 2.5s
+[ab] arm=rr_526b358 branch=(detached) head= scene=random-pairs goal=holding seeds=15
+[ab] resuming: 5 episode(s) already banked
+[ab] seed   15 -> eff 15 OK  plans=4 plan_t=3.21s wall=13.7s  
+[ab] DONE rr_526b358: success 5/6  mean plan_t 7.9s  median 3.1s
+[ab] arm=rr_c31cbdd branch=(detached) head= scene=random-pairs goal=holding seeds=100
+[ab] resuming: 6 episode(s) already banked
+[ab] seed  100 -> eff 100 OK  plans=2 plan_t=1.278s wall=7.4s  
+[ab] DONE rr_c31cbdd: success 7/7  mean plan_t 2.1s  median 2.3s
+[ab] arm=rr_526b358 branch=(detached) head= scene=random-pairs goal=holding seeds=100
+[ab] resuming: 6 episode(s) already banked
+[ab] seed  100 -> eff 100 OK  plans=3 plan_t=1.768s wall=10.1s  
+[ab] DONE rr_526b358: success 6/7  mean plan_t 7.0s  median 2.8s
+[ab] arm=rr_c31cbdd branch=(detached) head= scene=random-pairs goal=holding seeds=102
+[ab] resuming: 7 episode(s) already banked
+[ab] seed  102 -> eff 102 OK  plans=1 plan_t=1.724s wall=7.1s  
+[ab] DONE rr_c31cbdd: success 8/8  mean plan_t 2.1s  median 2.3s
+[ab] arm=rr_526b358 branch=(detached) head= scene=random-pairs goal=holding seeds=102
+[ab] resuming: 7 episode(s) already banked
+[ab] seed  102 -> eff 102 OK  plans=2 plan_t=2.254s wall=10.1s  
+[ab] DONE rr_526b358: success 7/8  mean plan_t 6.4s  median 2.8s
+[ab] arm=rr_c31cbdd branch=(detached) head= scene=random-pairs goal=holding seeds=103
+[ab] resuming: 8 episode(s) already banked
+[ab] seed  103 -> eff 103 OK  plans=5 plan_t=7.662s wall=19.5s  
+[ab] DONE rr_c31cbdd: success 9/9  mean plan_t 2.7s  median 2.3s
+[ab] arm=rr_526b358 branch=(detached) head= scene=random-pairs goal=holding seeds=103
+[ab] resuming: 8 episode(s) already banked
+[ab] seed  103 -> eff 103 OK  plans=4 plan_t=3.258s wall=12.0s  
+[ab] DONE rr_526b358: success 8/9  mean plan_t 6.1s  median 2.8s
+[ab] arm=rr_c31cbdd branch=(detached) head= scene=random-pairs goal=holding seeds=105
+[ab] resuming: 9 episode(s) already banked
+[ab] seed  105 -> eff 105 OK  plans=2 plan_t=3.318s wall=11.2s  
+[ab] DONE rr_c31cbdd: success 10/10  mean plan_t 2.8s  median 2.5s
+[ab] arm=rr_526b358 branch=(detached) head= scene=random-pairs goal=holding seeds=105
+[ab] resuming: 9 episode(s) already banked
+[ab] seed  105 -> eff 105 OK  plans=1 plan_t=1.159s wall=6.5s  
+[ab] DONE rr_526b358: success 9/10  mean plan_t 5.6s  median 2.8s
+[ab] arm=rr_c31cbdd branch=(detached) head= scene=random-pairs goal=holding seeds=108
+[ab] resuming: 10 episode(s) already banked
+[ab] seed  108 -> eff 108 OK  plans=4 plan_t=3.809s wall=17.2s  
+[ab] DONE rr_c31cbdd: success 11/11  mean plan_t 2.9s  median 2.5s
+[ab] arm=rr_526b358 branch=(detached) head= scene=random-pairs goal=holding seeds=108
+[ab] resuming: 10 episode(s) already banked
+[ab] seed  108 -> eff 108 OK  plans=3 plan_t=3.177s wall=13.9s  
+[ab] DONE rr_526b358: success 10/11  mean plan_t 5.4s  median 2.8s
+[ab] arm=rr_c31cbdd branch=(detached) head= scene=random-pairs goal=holding seeds=110
+[ab] resuming: 11 episode(s) already banked
+[ab] seed  110 -> eff 110 OK  plans=4 plan_t=3.415s wall=12.0s  
+[ab] DONE rr_c31cbdd: success 12/12  mean plan_t 2.9s  median 2.7s
+[ab] arm=rr_526b358 branch=(detached) head= scene=random-pairs goal=holding seeds=110
+[ab] resuming: 11 episode(s) already banked
+[ab] seed  110 -> eff 110 OK  plans=4 plan_t=2.97s wall=11.9s  
+[ab] DONE rr_526b358: success 11/12  mean plan_t 5.2s  median 3.0s
+[ab] arm=rr_c31cbdd branch=(detached) head= scene=random-pairs goal=holding seeds=113
+[ab] resuming: 12 episode(s) already banked
+[ab] seed  113 -> eff 113 OK  plans=4 plan_t=4.501s wall=16.2s  
+[ab] DONE rr_c31cbdd: success 13/13  mean plan_t 3.0s  median 2.7s
+[ab] arm=rr_526b358 branch=(detached) head= scene=random-pairs goal=holding seeds=113
+[ab] resuming: 12 episode(s) already banked
+[ab] seed  113 -> eff 113 OK  plans=3 plan_t=3.072s wall=12.5s  
+[ab] DONE rr_526b358: success 12/13  mean plan_t 5.0s  median 3.0s
+[ab] arm=rr_c31cbdd branch=(detached) head= scene=random-pairs goal=holding seeds=116
+[ab] resuming: 13 episode(s) already banked
+[ab] seed  116 -> eff 116 FAIL plans=8 plan_t=17.636s wall=30.9s  no_plan_binding_death) | held=none | unknown shadows=2 | red_object@(-0.003,-0.151)[bel 1mm] green_object@(0.001,0.171)[bel 2mm] orange_object@(-0.051,0.001)[bel 1mm] blue_object@(0.063,-0.025)[bel 1mm] cyan_object@(0.001,0.238)[NO BOXEL]
+[ab] DONE rr_c31cbdd: success 13/14  mean plan_t 4.1s  median 3.3s
+[ab] arm=rr_526b358 branch=(detached) head= scene=random-pairs goal=holding seeds=116
+[ab] resuming: 13 episode(s) already banked
+[ab] seed  116 -> eff 116 OK  plans=6 plan_t=5.29s wall=20.9s  
+[ab] DONE rr_526b358: success 13/14  mean plan_t 5.0s  median 3.1s
+[ab] arm=rr_c31cbdd branch=(detached) head= scene=random-pairs goal=holding seeds=119
+[ab] resuming: 14 episode(s) already banked
+[ab] seed  119 -> eff 119 OK  plans=4 plan_t=2.701s wall=16.9s  
+[ab] DONE rr_c31cbdd: success 14/15  mean plan_t 4.0s  median 2.7s
+[ab] arm=rr_526b358 branch=(detached) head= scene=random-pairs goal=holding seeds=119
+[ab] resuming: 14 episode(s) already banked
+[ab] seed  119 -> eff 119 OK  plans=3 plan_t=2.436s wall=19.4s  
+[ab] DONE rr_526b358: success 14/15  mean plan_t 4.8s  median 3.0s
+B3_RERUN_DONE
+--------------------- Slurm Task Epilog ------------------------
+Job ID: 4941890
+Time: Tue Oct 27 13:05:27 CET 2026
+Elapsed Time: 00:07:06
+Billing per second for TRES: billing=762,cpu=1,mem=190000M,node=1
+Show resource usage with e.g.:
+sacct -j 4941890 -o Elapsed,TotalCPU,UserCPU,SystemCPU,MaxRSS,ReqTRES%60,MaxDiskRead,MaxDiskWrite
+--------------------- Slurm Task Epilog ------------------------

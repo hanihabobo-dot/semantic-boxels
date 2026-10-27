@@ -60,6 +60,8 @@ def main():
     ap.add_argument('--aa-logs', required=True)
     ap.add_argument('--ab', nargs='*', default=[])
     ap.add_argument('--ab-logs')
+    ap.add_argument('--rerun-a', help="the re-runs' c31cbdd JSON")
+    ap.add_argument('--rerun-b', help="the re-runs' B3 JSON")
     ap.add_argument('--out')
     args = ap.parse_args()
 
@@ -128,7 +130,38 @@ def main():
         ok = (rep['ab']['outcome_within_noise'] and rep['ab']['plan_counts_within_noise']
               and rep['ab']['targets_identical'])
         print(f"within the pre-registered noise: {ok}; one re-run on both arms "
-              f"for seeds {flips}")
+              f"for seeds {sorted(set(flips) | set(plans))}")
+
+        if args.rerun_a and args.rerun_b:
+            # A difference REPRODUCES when the re-run gives each arm the
+            # same outcome (an outcome flip) or the same plan count (a
+            # plan-count difference) it had in the A/B (b3_rerun.sbatch).
+            ra, rb = load_arm([args.rerun_a]), load_arm([args.rerun_b])
+            rows, rep_flips, rep_plans = {}, [], []
+            for s in sorted(set(flips) | set(plans)):
+                if s not in ra or s not in rb:
+                    rows[s] = 'not re-run'
+                    continue
+                pair_ab = ((a1[s]['success'], a1[s]['plans_executed']),
+                           (b[s]['success'], b[s]['plans_executed']))
+                pair_rr = ((ra[s]['success'], ra[s]['plans_executed']),
+                           (rb[s]['success'], rb[s]['plans_executed']))
+                if s in flips and (pair_rr[0][0], pair_rr[1][0]) == \
+                        (pair_ab[0][0], pair_ab[1][0]):
+                    rep_flips.append(s)
+                if s in plans and (pair_rr[0][1], pair_rr[1][1]) == \
+                        (pair_ab[0][1], pair_ab[1][1]):
+                    rep_plans.append(s)
+                rows[s] = {'ab': pair_ab, 'rerun': pair_rr}
+            rep['rerun'] = {'per_seed': rows, 'reproduced_outcome_flips': rep_flips,
+                            'reproduced_plan_count_diffs': rep_plans,
+                            'pass': not rep_flips and not rep_plans}
+            for s, r in rows.items():
+                print(f"  seed {s}: A/B {r['ab'] if isinstance(r, dict) else r}"
+                      f"  re-run {r['rerun'] if isinstance(r, dict) else ''}")
+            print(f"re-runs: reproduced outcome flips {rep_flips}, reproduced "
+                  f"plan-count differences {rep_plans}; acceptance "
+                  f"{'PASSES' if (ok and rep['rerun']['pass']) else 'FAILS'}")
     if args.out:
         with open(args.out, 'w') as f:
             json.dump(rep, f, indent=1)

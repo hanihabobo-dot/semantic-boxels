@@ -4047,7 +4047,8 @@ B2  [OPEN]  HARNESS: tampura_bridge/ (fresh package; nothing imported from the
     $VO/bin/python $SB/tampura_bridge/run_bridge_on_finddice.py
     --global-seed 0 --vis 1'.  Effort 5 to 7 days.
 
-B3  [OPEN; code and tests 2026-10-27, BF#10; acceptance pending]
+B3  [OPEN; code and tests 2026-10-27, BF#10; acceptance failed on its
+    plan-count clause, user decision Q13]
     MAIN-PIPELINE PARAMETERISATION, NO BEHAVIOUR CHANGE ON OUR SCENES.
     Runs after B1 part 1 and before B1 part 2 and B2.
     (a) robot_utils gains a RobotModel (arm joints, finger joints, EE link,
@@ -4659,7 +4660,16 @@ Q11 D12: arm O in its own venv, preferably a clone of theirs plus our pinned
     dependencies, never in theirs.
 Q12 D7 (vii): if B1(i) shows their 1e-4 at-home test unreachable with the
     die payload, the at-home conjunct fails by construction; the test stays
-    strict and the user decides before B7.
+    strict and the user decides before B7.  (Does not arise: BF#11 (i).)
+Q13 B3's acceptance (BF#10): no outcome flip reproduced, but three
+    plan-count differences reproduced exactly (seeds 100, 105, 119), so the
+    rule as written fails B3; diagnostic runs show c31cbdd itself producing
+    each of those plan counts.  Proposed: accept B3 on this evidence, and
+    pre-register for the acceptances still to come (B5, M6, M7) a plan-count
+    test the reference can pass, for example the per-seed plan-count
+    distribution over three runs per arm compared seed by seed, fixed before
+    those runs.  Alternative: keep the per-seed rule and investigate further
+    before B2 lands.
 
 --------------------------------------------------------------------------------
 P4.11 CRITIQUE LOG, ROUND 1 (draft 1, 2026-10-25; four adversarial critics,
@@ -5584,7 +5594,7 @@ BF#9 [DONE]  B1(g): TAMPURA AS SHIPPED ON THE CLUSTER, SEEDS 0-19  (B1,
   the 20 consoles, the job log with other users' prolog rows stripped, and
   b1g_report.json from tools/_b1g_report.py).
 
-BF#10 [OPEN, acceptance pending]  B3: MAIN-PIPELINE PARAMETERISATION, EVERY
+BF#10 [OPEN, USER DECISION (Q13)]  B3: MAIN-PIPELINE PARAMETERISATION, EVERY
       NEW BEHAVIOUR DEFAULT OFF  (B3, 2026-10-27)
   WHAT: B3 (a) to (f) in code, with its tests.
   (a) robot_utils.RobotModel (arm joints, finger joints, EE link, gripper
@@ -5711,8 +5721,47 @@ BF#10 [OPEN, acceptance pending]  B3: MAIN-PIPELINE PARAMETERISATION, EVERY
   CLAIM EFFECT: none on the thesis scenes (every new behaviour is off).
   HONESTY CLASS: refactor.
   DECISION 2026-10-27 (executor): as above.
-  RESULT: acceptance pending: the A/A of c31cbdd (job 4940013) and the A/B
-  of this commit against it, both on cn-110.
+  RESULT: the acceptance, on cn-110 (Xeon Platinum 8160) in armO-venvA,
+  PYTHONHASHSEED 0, our holding scene, seeds 0-19 and 100-119, the A/A's
+  harness file (identical bytes), every arm from an immutable snapshot:
+  A/A of c31cbdd (BF#7 test 5): 31/40 and 30/40; 3 outcome flips (108,
+  116, 119), plan counts differ in 16 of the 35 seeds that ran, the Phase-4
+  target identical in all 35.
+  A/B, job 4941861, snapshot sb_526b358 (this commit): B3 31/40 (15/20 and
+  16/20).  Against c31cbdd's first repetition: 2 outcome flips (108 fail to
+  success, 119 success to fail; both seeds also flipped inside the A/A),
+  plan counts differ in 15 seeds (A/A 16), the Phase-4 target identical in
+  all 35.  Within the A/A's counts on both clauses.
+  The pre-registered re-runs, job 4941890: ONE re-run on both arms,
+  interleaved per seed, for each of the 15 seeds with any difference.  What
+  "reproduces" means was written into tools/cluster/b3_rerun.sbatch before
+  any re-run ran: each arm gets again the outcome (for a flip) or the plan
+  count (for a plan-count difference) it had in the A/B.  No outcome flip
+  reproduced: 108 and 119 succeed on both arms.  Three plan-count
+  differences reproduced: seed 100 (c31cbdd 2 plans, B3 3), 105 (2, 1) and
+  119 (4, 3).  One new outcome difference appeared in the re-runs (seed 10:
+  c31cbdd success, B3 fail; both succeeded in the A/B).  By the rule as
+  written, the acceptance FAILS on its plan-count clause.
+  Diagnostic runs OUTSIDE the protocol (jobs 4941930, 4941947, 4941948;
+  tools/cluster/b3_diag.sbatch; two more runs each of c31cbdd, of the B0
+  snapshot sb_3850dd1 and of B3, interleaved): c31cbdd itself produces the
+  values B3 reproduced.  Seed 100: c31cbdd 3 and 3 plans, relocating the
+  red cube first exactly as B3 did, after 2, 2 and 2 earlier (B0 2 and 3,
+  B3 3 and 3).  Seed 105: c31cbdd 2 and 2, B3 2 and 1; c31cbdd gave 1 in
+  the A/A's second repetition.  Seed 119: c31cbdd fails with 3 plans in
+  both, which is B3's A/B result; B3 succeeds with 3 and 4.  The plan that
+  sets the count differs between runs of each version, so per seed the
+  plan count is a draw from a distribution that c31cbdd and B3 share as far
+  as these runs show.
+  READING: the outcome clause passes.  The plan-count clause, applied per
+  seed with exact reproduction, cannot separate a change from noise when
+  identical code differs in 16 of 35 seeds; it fails B3 on values the
+  reference code produces itself.  The executor does not reinterpret a
+  pre-registered rule after its result: Q13 asks the user.
+  Evidence: archive/tampura_bridge_plan_2026-10-25/bf/BF10_b3/ (the A/B and
+  re-run JSONs, ab_report.json and acceptance_report.json from
+  tools/b3_acceptance_report.py, the three diagnostic jobs' JSONs in diag/,
+  the five job logs; their prologs list only our jobs).
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS

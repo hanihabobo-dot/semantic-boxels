@@ -1,0 +1,46 @@
+--------------------- Slurm Task Prolog ------------------------
+Job ID: 4941930
+Job name: p4-b3-diag
+Host: cn-110
+Date: Tue Oct 27 13:09:22 CET 2026
+User: hani.alassiri.alhabboub
+Slurm account: rleap
+Slurm partition: rleap_cpu
+Work dir: 
+------------------
+Node usage:
+JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
+4941930 rleap_cpu p4-b3-di hani.ala  R       0:00      1 cn-110
+------------------
+Show launch script with:
+sacct -B -j 
+------------------
+--------------------- Slurm Task Prolog ------------------------
+host cn-110  job 4941930  2026-10-27T13:09:22+01:00  seed 100  snapshots sb_c31cbdd sb_3850dd1 sb_526b358
+[ab] arm=diag_100_c31cbdd_r1 branch=(detached) head= scene=random-pairs goal=holding seeds=100
+[ab] seed  100 -> eff 100 OK  plans=3 plan_t=1.714s wall=10.2s  
+[ab] DONE diag_100_c31cbdd_r1: success 1/1  mean plan_t 1.7s  median 1.7s
+[ab] arm=diag_100_3850dd1_r1 branch=(detached) head= scene=random-pairs goal=holding seeds=100
+[ab] seed  100 -> eff 100 OK  plans=2 plan_t=1.297s wall=7.6s  
+[ab] DONE diag_100_3850dd1_r1: success 1/1  mean plan_t 1.3s  median 1.3s
+[ab] arm=diag_100_526b358_r1 branch=(detached) head= scene=random-pairs goal=holding seeds=100
+[ab] seed  100 -> eff 100 OK  plans=3 plan_t=1.778s wall=10.5s  
+[ab] DONE diag_100_526b358_r1: success 1/1  mean plan_t 1.8s  median 1.8s
+[ab] arm=diag_100_c31cbdd_r2 branch=(detached) head= scene=random-pairs goal=holding seeds=100
+[ab] seed  100 -> eff 100 OK  plans=3 plan_t=1.958s wall=10.6s  
+[ab] DONE diag_100_c31cbdd_r2: success 1/1  mean plan_t 2.0s  median 2.0s
+[ab] arm=diag_100_3850dd1_r2 branch=(detached) head= scene=random-pairs goal=holding seeds=100
+[ab] seed  100 -> eff 100 OK  plans=3 plan_t=1.96s wall=10.2s  
+[ab] DONE diag_100_3850dd1_r2: success 1/1  mean plan_t 2.0s  median 2.0s
+[ab] arm=diag_100_526b358_r2 branch=(detached) head= scene=random-pairs goal=holding seeds=100
+[ab] seed  100 -> eff 100 OK  plans=3 plan_t=1.891s wall=10.6s  
+[ab] DONE diag_100_526b358_r2: success 1/1  mean plan_t 1.9s  median 1.9s
+B3_DIAG_DONE
+--------------------- Slurm Task Epilog ------------------------
+Job ID: 4941930
+Time: Tue Oct 27 13:10:23 CET 2026
+Elapsed Time: 00:01:01
+Billing per second for TRES: billing=762,cpu=1,mem=190000M,node=1
+Show resource usage with e.g.:
+sacct -j 4941930 -o Elapsed,TotalCPU,UserCPU,SystemCPU,MaxRSS,ReqTRES%60,MaxDiskRead,MaxDiskWrite
+--------------------- Slurm Task Epilog ------------------------

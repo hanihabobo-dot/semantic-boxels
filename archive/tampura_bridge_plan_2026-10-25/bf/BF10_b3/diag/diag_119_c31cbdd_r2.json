@@ -1,0 +1,28 @@
+{
+ "arm": "diag_119_c31cbdd_r2",
+ "branch": "(detached)",
+ "head": "",
+ "scene": "random-pairs",
+ "goal": "holding",
+ "pipeline_args": "",
+ "results": [
+  {
+   "seed": 119,
+   "effective_seed": 119,
+   "rerolls": 0,
+   "success": false,
+   "timed_out": false,
+   "exit_code": 1,
+   "plans_executed": 3,
+   "planning_time_s": 3.368,
+   "senses_seen": 3,
+   "wall_s": 11.5,
+   "fail_reason": "planner_failed) | held=none | unknown shadows=2 | red_object@(0.122,0.151)[bel 3mm] green_object@(0.025,-0.052)[bel 1mm] orange_object@(-0.003,-0.148)[bel 1mm] blue_object@(0.131,0.209)[NO BOXEL] cyan_object@(0.021,0.002)[NO BOXEL] purple_object@(0.198,0.049)[bel 1mm]",
+   "integrity_events": 0,
+   "bystander_events": 0,
+   "transit_losses": 0,
+   "direct_path_certified": 0,
+   "direct_path_rejected": 0
+  }
+ ]
+}
