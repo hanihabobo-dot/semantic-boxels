@@ -31,6 +31,7 @@ import hashlib
 import inspect
 import os
 import sys
+import weakref
 from collections import Counter
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -290,6 +291,7 @@ def _make_ray(name, orig):
     def hook(*args, **kwargs):
         if _executing(kwargs) and not _read_exempt():
             _violation('G8', name, 'ray cast on the executing client')
+        _info[f'{name}_client_{_client(kwargs)}'] += 1
         return orig(*args, **kwargs)
     return hook
 
@@ -428,6 +430,66 @@ def _make_solve(orig):
     return solve
 
 
+def _make_observer(name, orig):
+    @functools.wraps(orig)
+    def observer(*args, **kwargs):
+        with write_only(name), capture(name):
+            return orig(*args, **kwargs)
+    return observer
+
+
+_registry_ref = None
+_bodies_at_install = None
+_TWIN_TOL = 1e-9
+
+
+def _make_sync_check(orig):
+    @functools.wraps(orig)
+    def sync_to_plan_client(self, held_body_id=None, registry=None):
+        out = orig(self, held_body_id=held_body_id, registry=registry)
+        if registry is not None and self.client_id == _cfg.executing_client:
+            _check_twin(self, held_body_id, registry)
+        return out
+    return sync_to_plan_client
+
+
+def _check_twin(env, held_body_id, registry):
+    """G8(c) on the plan twin (a plan-client read)."""
+    get = _pybullet_originals.get('getBasePositionAndOrientation',
+                                  pybullet.getBasePositionAndOrientation)
+    park = env._PLAN_CLIENT_PARK
+    for name, info in env.objects.items():
+        if name in ('plane', 'table', 'robot') or info.is_tray:
+            continue
+        pid = env._gui_to_plan.get(info.object_id)
+        if pid is None or info.object_id == held_body_id:
+            continue
+        pos = get(pid, physicsClientId=env.plan_client_id)[0]
+        bd = registry.get_boxel(name)
+        want = bd.center if bd is not None else park
+        _info['G8c_bodies_checked'] += 1
+        if max(abs(float(a) - float(b)) for a, b in zip(pos, want)) > _TWIN_TOL:
+            _violation('G8', 'sync_to_plan_client',
+                       f'{name}: plan twin at {list(pos)}, expected '
+                       f'{"its registry centre" if bd is not None else "the park pose"}')
+    _info['G8c_syncs'] += 1
+
+
+def _make_registry_init(orig):
+    @functools.wraps(orig)
+    def __init__(self, *args, **kwargs):
+        global _registry_ref
+        orig(self, *args, **kwargs)
+        _registry_ref = weakref.ref(self)
+    return __init__
+
+
+def latest_registry():
+    """The BoxelRegistry most recently created while the hooks were
+    installed (main()'s), or None."""
+    return _registry_ref() if _registry_ref is not None else None
+
+
 def _rebind(module_name, attr, wrapper):
     """Replace module_name.attr and every binding of the same object in a
     loaded module of this repository."""
@@ -502,6 +564,38 @@ def install(cfg: GateConfig) -> None:
     _rebind('robot_utils', 'solve_ik', _make_solve_ik(robot_utils.solve_ik))
     _rebind('robot_utils', 'move_robot_smooth',
             _make_move_smooth(robot_utils.move_robot_smooth))
+    # BF#2 (g): world_eye and telemetry are pure observers that read the
+    # simulator (every body, the hidden die included) and render their own
+    # images; they run as the declared write-only set and captures.
+    import telemetry
+    import world_eye
+    for mod, names in ((world_eye, ('enable', 'snapshot', 'disable')),
+                       (telemetry, ('enable', 'tick', 'phase', 'note',
+                                    'disable', 'attach_robot',
+                                    'register_bodies'))):
+        for name in names:
+            if hasattr(mod, name):
+                _rebind(mod.__name__, name,
+                        _make_observer(f'{mod.__name__}.{name}',
+                                       getattr(mod, name)))
+    # G8(c): after every belief-posed sync, each body with an OBJECT boxel
+    # sits at its registry centre in the plan twin and every boxel-less
+    # body at the park pose.
+    import boxel_env
+    _patched_attrs.append((boxel_env.BoxelTestEnv, 'sync_to_plan_client',
+                           boxel_env.BoxelTestEnv.sync_to_plan_client))
+    boxel_env.BoxelTestEnv.sync_to_plan_client = _make_sync_check(
+        boxel_env.BoxelTestEnv.sync_to_plan_client)
+    global _bodies_at_install
+    _bodies_at_install = pybullet.getNumBodies(
+        physicsClientId=cfg.executing_client)
+    # G8(b) asks whether a task body has an OBJECT boxel: the registry
+    # main() builds is recorded here as it is created.
+    import boxel_data
+    _patched_attrs.append((boxel_data.BoxelRegistry, '__init__',
+                           boxel_data.BoxelRegistry.__init__))
+    boxel_data.BoxelRegistry.__init__ = _make_registry_init(
+        boxel_data.BoxelRegistry.__init__)
     for name in ('is_config_collision_free', 'is_path_collision_free'):
         _rebind('robot_utils', name,
                 _make_collision_check(name, getattr(robot_utils, name)))
@@ -519,8 +613,13 @@ def install(cfg: GateConfig) -> None:
             _expected_sha[key] = _sha(f.read())
 
 
+def installed() -> bool:
+    return _cfg is not None
+
+
 def uninstall() -> None:
-    global _cfg
+    global _cfg, _registry_ref
+    _registry_ref = None
     for name, original in _pybullet_originals.items():
         setattr(pybullet, name, original)
     _pybullet_originals.clear()
@@ -606,6 +705,16 @@ def gate_record() -> dict:
     the last dispatched action are added to G6 here."""
     if _steps_since_dispatch:
         _counts['G6'] += _steps_since_dispatch
+    if _cfg is not None and _bodies_at_install is not None:
+        # B3(b) / B2: the executing world neither gained nor lost a body.
+        now = pybullet.getNumBodies(physicsClientId=_cfg.executing_client)
+        _info['executing_bodies_at_install'] = _bodies_at_install
+        _info['executing_bodies_now'] = now
+        if now != _bodies_at_install:
+            _counts['G14'] += 1
+            run_logger.ledger_event('gate_violation', gate='G14',
+                                    fn='getNumBodies',
+                                    detail=f'{_bodies_at_install} -> {now}')
     rec = {'counts': dict(_counts), 'info': dict(_info),
            'steps': dict(_steps),
            'steps_after_last_dispatch': _steps_since_dispatch,

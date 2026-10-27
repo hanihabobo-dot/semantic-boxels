@@ -34,7 +34,7 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ALLOWLIST = os.path.join(REPO, 'tools', 'bridge_gates_allowlist.txt')
-TW = '/root/tampura-work'
+TW = os.environ.get('TAMPURA_WORK', '/root/tampura-work')   # cluster: $W/tampura-work
 PINNED_COMMITS = {'tampura': 'cdddf14', 'tampura_environments': '4167c35'}
 # The one declared change to their tree (BF#3): tampura_environments at
 # 4167c35 does not import as shipped (its package __init__ star-imports the

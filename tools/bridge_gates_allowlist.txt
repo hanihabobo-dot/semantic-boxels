@@ -84,3 +84,9 @@ G1 | visualization.py | BoxelVisualizer.remove_boxel_viz | 327 | unreachable on 
 G1 | visualization.py | BoxelVisualizer.clear_all | 344 | unreachable on the bridge path | overlay body; every bridge run passes draw_boxel_overlays=False | p.removeBody(body_id)
 G2 | world_eye.py | WorldEye._objects | 173 | write-only | world eye snapshot, write-only; bridge runs wrap it in gate_hooks.write_only | pos, quat = p.getBasePositionAndOrientation(bid)
 G2 | world_eye.py | WorldEye._objects | 174 | write-only | world eye snapshot, write-only; bridge runs wrap it in gate_hooks.write_only | amin, amax = p.getAABB(bid)
+G1 | tampura_bridge/policy.py | d9_setup | 55 | D9 set-up | D9 (1): gravity on the executing client before the first step, phase setup (BF#12) | p.setGravity(0, 0, task_spec.GRAVITY_Z, physicsClientId=c)
+G1 | tampura_bridge/policy.py | d9_setup | 56 | D9 set-up | D9 (2): our timestep on the executing client, phase setup (BF#12) | p.setTimeStep(task_spec.TIMESTEP, physicsClientId=c)
+G1 | tampura_bridge/policy.py | d9_setup | 58 | D9 set-up | D9 (3): each task body's class mass, inertia and friction, phase setup (BF#12) | p.changeDynamics(body, -1, mass=task_spec.CLASS_MASS_KG[cat],
+G1 | tampura_bridge/policy.py | d9_setup | 63 | D9 set-up | D9 (4): our pad friction on the robot we drive, phase setup (BF#12) | p.changeDynamics(world.robot.body, fj,
+G1 | tampura_bridge/policy.py | d9_setup | 66 | D9 set-up | D9 (4): our finger opening, phase setup (BF#12) | p.resetJointState(world.robot.body, fj, task_spec.FINGER_OPEN,
+G2 | tampura_bridge/policy.py | _poses | 74 | write-only | the settle disclosure (D9): task-body poses before D9 and after the settle, read inside gate_hooks.write_only, logged only (BF#12) | return {b: p.getBasePositionAndOrientation(b, physicsClientId=c)

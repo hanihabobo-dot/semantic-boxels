@@ -4006,7 +4006,8 @@ B1  [DONE 2026-10-27; part 1 (a) to (d) BF#4; (g) on the cluster, BF#9;
     flagged).  GUI twin for (g): wsl -d Ubuntu -e bash -lc 'bash
     /root/tampura-work/tampura_run_gui.sh 0 1'.  Effort 2 to 3 days + 85 min.
 
-B2  [OPEN]  HARNESS: tampura_bridge/ (fresh package; nothing imported from the
+B2  [OPEN; harness 2026-10-27, BF#12; deliverable on the cluster pending]
+    HARNESS: tampura_bridge/ (fresh package; nothing imported from the
     archive).  run_bridge_on_finddice.py (seeds random and numpy with
     --global-seed, builds FindDiceEnv(config), b0, store = env.initialize(),
     asserts the loaded scene file against the pinned map, registers the
@@ -5854,6 +5855,75 @@ BF#11 [DONE]  B1 PART 2 (e), (f), (h), (i): THE EYE, W, THE REACH, M1 AND THE
   B6's to freeze from these numbers.
   RESULT: archive/tampura_bridge_plan_2026-10-25/bf/BF11_b1p2/ (one JSON and
   one console per item; probe_i_first.* is the first run of (i)).
+
+BF#12 [OPEN, deliverable pending]  B2: THE HARNESS  (B2, 2026-10-27)
+  WHAT: tampura_bridge/ gains, nothing imported from the archive:
+  task_spec.py (the declared task knowledge: target category, class sizes,
+  hollow cavities, masses, inertia and frictions, the D4 eye, W, the D9
+  values; HOME_HOLD_STEP_CAP 52; W and the cap provisional until B6);
+  env_adapter.py (TampuraWorldEnv, B3(b)'s adopt path over their executing
+  client: bodies from their world.objects and world.categories, symbols
+  named after the category; the plan twin built in the plan client alone
+  with their own code, create_default_env for the table and its frame,
+  their URDF for the Panda, create_ycb per task object; the eye and W from
+  task_spec; the shadow caster on the plan twin; the oracle raises,
+  update_object_positions is a counted no-op, reset() raises; nothing that
+  touches perception, boxel generation or the sync is overridden);
+  scoring.py (D3: the terminal SceneObservation from contact and joint
+  readback only); policy.py (BoxelBridgePolicy and the boxel_episode
+  execute_fn: run logger and ledger, the episode row, the gate hooks, D9
+  (1) to (4), the env adapter, main() with oracle_phases=False, the
+  after_settle check, draw_boxel_overlays=False, gui_hold_s=0, D7 on with
+  their DEFAULT_ARM_POS as q_home, telemetry off; then the observation and
+  the gate record); run_bridge_on_finddice.py (arm O's driver,
+  run_planner.py's order; asserts the loaded scene against G19's pinned
+  map before registering the schema); timed_policy.py and
+  tools/run_tampura_timed.py (arm T: TAMPURA's policy timed around
+  get_action, the driver run_planner.py copied line for line plus one
+  import; the T-driver check passes).  gate_hooks.py gains: world_eye and
+  telemetry run as declared write-only observers and captures (BF#2 (g));
+  the registry main() builds is tracked for G8(b)'s "has an OBJECT boxel";
+  G8(c) is checked after every belief-posed sync (each registered body at
+  its registry centre in the plan twin, each boxel-less body at the park
+  pose); the executing client's body count at install and at the gate
+  record must match (counted as G14); ray calls are counted per client.
+  bridge_gates.py reads their tree from $TAMPURA_WORK when set.
+  DECISIONS: (1) Their world has no ground plane; main() names "plane" and
+  "table" as supports, so both names map to their table (one body, one
+  twin); their table frame (posts and beams, which TAMPURA does not track)
+  is built in the plan twin by their create_default_env and never synced,
+  static scenery known at design time.  (2) The loaded scene file is read
+  from their own log line ("Loading scene from ..."), never from the
+  problems directory.  (3) G19's pinned map is read from tools/bridge_gates.py
+  so that it lives in one place.  (4) D9 (3)'s inertia: BF#4's rule let a
+  zero-volume VHACD piece through and gave NaN for the b and e cups;
+  PyBullet accepts a NaN inertia without complaint, so BF#4 (c)'s settle and
+  BF#11's layout disclosures ran with NaN inertia on those cups (their
+  reported settles show no NaN pose; they are re-measured with the
+  corrected values before B6 freezes anything).  The rule now also skips
+  pieces with zero hull volume or a non-finite centre; a, c, d and the die
+  are unchanged; task_spec declares the six diagonals.  (5) Development
+  smokes run locally in the laptop's arm T venv (no install, nothing
+  written into it; G13 green before and after); every recorded bridge run
+  is arm O's, in armO-venvA on the cluster (D12).
+  EVIDENCE (local smoke, seed 0, stop_before_planning, 2026-10-27): their
+  scene 1747173591 as pinned; D9 then main()'s 50 steps: the d cup drops 11
+  mm, the die 37.7 mm with 3.9 mm sideways and 21.2 deg tilt (BF#4 (c)'s
+  numbers), still absent from the eye; the first render gives 8 boxels, one
+  lateral shadow (of the d cup), the d cup's OBJECT boxel 4 mm from its
+  centre, no boxel for the die; G8(c) checked at both syncs (4 bodies), the
+  executing body count 12 before and after, every runtime gate count 0,
+  50 steps inside main(), 0 after it; G19 and G21 pass in the ledger;
+  their rewards stay 0.0 (nothing is planned).  38 tests pass
+  (hooks, ledger reader, B3); bridge_gates.py all green (G1 46 and G2 36
+  hits, all reviewed: the D9 writes are "D9 set-up" entries and the settle
+  read a "write-only" entry).
+  BEFORE / AFTER: no harness / the files above.
+  CLAIM EFFECT: none.
+  HONESTY CLASS: translation.
+  DECISION 2026-10-27 (executor): as above.
+  RESULT: pending: B2's deliverable (seeds 0 and 1 in armO-venvA on
+  cn-110, stop_before_planning) and review gate 1.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
