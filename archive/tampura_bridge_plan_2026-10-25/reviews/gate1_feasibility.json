@@ -1,0 +1,114 @@
+{
+  "lens": "feasibility",
+  "reviewed": ["526b358", "852b319"],
+  "context_read": ["8f122de (BF#10 acceptance)", "96239d9 (BF#11)", "8242937 (BF#12 deliverable)", "18be9d2 (Q13 answered, BF#13; committed while this review ran)"],
+  "verdict": "revise",
+  "summary": "B2 and B3 run as far as they have been exercised (setup, settle, first render, boxelization, gates green with stop_before_planning). What will break B7 and B8 lies beyond that point and has no owner in the plan yet: the die does not survive the move home (BF#11), no planned episode has run with the gate hooks installed, the G6 scoring controls are placeholders, PDDLStream's persisted stream statistics couple episodes, the D10 episode budget is not implemented, and B4's acceptance rule is undefined after Q13. On the upper half of each effort range the calendar now has about 11 to 13 days of slack before the latest B8 start (2026-11-24), enough for these items only if they start now, in parallel with B4 to B6, rather than surfacing in B7.",
+  "findings": [
+    {
+      "severity": "blocker",
+      "title": "The die does not survive the move home in the probe, and no package, rule or calendar slot owns the remedy",
+      "code_location": "test_full_pipeline.py:1777-1835 and 1338-1348 (final move to q_home, loop end); robot_utils.py:802-948 and 1043-1099 (move_robot_smooth, hold_at_config, close_gripper_until_contact); tools/_probe_b1p2_tampura.py:443-469",
+      "problem": "Every arm-O success needs the die carried from the table to q_home (D7 goal), but BF#11's probe lost a die-class body (17.6 mm, 5.2 g) on move_robot_smooth to DEFAULT_ARM_POS in 91 of 96 trials after a verified two-pad hold. The plan records this only as a FINDING that B7 'meets on every episode it reaches'. Once B7 has run on the released layouts, any remedy is chosen after seeing outcomes (R8, H4), and R7 forbids bridge-side help, so the decision path has to be pre-registered now from scene-independent probes. A drop on the final move is not detected inside the loop: there is no grip check after a move made while holding, _loop_done ends on held_body_id and at_home_ok, and Phase 6 files physics_mismatch, so one slip ends the episode. Cup transports (13 to 21 g; every episode moves at least the hiding cup) were never probed. HOME_HOLD_STEP_CAP 52 rests on 5 payload trials. If nothing changes, B8 measures the gripper in PyBullet, the situation D11 (iii) calls 'not runnable as specified', but without D11's pre-registered user decision.",
+      "evidence": "archive/.../bf/BF11_b1p2/probe_i.json: all 96 die rows 'settled' with both pads at 4.53 to 14.4 N; 91 not between the pads 'after_move', 86 of them at z 0.006 to 0.016 m (on the table) when the move ended; the 5 still held read 0.11, 0.7, 18.5, 22.9 and 30.4 N, and 0.11 N is below scoring.SQUEEZE_MIN_N 0.5, so 4 of 96 would score. Our friction grasp has been validated only on 0.1 to 0.5 kg bodies (boxel_env.py:104, 195-241); the die is 5.2 g and the cups 13 to 21 g (task_spec.py:42-43), against 0.1 kg finger links. Both Panda URDFs (pybullet_data and theirs) carry identical finger contact blocks (friction_anchor, stiffness 30000, damping 1000, spinning 0.1) and identical finger geometry (joint at 0.0584, mesh to 0.0538, grasp target at 0.105), so the robot model is not the difference; payload mass and a long transport while holding the target (never executed in the thesis runs, BF#10) are the candidates. The probe held the box centred on panda_grasptarget (about 16 mm of pad overlap); a pick from the table at B6's floor overlaps about 5 to 12 mm. BF#10 test (4) also lost its held cube on a cargo move. Where a dropped die lands (in view, in reach) was not recorded.",
+      "suggested_fix": "Before B4, add a pre-registered work item with its own BF# and a user question in the style of Q9/Q12: (1) a scene-independent empty-table probe extending B1(i), one factor at a time: payload class (die, each cup, and a 100 g control), squeeze force and target, a transport speed scale, solver iterations or substeps, and the pick from the table at B6's floor instead of a box created at the EE; log where a lost body lands. (2) A rule fixed before the probe runs, for example: adopt the first remedy, in a stated order, that keeps a die-class and a cup-class body between the pads at >= 0.5 N in >= 95 % of the 96 trials. (3) The remedy lands as a default-off main-pipeline parameter with the BF#13 acceptance, or as a disclosed D9 amendment of engine parameters. (4) Re-run B1(i) with the payload actually held to re-derive HOME_HOLD_STEP_CAP. (5) If nothing qualifies, the user decides before B7 (run as specified and attribute failures to the gripper, or B9). Changing class masses or frictions stays forbidden (G9), and no retry is added (R7)."
+    },
+    {
+      "severity": "major",
+      "title": "No planned episode has ever run with the runtime gate hooks installed",
+      "code_location": "tampura_bridge/policy.py:153-161; tampura_bridge/tests/test_b3_parameterisation.py:150-165 and 256-314",
+      "problem": "B7's GO criterion needs zero gate trips in four episodes, yet G3's motor hook inside dispatches, G14's net-zero check on solve_ik on the executing robot, G8(b) on the pick, release and execution-collision reads, G6's post-dispatch step count, G10 and G11 at real plan() calls (mission and disposal) and G20 on sense and integrity renders have only run in unit tests on synthetic worlds and in B2's stop_before_planning episodes. The only full adopted episode (B3 test 4) ran without install(). A false positive found in B7 costs a hook or main-pipeline fix plus re-runs inside the 4 days between B7 and the latest B8 start.",
+      "evidence": "gate_hooks.install is called only at policy.py:153 and in test_gate_hooks.py:41 (synthetic world). BF12_b2 seed0 and seed1 gate_record: solve_calls 0, steps only main_outside_dispatch 50, no dispatched step. test_b3_parameterisation.py:156 calls tfp.main without install. Static reading found no definite false positive (tactile reads use bodyA = robot, held bodies keep their OBJECT boxel, solve_ik restores the arm positions exactly, RobotConfig.__repr__ gives 'q_home' so G10's goal pin matches), which is what a hooked run should confirm.",
+      "suggested_fix": "Before B4, wrap B3 test (4) (our adopted scene, goal_at_home, held cargo, a corrective move) in gate_hooks.install with the bridge's GateConfig shape, assert gate_record()['counts'] == {} and the ledger reader green, and keep it as a regression test for B4 to B6. It uses our scene, so nothing is fitted to their layouts."
+    },
+    {
+      "severity": "major",
+      "title": "The G6 scoring controls are still placeholders although B2 is marked done",
+      "code_location": "tampura_bridge/tests/test_g6_controls.py:19-23; tampura_bridge/scoring.py:47-69",
+      "problem": "_harness() still raises NotImplementedError('G6 control harness: written in B2'). D3's chain from a physical die hold to their reward (held_body, the store-symbol lookup, store.add_typed, their Belief.update and abstract, get_reward 1.0) has never produced a 1.0. A defect there would score every successful arm-O episode 0.0, and B7's GO requires these controls to pass.",
+      "evidence": "test_g6_controls.py:19-23; BF#12 lists 38 passing tests (hooks, ledger reader, B3) and no G6 control; P4.1 G6 says the positive controls run first and must pass. Their env.py:271-321 (update copies grasp and grasp_body only when observation.grasp is not None; abstract emits holding(grasp_body) and at-home by np.allclose at 1e-4) agrees with D3 on reading, but nothing has executed it.",
+      "suggested_fix": "Write the harness now: their FindDiceEnv on seed 0 in armO-venvA, a two-pad hold of the die body at DEFAULT_ARM_POS through allowlisted test-control set-up, scoring.build_observation, their update and get_reward; run the seven controls before B4. They need no planning."
+    },
+    {
+      "severity": "major",
+      "title": "PDDLStream's persisted stream statistics couple every arm-O episode to the episodes before it",
+      "code_location": "pddlstream_lib/pddlstream/language/statistics.py:11-14, 53-75; pddlstream/algorithms/focused.py:136, 191-193, 244; tampura_bridge/run_bridge_on_finddice.py:7-11; tools/_eval_ab.py:53",
+      "problem": "LOAD_STATISTICS and SAVE_STATISTICS are True: every solve() loads statistics/py3/boxel-streams.pkl relative to the cwd, feeds it into p_success and overhead (no stream_info is passed, so the loaded totals are used), reorders stream plans with them (reorder=True) and writes the merged history back. The bridge runs from their tampura_environments directory, so all arm-O episodes (smokes, B7, both B8 repetitions) share one growing file outside the immutable snapshot: an episode's planning depends on the run order, repetition 2 does not re-run repetition 1's system, and a kill at the 900 s cap during the write leaves a truncated pickle that read_pickle (no try/except) turns into an exception in every later solve. On the laptop that directory already holds a June 8 file from the discarded v1 bridge era. The acceptance harness has the same coupling per snapshot directory, so reference and candidate arms carry different histories.",
+      "evidence": "statistics.py:11 LOAD_STATISTICS = True, :12 SAVE_STATISTICS = True, :14 DATA_DIR = 'statistics/py{:d}/', :60 read_pickle without try/except, :204-207 load_statistics sets the initial totals; focused.py:136 load, :193 reorder_stream_plan, :244 write. /root/tampura-work/tampura_environments/statistics/py3/boxel-streams.pkl (1203 bytes, 2026-06-08); this repo's statistics/py3/boxel-streams.pkl (1.4 MB, written 2026-10-27 12:33). _eval_ab.py:53 runs each episode with cwd=ROOT (the snapshot). P4.6 and G13 name temp/ but not statistics/, and no BF# mentions it. That this history explains part of the A/A plan-count noise is a suspicion, not measured.",
+      "suggested_fix": "Before B7 and before the next acceptance run, pre-register one handling for the bridge and the acceptance harness alike in a BF#: a fresh statistics directory per episode (empty at start, archived after) or LOAD and SAVE off, chosen by the user, and state in the paper that the thesis runs used an accumulated file. At minimum remove the stale untracked file from their tree before any smoke and record the file's hash per episode in campaign.json."
+    },
+    {
+      "severity": "major",
+      "title": "D10's episode budget is not implemented in the harness",
+      "code_location": "tampura_bridge/policy.py:48, 170-172; tampura_bridge/run_bridge_on_finddice.py:66; test_full_pipeline.py:1129-1134, 1464-1476, 1528-1535",
+      "problem": "D10 bounds --max-plan-time by the remaining episode budget, but the harness passes a constant 900 s to every plan() call, main()'s loop has no deadline (it relies on an external kill), one iteration can make two plan() calls (mission, then disposal), and tools/_bridge_campaign.py, the only planned owner of the 900 s cap, does not exist. A killed episode writes no gate_record, no bridge_episode.json and no RolloutHistory, so its gates and its exit go unrecorded; B7's GO ('every episode reaches a logged exit reason with no harness exception') fails on any episode that reaches the cap, and B7's headless runs have no cap at all until a driver exists.",
+      "evidence": "As located; tools/_bridge_campaign.py is absent; pddlstream_planner.py:1176-1177 records a single plan() reaching a 900 s cap in a tray smoke.",
+      "suggested_fix": "Give main() an episode-deadline keyword (default None, today's behaviour; BF#13 acceptance) that passes min(max_plan_time, remaining budget) to each plan() call, so a slow episode ends through the existing planner_failed exit with its ledger and gate record; keep the external kill as a backstop for non-planning stalls; write the cap-owning driver before B7."
+    },
+    {
+      "severity": "major",
+      "title": "B4's acceptance rule is undefined after Q13",
+      "code_location": "PAPER_AUDIT.txt:4143 and 4162 (P4.4 B3 and B4); BF#13 in commit 18be9d2",
+      "problem": "BF#13 replaces the per-seed plan-count clause only for B5, M6 and M7. B4 (the three-parameter sense in handle_sense_action, the q_clear init facts) and any main-pipeline remedy for the first or fifth finding still read 'B3 acceptance', whose per-seed clause fails a change that does nothing with probability about 0.96 on the measured rates. As written, B4 either fails by construction or needs a second reinterpretation of a pre-registered rule.",
+      "evidence": "BF#10 re-runs: 3 of 15 differing seeds reproduced exactly between arms that the diagnostics show share one distribution; with about 15 differing seeds and a reproduction rate near 0.2, P(no reproduction) is about 0.8^15 = 0.035. BF#13: 'the acceptances still to come (B5, M6, M7)'. B4: 'the two-parameter form is unchanged (B3 acceptance)'. BF#11: 'any remedy is a main-pipeline change with the B3 acceptance'. tools/acceptance_plan_counts.py implements the permutation test correctly (mean shift per seed, within-seed 3:3 splits, 20000 draws); it is passable at alpha 0.05 and costs about 240 holding-scene episodes per acceptance, roughly an hour on cn-110 at the A/B's 6 min per 40 episodes.",
+      "suggested_fix": "Before B4's runs, extend BF#13 by one line to B4 and to every later main-pipeline change (grasp or transport remedy, episode deadline, the P4.8 parked-fragment candidate), naming the reference commit per change."
+    },
+    {
+      "severity": "major",
+      "title": "D11 rests on 9 cells with a 0.8 mm margin, and 8 of 20 campaign seeds hinge on it",
+      "code_location": "tools/_probe_b1p2_tampura.py:244-272; streams.py:748 (GRASP_MAX_SPAN 0.076)",
+      "problem": "The sampler offers a cup grasp only if the ESTIMATED width fits 76 mm. Probe (e) measured the e cup at 9 cells and one yaw: 72.6 to 75.2 mm, a spread of 2.6 mm against a margin of 0.8 mm. The e cup hides the die in 1747173593, which the cluster map gives 8 seeds (1, 2, 3, 4, 8, 14, 15, 18). One position or yaw where the estimate passes 76 mm turns every such seed into no_grasp_in_span, so the gripper would decide 40 % of the campaign.",
+      "evidence": "BF11_b1p2/probe_e.json pinch_extent.e_cups_ud est widths 0.0739, 0.0752, 0.0726, 0.0731, 0.0745, 0.0737, 0.0747, 0.0747, 0.0745 (max at (0.39, 0.03)); BF#8 cluster map.",
+      "suggested_fix": "In B6, decide D11 on a dense grid over W (the 1 cm or at least the 5 cm cells of (h) and (i)) and several yaws, still on the empty table, and pre-register now that branch (ii), M6, is taken if any estimate comes within a stated margin of GRASP_MAX_SPAN (for example 2 mm, about the measured spread)."
+    },
+    {
+      "severity": "minor",
+      "title": "PICK_CONTACT_FLOOR is still None, so no die pick can succeed yet, and its prerequisites are thin",
+      "code_location": "tampura_bridge/task_spec.py:100; execution.py:58-61, 1043-1044",
+      "problem": "With None, execute_pick keeps the 35 mm floor: the grasp target stops 35 mm above the table and their pad tips (7.2 mm beyond panda_grasptarget, BF#4 (a)) at 27.8 mm, 10 mm above the die's 17.8 mm top, so the fingers close on air until B6 sets the floor. B6's value (7.2 mm plus a clearance) puts the contact near 13 mm, below B1(f)'s lowest probed EE height (0.045 m), and B1(i)'s lift pose used the 35 mm floor (0.135 m instead of about 0.113 m). The comment at execution.py:58-60 ('the pads reach 35 mm below panda_grasptarget') contradicts both URDFs (7.2 mm), so the 35 mm default is not a finger-geometry number.",
+      "evidence": "pybullet_data panda.urdf lines 313 and 335 and collision/finger.obj z 0.00013 to 0.0538; their URDF has the same finger joints and contact blocks; BF11_b1p2/probe_f.json heights start at dz 0.045.",
+      "suggested_fix": "In B6 set the floor to 0.0072 m plus a declared clearance, extend the reach probe down to the die contact height and re-run (i) at the corrected lift height together with the first finding's probe."
+    },
+    {
+      "severity": "minor",
+      "title": "RunLogger removes TAMPURA's logging handlers for the rest of the rollout",
+      "code_location": "run_logger.py:137-153, 181-201; tampura_bridge/policy.py:125, 199",
+      "problem": "RunLogger clears every root handler (their setup_logger file and console handlers) and sets the root to DEBUG; close() removes only its own. After boxel_episode their INFO lines fall to logging's basicConfig fallback on stderr, arm O's TAMPURA log file ends at step 0 while arm T's is complete, and the root stays at DEBUG for steps 1 to 19.",
+      "evidence": "BF12_b2/seed1.console: 'Loading scene from ...' in their '%(message)s' format before the episode, 'INFO:root:Observation: ...' in basicConfig's default format after it; tampura/config/config.py:81-103.",
+      "suggested_fix": "In execute_fn save logging.getLogger().handlers and level before RunLogger and restore them in finally (bridge only, no main-pipeline change)."
+    },
+    {
+      "severity": "minor",
+      "title": "'12 of 20 seeds' is stale on the cluster map",
+      "code_location": "PAPER_AUDIT.txt:3915 (D9), 4520 (P4.6 table notes), 4867 (V6)",
+      "problem": "Under BF#8's map the die starts at about 4 cm inside its cup in 1747173591 (7 seeds) and 1747173593 (8 seeds): 15 of 20. D9 and the disclosure still say 12. For our arm D9's gravity drops it inside the cup in those 15 seeds (tilt 21.2 and 49.8 deg after the settle, BF#12), and when the cup is lifted it falls to the table, where the eye sees it (167 to 259 px with the cup away, BF#11 (e)); no tilt-specific code path is needed, only the floor and the transport.",
+      "evidence": "BF#8 RESULT; BF#9 per-layout seeds; BF12_b2 seed1 settle.",
+      "suggested_fix": "Correct the count to the campaign map's 15 in D9 and in P4.6's table notes."
+    },
+    {
+      "severity": "minor",
+      "title": "GateConfig.held_body is never wired, so the held-body tactile exemption is dead",
+      "code_location": "tampura_bridge/policy.py:153-161; tampura_bridge/gate_hooks.py:62, 279-280",
+      "problem": "P4.1 G8(b) keeps queries with bodyA = held body legal, but policy.py leaves held_body at lambda: None. Reads such as robot_utils.py:613 and execution.py:647 pass only because the held body still has an OBJECT boxel; any path that retires a held body's boxel would trip G8(b) in B7.",
+      "evidence": "As located.",
+      "suggested_fix": "Expose the dispatcher's held body (for example through run_logger's dispatch context) and pass it as held_body, or record in a BF# that the exemption is narrowed to bodies with a boxel."
+    },
+    {
+      "severity": "minor",
+      "title": "Suspicion: planning cost in the VHACD plan twin and the hook overhead are unmeasured",
+      "code_location": "tampura_bridge/env_adapter.py:96, 120-121; robot_utils.py:399-401; tampura_bridge/gate_hooks.py:349-365",
+      "problem": "The twin holds their table, its frame and one create_ycb body per task object with VHACD collision (27 to 39 convex pieces per cup) and their default mass -1, so the twin cups are presumably not static and every performCollisionDetection inside IK and RRT checks also computes the cup-table compound pairs; our thesis scenes use primitives. No plan() has run in the twin, and M1 adds a planned move per sense. The gate hooks add Python overhead to arm O only (every wrapped pybullet call, a signature bind per collision check). Effect on plan time and the 900 s cap not measured. Checked and negligible: the twin body origin (visual centre of mass) sits within 4.7 mm of the collision AABB centre for every class.",
+      "evidence": "BF#4 (b) piece counts; create_ycb(mass=-1) in their panda_env_utils.py:676-706; B2 deliverable solve_calls 0.",
+      "suggested_fix": "Time is_config_collision_free and one plan() on the twin against our scenes during the hooked run of the second finding; if the cost matters, build the twin cups static (create_ycb(mass=0), their own function; the twin never steps) under a BF#; measure the hook overhead once and disclose it."
+    }
+  ],
+  "answers_to_focus": {
+    "1_die_grasp": "Not reachable until B6 sets the floor (7.2 mm plus clearance); after that geometrically feasible, but transport home fails in 91 of 96 probe trials (blocker finding).",
+    "2_tilted_die_in_cup": "15 of 20 seeds on the cluster map; after the cup lift the die falls flat and is registered by sense or discovery; feasible given the floor and a transport remedy.",
+    "3_W": "All cups and the die lie inside W in all three layouts (tightest: b cup rim at x about 0.359 against 0.35, d cup rim at y about 0.336 against 0.34, both in 1747173593); all within 0.71 m of the base against a 0.808 m reach; no issue found.",
+    "4_execute_fn": "Exceptions are caught, gates recorded, hooks uninstalled and a conservative observation built; gaps are the missing budget (D10), RunLogger's handler removal and a crash before the try (RunLogger construction) propagating into their rollout.",
+    "5_plan_twin": "Unmeasured cost (suspicion finding); geometry offset negligible.",
+    "6_gate_hooks": "No definite false positive on reading; never run in a planned episode (major finding); held_body exemption dead (minor).",
+    "7_Q13": "Answered 2026-10-27 (BF#13); the permutation test is sound and cheap, but B4 and later main-pipeline changes are not covered (major finding). Schedule: B0 to B3 and B1 done about 8 to 14 days ahead of BF#1's checkpoints; on the upper half of each effort range B4 to B7 with gates 2 and 3 end about 2026-11-11 (11-13 with M6), leaving about 11 to 13 days before the latest B8 start for the findings above (about 17 on the lower half)."
+  }
+}

@@ -3890,9 +3890,14 @@ D9  PHYSICS SET-UP IN THEIR WORLD, PRE-REGISTERED AND COMPLETE.  Inside
     campaign.json records gravity, timestep, frictions and masses.  The
     B1(c) probe uses this identical call sequence (steps (1) to (4), then
     exactly 50 steps).  TAMPURA's arm runs as shipped: no gravity, cups 1 cm
-    above the table, and in layouts 1747173591 and 1747173593 (12 of 20
-    seeds) the die inside its cup at about 4 cm, picked from mid-air; the
-    paper states this.
+    above the table, and in layouts 1747173591 and 1747173593 (15 of 20
+    seeds on the campaign map of BF#8; 12 on the laptop map) the die inside
+    its cup at about 4 cm, picked from mid-air; the paper states this.  On
+    our arm, in the same 15 seeds, D9's gravity drops the die inside its cup
+    during main()'s settle: in 1747173591 by 37.7 mm, 3.9 mm sideways, tilted
+    21.2 deg and still moving at 0.069 m/s when the settle ends; in
+    1747173593 by 39.8 mm, 10.3 mm sideways, tilted 49.8 deg (BF#4 (c),
+    BF#12).  The paper states this too.
 
 D10 BUDGETS: one wall cap of 900 s per episode on both arms, enforced by
     tools/_bridge_campaign.py (the same value as tampura_sweep.py's kill in
@@ -3901,6 +3906,12 @@ D10 BUDGETS: one wall cap of 900 s per episode on both arms, enforced by
     action cap on our arm (their 20 steps are their step semantics; our
     actions are finer grained); a killed or crashed episode enters every
     time statistic at the cap value, flagged censored, on both arms.
+    STATE AT GATE 1 (BF#14): the harness passes a constant --max-plan-time of
+    900 s and nothing yet owns the episode cap, so today the 900 s process
+    kill is the only bound.  Before B7, main() gains an episode-deadline
+    keyword (default None, today's behaviour; BF#13's test) that clips each
+    plan() call to the remaining budget, and the cap-owning driver exists;
+    the external kill stays as the backstop for non-planning stalls.
 
 D11 CUP GRASPABILITY, pre-registered and scene-independent: for EVERY cup
     class in the scenes' category table (a..e), B1(b) measures the collision-
@@ -3914,7 +3925,12 @@ D11 CUP GRASPABILITY, pre-registered and scene-independent: for EVERY cup
     own BF# and an A/B on our scenes.  (iii) If the top face does not fit
     either, the campaign is not runnable as specified (0/20 by construction
     would measure the gripper, not the method) and the user decides;
-    TAMPURA's grasp library stays #P5.  New exit reason no_grasp_in_span (the
+    TAMPURA's grasp library stays #P5.  MARGIN (pre-registered by BF#14,
+    before B6 runs): B6 decides on the 5 cm cells of W at yaws 0, 30, 60
+    and 90 deg, still on the empty table, and branch (i) holds only if every
+    class's largest estimate stays at least 2 mm below GRASP_MAX_SPAN (about
+    the 2.6 mm spread B1(e) measured over 9 cells); otherwise branch (ii).
+    New exit reason no_grasp_in_span (the
     stream offered no grasp for a hollow object the plan needed) keeps such
     failures attributable.
 
@@ -3944,9 +3960,11 @@ D12 INTERPRETER FOR ARM O: its OWN venv, never their venv and never one that
 --------------------------------------------------------------------------------
 P4.4  WORK PACKAGES B0-B9 (each ends with a BF# record)
 --------------------------------------------------------------------------------
-EXECUTION ORDER: B0; B1 part 1; B3; B1 part 2; B2; review gate 1; B4; B5; B6;
-review gate 2; B7; review gate 3; B8; review gate 4.  B9 only on a user
-decision.  The numbering is by topic, not by order.
+EXECUTION ORDER: B0; B1 part 1; B3; B1 part 2; B2; review gate 1; the gate-1
+fixes GF1 to GF9 (BF#14; gate 1 closes when they land); B4; B5; B6;
+review gate 2; B7; review gate 3; B8; review gate 4.  GF10 (the die loss)
+and BF#14's before-B7 list run beside B4 to B6 and are reviewed by gate 2.
+B9 only on a user decision.  The numbering is by topic, not by order.
 B0  [DONE 2026-10-26, BF#2, BF#3]  GATES AND LEDGER FIRST.  tools/bridge_gates.py implementing
     G1-G21 (greps, runtime hooks with violation counters, the ledger reader,
     the domain regeneration check, the tree hash, the T-driver diff) and the
@@ -4006,8 +4024,9 @@ B1  [DONE 2026-10-27; part 1 (a) to (d) BF#4; (g) on the cluster, BF#9;
     flagged).  GUI twin for (g): wsl -d Ubuntu -e bash -lc 'bash
     /root/tampura-work/tampura_run_gui.sh 0 1'.  Effort 2 to 3 days + 85 min.
 
-B2  [DONE 2026-10-27, BF#12: the deliverable met on the cluster; review
-    gate 1 running]
+B2  [OPEN 2026-10-27, BF#12, BF#14: the runs met the deliverable on the
+    cluster, but review gate 1 found that parts of G2, G6, G13, G18 and G19
+    have no code; B2 is done when GF1 to GF9 land]
     HARNESS: tampura_bridge/ (fresh package; nothing imported from the
     archive).  run_bridge_on_finddice.py (seeds random and numpy with
     --global-seed, builds FindDiceEnv(config), b0, store = env.initialize(),
@@ -4137,7 +4156,8 @@ B4  [OPEN, CONDITIONAL ON B1(h)]  MODEL TWEAK M1.  pddl/domain_find_dice_v2.pddl
     (execution.py:2460); it accepts an optional third parameter that the
     observation ignores and the ledger logs, and every other consumer of the
     sense tuple (G3's argument comparison, world_eye labels) is updated the
-    same way; the two-parameter form is unchanged (B3 acceptance).  Class:
+    same way; the two-parameter form is unchanged (B3 acceptance, with
+    BF#13's plan-count test by BF#14).  Class:
     model tweak.  Deliverable: on OUR holding scene seed 0 with a declared
     clearance configuration, the planner emits a planned move to q_clear
     before every sense, every such sense EXECUTES and is classified, and G3
@@ -4262,7 +4282,7 @@ M1  ARM CLEARANCE BEFORE SENSING (conditional, D5).
     stale (handempty and boxel_fits, domain_pddlstream.pddl:174, 183) and
     become more so; the paper adds that in the find_dice runs sensing
     requires the arm at a declared clearance pose, measured necessary for this
-    eye placement (BF#2), at the cost of a planned move per sense.
+    eye placement (BF#11 (h)), at the cost of a planned move per sense.
 
 M2  INTERIOR REGIONS OF HOLLOW CLASSES (D6).
     BEFORE: hidden regions are lateral occlusion shadows only; an OBJECT boxel
@@ -4297,9 +4317,29 @@ M2  INTERIOR REGIONS OF HOLLOW CLASSES (D6).
     dimensions measured from the same mesh, because our perception yields
     boxes, not meshes; both take the category label from the scene."
 
-M3  GOAL CONJUNCT at_config(q_home) (D7): a goal form plus the home
-    pseudo-boxel init facts, not a domain change; the goal formula is the same
-    for both systems and the evaluation is stricter on ours (D3, D7).
+M3  GOAL CONJUNCT at_config(q_home) AND D7's LOOP (D7, switched on by the
+    bridge; BF#14 reclassifies D7-on from refactor to this model tweak): a
+    goal form plus the home pseudo-boxel init facts, not a domain change; the
+    goal formula is the same for both systems and the evaluation is stricter
+    on ours (D3, D7).
+    BEFORE: goal (holding T); q starts as the home configuration by
+    assumption (methods.tex:198); after each action q is named after the
+    planned target whatever the residual (methods.tex:211); the loop exits of
+    methods.tex:188; the Boxels partition the workspace with one Know-If
+    fluent per object and Boxel (methods.tex:84).
+    AFTER: the goal gains at_config(q_home); the home pseudo-boxel (no
+    volume, no Know-If literal, excluded from every init enumeration,
+    asserted); the initial readback judged by TAMPURA's test and named
+    q_readback_0 when it fails; after a move to q_home the readback is named
+    by that test, otherwise by a fresh q_readback_k; the new exit
+    home_not_reached; the final hold; the cargo re-solve of every move made
+    while holding (plans still certify such moves with the cargo at the
+    approach offset or none, the re-solve applying the pick's offset, BF#14
+    RG1.25).
+    CLAIM EFFECT: the paper says that in the find_dice runs lines 198 and 211
+    of Algorithm 1 (and the loop condition at 199, through the goal), the
+    exit list of methods.tex:188 and the partition sentence of methods.tex:84
+    carry these qualifications; none on the thesis scenes, where D7 is off.
 
 M4  SCORING (D2, D3): success for both systems = TAMPURA's reward on
     TAMPURA's belief through TAMPURA's observation channel; our belief inputs
@@ -4380,7 +4420,7 @@ CLAIM LEDGER.
   time includes 200 effects_fn samples); :354 "simpler to model"
   (qualitative, see M5); related-work statements on LAO* and the learned MDP
   (source-verified, unchanged); all semantic-vs-uniform partition claims
-  (ours only, untouched).  M1, M2, M6 and M7 are used in find_dice only and
+  (ours only, untouched).  M1, M2, M3, M6 and M7 are used in find_dice only and
   the sentence that introduces them says so (conclusion.tex:27-33, 41-45 name
   sensing configurations and concave interiors as future work).
 
@@ -4439,8 +4479,15 @@ SUCCESS.  rewards[-1] == 1.0 from each arm's RolloutHistory (G12).  Secondary
 columns, never substituted: O holding but not at home; O at home within 2e-3
 rad (from the logged readback); O _verify_holding; optionally T successes
 whose executing arm is not at DEFAULT_ARM_POS (read-only, after the episode).
-Per-seed rows also carry scene_changed_by_settle and every cup's in-frame
-fraction below 1 (B1(e)).  GATE-FAILED EPISODES (pre-registered): an episode
+Per-seed rows also carry scene_changed_by_settle (B1(e) found every cup
+fully in frame, so the planned in-frame column is dropped; provisional until
+the corrected-inertia re-measure of BF#12 (4)).  CRASHED EPISODES
+(pre-registered by BF#14, before any campaign run): an arm O episode whose
+bridge_episode.json carries 'error' is a crashed episode, exactly like an
+arm T process that dies without a RolloutHistory: it fails, enters every
+time statistic censored at the cap and is flagged.  Arm O's outcome is one
+field that combines rewards[-1], the error and the G21 counts; the campaign
+report never takes success from rewards[-1] alone.  GATE-FAILED EPISODES (pre-registered): an episode
 with any per-episode gate count above 0 (G21's list: G3, G4, G5, G6, G8,
 G10, G11, G14, G15, G16, G18, G19's seed hygiene, G20) counts as a failure
 of its arm, keeps its row and is flagged with the gate's name; it is never
@@ -4468,7 +4515,12 @@ first reward 1.0 for successes.  (t4) actions to goal at macro level (pick,
 place, sense, look; each move folded into the action it serves, the final move
 home into the goal) with O's raw dispatched count beside it.  (t5) planning
 share on both arms: T's summed get_action spans; O's summed plan() spans plus
-first-render and boxelization time.  ANYTIME FIGURE: cumulative success
+first-render and boxelization time.  CLOCK BOUNDARIES (disclosed): T's
+initial perception and belief-world build run inside their initialize(),
+before the rollout clock starts; O's analogues (D9, the plan-twin build,
+the first render, boxelization) and the gate hooks, the ledger and
+world_eye run on O's clock.  This works against O; the report gives O's
+set-up share as its own column so a reader can subtract it.  ANYTIME FIGURE: cumulative success
 fraction against elapsed loop time up to 900 s for both arms (T: the time at
 solve_step; O: the time of the final action), so a reader can apply any
 budget.  All times as mean +/- std and median with n, over all episodes
@@ -4493,14 +4545,21 @@ localisable pixels on our side and 1 seg pixel on theirs (perception.py:320 vs
 env.py:64-73); the clearance precondition if M1; kinematic gravity-free
 execution vs physical execution with gravity (D9); their perfect poses vs our
 depth estimates; their saved grasp library vs our top-down contact grasp (and
-M6 if adopted); at-home strictness (D3, D7); masses, the settle and its
+M6 if adopted); at-home strictness (D3, D7) and the readback naming rule
+beside it (M3); masses, the settle and its
 campaign maximum displacement, their cups floating 1 cm and their die at about
-4 cm inside the cup in 12 of 20 seeds (D9); W, a rectangle inside the
+4 cm inside the cup in 15 of 20 seeds on the campaign map (D9); on our arm,
+in those seeds, the die's fall inside its cup during the settle, its tilt
+(21.2 or 49.8 deg) and its residual motion (D9); W, a rectangle inside the
 eye's unoccluded view, restricts our placements, theirs are unrestricted
 (D8); on our arm moves made while holding are re-solved with the held body
-as cargo (D7 (iv)), which the thesis runs did not do; the task
-knowledge each system was given (M5); three layouts; every cup partly out of
-frame.
+as cargo (D7 (iv)), which the thesis runs did not do; every lateral shadow
+on our arm is cast against the belief-posed plan twin (registered bodies at
+their estimates, unregistered ones parked), while the thesis runs cast
+against the simulated world (R6, item (h)); the task
+knowledge each system was given (M5); three layouts; every cup fully in
+frame for this eye (BF#11 (e); provisional until the corrected-inertia
+re-measure of BF#12 (4)).
 OUTPUT.  eval_results/tampura_bridge_<date>/{T,O}/rep<k>.json in the 2026-05-26
 JSON's per-seed shape plus scene_file, and for O planning_time_s, plan_count,
 exit_reason, parked_count, settle_max_disp, scene_changed_by_settle; copied
@@ -4514,7 +4573,9 @@ tampura_environments && PYTHONHASHSEED=<pinned> python -u /root/tampura-work/
 tampura_sweep.py --seeds 0-19 --out runs/<name>.json'.  T GUI: bash
 /root/tampura-work/tampura_run_gui.sh N 1.  O: the B2 command with --vis 0
 (headless) or --vis 1 (GUI).  The interleaved driver is
-tools/_bridge_campaign.py (B8).
+tools/_bridge_campaign.py (B8); it always passes --save-dir to the T driver
+(whose default save_dir now resolves into our tools/) and never passes
+--vis to it (their parser reads --vis as type=bool, so '--vis 0' means GUI).
 
 --------------------------------------------------------------------------------
 P4.7  RECORD FORMAT
@@ -4677,6 +4738,31 @@ Q13 B3's acceptance (BF#10): no outcome flip reproduced, but three
     before B2 lands.  ANSWERED 2026-10-27 (user): accept B3 on the
     diagnostic evidence, and pre-register a distributional plan-count test
     for the B5, M6 and M7 acceptances before those runs (BF#13).
+Q14 GF10, the die loss on the move home (BF#11: 91 of 96 probe trials; BF#14
+    RG1.1).  Proposed, fixed before the probe runs: an empty-table probe
+    extending B1(i), one factor at a time (payload class: the die, each cup
+    class and a 100 g control; squeeze force; a transport speed scale;
+    solver iterations or substeps; the pick from the table at B6's floor
+    instead of a box created at the EE), logging where a lost body lands.
+    Rule: adopt the first remedy, in that order, that keeps a die-class and
+    a cup-class body between the pads at >= 0.5 N in >= 95 % of the 96
+    trials; it lands as a default-off main-pipeline parameter with the B3
+    acceptance and BF#13's test, or as a disclosed D9 amendment of engine
+    parameters.  Masses and frictions stay as declared (G9); no retry (R7).
+    If nothing qualifies, the user decides before B7: run as specified and
+    attribute the failures to the gripper, or B9.
+Q15 PDDLStream's stream statistics (BF#14 RG1.12): every solve() loads and
+    rewrites statistics/py3/boxel-streams.pkl in the working directory, so
+    arm O episodes and acceptance arms depend on the runs before them.
+    Proposed: a fresh, empty statistics directory per episode, archived with
+    the run, for the bridge and the acceptance harness alike, and the paper
+    says the thesis runs used an accumulated file.  Alternative: LOAD and
+    SAVE off.
+Q16 Local smokes and probes (BF#12 (5), BF#11) ran in the laptop's arm T
+    venv, against D12 and the Q11 answer (no install, nothing written; the
+    campaign's arm T venv is the cluster's and its freeze is unchanged).
+    Proposed: record it as a deviation and build a local arm O venv (a
+    clone of the local arm T package set) for smokes and probes from now on.
 
 --------------------------------------------------------------------------------
 P4.11 CRITIQUE LOG, ROUND 1 (draft 1, 2026-10-25; four adversarial critics,
@@ -5776,6 +5862,26 @@ BF#10 [DONE, accepted by the user (Q13)]  B3: MAIN-PIPELINE
   re-run JSONs, ab_report.json and acceptance_report.json from
   tools/b3_acceptance_report.py, the three diagnostic jobs' JSONs in diag/,
   the five job logs; their prologs list only our jobs).
+  CORRECTIONS (BF#14, review gate 1): (1) The re-runs showed TWO new
+  outcome differences, not one: seed 10 (c31cbdd success, B3 fail) and
+  seed 116 (c31cbdd fail with 8 plans, no_plan_binding_death; B3 success
+  with 6); both seeds succeeded on both arms in the A/B.  Pair order
+  checked in tools/b3_acceptance_report.py (reference first).  (2) Per-arm
+  tallies over every run of each version (A/A or A/B, re-run, diagnostics):
+  seed 100, 3 plans in 4 of 4 B3 runs and 2 of 5 c31cbdd runs; seed 105, 1
+  plan in 3 of 4 B3 runs and 1 of 5 c31cbdd runs; seed 119, success in 3 of
+  4 B3 runs and 2 of 5 c31cbdd runs.  None is significant (Fisher about
+  0.17, 0.21 and 0.52), and the runs span jobs at different times.  (3) The
+  clause "timed-out plan() calls are logged as the noise source" was never
+  implemented in the acceptance tooling; it is recorded as unimplemented
+  for B3, and the acceptance report counts them before the next acceptance
+  run.  (4) The harness identity is now evidenced: tools/_eval_ab.py (local,
+  untracked, written 2026-09-20) has sha256 036a2634130b38caedb47f55c56b00
+  42ee18d114dc505a0c6470bb9f352547f1, and so do the cluster's inbox copy and
+  the copies in sb_c31cbdd, sb_3850dd1, sb_526b358 and sb_943ea9e (read
+  2026-10-27); tools/cluster/acceptance_dist.sbatch now prints both arms'
+  hashes.  (5) D7 as the bridge switches it on is model tweak M3, not a
+  refactor; M3 now carries the H3 lines.
 
 BF#11 [DONE]  B1 PART 2 (e), (f), (h), (i): THE EYE, W, THE REACH, M1 AND THE
       AT-HOME HOLD  (B1, 2026-10-27)
@@ -5868,8 +5974,17 @@ BF#11 [DONE]  B1 PART 2 (e), (f), (h), (i): THE EYE, W, THE REACH, M1 AND THE
   B6's to freeze from these numbers.
   RESULT: archive/tampura_bridge_plan_2026-10-25/bf/BF11_b1p2/ (one JSON and
   one console per item; probe_i_first.* is the first run of (i)).
+  CORRECTIONS (BF#14, review gate 1): HOME_HOLD_STEP_CAP 52 rests on the
+  empty-hand trials for 91 of the 96 cells: the payload stayed between the
+  pads in 5 trials only, so D7 (vii)'s "with the die-class payload" clause
+  was not met.  The cap is re-measured with a payload that stays in the
+  pads, and with the pass's persistence (N steps held after the first
+  pass, worst error recorded), before B6 freezes it.  The die loss is no
+  longer deferred to B7 without a rule: GF10 and Q14 pre-register it.  Of
+  the 5 dice kept, one read 0.11 N, below scoring's 0.5 N, so 4 of 96 would
+  have scored.
 
-BF#12 [DONE, review gate 1 pending]  B2: THE HARNESS  (B2, 2026-10-27)
+BF#12 [DONE, corrected by BF#14]  B2: THE HARNESS  (B2, 2026-10-27)
   WHAT: tampura_bridge/ gains, nothing imported from the archive:
   task_spec.py (the declared task knowledge: target category, class sizes,
   hollow cavities, masses, inertia and frictions, the D4 eye, W, the D9
@@ -5960,6 +6075,17 @@ BF#12 [DONE, review gate 1 pending]  B2: THE HARNESS  (B2, 2026-10-27)
   Evidence: archive/tampura_bridge_plan_2026-10-25/bf/BF12_b2/ (both
   consoles, bridge_episode.json and ledger.jsonl per seed, the ledger and
   static gate outputs, G13 before and after, the job log).
+  CORRECTION (BF#14, review gate 1): "green" covered less than the
+  deliverable lists.  Checked by code: G2's AST grep (not its leak test,
+  which does not exist yet), G13's tree hash, git status, pip freeze and
+  T-driver line check (not its runtime assertions, and not the
+  site-packages copy of tampura that arm T imports), and G19's scene map
+  (not its seed hygiene).  G18 held by inspection only; no ledger row covers
+  the interval from initialize() to the first step.  G6's seven controls
+  are still the B0 stubs and fail by design; the arm readback at main()
+  return is not logged.  B2 is OPEN again until GF1 to GF9 land.  Also: B2
+  and B1 part 2 (BF#11) were built on B3 while Q13 was open; the user
+  answered Q13 afterwards (18be9d2), accepting B3.
 
 BF#13 [DONE, pre-registered]  THE PLAN-COUNT TEST OF THE B5, M6 AND M7
       ACCEPTANCES  (protocol, 2026-10-27)
@@ -5998,6 +6124,253 @@ BF#13 [DONE, pre-registered]  THE PLAN-COUNT TEST OF THE B5, M6 AND M7
   DECISION 2026-10-27 (user, Q13; the test's form fixed by the executor the
   same day, before any B5, M6 or M7 run).
   RESULT: n/a until those acceptances run.
+
+BF#14 [OPEN, closes when GF1 to GF9 land]  REVIEW GATE 1: FOUR LENSES ON B3
+      AND B2  (review gate 1, 2026-10-27)
+  WHAT: four adversarial reviewers (Opus; lenses cheat, POD, validity,
+  feasibility) read B3 (526b358) and B2 (852b319) with the records BF#7 to
+  BF#13.  Files: archive/tampura_bridge_plan_2026-10-25/reviews/
+  gate1_{cheat,pod,validity,feasibility}.json, and gate1_handover.md (the
+  executing session's hand-over and claim checks).  Every reviewer returned
+  "revise".  Counts (blocker/major/minor): cheat 0/3/7, POD 0/2/7,
+  validity 0/6/10, feasibility 1/6/5; 47 findings merged into 37 below.
+  No reviewer found a cheat, a ground-truth path into a decision, a plan
+  edit or seed-specific code; every major is a missing check, a missing
+  rule or a stale record.  Claims checked against the code before this
+  record: the fourteen items of gate1_handover.md, the BF#10 pair order
+  (tools/b3_acceptance_report.py:145-148, reference first), the per-arm
+  tallies (acceptance_report.json, diag/*.json), the methods.tex lines M3
+  cites (84, 188, 198, 199, 211), PICK_CONTACT_FLOOR None
+  (task_spec.py:100), held_body absent from install() (policy.py:153-161),
+  this repo's statistics/py3/boxel-streams.pkl rewritten 2026-10-27 12:33,
+  and the harness hash on the cluster (BF#10 correction (4)).
+  FINDINGS (id [severity, lenses] finding.  disposition):
+  RG1.1  [blocker feasibility; major validity, POD] The die leaves the pads
+         on the move home in 91 of 96 probe trials (4 of 96 would score),
+         and no package, rule or calendar slot owns the remedy; a fix chosen
+         after B7 would be fitted to the released layouts.  ACCEPTED: GF10,
+         rule and probe pre-registered in Q14 before any remedy; the probe
+         runs beside B4 to B6, the remedy lands before gate 2.
+  RG1.2  [major cheat, validity; minor validity] G13's runtime half (two
+         registrations, Policy.rollout identity, the timed class's
+         __dict__, no env.step attribute, every tampura module's __file__)
+         has no code; the T-driver check compares lines as a set.
+         ACCEPTED: GF1.
+  RG1.3  [major validity] Arm T imports the site-packages copy of tampura,
+         which G13 never hashes; arm O imports the hashed checkout.
+         ACCEPTED: GF2.
+  RG1.4  [major cheat] G2's leak test does not exist, while B2 widened the
+         write-only set; the allowlist cites it.  A missing proof, not a
+         found leak (the reviewer traced every exempt read).  ACCEPTED:
+         GF3.
+  RG1.5  [major cheat, validity, feasibility] The G6 controls are B0 stubs;
+         D3's chain has never produced a 1.0; the readback at main() return
+         is not logged; no arm O history has been loaded in arm T's venv.
+         ACCEPTED: GF4.
+  RG1.6  [major validity; minor cheat] BF#12 lists G13, G18 and G19 green;
+         G18 and G19's seed hygiene have no check, and G18's sentence does
+         not allow the pinned-map load and the G19 assertion.  ACCEPTED:
+         GF5, and BF#12's correction line.
+  RG1.7  [major validity] An arm O exception is caught in execute_fn and
+         becomes an ordinary failure at its real time; the exit code is
+         rewards[-1] alone.  ACCEPTED: P4.6 CRASHED EPISODES (this entry);
+         the outcome field lands in GF5.
+  RG1.8  [major validity; minor POD, feasibility] D9 and P4.6 stale: "12 of
+         20" (15 on the campaign map), the die's fall, tilt and residual
+         motion missing, "every cup partly out of frame" and the in-frame
+         column contradicted by BF#11 (e), the plan-twin shadow cast not
+         listed.  ACCEPTED: D9 and P4.6 amended (this entry); the frame
+         statement provisional until the inertia re-measure.
+  RG1.9  [major POD] D7 (vi): the loop ends on held_body_id, which no
+         observation refreshes after the move home; a dropped die ends the
+         episode on a stale literal (scoring reads contacts, so never a
+         false 1.0).  ACCEPTED: before B7, item (a).
+  RG1.10 [major POD] D7 as the bridge runs it changes Algorithm 1's lines
+         198 and 211, the exits of methods.tex:188 and the partition of
+         methods.tex:84, recorded without H3 lines.  ACCEPTED: M3 rewritten
+         with BEFORE / AFTER / CLAIM EFFECT, D7-on reclassified as M3, the
+         claim ledger and P4.6 amended (this entry).
+  RG1.11 [major feasibility] No planned episode has run with the gate hooks
+         installed.  ACCEPTED: GF9.
+  RG1.12 [major feasibility] PDDLStream loads and rewrites
+         statistics/py3/boxel-streams.pkl in the working directory on every
+         solve, coupling episodes and acceptance arms; their tree holds a
+         stale June file; a truncated pickle would break later solves.
+         Suspected, not measured, as part of the A/A plan-count noise.
+         ACCEPTED: Q15 to the user; the chosen handling applies to the
+         bridge and the acceptance harness before the next acceptance run
+         and before B7; the stale file leaves their tree in GF8.
+  RG1.13 [major feasibility; minor validity] D10's per-call bound is not
+         implemented and nothing owns the cap.  ACCEPTED: D10 states the
+         present bound (this entry); before B7, item (b).
+  RG1.14 [major feasibility] B4 and later main-pipeline changes still read
+         "B3 acceptance", whose per-seed clause fails a no-op change about
+         96 % of the time.  ACCEPTED: BF#13's test also governs B4 and every
+         later main-pipeline change (GF10's remedy, item (a), the episode
+         deadline, the parked-fragment candidate), each naming its
+         reference commit; decided before any of their runs.
+  RG1.15 [major feasibility] D11 rests on 9 cells at one yaw with a 0.8 mm
+         margin, and the e cup decides 8 of 20 campaign seeds.  ACCEPTED:
+         D11 MARGIN pre-registered (2 mm; 5 cm cells, four yaws, in B6).
+  RG1.16 [minor cheat, validity] The 'setup' phase exempts the whole env
+         adapter build from G3 and G14.  ACCEPTED: GF6.
+  RG1.17 [minor cheat] G2's AST scan misses aliases and name lookups;
+         gate_hooks' own two pose reads are not allowlisted.  ACCEPTED: in
+         GF3.
+  RG1.18 [minor cheat; minor POD] G8(c) checks position only and skips the
+         held body; YCB twins are posed by their centre of mass.  ACCEPTED
+         IN PART: feasibility measured the twin origin within 4.7 mm of the
+         collision AABB centre for every class, so the offset is small but
+         real; GF7.
+  RG1.19 [minor cheat, validity] auto_cell follows the layout (0.082 or
+         0.087 m), not D8's largest declared class.  ACCEPTED: B6 passes
+         the declared value.
+  RG1.20 [minor cheat] The final hold stops at the first passing step;
+         persistence never measured.  ACCEPTED: before B6, with the cap
+         re-measure (BF#11 correction).
+  RG1.21 [minor cheat] G10's runtime pin trusts GateConfig.domain_file.
+         ACCEPTED: with B4, install accepts only the live domain's hash or
+         gen_bridge_domain.py's output regenerated in process.
+  RG1.22 [minor POD] An at-home miss in mid-plan does not end the plan.
+         ACCEPTED: before B7, item (a).
+  RG1.23 [minor POD] report_run_outcome prints a wall-clock message for
+         home_not_reached.  ACCEPTED: before B7, item (a).
+  RG1.24 [minor POD] M1 cites BF#2 for BF#11 (h)'s measurement.  ACCEPTED:
+         fixed (this entry).
+  RG1.25 [minor POD] Plans certify moves while holding with the cargo at
+         the approach offset (0.10 or 0.06 m) or with none, while the cargo
+         hangs 2 to 3 cm below the EE.  ACCEPTED: FINDING below; M3's AFTER
+         line states it.
+  RG1.26 [minor POD] B2 and B1 part 2 landed while Q13 was open.  ACCEPTED:
+         recorded in BF#12's correction; Q13 is answered.
+  RG1.27 [minor validity] BF#10 undercounts the re-runs' new outcome
+         differences.  ACCEPTED: BF#10 correction (1).
+  RG1.28 [minor validity] Q13's evidence omitted the per-arm tallies; the
+         timed-out-call clause was never implemented.  ACCEPTED: BF#10
+         corrections (2) and (3).
+  RG1.29 [minor validity] The acceptance harness is untracked and its
+         identity unevidenced.  ACCEPTED: hashes recorded (BF#10 correction
+         (4)); acceptance_dist.sbatch prints them.  The file stays
+         untracked (user's tool, kept out of checkouts on purpose).
+  RG1.30 [minor validity] main() writes boxel_data.json into their
+         tampura_environments directory; G13 ignores untracked files.
+         ACCEPTED: GF8.
+  RG1.31 [minor validity] The T driver: default save_dir in our tools/,
+         an order-blind check, --vis parsed as bool.  ACCEPTED: the check in
+         GF1; P4.6 COMMANDS amended (this entry).
+  RG1.32 [minor validity] The clock boundaries are asymmetric against O.
+         ACCEPTED: P4.6 CLOCK BOUNDARIES (this entry).
+  RG1.33 [minor validity] Local smokes ran in arm T's venv against D12.
+         ACCEPTED: Q16 to the user.
+  RG1.34 [minor feasibility] PICK_CONTACT_FLOOR is None, so no die pick can
+         succeed yet; execution.py:58-60 says the pads reach 35 mm below
+         panda_grasptarget, both URDFs say 7.2 mm.  ACCEPTED: B6 sets the
+         floor from the finger mesh plus a clearance and corrects the
+         comment; GF10's probe picks at that floor.
+  RG1.35 [minor feasibility] RunLogger removes TAMPURA's logging handlers
+         for the rest of the rollout.  ACCEPTED: before B7, item (c).
+  RG1.36 [minor feasibility] GateConfig.held_body is never wired.
+         ACCEPTED: before B7, item (c).
+  RG1.37 [minor feasibility] The VHACD twin's planning cost and the hook
+         overhead are unmeasured.  ACCEPTED: measured in GF9; twin cups
+         built static under a BF# if the cost matters.
+  BEFORE B4 (gate 1 closes when these land; each its own BF# and commit):
+  GF1  G13's runtime assertions in both drivers right before rollout,
+       recorded, stopping the run on failure: one schema whose execute_fn
+       is ours on arm O and none on arm T; type(policy).rollout is
+       Policy.rollout; TampuraPolicyTimed.__dict__'s non-dunder keys are
+       __init__ and get_action; 'step' not in vars(env); every tampura*
+       module's __file__ inside the hashed trees; type(env_adapter).
+       sync_to_plan_client is BoxelTestEnv.sync_to_plan_client.  The T-driver
+       check becomes an ordered diff of the whole file minus the docstring
+       and the one import.
+  GF2  G13 hashes the tampura package in arm T's venv and requires its files
+       to equal the checkout's byte for byte; run once on the cluster now,
+       which covers B1(g) if the freeze hash is unchanged.
+  GF3  G2: the leak test's pre-planning half now (seeds 0 and 1,
+       stop_before_planning, every value returned inside write_only replaced
+       by noise and tactile non-robot ids permuted; registry, boxels and
+       casts identical); its planning half pre-registered to run with B7's
+       headless episodes, so B7 stays the first planned run in their world;
+       ObjectInfo.position a raising property in TampuraWorldEnv (G16); the
+       AST scan flags any Load of a G1/G2 name on p or pybullet and string
+       constants of those names; gate_hooks' own reads allowlisted.
+  GF4  G6: controls (1) die hold at DEFAULT_ARM_POS gives 1.0, (2) cup hold
+       gives 0.0, and die hold 2e-3 rad off DEFAULT_ARM_POS gives 0.0, set
+       up as allowlisted test controls; the readback at main() return logged
+       and compared bit for bit with the observation's; the pickle round
+       trip of an arm O history in arm T's venv.  Faults (3) to (5) stay
+       with B7.
+  GF5  G18 and G19's seed hygiene in the ledger reader (the driver stamps
+       initialize-return and rollout-start); G18 reworded to allow the
+       pinned-map load and the G19 assertion; arm O's outcome field
+       combines rewards[-1], the error and the G21 counts (RG1.7).
+  GF6  set_phase('main') right after d9_setup, so only D9's calls run
+       unchecked.
+  GF7  G8(c) also asserts the identity quaternion of non-static twins and
+       the held twin at the EE, and compares the twin's AABB centre with the
+       registry centre within a stated tolerance (or compensates the
+       measured per-class offset when building the twin).
+  GF8  main() runs from arm O's run directory and changes back; G13 flags
+       untracked files outside runs/, temp/, logs/ and __pycache__; the B2
+       smoke's boxel_data.json and the stale statistics pickle in
+       /root/tampura-work/tampura_environments are checked to be ours, then
+       removed.
+  GF9  B3's test (4) (our adopted scene, goal_at_home, held cargo, a
+       corrective move) runs under gate_hooks.install with the bridge's
+       GateConfig shape; gate_record()['counts'] == {} and the ledger reader
+       green; kept as a regression test for B4 to B6; it times
+       is_config_collision_free and one plan() on the twin and the hook
+       overhead.  Our scene only, so nothing is fitted to their layouts.
+  BESIDE B4 TO B6 (reviewed by gate 2):
+  GF10 The die loss (RG1.1): the probe and the rule of Q14, run on the empty
+       table; the remedy, if any, through BF#13's test; Q14's fallback if
+       none qualifies.
+  BEFORE B7 (with B4 to B6, reviewed by gate 2):
+  (a)  One main-pipeline change, default off, BF#13's test: a tactile check
+       (both pads, >= 0.5 N) after every move made while holding, a loss
+       clearing held_body_id and the cargo data, the post-move render
+       registering the dropped body, bounded by the transit-loss three-strike
+       rule; a mid-plan at-home miss ends the plan (stale_precondition); the
+       home_not_reached branch in report_run_outcome.
+  (b)  main()'s episode-deadline keyword and the cap-owning driver (D10).
+  (c)  Bridge only: RunLogger's handler removal undone in execute_fn's
+       finally; GateConfig.held_body wired from the dispatcher; world_eye
+       image saves off in scored runs or timed and reported.
+  (d)  Q15's statistics handling; timed-out plan() calls counted in the
+       acceptance report.
+  (e)  B6: HOME_HOLD_STEP_CAP re-measured with a held payload and the pass's
+       persistence; auto_cell from the declared class; the pick floor;
+       D11's margin rule.  With B4: G10's install pin.
+  FINDING (against the thesis pipeline, POD minor, motion level;
+  methods.tex:182-184 describe the collision checks): compute-kin gives
+  every pick and place configuration grasp_ee_offset = grasp.position (0.10
+  or 0.06 m, the approach offsets; streams.py:1469), and plan_motion takes
+  the held set and the offset from the endpoints (:963-978), so a planned
+  move after a pick checks the cargo 6 to 10 cm below the EE, and a planned
+  move to a configuration that ignores nothing checks no cargo.  The real
+  cargo hangs 2 to 3 cm below the EE (_grasp_ee_to_obj_z, WP2b).  The thesis
+  runs therefore certified every planned move while holding with the cargo
+  4 to 8 cm too low; the 2026-08-22 F10 fix's "true carried height" of
+  0.10 m was superseded by WP2b.  Until now this appeared only as the
+  rationale of BF#10 decision (3).  The bridge reconciles it at run time
+  through D7 (iv)'s re-solve and a motion_resolve_failed replan, optimism
+  that is POD-acceptable and now stated (M3).  A fix in the planner's model
+  is a main-pipeline change with its own A/B; not scheduled.
+  BEFORE / AFTER: B2 DONE / B2 OPEN until GF1 to GF9; plan text amended as
+  listed (D9, D10, D11, M1, M3, the claim ledger, P4.6, P4.4's order and
+  B4's acceptance line, Q14 to Q16); BF#10, BF#11 and BF#12 carry
+  correction lines; acceptance_dist.sbatch prints the harness hashes.
+  CLAIM EFFECT: M3's (find_dice only); none on the thesis scenes beyond the
+  FINDING above, which qualifies methods.tex:182-184 for the thesis runs.
+  HONESTY CLASS: measurement (review) and configuration (protocol).
+  DECISION 2026-10-27 (executor, on the reviewers' findings; Q14 to Q16 to
+  the user): every finding accepted, RG1.18 in part.  Rejected
+  alternatives: deferring the G6 controls and the leak test to B7 (both are
+  on B7's GO criterion, and finding them broken there costs re-runs inside
+  the last four days); choosing the die-loss remedy in B7 (fitted to the
+  released layouts, R8).
+  RESULT: gate 1 recorded; it closes when GF1 to GF9 land.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS

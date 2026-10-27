@@ -1,0 +1,98 @@
+{
+  "lens": "cheat",
+  "reviewed": ["526b358", "852b319"],
+  "verdict": "revise",
+  "findings": [
+    {
+      "severity": "major",
+      "title": "G2's leak test does not exist; G2 is reported green from the grep alone while B2 widened the write-only set",
+      "code_location": "tampura_bridge/gate_hooks.py:667",
+      "problem": "Inside gate_hooks.write_only (and gate_hooks.scoring) every G8(b) query and every ray on the executing client is exempt, and the allowlisted print-only sites in execution.py read task-body poses with no runtime trap at all. P4.1 makes G2's leak test the guarantee that none of those values, and no body id from a tactile contact list, reaches the registry, the belief, the planner or an executor choice; G16 also delegates 'ObjectInfo.position is never read on the bridge path' to it. No such test exists anywhere. B2 widened the exempt set (the after_settle hook, the settle_disclosure read, world_eye and telemetry wrapped as observers), and BF#12 and 8242937 report G2 green from the AST grep only. The allowlist entries for execution.py:606 and 607 state 'covered by the G2 leak test'.",
+      "evidence": "A search for 'leak' in tools/bridge_gates.py, tampura_bridge/ and tampura_bridge/tests/ finds only the docstring at gate_hooks.py:670; BF#2 describes G1 and G2 as 'by AST scan' only; bf/BF12_b2/static.txt reads 'G2 PASS 36 hits, all reviewed'. My own trace found no leak today: after_settle and _poses write only cfg.out and the ledger; world_eye.snapshot's return value is never used by a caller; telemetry is off and only telemetry.is_active() gates a note; the print-only execution.py sites (1133, 1261, 606, 607, 658, 659, 1568, 1572, 1631) only print; the non_robot contact ids in _release_and_verify_drop go only into the diag string. So this is a missing proof, not a found leak.",
+      "suggested_fix": "Before B4, add a differential leak test: run seeds 0 and 1 with a short plan budget twice, the second time with every value returned while _write_only is non-empty replaced by noise (wrap the original pybullet functions for that context only) and the non-robot body ids of tactile contact lists permuted, and assert identical decision rows (plan rows, dispatched arguments, provenance rows, registry dumps). Make ObjectInfo.position a raising property in TampuraWorldEnv for G16. Until the test exists, BF#12 should say that G2 is green for its grep half only."
+    },
+    {
+      "severity": "major",
+      "title": "G13's runtime assertions are not implemented, though B2's deliverable lists G13 green",
+      "code_location": "tampura_bridge/run_bridge_on_finddice.py:92",
+      "problem": "P4.1 G13 asserts, per run: exactly two runtime registrations (boxel_episode on arm O, tampura_policy_timed on arm T); type(policy).rollout is Policy.rollout on both arms; the timed subclass's __dict__ holds only __init__ and get_action; the env has no instance attribute 'step'; every loaded tampura module's __file__ lies inside the hashed trees; no monkeypatch of their classes. These checks keep their loop, their Belief.update and their reward untouched (the archived bridge mutated their belief in place and swapped classes). Only the tree, git status, pip freeze and T-driver halves exist (tools/bridge_gates.py:461, 535). Neither driver asserts anything before rollout (run_bridge_on_finddice.py:92-95; tools/run_tampura_timed.py adds only the import).",
+      "evidence": "A search for rollout, __dict__, register_planner and action_schemas in tools/bridge_gates.py returns nothing. By reading, nothing violates the assertions today: BoxelBridgePolicy and TampuraPolicyTimed define only __init__ and get_action; register_schema is the only append to their problem_spec; the only class patches are pybullet_utils' BulletClient.__getattr__ (declared, BF#2 (a)) and our own BoxelTestEnv.sync_to_plan_client and BoxelRegistry.__init__; no module of ours shadows a top-level import of their trees. run_tdriver compares the __main__ block as a set of lines, so a reordering would pass; the whole file matches their run_planner.py apart from the docstring and the one import.",
+      "suggested_fix": "Assert in both drivers right before rollout, record the result in bridge_episode.json or the ledger, and stop the run on failure (per-run gate): exactly one schema whose execute_fn is ours on arm O and none on arm T; type(policy).rollout is tampura.policies.policy.Policy.rollout; the non-dunder keys of TampuraPolicyTimed.__dict__ are exactly __init__ and get_action; 'step' not in vars(env); every sys.modules entry named tampura* has __file__ under TW. Also assert type(env_adapter).sync_to_plan_client is BoxelTestEnv.sync_to_plan_client, so the G8(c) wrapper cannot be bypassed by an override, and make the T-driver comparison order-sensitive."
+    },
+    {
+      "severity": "major",
+      "title": "scoring.py shipped without its pre-registered G6 positive controls",
+      "code_location": "tampura_bridge/tests/test_g6_controls.py:19",
+      "problem": "scoring.py is the only writer of TAMPURA's belief inputs and the surface of the archived forced success (CB#123). The G6 controls are the pre-registered proof that a two-pad hold of the die scores 1.0 and a hold of a cup scores 0.0; the B0 file says 'B2 replaces this with the real one', and controls (1) and (2) need only B2's parts (their FindDiceEnv, the adapter, scoring.py, their Belief.update and get_reward). _harness() still raises NotImplementedError and BF#12 does not mention it. G6's other runtime clause, the arm readback logged when main() returns and compared bit for bit with the observation's, has no implementation either: no readback is logged at main() return.",
+      "evidence": "test_g6_controls.py is unchanged since fe6be08; BF#10 notes 'the 7 G6 controls still fail by design'; BF#12 counts 38 passing tests and is silent on the 7 failing ones. By reading, the channel is sound: S is the single body both finger pads touch with >= 0.5 N and no constraint (scoring.py held_body), resolved by the same store.get(s) == body comparison over sim_world.objects that obs_from_camera_image makes (their env.py:70-73, with object_syms = sim_world.objects at env.py:855); Q is the 7-joint readback; G is a plain tuple added once by store.add_typed; poses and camera_image stay empty; the exception path returns an observation without a grasp.",
+      "suggested_fix": "Write controls (1) and (2) now, with the hold set-up allowlisted as 'test control': die held by both pads with the arm at DEFAULT_ARM_POS gives get_reward 1.0 through scoring.build_observation, their Belief.update and abstract; a cup held gives 0.0; add the case 'die held, arm 2e-3 rad from DEFAULT_ARM_POS' giving 0.0. Log the 7-joint readback as a ledger row when main() returns so the bit-identity clause becomes a check. If the executor prefers to defer the controls to B7, BF#12 should say so."
+    },
+    {
+      "severity": "minor",
+      "title": "The G14 and G3 'setup' exemption covers the whole window before main(), including the env adapter's construction",
+      "code_location": "tampura_bridge/gate_hooks.py:207",
+      "problem": "G14 exempts only 'D9's pre-registered set-up before the first physics step'. The writer hook (gate_hooks.py:207), the motor hook (:225) and the move_robot_smooth hook (:371) skip every executing-client write and motor command while the phase is 'setup', and policy.py stays in 'setup' from install (policy.py:153) through d9_setup (:164), TampuraWorldEnv(...) (:166) and parse_pipeline_args until set_phase('main') (:174). A teleport of a task body or of the robot during the adapter's construction (in our code, or in their create_default_env and create_ycb if handed the executing client) would trip neither G14 nor G3; only a change of the body count is caught.",
+      "evidence": "By reading, the adopt path writes nothing to client 0 today: create_default_env, create_ycb and _plan_load_urdf receive the plan client; _finish_adoption and resolve_robot_model only read; the G1 allowlist pins the five d9_setup call sites.",
+      "suggested_fix": "Call gate_hooks.set_phase('main') (or a new 'adapter' phase with no write or motor allowance) immediately after d9_setup, or replace the phase test with an explicit allow-set of D9's calls: setGravity, setTimeStep, changeDynamics of each task body with the declared values, changeDynamics and resetJointState of the two finger joints to FINGER_OPEN."
+    },
+    {
+      "severity": "minor",
+      "title": "G18 is listed green in B2's deliverable but nothing checks it",
+      "code_location": "tools/bridge_gates.py:571",
+      "problem": "G18 requires ledger timestamps showing that between env.initialize() returning and the first env.step the bridge does only the schema registration. The ledger opens inside execute_fn, after env.step has begun, and run_ledger has no G18 line (the deliverable's reader output lists G3, G4, G5, G15, G19, G11 and G21 only). Work placed before rollout would escape time_deltas unseen.",
+      "evidence": "run_bridge_on_finddice.py:81-95: after initialize the driver reads the logged scene name, exec-loads tools/bridge_gates.py for the pinned map, builds EpisodeConfig, registers the schema and builds the policy; nothing there does episode work, so G18 holds by inspection today.",
+      "suggested_fix": "Record perf_counter stamps right after initialize and right before rollout in bridge_episode.json (or open the ledger in the driver) and check the gap in the reader, or record in BF#12 that G18 is satisfied by inspection only."
+    },
+    {
+      "severity": "minor",
+      "title": "G2's AST scan misses aliased references, and gate_hooks reads poses through such aliases",
+      "code_location": "tools/bridge_gates.py:231",
+      "problem": "visit_Call matches only calls named getBasePositionAndOrientation, getAABB, rayTest and so on; visit_Attribute flags only object_poses, visibility_grid, world.poses and .position. g = p.getBasePositionAndOrientation followed by g(body), or a lookup of the function by its name, is invisible to G2. gate_hooks._task_poses (:182) reads every task body's pose on the executing client, the hidden die included, through the original function, and B2's _check_twin (:456) reads the plan twin the same way; neither is on the allowlist although gate_hooks is on the campaign import graph. A module-level alias taken at import, before install(), would also escape the runtime G8(b) hook.",
+      "evidence": "A search for p. or pybullet. followed by a G1 or G2 name and no '(' finds only comments and gate_hooks.py:184, 459, 560, so no decision module uses the pattern today; both gate reads feed only gate comparisons.",
+      "suggested_fix": "Flag every Load of a G1 or G2 name as an attribute of pybullet or p, and string constants equal to those names; add allowlist entries for gate_hooks' two reads."
+    },
+    {
+      "severity": "minor",
+      "title": "G8(c) checks a twin's position only and skips the held body",
+      "code_location": "tampura_bridge/gate_hooks.py:456",
+      "problem": "_check_twin compares each twin's base position with its registry centre or the park pose, but not its orientation, and it skips the held body. A twin posed with its body's true orientation (a yaw or tilt leak into the collision world and the shadow rays), or a held twin placed at its true pose instead of at the EE, would pass G8(c).",
+      "evidence": "sync_to_plan_client sets [0, 0, 0, 1] for every non-static twin (boxel_env.py:856) and the EE position for the held one (boxel_env.py:850), so nothing leaks today.",
+      "suggested_fix": "Also assert the identity quaternion for every non-static twin and, for the held body, a position equal to the executing EE link position read in the same sync."
+    },
+    {
+      "severity": "minor",
+      "title": "The minimum boxel size is layout dependent, not 'from the largest declared class' (D8)",
+      "code_location": "test_full_pipeline.py:569",
+      "problem": "TampuraWorldEnv gives every body its class extents as ObjectInfo.size (env_adapter.py:116) and main() takes the maximum over the bodies present, so the octree floor is 0.082 m in 1747173591 (die and d cup) and 0.087 m in 1747173593 (e cup present). D8 sets auto_cell from the largest declared class, a scene-independent constant; a planning constant that changes with the layout conflicts with G9 and H4.",
+      "evidence": "bf/BF12_b2/seed0.console:30 'Effective minimum boxel size: 0.082 m'; seed1.console:30 '0.087 m'. No hidden information enters: the categories are the shared identity map and the die is the smallest class.",
+      "suggested_fix": "Pass min_boxel_size = the largest extent in task_spec.CLASS_EXTENTS plus 0.01 from the bridge (frozen in B6), or state in B6's BF# why the per-scene rule is kept."
+    },
+    {
+      "severity": "minor",
+      "title": "The final hold stops at the first step that passes TAMPURA's test and the episode is scored at that instant; persistence was never measured",
+      "code_location": "robot_utils.py:936",
+      "problem": "hold_at_config returns as soon as np.allclose passes; at_home_ok then ends the loop and G6 forbids any further step, so the observation is the first passing readback. This is D7 (vii) as pre-registered and it runs inside the dispatched move to q_home, so it is not motion outside a planned action; but a transient pass would be scored as at-home, and B1(i) recorded only the steps to the first pass (tools/_probe_b1p2_tampura.py:469), not whether the arm stays within rtol and atol afterwards.",
+      "evidence": "test_full_pipeline.py:1785-1789 (hold, then the test on the readback); robot_utils.py:919-947; BF#11 (i) reports steps to pass and the largest residual only.",
+      "suggested_fix": "In B1(i) or B6, keep holding N steps after the first pass and record the worst error; if the pass does not persist, pre-register a dwell of k consecutive passing steps before B7, and disclose the result either way."
+    },
+    {
+      "severity": "minor",
+      "title": "G10's runtime domain pin trusts GateConfig.domain_file; B3 added the domain_file route",
+      "code_location": "tampura_bridge/gate_hooks.py:611",
+      "problem": "check_plan_call compares planner.domain_pddl with whatever file GateConfig.domain_file names. B3's main(domain_file) (pddlstream_planner.py:185-189) is the one route for another domain; a caller passing the same arbitrary path to main() and to GateConfig would pass G10 at run time. The pin to 'the live domain or gen_bridge_domain.py's regeneration' exists only in the static 'domain' command.",
+      "evidence": "B2 passes no domain_file and the GateConfig default is pddl/domain_pddlstream.pddl, so nothing is exploited now; the gap opens with M1 in B4.",
+      "suggested_fix": "At install, accept only the live domain's hash or the hash of gen_bridge_domain.py's output regenerated in process, independent of the caller's path."
+    }
+  ],
+  "verified_clean": [
+    "(1) Ground truth: the reads B2 and B3 add are the after_settle render and _poses (inside write_only; they reach only cfg.out and the ledger), the scoring readback (after main(), into their observation only), proprioception (arm_joint_positions, the EE link state that places the held twin), the static floor and robot base in sync_to_plan_client, and gate-internal reads. ObjectInfo carries no instance pose; OBJECT boxels come from render estimates; every shadow ray goes to the plan twin posed from those estimates with boxel-less bodies at [5, 5, -5] (B2 seed 1: 4 rayTestBatch calls on client 2, none on client 0). I found no path from a ground-truth value to the registry, the belief, the planner or an executor choice.",
+    "(2) D7: the initial readback rule and the q_home or q_readback_k naming only label proprioceptive readbacks with TAMPURA's test; hold_at_config runs inside the dispatched move to q_home (G3 context active), uses position control with move_robot_smooth's force and no reset; home_not_reached only ends an episode. None of it is a motion or a choice outside a planned action.",
+    "(3) held_cargo_config uses the readback joints, the plan grasp's xy, the registry box of the held body and declared constants, never a pose of the held body; the cargo re-solve keeps the planned goal configuration and logs goal_equal, which the ledger reader checks (bridge_gates.py:619).",
+    "(4) TampuraWorldEnv: identity map from world.objects and world.categories, position and orientation None, size the class extents; the twin is built by their create_default_env and create_ycb in the plan BulletClient only, the executing body count is asserted (12 and 15 unchanged on the cluster); 'plane' and 'table' both name their static table; the overrides are _adopt_scene, oracle_detect_objects (raises, G16), update_object_positions (counted no-op) and reset (raises).",
+    "(5) scoring.py: S from both pads at >= 0.5 N with no constraint, resolved by store.get(s) == body over sim_world.objects as obs_from_camera_image does; Q the 7-joint readback; no route to a forced success found.",
+    "(6) policy.py: install, D9 (1) to (4) in order, the adapter, main(), then scoring; no stepSimulation, motor command or reset of the executing world outside main() except D9 (4)'s finger reset; main()'s return value is ignored (G12).",
+    "(7) The observer wrapping exempts reads and captures only for the duration of world_eye and telemetry calls whose outputs no caller consumes; latest_registry tracks the single BoxelRegistry main() builds (test_full_pipeline.py:695); the body count and per-client ray counters only add checks.",
+    "(8) G10: _norm turns planner.home_config into 'q_home' (RobotConfig.__repr__ is its name), so the conjunction ('and', ('holding', 'dice'), ('at_config', 'q_home')) pins; target_objects is ['dice'] from the category; the home pseudo-boxel appears only in (Boxel home) and (config_for_boxel q_home home), asserted, and compute-kin yields nothing for it; G11 is unchanged.",
+    "Arm T: tools/run_tampura_timed.py equals their run_planner.py apart from the docstring and the one import; TampuraPolicyTimed overrides __init__ and get_action only and writes its spans to a side log."
+  ]
+}

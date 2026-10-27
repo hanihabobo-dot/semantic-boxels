@@ -25,6 +25,7 @@ export PYTHONHASHSEED=0
 echo "host $(hostname)  job ${SLURM_JOB_ID:-none}  $(date -Is)  ref $REF  cand $CAND"
 grep -m1 'model name' /proc/cpuinfo
 cmp $W/$REF/tools/_eval_ab.py $W/$CAND/tools/_eval_ab.py && echo "one harness file"
+sha256sum $W/$REF/tools/_eval_ab.py $W/$CAND/tools/_eval_ab.py
 for rep in 1 2 3; do
   for s in $(seq 0 19) $(seq 100 119); do
     for arm in $REF $CAND; do

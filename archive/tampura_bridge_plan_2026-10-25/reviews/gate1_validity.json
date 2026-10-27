@@ -1,0 +1,138 @@
+{
+  "lens": "validity",
+  "reviewed": ["526b358", "852b319"],
+  "records_read": ["8f122de (BF#10)", "1157ca7 (BF#7)", "fd7eabd and f71beb1 (BF#8, BF#9)", "96239d9 (BF#11)", "8242937 (BF#12)", "PAPER_AUDIT.txt at 8242937: P4.0, P4.1, P4.2, P4.3, P4.6, P4.14"],
+  "note_on_scope": "Commit 18be9d2 (Q13 answered, BF#13) landed at 14:14 while this review ran; it is outside the reviewed range and is cited only where it settles a point. Line numbers in PAPER_AUDIT.txt are those of 8242937. Their trees were read with cat, sed and grep, plus ls, find and git status (read only).",
+  "verdict": "revise",
+  "summary": "D3 is correct by reading: holding(S) unifies with is-target because S is resolved to their own sim_world store symbol through the body id lookup their obs_from_camera_image uses, at-home is judged by their abstract() on the real 7-joint readback, the no-op branch carries a step-0 reward to rewards[-1], and no path to a false 1.0 was found while G6's step count and G14's post phase hold. The clock covers D9, the settle, the twin build, the first render and boxelization for arm O. The seed-to-scene map pinned in tools/bridge_gates.py matches all 20 B1(g) consoles, and arm O seeds exactly as run_planner.py does. The T driver equals run_planner.py plus one import, and the timed subclass defines only __init__ and get_action. The B3 acceptance rule was applied as written, on one node, one venv and one harness file. The findings below concern what runs unchecked, what is unexercised and what the disclosures misstate.",
+  "findings": [
+    {
+      "severity": "major",
+      "title": "Arm T runs a tampura copy that G13 never hashes, while arm O runs the hashed tree",
+      "code_location": "tools/cluster/setup_arm_t.sbatch:53-55; tools/cluster/b2_deliverable.sbatch:26; tools/bridge_gates.py:461-492",
+      "problem": "G13 requires that every loaded tampura module lies inside the hashed trees. Arm T's venv installs tampura from GitHub non-editable, so arm T (B1(g), and the timed T arm that will use the same venv) imports the copy in .venv/lib/python3.11/site-packages/tampura. tree_state() hashes only $TW/tampura, the git checkout. Arm O puts $TW/tampura on PYTHONPATH and therefore imports the hashed checkout. The rollout, env.step, Belief.update and get_reward that judge both arms come from two different file sets, and the per-run gate that should stop the campaign on a change to their loop does not cover the copy arm T executes. No runtime check of __file__ exists on either driver.",
+      "evidence": "setup_arm_t.sbatch:53 'tampura as locally: from GitHub at the pinned commit, non-editable'; BF7_b1j/p4-setup-armT_4940009.txt:146 'import ok .../tampura-work/.venv/lib/python3.11/site-packages/tampura/__init__.py'; b2_deliverable.sbatch:26 PYTHONPATH=$SB:$W/pddlstream_lib:$TW/tampura:$TW/tampura_environments; tree_state() runs git ls-files on $TW/tampura only. Both copies exist locally too (site-packages/tampura/policies/policy.py and tampura/tampura/policies/policy.py); a grep spot check shows the same rollout lines, so no divergence was observed.",
+      "suggested_fix": "Make both arms load one copy: either drop $TW/tampura from arm O's PYTHONPATH so both load the pip-installed package, or hash the site-packages tampura tree (every .py file) in tree_state() and compare it with the checkout before and after every run. Add the __file__ assertion G13 promises: arm O's driver after import, and arm T through tampura_bridge/timed_policy.py at import time (it is the T driver's one permitted import, so the T-driver check stays green)."
+    },
+    {
+      "severity": "major",
+      "title": "BF#12 reports gates green whose checks do not exist: G13's runtime half, G18, G19's seed hygiene and G6's readback equality",
+      "code_location": "tools/bridge_gates.py:535-555, 571-707; tampura_bridge/run_bridge_on_finddice.py:80-95; tampura_bridge/policy.py:185-189",
+      "problem": "B2's deliverable requires G13, G18 and G19 green (P4.4 B2, PAPER_AUDIT.txt:4040) and BF#12 records the deliverable as met. A repository grep finds no code for: exactly two runtime registrations; type(policy).rollout is Policy.rollout on both arms; the timed subclass's __dict__ holding only __init__ and get_action; the env having no instance attribute step (G13, PAPER_AUDIT.txt:3415ff). G18 has no check at all: the ledger opens inside execute_fn, so no row covers the interval from initialize() returning to the first env.step, and the ledger gate output has no G18 line, although G18 says 'Ledger timestamps prove it' (3471) and G21 lists G18 as a per-episode ledger count. The ledger reader checks only G19's scene map, not its seed hygiene, which G21 also lists. G6's 'arm readback logged at main() return and at observation build, bit-identical' is not logged. G18's own sentence is also inconsistent with B2's spec: between initialize() and the first step the driver also loads SCENE_MAP by executing tools/bridge_gates.py, runs the G19 assertion and builds the policy, all trivial and all before the rollout clock starts.",
+      "evidence": "git grep for rollout, __dict__, registrations and the step attribute in tampura_bridge/, tools/bridge_gates.py and tools/run_tampura_timed.py returns only comments and the rollout call; BF12_b2/seed1_ledger_gates.txt lists ledger, G3, G4, G5, G15, G19, G11, G21 and nothing for G18; the seed 1 ledger's first row is ledger_open at the start of execute_fn; run_tdriver compares line membership only (bridge_gates.py:549-552). By inspection the current code satisfies the unimplemented G13 items and G18's intent, so this is an enforcement and record gap, not an observed violation.",
+      "suggested_fix": "Implement the missing checks before B7 and amend BF#12 to say which gates were checked by code and which by inspection: assert the registrations, Policy.rollout identity, the timed __dict__ and the absence of env.step in both drivers (for arm T inside timed_policy at import or __init__); write a ledger or episode row with the wall time when initialize() returns and when the rollout starts (or record initialize_return_wall in bridge_episode.json and compare it with RolloutHistory start); add G18 and G19 seed hygiene to the ledger reader; log the arm readback at main() return and compare it with the observation's conf. Reword G18 to list the G19 assertion it must allow."
+    },
+    {
+      "severity": "major",
+      "title": "D3 is unexercised: the G6 positive and negative controls are still stubs after B2",
+      "code_location": "tampura_bridge/tests/test_g6_controls.py:19-23; tampura_bridge/scoring.py:26-69",
+      "problem": "The scoring channel is arm O's success criterion and the site of the archived CB#123 failure. The control harness says 'B2 replaces this with the real one' and still raises NotImplementedError, BF#12's evidence lists 38 passing tests (hooks, ledger reader, B3) without the G6 controls, and the cluster deliverable ran stop_before_planning, so build_observation only ever produced the empty-hand observation (grasp_body null in both seeds). No executed evidence shows that a real two-pad hold of the die at DEFAULT_ARM_POS yields get_reward 1.0 through their update and abstract(), that a cup hold yields 0.0, or that an arm O RolloutHistory (tuple grasp in the store) loads in arm T's venv; B1(j) test 3 checked a run_planner history, not a bridge history.",
+      "evidence": "test_g6_controls.py:19-23; BF#12 EVIDENCE and RESULT (PAPER_AUDIT.txt:5925ff); BF12_b2/seed0 and seed1 bridge_episode.json observation.grasp_body null; B7's GO criterion needs these controls, so they are on the critical path anyway.",
+      "suggested_fix": "Write the G6 harness now: their FindDiceEnv on seed 0, D9, a test-control hold (die body between the pads at DEFAULT_ARM_POS, fingers closed, a few steps), scoring.build_observation, their b.update and get_reward; then the cup hold, the three fault injections and the pickle round trip of the resulting arm O history in arm T's venv without tampura_bridge on the path. Record the run in BF#12 or a new BF#."
+    },
+    {
+      "severity": "major",
+      "title": "Arm O's harness does not produce P4.6's per-episode outcome: a crash becomes an ordinary failure at its real time, and the exit code ignores gate counts",
+      "code_location": "tampura_bridge/policy.py:190-207; tampura_bridge/run_bridge_on_finddice.py:97-104",
+      "problem": "D10 says a killed or crashed episode enters every time statistic at the cap value, flagged censored, on both arms (PAPER_AUDIT.txt:3897-3903). Arm T's crash (B1(g) seed 16) leaves no RolloutHistory and is censored at 900 s. In arm O, any exception escaping main() is caught by execute_fn, a conf-only observation is returned, the rollout completes and pickles a normal history with rewards 0 and the real elapsed time; the crash survives only as 'error' in bridge_episode.json. A report that reads RolloutHistory (G12) would count O's crash at its true, shorter time, which favours O in the all-episode time statistics. Separately, the driver's exit code is rewards[-1] == 1.0 alone; P4.6 GATE-FAILED EPISODES counts any episode with a per-episode gate count above 0 as a failure, and a GateViolation swallowed inside main() (P4.1 notes main-pipeline code swallows broad exceptions) can coexist with rewards[-1] == 1.0.",
+      "evidence": "policy.py:190 'except Exception as e', 200-206 the fallback SceneObservation with conf only; run_bridge_on_finddice.py:104 'return 0 if history.rewards[-1] == 1.0 else 1'; BF#9 RESULT on seed 16; P4.6 SUCCESS at PAPER_AUDIT.txt:4434-4449.",
+      "suggested_fix": "Pre-register in P4.6 how an arm O exception counts: either re-raise from execute_fn after writing the gate record, so the process dies without a history exactly like arm T's crash, or define that an episode whose bridge_episode.json carries 'error' is a crashed episode, censored at the cap and flagged. Make the driver's exit code (or a single outcome field) combine rewards[-1] with the G21 counts, and state that the campaign report never takes success from rewards[-1] alone."
+    },
+    {
+      "severity": "major",
+      "title": "P4.6's disclosure list and D9 are stale after BF#4, BF#8 and BF#11",
+      "code_location": "PAPER_AUDIT.txt:3892-3895 (D9), 4484-4499 (P4.6 DISCLOSURES), 4438-4439 (P4.6 SUCCESS)",
+      "problem": "D9 and the table-note disclosures say their die sits at about 4 cm inside the cup 'in 12 of 20 seeds'. That is the laptop map. On the cluster map pinned by BF#8 (option A), layouts 1747173591 (seeds 0, 7, 9, 11, 12, 13, 16) and 1747173593 (seeds 1, 2, 3, 4, 8, 14, 15, 18) cover 15 of 20 seeds. This is the largest physical asymmetry between the arms: arm T picks a floating die from mid-air, arm O must find a die that fell about 4 cm inside its cup, tilted 21 deg (1747173591, still moving at 0.069 m/s after the settle) or 49.8 deg and 10.3 mm sideways (1747173593). BF#4's CLAIM EFFECT promised the tilt and residual motion as disclosures; P4.6 does not list them. P4.6 also still lists 'every cup partly out of frame' and the per-seed 'in-frame fraction below 1' column, which BF#11 (e) found false for this eye and dropped.",
+      "evidence": "tools/bridge_gates.py:89-94 SCENE_MAP; BF9_b1g consoles (all 20 'Loading scene from' lines match it); BF#4 (c) and BF#12 RESULT for the die's fall, sideways displacement and tilt; BF#11 (e) 'every cup's AABB projects entirely into the frame ... dropped'; P4.6 text at 8242937 unchanged on all three points.",
+      "suggested_fix": "Amend D9 and P4.6 DISCLOSURES in a BF# entry: 15 of 20 seeds on the campaign map (12 of 20 on the laptop map); add the die's fall inside the cup, its tilt and its residual motion after main()'s settle in those two layouts; delete 'every cup partly out of frame' and replace the in-frame column with the measured fact that every cup is fully in frame for this eye."
+    },
+    {
+      "severity": "major",
+      "title": "BF#11's die loss on the move home has no pre-registered decision before B7, and HOME_HOLD_STEP_CAP's payload clause was met on 5 of 96 cells",
+      "code_location": "PAPER_AUDIT.txt:5821-5845 (BF#11 (i) and FINDING); 3820ff (D7 (vii)); archive/tampura_bridge_plan_2026-10-25/bf/BF11_b1p2/probe_i.json",
+      "problem": "The die-class box was held with 7 to 10 N pad force in all 96 trials and left the pads on the move home in 91. If B7 confirms this, arm O fails most episodes on transport, and the comparison measures the gripper rather than the method, the case D11 (iii) already treats as 'not runnable as specified' for cup width. No analogous rule exists here, and BF#11 defers the remedy to B7, which runs on the campaign seeds; a remedy designed after watching those episodes risks being fitted to the released layouts (R8). D7 (vii) also fixes HOME_HOLD_STEP_CAP from the probe grid 'empty-handed and with the die-class payload'; the payload stayed in the pads in 5 cells only, so 52 rests on empty-hand trials for 91 cells while BF#11's DECISION says the cap follows 'the pre-registered rules'. The loss mechanism is undiagnosed (suspicion: a probe or grip-control artefact on their Panda's finger joints 12 and 13, which a 5 g box under 7 to 10 N squeeze should not slip from by friction alone).",
+      "evidence": "probe_i.json rows, e.g. cell (0.375, -0.255) die_class: settled both pads 8.7 N at z 0.1358, after_move both false at z 0.0086; BF#11 'The payload stayed between the pads in only 5 of its 96 trials'; 'HOME_HOLD_STEP_CAP = 2 x 26 = 52 ... with the payload measured in 5 trials only'.",
+      "suggested_fix": "Before B7, on the empty table only: diagnose the loss (finger motor commands during move_robot_smooth and hold_at_config on their Panda, contact geometry, accelerations), and pre-register what happens if it persists (a main-pipeline change through the B3 acceptance and BF#13's test, or a user decision as in D11 (iii)). Re-run B1(i) with a payload that stays in the pads on every cell, or record the cap's derivation as a deviation for the user."
+    },
+    {
+      "severity": "minor",
+      "title": "The clock boundaries are asymmetric against arm O, and G18's parity sentence overstates them",
+      "code_location": "tampura_bridge/policy.py:119-186; their find_dice/env.py:816-876; their tampura/policies/policy.py:104, 136",
+      "problem": "G18 puts arm O's set-up on the clock 'as it covers TAMPURA's own t=0 stream sampling'. The direct analogue of O's first render and boxelization is T's initial camera image and visibility-grid update, and the analogue of O's plan twin is T's sim_world; both run inside their initialize(), before the rollout's st, so they are off T's clock. O's twin build alone took 0.975 s of the 1.614 s step 0 in BF#12 seed 1. O's clock also carries the gate hooks, the ledger and world_eye snapshots with saved images (main() enables world_eye whenever a run logger is passed). All of this works against O, so it cannot flatter O, but (t1) and (t5) are described as comparable without saying so.",
+      "evidence": "BF12_b2/seed1 ledger bridge_timing d9_setup_s 0.080, env_build_s 0.975; bridge_episode.json time_deltas[0] 1.614; test_full_pipeline.py:1065-1066 enables world_eye; B1(g) per-seed wall minus loop is 14 to 38 s (imports, initialize and the final pickle together; initialize alone is not measured).",
+      "suggested_fix": "Disclose in P4.6 TIME that T's initial perception and belief-world build are off its clock while O's are on it, and report O's set-up share (D9, twin build, first render, boxelization) as its own column so readers can subtract it; or measure initialize() on both drivers from the campaign driver and report it beside (t1). Consider disabling world_eye image saves in scored runs, or report their time."
+    },
+    {
+      "severity": "minor",
+      "title": "BF#10 undercounts the new outcome differences in the re-runs",
+      "code_location": "PAPER_AUDIT.txt:5743-5745 (BF#10 RESULT); archive/tampura_bridge_plan_2026-10-25/bf/BF10_b3/rr_c31cbdd.json",
+      "problem": "BF#10 says one new outcome difference appeared in the re-runs (seed 10: c31cbdd success, B3 fail). There were two: seed 116 also differs, c31cbdd failing with 8 plans (no_plan_binding_death) while B3 succeeded with 6; both had succeeded in the A/B. The omission does not change the verdict, but the record names only the difference that goes against B3.",
+      "evidence": "acceptance_report.json rerun.per_seed '116': ab [[true,6],[true,3]], rerun [[false,8],[true,6]]; p4-b3-rerun_4941890.txt 'seed 116 -> eff 116 FAIL plans=8' then 'OK plans=6'.",
+      "suggested_fix": "Correct BF#10's RESULT to two new outcome differences (10 against B3, 116 for B3)."
+    },
+    {
+      "severity": "minor",
+      "title": "Q13's evidence summary omits the per-arm tallies, and one clause of the pre-registered rule was never implemented",
+      "code_location": "PAPER_AUDIT.txt:5757-5762 (BF#10 READING), 4665ff (Q13), 4113 (B3 ACCEPTANCE); tools/b3_acceptance_report.py",
+      "problem": "The rule was applied as written and the executor did not reinterpret it; that part is sound. The reading 'c31cbdd itself produces the values B3 reproduced' is literally true but gives the user no frequencies. Across all runs of each version: seed 100, B3 gave 3 plans in 4 of 4 runs, c31cbdd in 2 of 5; seed 105, B3 gave 1 plan in 3 of 4, c31cbdd in 1 of 5; seed 119, B3 succeeded in 3 of 4, c31cbdd in 2 of 5. None is significant (Fisher about 0.17, 0.21, 0.52), and the runs span jobs at different times, but the leanings belong in the evidence put to the user. The pre-registered clause 'timed-out plan() calls are logged as the noise source' is implemented nowhere in the acceptance tooling. Commit 18be9d2, outside this review, records the user's acceptance and BF#13's per-seed permutation test, which is valid under exchangeability without calibration on the A/A, so no further rule change is asked here.",
+      "evidence": "acceptance_report.json per_seed rows for 100, 105 and 119 plus the rerun rows; diag/*.json (c31cbdd 100: 3, 3; 105: 2, 2; 119: fail 3, fail 3; B3 100: 3, 3; 105: 2, 1; 119: success 3, success 4); b3_acceptance_report.py has no timeout field.",
+      "suggested_fix": "Append the per-arm tallies to BF#10's READING, and either count timed-out plan() calls per run in the acceptance report (BF#13's test can report them too) or strike that clause from the B3 text as unimplemented."
+    },
+    {
+      "severity": "minor",
+      "title": "The acceptance harness is untracked, and its identity across snapshots is asserted, not evidenced",
+      "code_location": "tools/_eval_ab.py (untracked); tools/cluster/setup_arm_o.sbatch:25-29; tools/cluster/b3_rerun.sbatch",
+      "problem": "The A/A, A/B, re-runs and diagnostics all ran tools/_eval_ab.py copied into each snapshot from the cluster inbox. The file is not in any commit, no job log records its hash, and BF#10's 'the A/A's harness file (identical bytes)' therefore cannot be checked from the repository. The definition of 'reproduces' sits in b3_rerun.sbatch, committed in 8f122de together with the re-run results, so the claim that it was fixed before any re-run result rests on the record's word.",
+      "evidence": "git ls-files tools/_eval_ab.py returns nothing; setup_arm_o.sbatch copies $IN/_eval_ab.py into each snapshot; the local file (sha256 036a2634...47f1, last written 2026-09-20) is consistent with an unchanged harness, but the cluster copies were not hashed.",
+      "suggested_fix": "Commit tools/_eval_ab.py (or record its sha256 in BF#7 and BF#10 and have every acceptance job print sha256sum of the harness it runs), and commit protocol scripts in their own commit before their jobs are submitted, as BF#13 now does for acceptance_dist.sbatch."
+    },
+    {
+      "severity": "minor",
+      "title": "D10's per-call planning bound is not implemented",
+      "code_location": "tampura_bridge/policy.py:48, 170-172; tampura_bridge/run_bridge_on_finddice.py:66",
+      "problem": "D10 says 'our --max-plan-time bounded by the remaining episode budget'. The bridge passes a static --max-plan-time of 900 s to every plan() call. The process cap still ends the episode, so outcomes do not change, but a plan() call can never time out before the kill, which changes how such episodes are classified (censored timeout rather than planner_failed) relative to the pre-registered text.",
+      "evidence": "EpisodeConfig.max_plan_time = 900.0 and parse_pipeline_args([..., '--max-plan-time', str(cfg.max_plan_time)]).",
+      "suggested_fix": "Either implement the bound (pass the episode deadline into main() and clip each plan() call's max_time to the remaining budget) or amend D10 to say the 900 s process cap is the only bound."
+    },
+    {
+      "severity": "minor",
+      "title": "Arm O writes boxel_data.json into their tampura_environments directory, unseen by G13",
+      "code_location": "test_full_pipeline.py:698; tools/bridge_gates.py:473-474",
+      "problem": "main() saves boxel_data.json to the working directory, and both drivers run from their tampura_environments checkout, so every arm O episode leaves an untracked file in their tree. G13 checks tracked files only (--untracked-files=no) and its acknowledged untracked outputs are runs/, temp/, logs/ and __pycache__. Nothing reads the file, so no result changes, but 'their tree untouched' is not what G13 verifies. pddlstream's temp/ in the same directory is shared by both arms; serial runs keep that harmless.",
+      "evidence": "BF12_b2/seed0.console 'saved 8 boxels to boxel_data.json'; locally /root/tampura-work/tampura_environments shows '?? boxel_data.json' written 2026-10-27 13:32 by a B2 smoke.",
+      "suggested_fix": "Have the bridge chdir to arm O's run directory inside execute_fn (after the scene is loaded) or make main() write its artefacts into the run logger's directory; add untracked files outside the acknowledged list to G13's check."
+    },
+    {
+      "severity": "minor",
+      "title": "The T driver copy and its check have three loose ends",
+      "code_location": "tools/run_tampura_timed.py:25-29, 39-43; tools/bridge_gates.py:549-552",
+      "problem": "(1) The default save_dir is built from __file__, which now points at our tools/ directory, so without an explicit --save-dir arm T writes its runs (and TAMPURA's per-sample pddl directories) into our snapshot instead of their runs/. (2) The T-driver check compares the __main__ block by line membership: a reordered block (for example random.seed after env.initialize, which would break G19 for arm T) or a duplicated line passes, and create_parser() and the module imports are not compared at all. (3) Their parser declares --vis with type=bool, so a campaign driver that passes '--vis 0' for symmetry with arm O would switch arm T to GUI mode.",
+      "evidence": "Compare-Object of tools/run_tampura_timed.py against their run_planner.py shows only the docstring and the one import as differences today; bridge_gates.py:549 'extra = [l for l in (ours or []) if l not in (ref or [])]'.",
+      "suggested_fix": "Make the check an ordered diff of the whole file after removing the docstring and the one permitted import; have tools/_bridge_campaign.py always pass --save-dir and never pass --vis to the T driver, and state both in P4.6 COMMANDS."
+    },
+    {
+      "severity": "minor",
+      "title": "The setup phase disables G14 and G3 on the executing client for the whole env adapter build",
+      "code_location": "tampura_bridge/gate_hooks.py:207, 225; tampura_bridge/policy.py:153-174",
+      "problem": "Writes and motor commands on the executing client are unchecked while the phase is 'setup'. The phase covers D9 and then also the TampuraWorldEnv construction, the args set-up and an import, until set_phase('main'). D9 says nothing else of theirs is altered, and that is a disclosure premise; by inspection the adopt path writes only to the plan client (create_default_env and create_ycb with the plan BulletClient, _plan_load_urdf, reads in resolve_robot_model), so nothing is violated today, but no hook would notice if it were.",
+      "evidence": "_make_writer: 'if _executing(kwargs) and _phase != \"setup\"'; _make_motor has the same condition; set_phase('main') is called only after env construction (policy.py:174).",
+      "suggested_fix": "Call set_phase('main') (or a new 'adapter' phase with the main rules) right after d9_setup, so only the D9 calls run unchecked; the body-count check at gate_record stays as a second net."
+    },
+    {
+      "severity": "minor",
+      "title": "The octree's minimum boxel size varies by layout, against D8's 'largest declared class'",
+      "code_location": "test_full_pipeline.py:561-570; tampura_bridge/env_adapter.py:113-118; tampura_bridge/policy.py:175-184",
+      "problem": "main() derives auto_cell from the largest ObjectInfo.size among the bodies present, and the adapter fills sizes for the categories in the loaded scene, so arm O runs with 0.082 m in 1747173591 and 0.087 m in 1747173593. D8 pre-registers auto_cell from the largest declared class, a scene-independent value. The difference is small and follows the thesis pipeline's own rule, but it makes an arm O parameter depend on which layout loaded.",
+      "evidence": "BF12_b2/seed0.console 'Effective minimum boxel size: 0.082 m'; seed1.console '0.087 m'.",
+      "suggested_fix": "In B6, pass the declared value (largest class in task_spec.CLASS_EXTENTS plus the headroom) to main() through min_boxel_size, and record it in task_spec and campaign.json."
+    },
+    {
+      "severity": "minor",
+      "title": "Arm O development smokes ran in arm T's local venv, against D12 and the user's Q11 answer",
+      "code_location": "PAPER_AUDIT.txt:5905-5908 (BF#12 DECISION (5)); 3921ff (D12)",
+      "problem": "D12 reads 'its OWN venv, never their venv and never one that arm T uses', and Q11 was answered with that proposal. BF#12 (5) records that the B2 smokes ran the bridge in the laptop's arm T venv, an executor decision. The campaign arm T is the cluster venv and its freeze is unchanged, so no campaign number is affected; the deviation is from a user-approved rule and is not marked as one.",
+      "evidence": "BF#12 (5): 'Development smokes run locally in the laptop's arm T venv (no install, nothing written into it; G13 green before and after)'; BF#11 probes likewise ran in that venv.",
+      "suggested_fix": "Record it as a deviation for the user to confirm, or build a local arm O venv (a clone of the local arm T package set) for smokes and probes from now on."
+    }
+  ]
+}
