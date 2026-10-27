@@ -4006,7 +4006,8 @@ B1  [DONE 2026-10-27; part 1 (a) to (d) BF#4; (g) on the cluster, BF#9;
     flagged).  GUI twin for (g): wsl -d Ubuntu -e bash -lc 'bash
     /root/tampura-work/tampura_run_gui.sh 0 1'.  Effort 2 to 3 days + 85 min.
 
-B2  [OPEN; harness 2026-10-27, BF#12; deliverable on the cluster pending]
+B2  [DONE 2026-10-27, BF#12: the deliverable met on the cluster; review
+    gate 1 running]
     HARNESS: tampura_bridge/ (fresh package; nothing imported from the
     archive).  run_bridge_on_finddice.py (seeds random and numpy with
     --global-seed, builds FindDiceEnv(config), b0, store = env.initialize(),
@@ -4048,8 +4049,9 @@ B2  [OPEN; harness 2026-10-27, BF#12; deliverable on the cluster pending]
     $VO/bin/python $SB/tampura_bridge/run_bridge_on_finddice.py
     --global-seed 0 --vis 1'.  Effort 5 to 7 days.
 
-B3  [OPEN; code and tests 2026-10-27, BF#10; acceptance failed on its
-    plan-count clause, user decision Q13]
+B3  [DONE 2026-10-27, BF#10; its acceptance failed the per-seed
+    plan-count clause, and the user accepted B3 on the diagnostic evidence
+    (Q13); later acceptances use BF#13's test]
     MAIN-PIPELINE PARAMETERISATION, NO BEHAVIOUR CHANGE ON OUR SCENES.
     Runs after B1 part 1 and before B1 part 2 and B2.
     (a) robot_utils gains a RobotModel (arm joints, finger joints, EE link,
@@ -4116,8 +4118,10 @@ B3  [OPEN; code and tests 2026-10-27, BF#10; acceptance failed on its
     at-home miss); the after_settle hook neither steps nor moves anything;
     with the shadow-raycast client set, no ray reaches the executing client;
     the adopted client survives main(); stop_before_planning returns before
-    the first plan() call.  B5, M6 and M7 reuse this acceptance.  Lands on
-    tampura-bridge first, cherry-picked to main-paper-icaps-2027 once green.
+    the first plan() call.  B5, M6 and M7 reuse this acceptance, with its
+    plan-count clause replaced by BF#13's pre-registered distributional
+    test (three runs per arm).  Lands on tampura-bridge first,
+    cherry-picked to main-paper-icaps-2027 once green.
     Effort 5 to 6 days.
 
 B4  [OPEN, CONDITIONAL ON B1(h)]  MODEL TWEAK M1.  pddl/domain_find_dice_v2.pddl
@@ -4670,7 +4674,9 @@ Q13 B3's acceptance (BF#10): no outcome flip reproduced, but three
     test the reference can pass, for example the per-seed plan-count
     distribution over three runs per arm compared seed by seed, fixed before
     those runs.  Alternative: keep the per-seed rule and investigate further
-    before B2 lands.
+    before B2 lands.  ANSWERED 2026-10-27 (user): accept B3 on the
+    diagnostic evidence, and pre-register a distributional plan-count test
+    for the B5, M6 and M7 acceptances before those runs (BF#13).
 
 --------------------------------------------------------------------------------
 P4.11 CRITIQUE LOG, ROUND 1 (draft 1, 2026-10-25; four adversarial critics,
@@ -5595,8 +5601,8 @@ BF#9 [DONE]  B1(g): TAMPURA AS SHIPPED ON THE CLUSTER, SEEDS 0-19  (B1,
   the 20 consoles, the job log with other users' prolog rows stripped, and
   b1g_report.json from tools/_b1g_report.py).
 
-BF#10 [OPEN, USER DECISION (Q13)]  B3: MAIN-PIPELINE PARAMETERISATION, EVERY
-      NEW BEHAVIOUR DEFAULT OFF  (B3, 2026-10-27)
+BF#10 [DONE, accepted by the user (Q13)]  B3: MAIN-PIPELINE
+      PARAMETERISATION, EVERY NEW BEHAVIOUR DEFAULT OFF  (B3, 2026-10-27)
   WHAT: B3 (a) to (f) in code, with its tests.
   (a) robot_utils.RobotModel (arm joints, finger joints, EE link, gripper
       links, ignored self pairs, finger limits), resolved by NAME in
@@ -5759,6 +5765,13 @@ BF#10 [OPEN, USER DECISION (Q13)]  B3: MAIN-PIPELINE PARAMETERISATION, EVERY
   identical code differs in 16 of 35 seeds; it fails B3 on values the
   reference code produces itself.  The executor does not reinterpret a
   pre-registered rule after its result: Q13 asks the user.
+  DECISION 2026-10-27 (user, Q13): B3 is accepted on the diagnostic
+  evidence.  The per-seed plan-count clause stays on record as failed for
+  B3; the acceptances still to come (B5, M6, M7) use the distributional
+  plan-count test fixed in BF#13 before any of their runs.  The cherry-pick
+  of B3 to main-paper-icaps-2027 that P4.4 foresees "once green" is still
+  to do; it needs a branch switch, which this session does not make in a
+  shared checkout.
   Evidence: archive/tampura_bridge_plan_2026-10-25/bf/BF10_b3/ (the A/B and
   re-run JSONs, ab_report.json and acceptance_report.json from
   tools/b3_acceptance_report.py, the three diagnostic jobs' JSONs in diag/,
@@ -5947,6 +5960,44 @@ BF#12 [DONE, review gate 1 pending]  B2: THE HARNESS  (B2, 2026-10-27)
   Evidence: archive/tampura_bridge_plan_2026-10-25/bf/BF12_b2/ (both
   consoles, bridge_episode.json and ledger.jsonl per seed, the ledger and
   static gate outputs, G13 before and after, the job log).
+
+BF#13 [DONE, pre-registered]  THE PLAN-COUNT TEST OF THE B5, M6 AND M7
+      ACCEPTANCES  (protocol, 2026-10-27)
+  WHAT: By the user's decision on Q13, the acceptances still to come (B5,
+  M6, M7) replace the per-seed plan-count clause of B3's acceptance with a
+  distributional test, fixed here before any of their runs and implemented
+  in tools/acceptance_plan_counts.py and tools/cluster/acceptance_dist.sbatch.
+  RUNS: the reference (the commit the change applies to) and the candidate
+  (the change) each run our holding scene on seeds 0-19 and 100-119 three
+  times, interleaved per seed (reference, then candidate) in every
+  repetition, on one exclusive node (cn-110) with one harness file, in
+  armO-venvA, PYTHONHASHSEED 0 (P4.6 MACHINE).
+  PLAN-COUNT CLAUSE: a seed enters when all six of its runs reached the
+  planner (a scene the pre-flight rejects has no plan count on either arm
+  and leaves; a seed with any other missing count is listed and left out).
+  With R_s and C_s the reference's and the candidate's three plan counts on
+  seed s, T = sum over the seeds of (mean C_s - mean R_s).  Null hypothesis:
+  the change leaves each seed's plan-count distribution unchanged, so the
+  six counts of a seed are exchangeable between the arms; T is recomputed
+  under 20000 random three-to-three splits of every seed's six counts
+  (random.Random(0)) and p is the share of draws with |T*| >= |T|.  The
+  clause PASSES when p >= 0.05.
+  UNCHANGED: the outcome clause (flips between the first repetitions of the
+  arms accepted up to the A/A's count, 3 by BF#7; repetition 2 is each
+  flipped seed's one re-run on both arms; a flip that reproduces fails)
+  and the identical Phase-4 target clause, now over all six runs.
+  CHECK (synthetic counts only, nothing from any real arm, so the rule is
+  not fitted to data it will judge): with the reference's distribution
+  reproduced the test passes (p 0.33); with one more plan on half the seeds
+  it fails (p 0.007).
+  BEFORE / AFTER: per-seed exact reproduction of a plan-count difference
+  fails the acceptance / the aggregate exchangeability test above, for B5,
+  M6 and M7.
+  CLAIM EFFECT: none.
+  HONESTY CLASS: configuration (protocol).
+  DECISION 2026-10-27 (user, Q13; the test's form fixed by the executor the
+  same day, before any B5, M6 or M7 run).
+  RESULT: n/a until those acceptances run.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
