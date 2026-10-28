@@ -6797,6 +6797,16 @@ BF#25 [DONE]  GF9: B3'S TEST (4) UNDER THE GATE HOOKS  (B2 gate fix,
   complete on the laptop.  Re-running B2's deliverable on the cluster
   (both seeds, with G13's new stray-file check) needs the user's approval.
   GF10 and the before-B7 list stay with B4 to B6.
+  CLUSTER (same day): tools/cluster/push_snapshot.ps1 puts one commit on
+  the cluster as a read-only snapshot (git archive, tracked files only)
+  and prints the submit lines; tools/cluster/bridge_run.sbatch runs arm O
+  on chosen seeds, smoke or full, serial on an exclusive node: G13 before
+  (a failure stops the job), each episode's outcome field and ledger
+  gates, G13 after, the static gates.  CLEAN_STRAYS=1 removes only the two
+  files the pre-GF8 runs left in their tampura_environments
+  (boxel_data.json, statistics/py3/boxel-streams.pkl).  A local dry run
+  of the job script (P4_WORK pointing at a symlinked layout, smoke, seed
+  0) passed every gate.  Nothing has run on the cluster.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
