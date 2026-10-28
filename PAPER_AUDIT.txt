@@ -6516,6 +6516,33 @@ BF#17 [DONE]  NO SIM SCREENSHOTS ON THE CLUSTER; LOCAL ONES KEPT A WEEK
   DECISION 2026-10-28 (user).
   RESULT: as above.
 
+BF#18 [DONE]  GF2: G13 HASHES ARM T'S INSTALLED TAMPURA  (B2 gate fix,
+      2026-10-28)
+  WHAT: arm T's venv holds tampura as a pip install from git at cdddf14
+  (site-packages, not editable); tampura_environments is an editable
+  install of the checkout.  tools/bridge_gates.py tree now locates the
+  tampura arm T's python imports and requires every tracked file of the
+  checkout's package that the install carries to be byte-equal (RG1.3).
+  Four tracked files are not installed and fail nothing (NOT_INSTALLED):
+  config/default.yml and three SymK dotfiles; none is read at run time
+  (load_config reads the --config file, find_dice's own).  Any other
+  missing file, any differing file, any untracked file outside pip's build
+  products (the setup.py dummy extension and SymK's build tree, which
+  cannot equal the checkout's own build) fails G13.  The build products'
+  hash goes into the saved state and into --compare.  The runtime half
+  (loaded modules byte-equal to the checkout) is BF#16's clause (6).
+  EVIDENCE: archive/tampura_bridge_plan_2026-10-25/bf/BF18_gf2/.  Local:
+  2502 of 2506 tracked files equal, PASS; one appended byte in the
+  installed utils.py fails it (reverted).  Cluster (cn-04, $W/tampura-work):
+  2502 of 2506 equal, PASS; pip freeze 0cdfcf0c..., unchanged since B1(g),
+  so B1(g) ran on this same installed tampura.
+  BEFORE / AFTER: the checkout hashed, the code arm T imports not / both,
+  and the two required equal.
+  CLAIM EFFECT: none.
+  HONESTY CLASS: infrastructure (gates).
+  DECISION 2026-10-28 (executor): as BF#14 GF2 specified.
+  RESULT: GF2 done; GF3 (G2's leak test) is next.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

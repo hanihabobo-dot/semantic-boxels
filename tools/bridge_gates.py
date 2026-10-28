@@ -47,6 +47,18 @@ DECLARED_THEIR_CHANGES = {
             '9a64bea00c9ef6dcea6a8ee5b26a1f071a4366f053895509ddc32e45fe7b8ec4',
     },
 }
+# Arm T imports tampura from its venv's site-packages, a pip install from git
+# at the pinned commit, not from the checkout (RG1.3, GF2).  G13 requires
+# every tracked file of the checkout's package that the install carries to be
+# byte-equal.  Tracked files pip leaves out (none is read at run time:
+# load_config reads the --config file, find_dice's own):
+NOT_INSTALLED = frozenset((
+    'config/default.yml', 'third_party/symk/.gitattributes',
+    'third_party/symk/.gitignore', 'third_party/symk/.uncrustify.cfg'))
+# What pip builds that git does not track: the setup.py dummy extension and
+# SymK's own build tree (bin/downward is the planner arm T runs).  These
+# cannot equal the checkout's build; their hash goes into --compare instead.
+INSTALL_BUILT = re.compile(r'(_dummy\.cpython-[^/]*\.so|third_party/symk/builds/.*)$')
 
 # The campaign drivers (G1).  test_full_pipeline.py is a declared root as
 # well: D1 runs its main() inside execute_fn, so it is on the campaign path
@@ -489,7 +501,49 @@ def tree_state():
                        'undeclared_changes': undeclared}
     freeze = _run([os.path.join(TW, '.venv', 'bin', 'pip'), 'freeze'])
     state['pip_freeze_sha256'] = hashlib.sha256(freeze.encode()).hexdigest()
+    state['tampura_installed'] = installed_state()
     return state
+
+
+def _sha(fp):
+    with open(fp, 'rb') as fh:
+        return hashlib.sha256(fh.read()).hexdigest()
+
+
+def installed_state():
+    """The site-packages tampura of arm T's venv against the checkout."""
+    found = _run([os.path.join(TW, '.venv', 'bin', 'python'), '-c',
+                  'import tampura, os; print(os.path.dirname(tampura.__file__))']).strip()
+    checkout = os.path.join(TW, 'tampura', 'tampura')
+    tracked = [f[len('tampura/'):] for f in
+               _run(['git', '-C', os.path.join(TW, 'tampura'), 'ls-files', '-z',
+                     'tampura']).split('\0') if f]
+    differ, missing, equal = [], [], 0
+    for rel in tracked:
+        fp = os.path.join(found, rel)
+        if not os.path.isfile(fp):
+            if rel not in NOT_INSTALLED:
+                missing.append(rel)
+        elif _sha(fp) != _sha(os.path.join(checkout, rel)):
+            differ.append(rel)
+        else:
+            equal += 1
+    tracked_set, extra = set(tracked), []
+    built = hashlib.sha256()
+    for root, dirs, files in os.walk(found):
+        dirs[:] = sorted(d for d in dirs if d != '__pycache__')
+        for name in sorted(files):
+            rel = os.path.relpath(os.path.join(root, name), found).replace(os.sep, '/')
+            if rel in tracked_set:
+                continue
+            if INSTALL_BUILT.match(rel):
+                built.update(rel.encode())
+                built.update(bytes.fromhex(_sha(os.path.join(root, name))))
+            else:
+                extra.append(rel)
+    return {'path': found, 'tracked': len(tracked), 'equal': equal, 'differ': differ,
+            'missing': missing, 'untracked_extra': extra,
+            'built_sha256': built.hexdigest()}
 
 
 def run_tree(report, save=None, compare=None):
@@ -511,6 +565,16 @@ def run_tree(report, save=None, compare=None):
                                   f"{n_decl} declared change(s) (BF#3), "
                                   f"nothing else modified"))
     report.add('G13', 'INFO', f"arm T pip freeze {state['pip_freeze_sha256'][:16]}")
+    inst = state['tampura_installed']
+    bad = [f"{k}: {inst[k][:5]}" for k in ('differ', 'missing', 'untracked_extra')
+           if inst[k]]
+    if inst['path'] == os.path.join(TW, 'tampura', 'tampura'):
+        bad.append('arm T imports the checkout itself, not the install G13 expects')
+    report.add('G13', 'FAIL' if bad else 'PASS',
+               f"arm T's installed tampura: " + ('; '.join(bad) if bad else
+               f"{inst['equal']} of {inst['tracked']} tracked files byte-equal "
+               f"to the checkout, the rest never installed and never read, "
+               f"build {inst['built_sha256'][:16]}"))
     if save:
         with open(save, 'w') as f:
             json.dump(state, f, indent=1)
@@ -518,6 +582,9 @@ def run_tree(report, save=None, compare=None):
         with open(compare) as f:
             before = json.load(f)
         diff = [k for k in ('pip_freeze_sha256',) if before.get(k) != state.get(k)]
+        if 'tampura_installed' in before and (before['tampura_installed']['built_sha256']
+                                              != state['tampura_installed']['built_sha256']):
+            diff.append('tampura_installed build')
         diff += [r for r in PINNED_COMMITS
                  if before[r]['tracked_sha256'] != state[r]['tracked_sha256']]
         report.add('G13', 'FAIL' if diff else 'PASS',
