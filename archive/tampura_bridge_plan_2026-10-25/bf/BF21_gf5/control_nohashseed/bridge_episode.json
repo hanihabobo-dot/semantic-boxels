@@ -1,0 +1,174 @@
+{
+ "seed": 0,
+ "scene_file": "1747173591.670785.json",
+ "g13_runtime": {
+  "arm": "O",
+  "failures": [],
+  "their_root": "/root/tampura-work",
+  "policy_methods": [
+   "__init__",
+   "get_action"
+  ],
+  "their_modules": {
+   "in_checkout": 53,
+   "identical_copy": 0
+  },
+  "schemas_of_ours": [
+   "boxel_episode"
+  ],
+  "ok": true
+ },
+ "run_dir": "/mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/archive/tampura_bridge_plan_2026-10-25/bf/BF21_gf5/control_nohashseed/ours/run_2026-10-28_12-56-02",
+ "scene_changed_by_settle": false,
+ "settle": {
+  "d_cups_ud": {
+   "dxy_m": 0.0,
+   "dz_m": -0.011,
+   "dyaw_deg": 0.0,
+   "tilt_deg": 0.0
+  },
+  "dice": {
+   "dxy_m": 0.0039,
+   "dz_m": -0.0377,
+   "dyaw_deg": -0.52,
+   "tilt_deg": 21.2
+  }
+ },
+ "settle_max_dxy_m": 0.0039,
+ "observation": {
+  "grasp_body": null,
+  "conf": [
+   -0.0806389116678673,
+   -1.6722655321416895,
+   0.07069076842695393,
+   -2.744941788892324,
+   0.0817931811921767,
+   1.751514446341271,
+   0.7849770239183707
+  ]
+ },
+ "readback_identical": true,
+ "gates": {
+  "counts": {},
+  "info": {
+   "G16_update_object_positions_noop": 1,
+   "G8c_bodies_checked": 4,
+   "G8c_syncs": 2,
+   "rayTestBatch_client_2": 1,
+   "executing_bodies_at_install": 12,
+   "executing_bodies_now": 12
+  },
+  "steps": {
+   "main_outside_dispatch": 50
+  },
+  "steps_after_last_dispatch": 0,
+  "solve_calls": 0
+ },
+ "rewards": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "time_deltas": [
+  1.3792481422424316,
+  1.3924970626831055,
+  1.4020509719848633,
+  1.4115972518920898,
+  1.4216041564941406,
+  1.4315731525421143,
+  1.441927433013916,
+  1.452404260635376,
+  1.46097993850708,
+  1.4702959060668945,
+  1.4813437461853027,
+  1.4913907051086426,
+  1.5002751350402832,
+  1.5105698108673096,
+  1.5209565162658691,
+  1.531566858291626,
+  1.5420725345611572,
+  1.554119348526001,
+  1.565948247909546,
+  1.5755133628845215,
+  1.5793089866638184
+ ],
+ "ledger_gates": [
+  [
+   "ledger",
+   "PASS",
+   "16 rows, complete"
+  ],
+  [
+   "G3",
+   "PASS",
+   "0 steps over 0 plans, all as planned; 0 labelled early ends"
+  ],
+  [
+   "G4",
+   "PASS",
+   "0 places at the planned centre"
+  ],
+  [
+   "G5",
+   "PASS",
+   "no fragment change"
+  ],
+  [
+   "G15",
+   "PASS",
+   "0 senses, each classified on its planned region"
+  ],
+  [
+   "G19",
+   "PASS",
+   "scene file matches the pinned map"
+  ],
+  [
+   "G18",
+   "PASS",
+   "initialize return to rollout start 0.024 s (initialize_call +0.007 s, initialize_return +3.473 s, scene_map_asserted +0.008 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.016 s, rollout_start +0.000 s)"
+  ],
+  [
+   "G19h",
+   "FAIL",
+   "PYTHONHASHSEED None, pinned '0'"
+  ],
+  [
+   "G11",
+   "PASS",
+   "0 solve calls, 0 plan rows"
+  ],
+  [
+   "G21",
+   "PASS",
+   "every runtime count 0; steps {'main_outside_dispatch': 50}"
+  ]
+ ],
+ "outcome": {
+  "status": "gate_failed",
+  "success": false,
+  "reward": 0.0,
+  "error": null,
+  "gate_failures": {
+   "G19h": "PYTHONHASHSEED None, pinned '0'"
+  }
+ }
+}

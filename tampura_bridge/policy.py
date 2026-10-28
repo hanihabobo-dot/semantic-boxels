@@ -7,7 +7,8 @@ untouched.  boxel_episode is a schema with no preconditions and identity
 effects whose execute_fn runs our whole episode inside their executing
 world:
   1. the run logger and its ledger, the episode row (seed, scene file),
-     and the runtime gate hooks (phase 'setup');
+     the driver's clock and RNG record (G18, G19), and the runtime gate
+     hooks (phase 'setup');
   2. D9's set-up, in order, before any physics step: gravity, timestep,
      every task body's class mass, inertia and friction, our pad friction
      and finger opening;
@@ -48,6 +49,9 @@ class EpisodeConfig:
     log_level: str = 'smart'
     max_plan_time: float = 900.0
     out: dict = field(default_factory=dict)
+    # The driver's clock stamps and RNG record (G18, G19's seed hygiene),
+    # written to the ledger as its driver_clock row.
+    driver: dict = field(default_factory=dict)
 
 
 def d9_setup(world, model):
@@ -128,6 +132,7 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
         observation = None
         try:
             ledger_event('episode', seed=cfg.seed, scene_file=cfg.scene_file)
+            ledger_event('driver_clock', **cfg.driver)
             model = robot_utils.resolve_robot_model(robot, c)
             robot_utils.use_robot_model(model)
             names = symbol_names(list(world.categories))

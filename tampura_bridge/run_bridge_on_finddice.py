@@ -3,8 +3,11 @@ P4.4 B2).  Arm O's driver: run_planner.py's order (seed random and numpy
 with the global seed, build FindDiceEnv, initialize), then the bridge's
 only additions: assert the loaded scene against the pinned map (G19),
 register the boxel_episode schema (G13's one arm-O registration) and run
-their rollout with BoxelBridgePolicy.  Exit code 0 iff rewards[-1] == 1.0
-(G12).  Run from their tampura_environments directory in arm O's venv:
+their rollout with BoxelBridgePolicy.  It stamps its clock and records the
+RNG state for G18 and G19, and writes one outcome field that combines
+rewards[-1], the error and the ledger reader's gates (RG1.7).  Exit code 0
+iff that outcome is success.  Run from their tampura_environments
+directory in arm O's venv:
 
   PYTHONPATH=<repo>:<pddlstream_lib>:<their tampura>:<their envs> \\
     <arm O python> <repo>/tampura_bridge/run_bridge_on_finddice.py \\
@@ -46,13 +49,22 @@ class _SceneFile(logging.Handler):
             self.name_seen = msg[len('Loading scene from '):].strip()
 
 
-def _pinned_scene_map():
-    """G19's pinned map, from tools/bridge_gates.py (one place only)."""
+def _bridge_gates():
+    """tools/bridge_gates.py: G19's pinned map (one place only) and the
+    ledger reader behind the outcome field."""
     path = os.path.join(REPO, 'tools', 'bridge_gates.py')
-    spec = importlib.util.spec_from_file_location('_bridge_gates_map', path)
+    spec = importlib.util.spec_from_file_location('_bridge_gates', path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return mod.SCENE_MAP
+    return mod
+
+
+def _rng_untouched(seed):
+    """G19: both global RNGs are in the state their seeding left."""
+    s, t = np.random.get_state(), np.random.RandomState(seed).get_state()
+    return {'random': random.getstate() == random.Random(seed).getstate(),
+            'numpy': (s[0] == t[0] and bool(np.array_equal(s[1], t[1]))
+                      and tuple(s[2:]) == tuple(t[2:]))}
 
 
 def main():
@@ -70,43 +82,75 @@ def main():
                 'vis': bool(a.vis), 'save_dir': a.save_dir}
     config = tconfig.load_config(config_file=a.config, arg_dict=arg_dict)
 
+    # G18: the driver's clock stamps (perf_counter, the ledger's clock),
+    # written to the episode's ledger by execute_fn.
+    events = []
+
+    def stamp(name):
+        events.append((name, time.perf_counter()))
+
     # G19: the global RNG is seeded exactly as run_planner.py does, and
     # nothing consumes it before their get_scene_data.
     random.seed(config['global_seed'])
     np.random.seed(config['global_seed'])
+    stamp('seeded')
     tconfig.setup_logger(config['save_dir'], log_level=logging.INFO)
     scene = _SceneFile()
     logging.getLogger().addHandler(scene)
 
+    rng_untouched = _rng_untouched(config['global_seed'])
+    stamp('initialize_call')
     env = tconfig.get_env(config['task'])(config=config)
     b0, store = env.initialize()
+    stamp('initialize_return')
 
-    pinned = _pinned_scene_map().get(a.global_seed)
+    gates = _bridge_gates()
+    pinned = gates.SCENE_MAP.get(a.global_seed)
     if scene.name_seen is None or pinned is None or pinned not in scene.name_seen:
         raise SystemExit(f"G19: seed {a.global_seed} loaded {scene.name_seen}, "
                          f"pinned {pinned}")
+    stamp('scene_map_asserted')
     cfg = bridge_policy.EpisodeConfig(
         seed=a.global_seed, scene_file=scene.name_seen,
         log_dir=os.path.join(config['save_dir'], 'ours'), vis=bool(a.vis),
         stop_before_planning=bool(a.stop_before_planning),
         log_level=a.log_level, max_plan_time=a.max_plan_time)
+    cfg.driver = {'events': events, 'seed': config['global_seed'],
+                  'rng_untouched': rng_untouched,
+                  'pythonhashseed': os.environ.get('PYTHONHASHSEED')}
     execute_fn = bridge_policy.make_execute_fn(env, cfg)
     bridge_policy.register_schema(env, execute_fn)
+    stamp('schema_registered')
     policy = bridge_policy.bridge_policy_class()(config, env.problem_spec)
+    stamp('policy_built')
     # G13's runtime half (GF1): recorded, and the run stops here on a failure
     g13 = g13_runtime.check_arm_o(env, policy, b0, bridge_policy.SCHEMA_NAME, execute_fn)
     cfg.out['g13_runtime'] = g13
     g13_runtime.write_and_enforce(g13, config['save_dir'])
+    stamp('g13_checked')
+    stamp('rollout_start')
     history, _ = policy.rollout(env, b0, store)
 
     cfg.out['rewards'] = [float(r) for r in history.rewards]
     cfg.out['time_deltas'] = [float(t) for t in history.time_deltas]
+    # The outcome field (RG1.7): rewards[-1], the error and the ledger
+    # reader's per-episode gates; success is never rewards[-1] alone.
+    report = gates.Report()
+    try:
+        gates.run_ledger(report, cfg.out['run_dir'])
+    except Exception as e:
+        report.add('ledger', 'FAIL', f"{type(e).__name__}: {e}")
+    cfg.out['ledger_gates'] = report.rows
+    cfg.out['outcome'] = gates.episode_outcome(
+        cfg.out['rewards'], cfg.out.get('error'), report)
     with open(os.path.join(config['save_dir'], 'bridge_episode.json'), 'w') as f:
         json.dump({'seed': a.global_seed, 'scene_file': scene.name_seen,
                    **cfg.out}, f, indent=1, default=str)
-    print(f"seed {a.global_seed}: their RolloutHistory rewards[-1] = "
-          f"{history.rewards[-1]}; details in {config['save_dir']}")
-    return 0 if history.rewards[-1] == 1.0 else 1
+    report.show()
+    print(f"seed {a.global_seed}: outcome {cfg.out['outcome']['status']}, their "
+          f"RolloutHistory rewards[-1] = {history.rewards[-1]}; details in "
+          f"{config['save_dir']}")
+    return 0 if cfg.out['outcome']['success'] else 1
 
 
 if __name__ == '__main__':

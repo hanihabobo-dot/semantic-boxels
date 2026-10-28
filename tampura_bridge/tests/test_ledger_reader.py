@@ -150,3 +150,86 @@ def test_runtime_counts_reach_g11_and_g21(tmp_path):
                 'steps': {}}
     res = run(tmp_path, rows)
     assert res['G21'] == 'PASS' and res['G11'] == 'PASS'
+
+
+# ----- GF5: G18, G19's seed hygiene, the outcome field ---------------------
+
+def bridge():
+    """clean() as a bridge episode: stamped rows, the episode and
+    driver_clock rows, a gate_record."""
+    rows = clean()
+    rows.insert(1, {'kind': 'episode', 'seed': 0,
+                    'scene_file': '1747173591.json'})
+    rows.insert(2, {'kind': 'driver_clock', 'seed': 0,
+                    'events': [[n, float(k)] for k, n in enumerate(bg.G18_EVENTS)],
+                    'rng_untouched': {'random': True, 'numpy': True},
+                    'pythonhashseed': '0'})
+    rows.insert(-1, {'kind': 'gate_record', 'counts': {}, 'solve_calls': 1,
+                     'steps': {}})
+    start = len(bg.G18_EVENTS) - 1
+    for k, r in enumerate(rows):
+        r['t'] = start + 1.0 + k
+    return rows
+
+
+def test_clean_bridge_ledger_passes(tmp_path):
+    res = run(tmp_path, bridge())
+    assert all(s == 'PASS' for s in res.values()), res
+    assert res['G18'] == res['G19h'] == 'PASS'
+
+
+def _clock(change):
+    rows = bridge()
+    change(rows[2])
+    return rows
+
+
+def _swap_events(ck):
+    ev = ck['events']
+    ev[4][0], ev[5][0] = ev[5][0], ev[4][0]
+
+
+@pytest.mark.parametrize('name,rows,gate', [
+    ('extra driver work', _clock(lambda ck: ck['events'].insert(
+        3, ['plan_warmup', 2.5])), 'G18'),
+    ('stamps reordered', _clock(_swap_events), 'G18'),
+    ('stamps out of time', _clock(lambda ck: ck['events'][4].__setitem__(1, 0.5)),
+     'G18'),
+    ('random consumed', _clock(lambda ck: ck['rng_untouched'].update(
+        random=False)), 'G19h'),
+    ('numpy consumed', _clock(lambda ck: ck['rng_untouched'].update(
+        numpy=False)), 'G19h'),
+    ('other seed', _clock(lambda ck: ck.update(seed=3)), 'G19h'),
+    ('hash seed unset', _clock(lambda ck: ck.update(pythonhashseed=None)), 'G19h'),
+])
+def test_driver_clock_tampering_fails(tmp_path, name, rows, gate):
+    assert run(tmp_path, rows)[gate] == 'FAIL', name
+
+
+def test_bridge_work_before_rollout_start_fails_g18(tmp_path):
+    rows = bridge()
+    rows[4]['t'] = 1.0           # a row written before their first step
+    assert run(tmp_path, rows)['G18'] == 'FAIL'
+
+
+def test_bridge_run_without_clock_or_gate_record_fails(tmp_path):
+    rows = [r for r in bridge() if r['kind'] not in ('driver_clock', 'gate_record')]
+    res = run(tmp_path, rows)
+    assert res['G18'] == res['G19h'] == res['G21'] == 'FAIL'
+
+
+def test_outcome_field(tmp_path):
+    ok, bad = bg.Report(), bg.Report()
+    ok.add('G3', 'PASS')
+    ok.add('G21', 'N/A')
+    bad.add('G3', 'PASS')
+    bad.add('G18', 'FAIL', 'stamps out of time order')
+    assert bg.episode_outcome([0.0, 1.0], None, ok)['status'] == 'success'
+    assert bg.episode_outcome([0.0, 0.0], None, ok)['status'] == 'failure'
+    # a gate failure outranks a reward of 1.0, a crash outranks both
+    out = bg.episode_outcome([0.0, 1.0], None, bad)
+    assert out['status'] == 'gate_failed' and not out['success']
+    assert out['gate_failures'] == {'G18': 'stamps out of time order'}
+    out = bg.episode_outcome([0.0, 1.0], 'RuntimeError: x', bad)
+    assert out['status'] == 'crashed' and not out['success']
+    assert bg.episode_outcome([], None, ok)['status'] == 'failure'

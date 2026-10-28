@@ -1,0 +1,45 @@
+12:55:49 [INFO   ] root: Run started  : 2026-10-28_12-55-49
+12:55:49 [INFO   ] root: Log file     : /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/archive/tampura_bridge_plan_2026-10-25/bf/BF21_gf5/armO_seed0/ours/run_2026-10-28_12-55-49/run_2026-10-28_12-55-49.log
+12:55:49 [INFO   ] root: Verbosity    : smart (console), DEBUG (file)
+12:55:50 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IHDR' 16 13
+12:55:50 [DEBUG  ] PIL.PngImagePlugin: STREAM b'pHYs' 41 9
+12:55:50 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IDAT' 62 8192
+12:55:50 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IHDR' 16 13
+12:55:50 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IDAT' 41 8192
+Boxel Test Environment initialized successfully!
+Camera position: [0.17861445 0.04880322 0.58831882]
+Camera target: [ 3.28582478 -0.16977984 -3.32287836]
+Adopted executing client 0; plan twin client 2
+Objects in scene: ['plane', 'table', 'robot', 'd_cups_ud', 'dice']
+============================================================
+FULL PIPELINE: PDDLStream + Replanning
+============================================================
+
+--- Phase 1: Environment Setup ---
+  [audit-66/67] Effective minimum boxel size: 0.082 m (largest object AABB 0.072 m + 0.01 m headroom).
+Robot ID: 0
+
+--- Phase 2: Calculating Boxels ---
+  Merge iteration 1: 14 merges, 15 boxels remaining
+  Merge iteration 2: 6 merges, 9 boxels remaining
+  Merge iteration 3: 3 merges, 6 boxels remaining
+  Merging complete: 29 -> 6 boxels
+  Calculated 8 boxels
+
+--- Phase 3: Creating BoxelRegistry ---
+Saved 8 boxels to boxel_data.json
+12:55:50 [DEBUG  ] root: Saved artefact: boxel_data.json -> /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/archive/tampura_bridge_plan_2026-10-25/bf/BF21_gf5/armO_seed0/ours/run_2026-10-28_12-55-49/boxel_data.json
+  8 boxels, 1 shadows, 1 occluders
+
+--- Phase 4: Hidden Object Scenario ---
+  Target: dice (given; not in the first observation; the robot must search)
+  Shadow blockers (audit #78):
+    shadow_of_d_cups_ud blocked by: ['d_cups_ud']
+  Boxel->PyBullet mapping: 1 objects
+
+--- Phase 5: Planning with Replanning ---
+    [eye #1] initial observation (phase 2-4) | held=none | unknown shadows=1 | d_cups_ud@(0.673,0.216)[bel 4mm] dice@(0.669,0.216)[NO BOXEL]
+
+  stop_before_planning: returning after the first plan-twin sync
+12:55:51 [INFO   ] root: Run finished : 2026-10-28_12-55-51
+12:55:51 [INFO   ] root: Full log at  : /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/archive/tampura_bridge_plan_2026-10-25/bf/BF21_gf5/armO_seed0/ours/run_2026-10-28_12-55-49/run_2026-10-28_12-55-49.log

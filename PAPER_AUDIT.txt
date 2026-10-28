@@ -3465,7 +3465,10 @@ G16 Oracle paths.  The env adapter (which inherits both from BoxelTestEnv)
     path.
 G17 Naming lint: "faithful" absent from bridge code, captures and prose.
 G18 Clock: between env.initialize() returning and the first env.step the
-    bridge performs only the schema registration.  D9's set-up, the settle,
+    bridge performs only the pinned-map load and G19's assertion, the schema
+    registration, the policy's construction (as run_planner.py) and G13's
+    runtime check, each stamped in the ledger's driver_clock row (BF#21).
+    D9's set-up, the settle,
     the env adapter, the first render, boxelization and shadow casting run
     inside execute_fn, so their RolloutHistory.time_deltas covers them, as it
     covers TAMPURA's own t=0 stream sampling.  Ledger timestamps prove it; the
@@ -3476,6 +3479,9 @@ G19 Seed hygiene on BOTH drivers: random.seed and np.random.seed(global_seed)
     problem file per seed equals the pinned map (P4.2; on the cluster,
     BF#8's map) and is asserted;
     PYTHONHASHSEED is pinned to one value for B1(g), both T repetitions and O.
+    Arm O's driver records both RNGs' state before their code and
+    PYTHONHASHSEED in the driver_clock row; the ledger reader's G19h checks
+    them (BF#21).
 G20 Camera: a module-level hook on pybullet.getCameraImage for every client
     checks that the view and projection matrices equal those their own
     pbu.get_image_at_pose path computes at DEFAULT_ARM_POS (D4); write-only
@@ -6635,6 +6641,45 @@ BF#20 [DONE]  GF4: G6'S CONTROLS, THE READBACK CHECK, THE PICKLE ROUND
   HONESTY CLASS: infrastructure (gates).
   DECISION 2026-10-28 (executor): as BF#14 GF4 specified.
   RESULT: GF4 done; GF5 (G18/G19 seed hygiene, the outcome field) is next.
+
+BF#21 [DONE]  GF5: G18 AND G19'S SEED HYGIENE IN THE LEDGER, ARM O'S
+      OUTCOME FIELD  (B2 gate fix, 2026-10-28)
+  WHAT: arm O's driver stamps its clock (perf_counter, the ledger's clock)
+  at seeded, initialize_call, initialize_return, scene_map_asserted,
+  schema_registered, policy_built, g13_checked and rollout_start, and
+  records whether both global RNGs still hold the state their seeding left
+  (compared with fresh random.Random and numpy RandomState of the seed)
+  right before their get_env and initialize, plus PYTHONHASHSEED.
+  execute_fn writes this as the ledger's driver_clock row, after the
+  episode row.  tools/bridge_gates.py's ledger reader checks G18 (the
+  stamps are exactly that list in time order, and every ledger row comes
+  after rollout_start, so D9, the settle, the adapter and main() lie inside
+  their time_deltas) and G19h (the seed is the episode's, both RNGs
+  untouched, PYTHONHASHSEED '0').  A bridge run with no driver_clock or no
+  gate_record fails G18, G19h or G21.  The driver then runs the ledger
+  reader on the episode and writes one outcome field to
+  bridge_episode.json (bridge_gates.episode_outcome): crashed if
+  execute_fn caught an error, else gate_failed if any reader gate failed,
+  else success iff rewards[-1] == 1.0, else failure; the exit code is 0
+  iff success.  G18's text in #P4 now lists the driver's allowed work.
+  EVIDENCE: archive/tampura_bridge_plan_2026-10-25/bf/BF21_gf5/.  Seed 0,
+  stop_before_planning, PYTHONHASHSEED 0: every reader gate PASS,
+  initialize return to rollout start 0.018 s, outcome failure (reward 0,
+  stopped before planning).  Control, PYTHONHASHSEED unset: G19h FAIL,
+  outcome gate_failed.  test_ledger_reader.py gains 11 tests (a clean
+  bridge ledger passes; extra driver work, reordered or out-of-time
+  stamps, a row before rollout_start, either RNG consumed, another seed,
+  the hash seed unset, a missing clock or gate_record each fail; the
+  outcome's precedence).  Full bridge suite 81 passed, 3 skipped; static
+  gates green.
+  BEFORE / AFTER: G18 by inspection, G19's seed hygiene unchecked, the exit
+  code rewards[-1] alone / both checked per episode from the ledger, the
+  outcome one field over reward, error and gates.
+  CLAIM EFFECT: none.
+  HONESTY CLASS: infrastructure (gates).
+  DECISION 2026-10-28 (executor): as BF#14 GF5 specified; BF#12's
+  correction line was already written by BF#14.
+  RESULT: GF5 done; GF6 (set_phase('main') right after d9_setup) is next.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS

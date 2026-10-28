@@ -8,8 +8,9 @@ Usage, from the repository root (standard library only):
                                                the reviewed file from it)
   python tools/bridge_gates.py domain          G10: domain and stream hashes
   python tools/bridge_gates.py ledger RUN_DIR [--m7 on|off]
-                                               G3 G4 G5 G11 G15 G21 from a
-                                               run ledger (ours or the bridge's)
+                                               G3 G4 G5 G11 G15 G18 G19 G21
+                                               from a run ledger (ours or the
+                                               bridge's)
   python tools/bridge_gates.py tree [--save F | --compare F]
                                                G13 inside WSL: their trees,
                                                git status, pip freeze
@@ -128,6 +129,14 @@ G3_STATUSES = ('ok', 'sense_outcome', 'integrity_replan',
                'stack_failure', 'empty_hand', 'stale_precondition',
                'home_not_reached')
 G4_TOL_M = 1e-6
+# G18: the arm O driver's clock stamps, in order.  Between their
+# initialize() returning and the rollout's first env.step it may only load
+# and assert the pinned scene map (G19), register the schema, build the
+# policy (run_planner.py does too) and run G13's runtime check (GF1).
+G18_EVENTS = ('seeded', 'initialize_call', 'initialize_return',
+              'scene_map_asserted', 'schema_registered', 'policy_built',
+              'g13_checked', 'rollout_start')
+G19_PYTHONHASHSEED = '0'
 
 
 def rel(path):
@@ -825,11 +834,14 @@ def run_ledger(report, run_dir, m7='on'):
                  or SCENE_MAP[e['seed']] not in str(e.get('scene_file'))]
         report.add('G19', 'FAIL' if bad19 else 'PASS',
                    '; '.join(bad19) or 'scene file matches the pinned map')
+        check_driver_clock(report, rows, eps[-1])
 
     # G11 and G21 from the runtime hooks, when the run had them.
     rec = [r for r in rows if r['kind'] == 'gate_record']
     if not rec:
-        report.add('G21', 'N/A', 'no gate_record (run without the bridge hooks)')
+        report.add('G21', 'FAIL' if eps else 'N/A',
+                   'no gate_record in a bridge run' if eps else
+                   'no gate_record (run without the bridge hooks)')
         return
     rec = rec[-1]
     calls = sum(1 for r in rows if r['kind'] == 'plan')
@@ -839,6 +851,74 @@ def run_ledger(report, run_dir, m7='on'):
     report.add('G21', 'FAIL' if bad21 else 'PASS',
                f'violations {bad21}' if bad21 else
                f"every runtime count 0; steps {rec.get('steps')}")
+
+
+def check_driver_clock(report, rows, episode):
+    """G18 and G19's seed hygiene from the arm O driver's driver_clock row
+    (GF5).  G18: the stamps are G18_EVENTS in order, and every ledger row
+    (all of the bridge's own work: D9, the settle, the adapter, main())
+    comes after rollout_start, so inside their time_deltas.  G19h: both
+    global RNGs were seeded with the episode's seed and untouched when
+    their code took over, and PYTHONHASHSEED is the pinned value."""
+    clocks = [r for r in rows if r['kind'] == 'driver_clock']
+    if not clocks:
+        report.add('G18', 'FAIL', 'no driver_clock row in a bridge run')
+        report.add('G19h', 'FAIL', 'no driver_clock row in a bridge run')
+        return
+    ck = clocks[-1]
+    events = [tuple(e) for e in ck.get('events', [])]
+    names = tuple(n for n, _ in events)
+    bad18 = []
+    if names != G18_EVENTS:
+        bad18.append(f'stamps {list(names)} != {list(G18_EVENTS)}')
+    elif any(b[1] < a[1] for a, b in zip(events, events[1:])):
+        bad18.append('stamps out of time order')
+    if 'rollout_start' in names:
+        start = dict(events)['rollout_start']
+        early = [r['kind'] for r in rows if r['t'] < start]
+        if early:
+            bad18.append(f'{len(early)} ledger rows before rollout_start '
+                         f'({early[:4]})')
+    if bad18:
+        report.add('G18', 'FAIL', '; '.join(bad18))
+    else:
+        t = dict(events)
+        gaps = ', '.join(f'{b[0]} +{b[1] - a[1]:.3f} s'
+                         for a, b in zip(events, events[1:]))
+        report.add('G18', 'PASS',
+                   f"initialize return to rollout start "
+                   f"{t['rollout_start'] - t['initialize_return']:.3f} s ({gaps})")
+
+    bad19h = []
+    if ck.get('seed') != episode.get('seed'):
+        bad19h.append(f"seeded {ck.get('seed')}, episode {episode.get('seed')}")
+    for rng in ('random', 'numpy'):
+        if ck.get('rng_untouched', {}).get(rng) is not True:
+            bad19h.append(f'{rng} RNG consumed before their code')
+    if ck.get('pythonhashseed') != G19_PYTHONHASHSEED:
+        bad19h.append(f"PYTHONHASHSEED {ck.get('pythonhashseed')!r}, "
+                      f"pinned {G19_PYTHONHASHSEED!r}")
+    report.add('G19h', 'FAIL' if bad19h else 'PASS', '; '.join(bad19h) or
+               f"seed {ck.get('seed')}, both RNGs untouched, PYTHONHASHSEED "
+               f"{G19_PYTHONHASHSEED}")
+
+
+def episode_outcome(rewards, error, report):
+    """Arm O's one outcome field (P4.6 CRASHED and GATE-FAILED EPISODES,
+    RG1.7): rewards[-1], the error and every gate the ledger reader failed.
+    A crash outranks a gate failure, which outranks the reward."""
+    failed = {g: d for g, s, d in report.rows if s == 'FAIL'}
+    reward = float(rewards[-1]) if rewards else None
+    if error:
+        status = 'crashed'
+    elif failed:
+        status = 'gate_failed'
+    elif reward == 1.0:
+        status = 'success'
+    else:
+        status = 'failure'
+    return {'status': status, 'success': status == 'success',
+            'reward': reward, 'error': error, 'gate_failures': failed}
 
 
 # ----- entry point -------------------------------------------------------
