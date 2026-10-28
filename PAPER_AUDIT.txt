@@ -6808,6 +6808,38 @@ BF#25 [DONE]  GF9: B3'S TEST (4) UNDER THE GATE HOOKS  (B2 gate fix,
   of the job script (P4_WORK pointing at a symlinked layout, smoke, seed
   0) passed every gate.  Nothing has run on the cluster.
 
+BF#26 [PARTLY DONE]  THE PICK FLOOR FOR THEIR PANDA; THE SENSE POSE HIDES
+      THE DIE  (B6 item, 2026-10-28)
+  FINDING (user, watching seed 0 with --vis 1): the arm closed on air
+  above the die.  The log: aim 1.4 mm from the die's centre, contact_z
+  0.035 m, no pad touched, three strikes, pick_giveup.  The bridge left
+  PICK_CONTACT_FLOOR at None, so execute_pick used our pipeline's 35 mm
+  floor (execution.py _FINGER_TIP_DEPTH), while the die is 17.8 mm tall
+  (contact wanted at its top less 5 mm, 12.8 mm).
+  PROBE (empty table, scene-independent): gripper pointing down at 0.3 m,
+  fingers open; the finger links' collision AABB bottom lies 11.2 mm below
+  panda_grasptarget, on their srl Panda and on pybullet_data's alike.
+  CHANGE (bridge only, D8): task_spec.PICK_CONTACT_FLOOR = 0.0132 (11.2 mm
+  plus 2 mm clearance), PROVISIONAL until B6 freezes it.  The main
+  pipeline's 35 mm default is untouched; why it is 35 mm when the
+  fingertips reach 11.2 mm is open (execution.py:58 says "the pads reach
+  35 mm below panda_grasptarget", which this probe contradicts).
+  EFFECT, seed 0 (GUI run and headless run, identical paths): the cup's
+  pick and place now both succeed (the place had aborted on IK at the old
+  floor), but then three senses of shadow_of_d_cups_ud return
+  still_blocked: the die is in the eye's view yet "partly behind the arm"
+  at the sense configuration, so F20 never registers it; the episode ends
+  all_searched with reward 0.  The new floor has not yet been exercised
+  on a die pick.
+  OPEN: the sense pose occluding the target in the fixed eye (a D7 or
+  main-pipeline question, reviewed with B4 to B6); the die pick at the new
+  floor; the 35 mm default.
+  EVIDENCE: local only, archive/tampura_bridge_plan_2026-10-25/bf/gui_runs/
+  (screenshots, uncommitted, kept a week).
+  CLAIM EFFECT: none yet.
+  HONESTY CLASS: parameterisation of the bridge (D8), from robot geometry.
+  DECISION 2026-10-28 (executor, after the user's diagnosis): as above.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

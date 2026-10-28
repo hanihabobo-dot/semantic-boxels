@@ -95,7 +95,11 @@ HOME_IS_THEIR_DEFAULT_ARM_POS = True
 # (PROVISIONAL until B6 freezes it).
 HOME_HOLD_STEP_CAP = 52
 
-# D8: the pick contact floor and the reach envelope are B6's (None keeps
-# our pipeline's values until then; B2 plans nothing).
-PICK_CONTACT_FLOOR = None
+# D8: the pick contact floor, a probe on the empty table (2026-10-28, BF#26):
+# their Panda's fingertip collision AABB reaches 11.2 mm below
+# panda_grasptarget with the gripper pointing down (ours the same), plus
+# 2 mm clearance.  Our pipeline's 35 mm default put the die's pinch above
+# the 17.8 mm die.  PROVISIONAL until B6 freezes it.  The reach envelope
+# stays B6's (None keeps our pipeline's value).
+PICK_CONTACT_FLOOR = 0.0132
 REACH_ENVELOPE = None
