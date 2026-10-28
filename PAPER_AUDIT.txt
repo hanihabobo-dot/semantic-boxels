@@ -6488,6 +6488,34 @@ BF#16 [DONE]  GF1: G13'S RUNTIME HALF AND THE ORDERED T-DRIVER CHECK
   RESULT: GF1 done; GF2's static half (hash the site-packages copy in
   tree_state) is next.
 
+BF#17 [DONE]  NO SIM SCREENSHOTS ON THE CLUSTER; LOCAL ONES KEPT A WEEK
+      (configuration, 2026-10-28)
+  WHAT: by the user's rule, sim screenshots (world_eye's eye_<k>_camera.png
+  and eye_<k>_gui.png) are for local debugging only.  world_eye.snapshot
+  honours BOXEL_EYE_IMAGES=0: no images, and no render made only for them
+  (eye.log and eye.jsonl are still written); default on.  Every job script
+  in tools/cluster exports it, except acceptance_dist.sbatch, which turns
+  it off only when both snapshots have the switch (an older reference would
+  still render and save, and the wall-clock budgets would then differ
+  between the arms) and deletes the job's images at the end either way.
+  The 1005 images already on the cluster (144 MB) were deleted.  Locally,
+  tools/prune_screenshots.ps1 deletes untracked sim screenshots older than
+  7 days (dry run unless -Apply); a daily scheduled task for it was refused
+  by the session's auto mode and is left to the user.
+  EVIDENCE: a local arm O run (seed 0, stop_before_planning,
+  BOXEL_EYE_IMAGES=0) wrote no PNG and the full text record; the pruner
+  deleted an 8-day-old test image and kept a fresh image and an old text
+  log.
+  BEFORE / AFTER: every snapshot asked to save an image rendered and saved
+  it / on the cluster no image and no extra render.
+  CLAIM EFFECT: none.  Disclosure: arm O's cluster runs from this commit on
+  skip the observer's image renders, so their wall-clock time is not
+  comparable with earlier cluster runs of ours that saved images (the
+  B3 A/A and A/B, BF#7 and BF#10); acceptance pairs stay symmetric (above).
+  HONESTY CLASS: configuration.
+  DECISION 2026-10-28 (user).
+  RESULT: as above.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

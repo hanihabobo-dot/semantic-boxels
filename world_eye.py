@@ -33,6 +33,7 @@ Module API mirrors telemetry.py: ``enable`` / ``disable`` / ``snapshot`` /
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -359,8 +360,11 @@ class WorldEye:
         ``save_image=True``) and no render, one TinyRenderer pass is made
         here and its detections are recorded too.  ``save_image`` also
         writes eye_<k>_camera.png (the robot's camera) and, under the
-        GUI, eye_<k>_gui.png (the user's viewpoint)."""
+        GUI, eye_<k>_gui.png (the user's viewpoint).  BOXEL_EYE_IMAGES=0 turns
+        the images (and the render made only for them) off: the cluster runs
+        evals only, and screenshots are for local debugging (user, 2026-10-28)."""
         self.count += 1
+        save_image = save_image and os.environ.get("BOXEL_EYE_IMAGES", "1") != "0"
         seg = None
         if render is not None:
             seg = render[1]

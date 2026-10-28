@@ -18,7 +18,7 @@ SB=$W/${1:?snapshot dir name, e.g. sb_526b358}
 VA=$W/armO-venvA/bin
 OUT=$W/results/b3_ab
 mkdir -p $OUT
-export PYTHONHASHSEED=0
+export PYTHONHASHSEED=0 BOXEL_EYE_IMAGES=0
 echo "host $(hostname)  job ${SLURM_JOB_ID:-none}  $(date -Is)  snapshot $SB"
 grep -m1 'model name' /proc/cpuinfo
 cd $SB

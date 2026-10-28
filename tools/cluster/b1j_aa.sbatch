@@ -17,7 +17,7 @@ SB=$W/sb_c31cbdd
 VA=$W/armO-venvA/bin
 OUT=$W/results/b1j_aa
 mkdir -p $OUT
-export PYTHONHASHSEED=0
+export PYTHONHASHSEED=0 BOXEL_EYE_IMAGES=0
 echo "host $(hostname)  job ${SLURM_JOB_ID:-none}  $(date -Is)"
 grep -m1 'model name' /proc/cpuinfo
 cd $SB

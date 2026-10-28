@@ -22,6 +22,15 @@ VA=$W/armO-venvA/bin
 OUT=$W/results/accept_${REF#sb_}_vs_${CAND#sb_}
 mkdir -p $OUT
 export PYTHONHASHSEED=0
+# Sim screenshots are for local debugging only.  Off only when BOTH snapshots
+# have the switch: an older reference would still render and save them, and
+# the wall-clock budgets would then differ between the arms.  Deleted at the
+# end either way.
+if grep -q BOXEL_EYE_IMAGES $W/$REF/world_eye.py && grep -q BOXEL_EYE_IMAGES $W/$CAND/world_eye.py; then
+  export BOXEL_EYE_IMAGES=0; echo "sim screenshots off on both arms"
+else
+  echo "sim screenshots ON on both arms (a snapshot predates the switch); deleted at the end"
+fi
 echo "host $(hostname)  job ${SLURM_JOB_ID:-none}  $(date -Is)  ref $REF  cand $CAND"
 grep -m1 'model name' /proc/cpuinfo
 cmp $W/$REF/tools/_eval_ab.py $W/$CAND/tools/_eval_ab.py && echo "one harness file"
@@ -35,4 +44,5 @@ for rep in 1 2 3; do
     done
   done
 done
+find $W/$REF $W/$CAND $OUT -type f \( -name 'eye_*_camera.png' -o -name 'eye_*_gui.png' \) -delete
 echo ACCEPT_DONE

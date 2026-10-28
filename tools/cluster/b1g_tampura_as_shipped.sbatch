@@ -15,7 +15,7 @@ set -euo pipefail
 W=/work/rleap1/hani.alassiri.alhabboub/p4
 export TAMPURA_WORK=$W/tampura-work
 export SWEEP_CONSOLE_DIR=$W/results/b1g/consoles
-export PYTHONHASHSEED=0
+export PYTHONHASHSEED=0 BOXEL_EYE_IMAGES=0
 mkdir -p $W/results/b1g $SWEEP_CONSOLE_DIR
 echo "host $(hostname)  job ${SLURM_JOB_ID:-none}  $(date -Is)"
 grep -m1 'model name' /proc/cpuinfo

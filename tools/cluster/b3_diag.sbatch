@@ -16,7 +16,7 @@ REPS=$1; SEED=$2; shift 2
 VA=$W/armO-venvA/bin
 OUT=$W/results/b3_diag
 mkdir -p $OUT
-export PYTHONHASHSEED=0
+export PYTHONHASHSEED=0 BOXEL_EYE_IMAGES=0
 echo "host $(hostname)  job ${SLURM_JOB_ID:-none}  $(date -Is)  seed $SEED  snapshots $*"
 for r in $(seq 1 $REPS); do
   for snap in "$@"; do

@@ -17,7 +17,7 @@ TW=$W/tampura-work
 VA=$W/armO-venvA/bin
 OUT=$W/results/b2_${1#sb_}
 mkdir -p $OUT
-export PYTHONHASHSEED=0 PYTHONDONTWRITEBYTECODE=1 TAMPURA_WORK=$TW
+export PYTHONHASHSEED=0 BOXEL_EYE_IMAGES=0 PYTHONDONTWRITEBYTECODE=1 TAMPURA_WORK=$TW
 echo "host $(hostname)  job ${SLURM_JOB_ID:-none}  $(date -Is)  snapshot $SB"
 grep -m1 'model name' /proc/cpuinfo
 (cd $SB && $VA/python tools/bridge_gates.py tree) > $OUT/g13_before.txt 2>&1

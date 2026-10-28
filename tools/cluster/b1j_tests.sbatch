@@ -17,7 +17,7 @@ VT=$TW/.venv/bin
 VA=$W/armO-venvA/bin
 OUT=$W/results/b1j
 mkdir -p $OUT
-export PYTHONHASHSEED=0 PYTHONDONTWRITEBYTECODE=1
+export PYTHONHASHSEED=0 BOXEL_EYE_IMAGES=0 PYTHONDONTWRITEBYTECODE=1
 echo "host $(hostname)  job ${SLURM_JOB_ID:-none}  $(date -Is)"
 grep -m1 'model name' /proc/cpuinfo
 status() { echo "TEST $1: $2"; echo "$1 $2" >> $OUT/summary.txt; }
