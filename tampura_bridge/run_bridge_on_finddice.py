@@ -103,6 +103,14 @@ def main():
     env = tconfig.get_env(config['task'])(config=config)
     b0, store = env.initialize()
     stamp('initialize_return')
+    # Their initialize draws the visibility grid's boxes as GUI debug lines
+    # (voxel_utils.draw_intervals, cloud_vis False); clear them so the GUI
+    # shows the scene alone.  Debug lines are not in camera renders, so the
+    # eye images are the same either way.
+    if a.vis:
+        for w in {id(x): x for x in (env.world, getattr(env, 'sim_world', None))
+                  if x is not None}.values():
+            w.client.removeAllUserDebugItems()
 
     gates = _bridge_gates()
     pinned = gates.SCENE_MAP.get(a.global_seed)
