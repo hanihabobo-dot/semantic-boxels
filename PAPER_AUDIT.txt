@@ -6431,6 +6431,63 @@ BF#15 [DONE, decisions]  THE USER'S ANSWERS TO Q10, Q14, Q15 AND Q16
   6b6a.  Evidence: archive/tampura_bridge_plan_2026-10-25/bf/BF15_venv/
   and BF15_venv_console.txt.
 
+BF#16 [DONE]  GF1: G13'S RUNTIME HALF AND THE ORDERED T-DRIVER CHECK
+      (gate-1 fix, 2026-10-28)
+  WHAT: tampura_bridge/g13_runtime.py checks, once per run right before
+  their rollout, what G13 promised and BF#14 RG1.2 found without code:
+  (1) registrations: arm O registers exactly one schema of ours,
+  boxel_episode, whose execute_fn is the driver's, and no class of ours
+  sits in their env or planner registry; arm T registers
+  tampura_policy_timed -> TampuraPolicyTimed and nothing else of ours, and
+  no schema of ours exists; (2) type(policy).rollout is their
+  Policy.rollout; (3) the policy class of ours defines __init__ and
+  get_action only; (4) arm O: the env has no instance attribute 'step'
+  (arm T: no code of ours holds the env); (5) no monkeypatch: no function
+  defined in a file of this repo sits in the __dict__ of their Policy,
+  TampuraPolicy, their registered env classes or (arm O) the env's and the
+  belief's classes; (6) every loaded tampura / tampura_environments module
+  lies in their checkout or is byte-identical to the checkout's file (the
+  runtime half of GF2: arm T imports the site-packages copy of tampura);
+  (7) arm O: TampuraWorldEnv.sync_to_plan_client is
+  BoxelTestEnv.sync_to_plan_client.  The record goes to the run's
+  g13_runtime.json (arm O also into bridge_episode.json), and a failure
+  stops the run (SystemExit before the rollout).  Arm O runs it in
+  run_bridge_on_finddice.py right before policy.rollout; arm T in
+  TampuraPolicyTimed.__init__, the last code of ours before their rollout,
+  since the T driver may not change.  Their checkout root comes from the
+  loaded tampura_environments package, or $TAMPURA_WORK.  The T-driver
+  check (tools/bridge_gates.py tdriver_diff) is now an ordered whole-file
+  comparison: our driver minus its leading docstring and the one permitted
+  import (which must sit inside __main__) equals their run_planner.py line
+  for line.
+  EVIDENCE: tampura_bridge/tests/test_g13_runtime.py, 16 tests in the
+  laptop arm O venv (BF#15): each check passes on the real set-up and fails
+  on its violation (an env 'step' attribute, a second schema of ours, a
+  rollout override, a monkeypatch of Policy, a class of ours in their
+  registry, a sync override, a changed copy of their module, reordered or
+  extra driver lines, the import outside __main__); the bridge suite 54
+  passed (38 + 16), the 7 G6 stubs fail by design until GF4;
+  bridge_gates.py all green, the ordered T-driver check PASS on the real
+  files.  Real drivers on the laptop, seed 0
+  (archive/tampura_bridge_plan_2026-10-25/bf/BF16_gf1/; pickles and their
+  per-sample pddl folders removed): arm O (armO-venvA, stop_before_planning)
+  g13_runtime ok, 53 of their modules from the checkout; arm T (their venv,
+  --max-steps 1) g13_runtime ok, 30 modules from the checkout and 23
+  byte-identical copies from the venv's site-packages tampura, then one
+  step of theirs, exit 0.  (A first arm T run without their venv on PATH
+  failed inside their SymK translate, which calls a bare "python"; the
+  cluster scripts activate the venv, so this was the smoke's invocation.)
+  BEFORE / AFTER: G13's runtime clauses unchecked, the T-driver check a
+  line-set comparison / both checked per run and recorded, an ordered
+  comparison.
+  CLAIM EFFECT: none.
+  HONESTY CLASS: infrastructure (gates).
+  DECISION 2026-10-28 (executor): as BF#14 GF1 specified; arm T's check
+  sits in the timed policy's __init__ because the driver copy may not
+  change.
+  RESULT: GF1 done; GF2's static half (hash the site-packages copy in
+  tree_state) is next.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

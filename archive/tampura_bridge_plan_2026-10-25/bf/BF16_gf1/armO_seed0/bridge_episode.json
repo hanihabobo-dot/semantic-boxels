@@ -1,0 +1,112 @@
+{
+ "seed": 0,
+ "scene_file": "1747173591.670785.json",
+ "g13_runtime": {
+  "arm": "O",
+  "failures": [],
+  "their_root": "/root/tampura-work",
+  "policy_methods": [
+   "__init__",
+   "get_action"
+  ],
+  "their_modules": {
+   "in_checkout": 53,
+   "identical_copy": 0
+  },
+  "schemas_of_ours": [
+   "boxel_episode"
+  ],
+  "ok": true
+ },
+ "run_dir": "/mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/archive/tampura_bridge_plan_2026-10-25/bf/BF16_gf1/armO_seed0/ours/run_2026-10-28_11-07-25",
+ "scene_changed_by_settle": false,
+ "settle": {
+  "d_cups_ud": {
+   "dxy_m": 0.0,
+   "dz_m": -0.011,
+   "dyaw_deg": 0.0,
+   "tilt_deg": 0.0
+  },
+  "dice": {
+   "dxy_m": 0.0039,
+   "dz_m": -0.0377,
+   "dyaw_deg": -0.52,
+   "tilt_deg": 21.2
+  }
+ },
+ "settle_max_dxy_m": 0.0039,
+ "observation": {
+  "grasp_body": null,
+  "conf": [
+   -0.0806389116678673,
+   -1.6722655321416895,
+   0.07069076842695393,
+   -2.744941788892324,
+   0.0817931811921767,
+   1.751514446341271,
+   0.7849770239183707
+  ]
+ },
+ "gates": {
+  "counts": {},
+  "info": {
+   "G16_update_object_positions_noop": 1,
+   "G8c_bodies_checked": 4,
+   "G8c_syncs": 2,
+   "rayTestBatch_client_2": 1,
+   "executing_bodies_at_install": 12,
+   "executing_bodies_now": 12
+  },
+  "steps": {
+   "main_outside_dispatch": 50
+  },
+  "steps_after_last_dispatch": 0,
+  "solve_calls": 0
+ },
+ "rewards": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "time_deltas": [
+  1.3686752319335938,
+  1.377699851989746,
+  1.3864617347717285,
+  1.39607572555542,
+  1.4062917232513428,
+  1.4156997203826904,
+  1.4241812229156494,
+  1.4330244064331055,
+  1.4585695266723633,
+  1.4658856391906738,
+  1.4728920459747314,
+  1.4806921482086182,
+  1.4879977703094482,
+  1.4961111545562744,
+  1.5040738582611084,
+  1.511552333831787,
+  1.5197126865386963,
+  1.5277488231658936,
+  1.5355796813964844,
+  1.5433483123779297,
+  1.5464627742767334
+ ]
+}

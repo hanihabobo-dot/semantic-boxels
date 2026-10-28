@@ -532,6 +532,37 @@ def _main_block(lines):
     return None
 
 
+T_DRIVER_IMPORT = re.compile(r'^\s+import tampura_bridge\.timed_policy\b')
+
+
+def tdriver_diff(ours_text, theirs_text):
+    """The ordered whole-file check (GF1): our T driver minus its leading
+    docstring and the one permitted import, line for line equal to their
+    run_planner.py.  Returns (ok, message)."""
+    ours = ours_text.splitlines()
+    if ours and ours[0].startswith('"""'):
+        end = next((i for i, l in enumerate(ours)
+                    if l.rstrip().endswith('"""') and (i > 0 or l.count('"""') > 1)), None)
+        if end is None:
+            return False, 'unterminated docstring in our T driver'
+        ours = ours[end + 1:]
+    imports = [i for i, l in enumerate(ours) if T_DRIVER_IMPORT.match(l)]
+    if len(imports) != 1:
+        return False, f'{len(imports)} permitted imports, need exactly 1'
+    main = _main_block(ours) or []
+    if not any(T_DRIVER_IMPORT.match(l) for l in main):
+        return False, 'the permitted import is not inside __main__'
+    del ours[imports[0]]
+    a = [l.rstrip() for l in ours]
+    b = [l.rstrip() for l in theirs_text.splitlines()]
+    if a == b:
+        return True, 'T driver = run_planner.py line for line, plus the one import'
+    i = next((k for k, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
+    return False, (f'T driver differs from run_planner.py at line {i + 1}: '
+                   f'ours {a[i] if i < len(a) else "<end>"!r}, '
+                   f'theirs {b[i] if i < len(b) else "<end>"!r}')
+
+
 def run_tdriver(report):
     drv = os.path.join(REPO, 'tools', 'run_tampura_timed.py')
     theirs = os.path.join(TW, 'tampura_environments', 'run_planner.py')
@@ -543,16 +574,11 @@ def run_tdriver(report):
         report.add('G13', 'FAIL', f'{theirs} not found (run inside WSL)')
         return
     with open(drv) as f:
-        ours = _main_block(f.read().splitlines())
+        ours = f.read()
     with open(theirs) as f:
-        ref = _main_block(f.read().splitlines())
-    extra = [l for l in (ours or []) if l not in (ref or [])]
-    lost = [l for l in (ref or []) if l not in (ours or [])]
-    ok = (ours is not None and not lost and len(extra) == 1
-          and extra[0].strip().startswith(('import ', 'from ')))
-    report.add('G13', 'PASS' if ok else 'FAIL',
-               'T driver = run_planner.py __main__ plus one import' if ok else
-               f'T driver differs: extra {extra[:3]}, missing {lost[:3]}')
+        ref = f.read()
+    ok, msg = tdriver_diff(ours, ref)
+    report.add('G13', 'PASS' if ok else 'FAIL', msg)
 
 
 # ----- ledger reader -----------------------------------------------------

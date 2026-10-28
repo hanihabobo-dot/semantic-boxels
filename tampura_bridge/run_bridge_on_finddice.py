@@ -28,6 +28,7 @@ if REPO not in sys.path:
 from tampura.config import config as tconfig    # noqa: E402
 import tampura_environments                      # noqa: E402,F401
 
+from tampura_bridge import g13_runtime              # noqa: E402
 from tampura_bridge import policy as bridge_policy   # noqa: E402
 
 
@@ -89,9 +90,13 @@ def main():
         log_dir=os.path.join(config['save_dir'], 'ours'), vis=bool(a.vis),
         stop_before_planning=bool(a.stop_before_planning),
         log_level=a.log_level, max_plan_time=a.max_plan_time)
-    bridge_policy.register_schema(
-        env, bridge_policy.make_execute_fn(env, cfg))
+    execute_fn = bridge_policy.make_execute_fn(env, cfg)
+    bridge_policy.register_schema(env, execute_fn)
     policy = bridge_policy.bridge_policy_class()(config, env.problem_spec)
+    # G13's runtime half (GF1): recorded, and the run stops here on a failure
+    g13 = g13_runtime.check_arm_o(env, policy, b0, bridge_policy.SCHEMA_NAME, execute_fn)
+    cfg.out['g13_runtime'] = g13
+    g13_runtime.write_and_enforce(g13, config['save_dir'])
     history, _ = policy.rollout(env, b0, store)
 
     cfg.out['rewards'] = [float(r) for r in history.rewards]
