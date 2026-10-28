@@ -4380,8 +4380,8 @@ M6  TOP-FACE PINCH WIDTH (conditional, D11 branch (ii)): BEFORE the pinch
     B3 acceptance on our scenes; CLAIM EFFECT: none on the thesis scenes
     (cubes have equal top and AABB widths), recorded either way.
 
-M7  REDISCOVERY KEEPS UNOBSERVED FRAGMENTS (B5; a switch, default off on our
-    scenes, on in the bridge unless the user rejects it, Q10).
+M7  REDISCOVERY KEEPS UNOBSERVED FRAGMENTS (B5; a switch, default ON on our
+    scenes and in the bridge by the user's Q10 answer, BF#15).
     BEFORE: when a sense rediscovers a registered body, its old fragments are
     removed from the registry and the belief without a render
     (execution.py:2871-2884); the area becomes free space and the planner
@@ -4721,7 +4721,10 @@ Q9  D11 branch (iii): if no cup class fits the gripper even by its top face,
 Q10 M7: in the bridge, the rediscovery cleanup keeps every superseded
     fragment that does not render empty (a switch, default off on our
     scenes).  If rejected, today's unobserved removal stays, counted per
-    episode and disclosed (G5, correction (6)).
+    episode and disclosed (G5, correction (6)).  ANSWERED 2026-10-28
+    (user): option (c), M7 everywhere: the main pipeline adopts it with
+    default ON for the thesis scenes too (A/B with BF#13's test), and
+    CB#113 is re-run after it lands (BF#15).
 Q11 D12: arm O in its own venv, preferably a clone of theirs plus our pinned
     dependencies, never in theirs.
 Q12 D7 (vii): if B1(i) shows their 1e-4 at-home test unreachable with the
@@ -4750,19 +4753,26 @@ Q14 GF10, the die loss on the move home (BF#11: 91 of 96 probe trials; BF#14
     acceptance and BF#13's test, or as a disclosed D9 amendment of engine
     parameters.  Masses and frictions stay as declared (G9); no retry (R7).
     If nothing qualifies, the user decides before B7: run as specified and
-    attribute the failures to the gripper, or B9.
-Q15 PDDLStream's stream statistics (BF#14 RG1.12): every solve() loads and
+    attribute the failures to the gripper, or B9.  ANSWERED 2026-10-28
+    (user): the rule as proposed (BF#15).
+Q15PDDLStream's stream statistics (BF#14 RG1.12): every solve() loads and
     rewrites statistics/py3/boxel-streams.pkl in the working directory, so
     arm O episodes and acceptance arms depend on the runs before them.
     Proposed: a fresh, empty statistics directory per episode, archived with
     the run, for the bridge and the acceptance harness alike, and the paper
     says the thesis runs used an accumulated file.  Alternative: LOAD and
-    SAVE off.
+    SAVE off.  ANSWERED 2026-10-28 (user): neither for now.  The
+    accumulated file stays; every episode records its position in the run
+    sequence and the statistics file it started from (size and sha256, or
+    none).  Whether the history changes performance is decided by an
+    experiment (fresh against accumulated) after the bridge and the
+    migration (BF#15).
 Q16 Local smokes and probes (BF#12 (5), BF#11) ran in the laptop's arm T
     venv, against D12 and the Q11 answer (no install, nothing written; the
     campaign's arm T venv is the cluster's and its freeze is unchanged).
     Proposed: record it as a deviation and build a local arm O venv (a
     clone of the local arm T package set) for smokes and probes from now on.
+    ANSWERED 2026-10-28 (user): as proposed (BF#15).
 
 --------------------------------------------------------------------------------
 P4.11 CRITIQUE LOG, ROUND 1 (draft 1, 2026-10-25; four adversarial critics,
@@ -6371,6 +6381,46 @@ BF#14 [OPEN, closes when GF1 to GF9 land]  REVIEW GATE 1: FOUR LENSES ON B3
   the last four days); choosing the die-loss remedy in B7 (fitted to the
   released layouts, R8).
   RESULT: gate 1 recorded; it closes when GF1 to GF9 land.
+
+BF#15 [DONE, decisions]  THE USER'S ANSWERS TO Q10, Q14, Q15 AND Q16
+      (protocol, 2026-10-28)
+  WHAT: the four open questions, asked one at a time with their context.
+  Q10 (M7): option (c), M7 everywhere.  The main pipeline adopts M7 with
+  default ON for the thesis scenes as well as the bridge.  Consequences:
+  M7 lands as a main-pipeline change with an A/B on our scenes under
+  BF#13's test (reference: the commit it applies to); CB#113 is re-run
+  after it lands, and every thesis number produced before it is labelled
+  as the old cleanup (correction (6) applies to those numbers).  B5 still
+  waits for M7.
+  Q14 (GF10, the die loss): the rule as proposed, fixed before the probe
+  runs (P4.10 Q14): one factor at a time in the stated order, the first
+  remedy that keeps a die-class and a cup-class body between the pads at
+  >= 0.5 N in >= 95 % of 96 trials is adopted, as a default-off
+  main-pipeline parameter through BF#13's test or a disclosed D9 engine
+  amendment; if none qualifies, the user decides before B7.
+  Q15 (stream statistics): neither proposed handling for now.  The
+  accumulated statistics/py3/boxel-streams.pkl stays as PDDLStream
+  writes it.  Every episode (bridge, acceptance harness, campaign)
+  records its position in the run sequence and the statistics file it
+  started from (size and sha256, or "none"), so an order effect can be
+  traced.  An experiment, fresh file per episode against accumulated,
+  decides whether the history changes performance; it runs after the
+  bridge and the migration.  Replaces BF#14's before-B7 item (d)'s first
+  half.
+  Q16 (local environment): as proposed.  The local smokes and probes of
+  BF#11 and BF#12 in the laptop's arm T venv are recorded as a deviation
+  from D12 (nothing installed, the freeze hash unchanged, no recorded
+  result affected); from now on local smokes and probes run in a laptop
+  clone of the arm T package set plus our dependencies, the counterpart
+  of the cluster's armO-venvA.
+  BEFORE / AFTER: Q10, Q14, Q15, Q16 open / answered as above; M7's
+  default ON everywhere.
+  CLAIM EFFECT: Q10 changes the thesis-scene pipeline once M7 lands
+  (correction (6) then holds only for numbers produced before it); none
+  for the others.
+  HONESTY CLASS: configuration (protocol).
+  DECISION 2026-10-28 (user).
+  RESULT: decisions recorded; the laptop arm O venv is built next.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
