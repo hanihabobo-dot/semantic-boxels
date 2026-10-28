@@ -6764,6 +6764,40 @@ BF#24 [DONE]  GF8: MAIN() RUNS IN ARM O'S RUN DIRECTORY; G13 FLAGS STRAY
   DECISION 2026-10-28 (executor): as BF#14 GF8 specified.
   RESULT: GF8 done; GF9 (B3's test (4) under the gate hooks) is next.
 
+BF#25 [DONE]  GF9: B3'S TEST (4) UNDER THE GATE HOOKS  (B2 gate fix,
+      2026-10-28)
+  WHAT: tampura_bridge/tests/test_gf9_gated_episode.py runs B3's test (4)
+  (our random-pairs seed 1 adopted, goal_at_home, held-cargo re-solve, the
+  injected 5 mrad at-home miss and its corrective move) under
+  gate_hooks.install with the GateConfig execute_fn builds (executing
+  client, robot, arm joints, task bodies, has_object_boxel from the latest
+  registry, the env's own eye matrices for G20, the mission goal and
+  target for G10), phase 'main' around main().  The env is B3's AdoptedEnv
+  with the bridge adapter's oracle overrides taken from TampuraWorldEnv
+  (oracle_detect_objects raises, update_object_positions is the counted
+  no-op, every ObjectInfo poseless); without them G8 trips on the first
+  update_object_positions, as it should.  Asserts gate_record counts == {},
+  the ledger reader with no FAIL, the injected miss and the corrective
+  move.  Kept as the regression test for B4 to B6.
+  EVIDENCE: archive/tampura_bridge_plan_2026-10-25/bf/BF25_gf9/
+  gated_episode.console.  Counts empty; ledger, G3, G4, G5, G11, G15, G21
+  PASS.  Timing (laptop): is_config_collision_free on the plan twin 0.051
+  ms plain, 0.069 ms with the hooks installed (200 calls each); plan()
+  0.26 to 1.9 s per call; main() 7 to 14 s (two runs, 2 and 4 plans).
+  The episode ends with the held body out of the pads after the move home
+  (PHYSICAL_FAILURE, main() returns False) in the gated run and in B3's
+  ungated test alike: the known grasp loss (RG1.1, GF10, before B7 (a)),
+  not a gate effect.  Full bridge suite 86 passed, 3 skipped; static gates
+  green.
+  BEFORE / AFTER: B3's test (4) ungated / the same episode gated, clean.
+  CLAIM EFFECT: none.
+  HONESTY CLASS: infrastructure (gates).
+  DECISION 2026-10-28 (executor): as BF#14 GF9 specified.
+  RESULT: GF9 done; GF1 to GF9 have all landed, so B2's gate fixes are
+  complete on the laptop.  Re-running B2's deliverable on the cluster
+  (both seeds, with G13's new stray-file check) needs the user's approval.
+  GF10 and the before-B7 list stay with B4 to B6.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
