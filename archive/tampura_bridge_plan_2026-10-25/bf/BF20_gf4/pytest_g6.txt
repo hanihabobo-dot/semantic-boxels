@@ -1,0 +1,20 @@
+.......................sss.............................................. [ 98%]
+.                                                                        [100%]
+=============================== warnings summary ===============================
+test_g13_runtime.py::test_arm_o_passes_on_the_real_setup
+  /root/tampura-work/tampura_environments/tampura_environments/__init__.py:20: UserWarning: tampura_environments: skipping subpackage 'toy_discrete': No module named 'tampura_environments.toy_discrete'
+    _warnings.warn(f"tampura_environments: skipping subpackage '{_name}': {_e}")
+
+test_g6_controls.py::test_1_positive_die_hold_scores_one
+test_g6_controls.py::test_2_positive_cup_hold_scores_zero
+test_g6_controls.py::test_1b_die_hold_off_home_scores_zero
+  /root/armO-venvA/lib/python3.11/site-packages/trimesh/grouping.py:99: RuntimeWarning: invalid value encountered in cast
+    stacked = np.column_stack(stacked).round().astype(np.int64)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] ../../../mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/tampura_bridge/tests/test_g6_controls.py:137: fault injection runs with B7 full episodes (GF4)
+SKIPPED [1] ../../../mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/tampura_bridge/tests/test_g6_controls.py:142: fault injection runs with B7 full episodes (GF4)
+SKIPPED [1] ../../../mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/tampura_bridge/tests/test_g6_controls.py:147: fault injection runs with B7 full episodes (GF4)
+70 passed, 3 skipped, 4 warnings in 52.08s
+argv[0]=

@@ -686,6 +686,22 @@ def capture(name: str):
         _captures.pop()
 
 
+def check_readback(at_main_return, observation_conf) -> bool:
+    """G6: the arm readback taken when main() returned equals the
+    observation's conf bit for bit.  A mismatch counts against the episode
+    (no exception: the observation is still returned and scored)."""
+    same = [float(v) for v in at_main_return] == [float(v) for v in observation_conf]
+    run_logger.ledger_event('readback_check', identical=same,
+                            at_main_return=list(at_main_return),
+                            observation_conf=list(observation_conf))
+    if not same:
+        _counts['G6'] += 1
+        run_logger.ledger_event('gate_violation', gate='G6', fn='readback',
+                                detail='observation conf differs from the '
+                                       'readback at main() return')
+    return same
+
+
 def count_update_object_positions() -> None:
     """G16: the env adapter's update_object_positions is a counted no-op."""
     _info['G16_update_object_positions_noop'] += 1

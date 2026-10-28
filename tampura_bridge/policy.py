@@ -15,7 +15,8 @@ world:
      settles (D9 (5)), runs the after_settle check, renders, boxelizes and
      plans, acts and senses;
   4. the terminal observation from physical readback (scoring.py, phase
-     'post') and the gate record (G21).
+     'post'), its conf checked bit for bit against the arm readback taken
+     when main() returned (G6), and the gate record (G21).
 It returns the SceneState it received and that observation.
 """
 import logging
@@ -183,9 +184,17 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 home_hold_step_cap=task_spec.HOME_HOLD_STEP_CAP,
                 telemetry_enabled=False)
             gate_hooks.set_phase('post')
+            # G6: the arm at main() return, compared bit for bit with the
+            # observation's conf below.
+            with gate_hooks.scoring():
+                q_main = [p.getJointState(robot, j, physicsClientId=c)[0]
+                          for j in model.arm_joints]
+            ledger_event('main_return_readback', conf=q_main)
             observation = scoring.build_observation(their_env, store, c, robot)
             cfg.out['observation'] = {'grasp_body': observation.grasp_body,
                                       'conf': observation.conf}
+            cfg.out['readback_identical'] = gate_hooks.check_readback(
+                q_main, observation.conf)
             cfg.out['gates'] = gate_hooks.gate_record()
         except Exception as e:
             cfg.out['error'] = f"{type(e).__name__}: {e}"

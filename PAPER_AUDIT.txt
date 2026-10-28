@@ -6601,6 +6601,41 @@ BF#19 [PARTLY DONE]  GF3: G2'S LEAK TEST (PRE-PLANNING HALF), THE WIDER
   DECISION 2026-10-28 (executor): as BF#14 GF3 specified.
   RESULT: GF3 done except seed 1; GF4 (G6 controls) is next.
 
+BF#20 [DONE]  GF4: G6'S CONTROLS, THE READBACK CHECK, THE PICKLE ROUND
+      TRIP  (B2 gate fix, 2026-10-28)
+  WHAT: tampura_bridge/tests/test_g6_controls.py replaces B0's stubs.  The
+  controls run on the real chain: their FindDiceEnv on seed 0 (initialize
+  as run_planner.py does), D9's set-up, a held body, our
+  scoring.build_observation, then their SceneBelief.update, abstract and
+  ProblemSpec.get_reward, the calls of their rollout.  The hold is a test
+  control: the body placed between the pads at the EE, the fingers closed
+  with our close force (60 N) to 3 mm inside the class half-width, 240
+  steps, the two-pad hold asserted with scoring.held_body, then the arm set
+  to the control's configuration with no further step.  It sits in the test
+  file only, outside the campaign import graph, so no allowlist entry.  (3)
+  to (5) are skipped with the reason "runs with B7".  In the episode
+  path, execute_fn reads the arm (inside gate_hooks.scoring) right after
+  main() returns, logs it (main_return_readback) and checks it bit for bit
+  against the observation's conf (gate_hooks.check_readback: a ledger row,
+  and a mismatch counts G6 without raising; cfg.out['readback_identical']).
+  EVIDENCE: archive/tampura_bridge_plan_2026-10-25/bf/BF20_gf4/.  (1) die
+  hold at DEFAULT_ARM_POS: reward 1.0.  (2) cup hold (the smallest cup of
+  the layout, held as asserted): 0.0.  (1b) the same die hold with arm
+  joint 0 2e-3 rad off DEFAULT_ARM_POS: 0.0.  The readback check passes on
+  equal lists and counts one G6 on a 1e-12 difference.  Arm O's driver on
+  seed 0 (stop_before_planning) wrote their RolloutHistory pickle; arm T's
+  python loaded it with only their trees on PYTHONPATH, from outside the
+  repository, with no tampura_bridge module loaded.  The same driver run
+  logged readback_check identical: true, gate counts empty.  Full bridge
+  suite 70 passed, 3 skipped; bridge_gates.py all green.
+  BEFORE / AFTER: B0's stubs raising NotImplementedError, no readback
+  comparison / the positive controls and the round trip passing, the
+  readback compared and recorded per episode.
+  CLAIM EFFECT: none.
+  HONESTY CLASS: infrastructure (gates).
+  DECISION 2026-10-28 (executor): as BF#14 GF4 specified.
+  RESULT: GF4 done; GF5 (G18/G19 seed hygiene, the outcome field) is next.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
