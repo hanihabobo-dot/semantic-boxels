@@ -12,7 +12,8 @@ world:
   2. D9's set-up, in order, before any physics step: gravity, timestep,
      every task body's class mass, inertia and friction, our pad friction
      and finger opening;
-  3. the env adapter (B3(b)'s adopt path) and main() (phase 'main'), which
+  3. phase 'main' from here: the env adapter (B3(b)'s adopt path) and
+     main(), which
      settles (D9 (5)), runs the after_settle check, renders, boxelizes and
      plans, acts and senses;
   4. the terminal observation from physical readback (scoring.py, phase
@@ -168,6 +169,9 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
             with gate_hooks.write_only('settle_disclosure'):
                 before = _poses(world)
             d9_setup(world, model)
+            # GF6: only D9's calls run under 'setup'; the adapter build and
+            # main() are checked by G3, G6 and G14.
+            gate_hooks.set_phase('main')
             t_setup = time.perf_counter()
             env = TampuraWorldEnv(world, gui=cfg.vis)
             assert env.target_symbol() == target[0]
@@ -177,7 +181,6 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 '--no-gui', '--goal', 'holding', '--log-level', cfg.log_level,
                 '--max-plan-time', str(cfg.max_plan_time)])
             from tampura_environments.panda_utils.robot import DEFAULT_ARM_POS
-            gate_hooks.set_phase('main')
             test_full_pipeline.main(
                 gui=cfg.vis, run_logger=logger, goal_kind='holding',
                 draw_boxel_overlays=False, env=env, target_name=target[0],

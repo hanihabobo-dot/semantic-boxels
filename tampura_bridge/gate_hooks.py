@@ -3,7 +3,7 @@
 install(cfg) wraps
   * every pybullet function that writes world or robot state (G14),
   * the motor commands and robot_utils.move_robot_smooth (G3),
-  * stepSimulation (G6: no physics step before main() starts, after it
+  * stepSimulation (G6: no physics step during D9's set-up, after main()
     returns, or after the last dispatched action),
   * getAABB, getBasePositionAndOrientation, getClosestPoints,
     getContactPoints, rayTest and rayTestBatch (G8(b)),
@@ -240,7 +240,7 @@ def _make_step(orig):
             if _phase == 'setup':
                 _steps['setup'] += 1
                 _violation('G6', 'stepSimulation',
-                           'physics step before main() started')
+                           "physics step during D9's set-up")
             elif _phase == 'post':
                 _steps['post'] += 1
                 _violation('G6', 'stepSimulation',
@@ -643,8 +643,9 @@ def reset_counts() -> None:
 
 
 def set_phase(phase: str) -> None:
-    """'setup' (D9 before main()), 'main' (inside main()), 'post' (after
-    main() returned, while the observation is built)."""
+    """'setup' (D9's set-up only), 'main' (the env adapter build and
+    main()), 'post' (after main() returned, while the observation is
+    built)."""
     global _phase
     if phase not in _PHASES:
         raise ValueError(phase)

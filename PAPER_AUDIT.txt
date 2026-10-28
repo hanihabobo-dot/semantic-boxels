@@ -6681,6 +6681,26 @@ BF#21 [DONE]  GF5: G18 AND G19'S SEED HYGIENE IN THE LEDGER, ARM O'S
   correction line was already written by BF#14.
   RESULT: GF5 done; GF6 (set_phase('main') right after d9_setup) is next.
 
+BF#22 [DONE]  GF6: THE 'SETUP' PHASE COVERS D9 ONLY  (B2 gate fix,
+      2026-10-28)
+  WHAT: execute_fn switches gate_hooks to 'main' right after d9_setup,
+  before the env adapter is built (it was switched just before main()), so
+  the adapter build runs under G3's motor and motion checks, G14's write
+  and IK checks and G6's step accounting; only D9's own calls run under
+  'setup'.  gate_hooks' docstrings and its setup-step message say so.
+  EVIDENCE: archive/tampura_bridge_plan_2026-10-25/bf/BF22_gf6/.  Seed 0,
+  stop_before_planning: the ledger reads episode, driver_clock,
+  gate_phase setup, gate_phase main, bridge_timing (the adapter build),
+  then the settle's renders; every reader gate PASS, runtime counts all
+  0, 50 physics steps all inside main() as before (the adapter build takes
+  none).  Full bridge suite 81 passed, 3 skipped; static gates green.
+  BEFORE / AFTER: the adapter build exempt from G3 and G14 / checked.
+  CLAIM EFFECT: none.
+  HONESTY CLASS: infrastructure (gates).
+  DECISION 2026-10-28 (executor): as BF#14 GF6 specified.
+  RESULT: GF6 done; GF7 (G8(c): identity quaternion, held twin, AABB
+  centre) is next.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
