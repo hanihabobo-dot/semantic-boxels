@@ -1,0 +1,28 @@
+{
+ "tampura": {
+  "tracked_sha256": "fbc0cd060ddbb4af2ed768e9cbd848ff484a267cb81bf64c3094ab89ee9a689b",
+  "head": "cdddf14b45d2608fc1d3bc9c72d8ee249c4638b2",
+  "modified_tracked": [],
+  "undeclared_changes": [],
+  "untracked_stray": []
+ },
+ "tampura_environments": {
+  "tracked_sha256": "e339e7b865a82c1bb5885ea8ae74484544139ca462ee0c088431836d99ab309d",
+  "head": "4167c35e41170beee48b108d4a6a64a69d4b555a",
+  "modified_tracked": [
+   " M tampura_environments/__init__.py"
+  ],
+  "undeclared_changes": [],
+  "untracked_stray": []
+ },
+ "pip_freeze_sha256": "f3ab9887e30e2525e057dfa4d72cfdaa31ddaa3fb95160088c828d5e8f214735",
+ "tampura_installed": {
+  "path": "/root/tampura-work/.venv/lib/python3.11/site-packages/tampura",
+  "tracked": 2506,
+  "equal": 2502,
+  "differ": [],
+  "missing": [],
+  "untracked_extra": [],
+  "built_sha256": "e949c864de1971fda96a63aee6ae61337478f723caebc56237ec1232113948a8"
+ }
+}

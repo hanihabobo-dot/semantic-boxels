@@ -6732,6 +6732,38 @@ BF#23 [DONE]  GF7: G8(c) CHECKS ORIENTATION, THE HELD TWIN AND THE AABB
   RESULT: GF7 done; GF8 (main() in arm O's run directory, G13's untracked
   files) is next.
 
+BF#24 [DONE]  GF8: MAIN() RUNS IN ARM O'S RUN DIRECTORY; G13 FLAGS STRAY
+      FILES IN THEIR TREES  (B2 gate fix, 2026-10-28)
+  WHAT: execute_fn makes work/ under the run logger's directory the
+  working directory for the whole episode and changes back in its finally,
+  so main()'s boxel_data.json and pddlstream's temp/ and statistics/ land
+  there (work/, because main() copies boxel_data.json into the run
+  directory itself: with the run directory as cwd the copy raised
+  SameFileError, which the GF5 outcome field reported as crashed on the
+  first try).  G13's tree check lists every untracked file of both trees,
+  ignored ones included, and fails on any outside runs/, temp/, logs/,
+  __pycache__/, pip's egg-info and the build products of their install
+  (the dummy extension, SymK's builds/, the autotools output of its CUDD).
+  On the laptop the B2 smoke's boxel_data.json (byte-equal to our 14:00
+  run's) and statistics/py3/boxel-streams.pkl (our stream file's name,
+  written 14:00 by our run; no git history in their repository) were
+  ours and were removed.  The cluster's trees get the same check on the
+  next job; any stray there fails G13 and is removed only with the user's
+  approval.
+  EVIDENCE: archive/tampura_bridge_plan_2026-10-25/bf/BF24_gf8/.  Seed 0
+  stop_before_planning: work/ holds boxel_data.json, every reader gate
+  PASS, every count 0; afterwards G13 PASS on both trees ("nothing else
+  modified or stray") and on arm T's installed tampura.  Control: a
+  boxel_data.json planted in tampura_environments fails G13
+  (control_stray.txt); removed, G13 passes again.
+  BEFORE / AFTER: main() wrote into their tree and G13 ignored untracked
+  files / our output stays in our run directory and a stray file fails
+  G13.
+  CLAIM EFFECT: none.
+  HONESTY CLASS: infrastructure (gates).
+  DECISION 2026-10-28 (executor): as BF#14 GF8 specified.
+  RESULT: GF8 done; GF9 (B3's test (4) under the gate hooks) is next.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

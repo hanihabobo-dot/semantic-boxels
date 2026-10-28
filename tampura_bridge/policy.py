@@ -6,7 +6,9 @@ no-op afterwards; their rollout, env.step, Belief.update and get_reward run
 untouched.  boxel_episode is a schema with no preconditions and identity
 effects whose execute_fn runs our whole episode inside their executing
 world:
-  1. the run logger and its ledger, the episode row (seed, scene file),
+  1. the run logger and its ledger, work/ in its run directory as the
+     working directory until execute_fn returns, the episode row (seed,
+     scene file),
      the driver's clock and RNG record (G18, G19), and the runtime gate
      hooks (phase 'setup');
   2. D9's set-up, in order, before any physics step: gravity, timestep,
@@ -22,6 +24,7 @@ world:
 It returns the SceneState it received and that observation.
 """
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Optional
@@ -131,7 +134,15 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
         logger = RunLogger(verbosity=cfg.log_level, log_dir=cfg.log_dir)
         cfg.out['run_dir'] = str(logger.run_dir)
         observation = None
+        # GF8: main() writes boxel_data.json and pddlstream its temp/ and
+        # statistics/ into the working directory; they go to work/ under our
+        # run directory (main() copies boxel_data.json into the run
+        # directory itself), never into their tree.
+        cwd = os.getcwd()
         try:
+            work = os.path.join(str(logger.run_dir), 'work')
+            os.makedirs(work, exist_ok=True)
+            os.chdir(work)
             ledger_event('episode', seed=cfg.seed, scene_file=cfg.scene_file)
             ledger_event('driver_clock', **cfg.driver)
             model = robot_utils.resolve_robot_model(robot, c)
@@ -210,6 +221,7 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
             if gate_hooks.installed():
                 cfg.out['gates'] = gate_hooks.gate_record()
         finally:
+            os.chdir(cwd)
             gate_hooks.uninstall()
             world_eye.disable()
             telemetry.disable()

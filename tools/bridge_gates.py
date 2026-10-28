@@ -60,6 +60,15 @@ NOT_INSTALLED = frozenset((
 # SymK's own build tree (bin/downward is the planner arm T runs).  These
 # cannot equal the checkout's build; their hash goes into --compare instead.
 INSTALL_BUILT = re.compile(r'(_dummy\.cpython-[^/]*\.so|third_party/symk/builds/.*)$')
+# GF8: untracked files (ignored ones included) G13 accepts in their trees:
+# run output (runs/, temp/, logs/), bytecode, pip's egg-info, and the build
+# products of their own install (the dummy extension, SymK's build tree and
+# the autotools output of its CUDD).  Anything else, a stray file of ours
+# included, fails G13.
+UNTRACKED_ALLOWED = re.compile(
+    r'^(runs|temp|logs)/|(^|/)__pycache__/|^[^/]+\.egg-info/'
+    r'|^tampura/_dummy\.cpython-[^/]*\.so$'
+    r'|^tampura/third_party/symk/(builds/|src/search/ext/cudd-3\.0\.0/)')
 
 # The campaign drivers (G1).  test_full_pipeline.py is a declared root as
 # well: D1 runs its main() inside execute_fn, so it is on the campaign path
@@ -545,10 +554,13 @@ def tree_state():
                     digest = hashlib.sha256(fh.read()).hexdigest()
             if entry[:2] != ' M' or declared.get(name) != digest:
                 undeclared.append(entry)
+        others = _run(['git', '-C', path, 'ls-files', '--others', '-z']).split('\0')
+        stray = sorted(f for f in others if f and not UNTRACKED_ALLOWED.search(f))
         head = _run(['git', '-C', path, 'rev-parse', 'HEAD']).strip()
         state[repo] = {'tracked_sha256': h.hexdigest(), 'head': head,
                        'modified_tracked': modified,
-                       'undeclared_changes': undeclared}
+                       'undeclared_changes': undeclared,
+                       'untracked_stray': stray}
     freeze = _run([os.path.join(TW, '.venv', 'bin', 'pip'), 'freeze'])
     state['pip_freeze_sha256'] = hashlib.sha256(freeze.encode()).hexdigest()
     state['tampura_installed'] = installed_state()
@@ -608,12 +620,15 @@ def run_tree(report, save=None, compare=None):
             bad.append(f"HEAD {s['head'][:7]} != pinned {pin}")
         if s['undeclared_changes']:
             bad.append(f"undeclared changes: {s['undeclared_changes'][:5]}")
+        if s['untracked_stray']:
+            bad.append(f"untracked files outside run output and build "
+                       f"products: {s['untracked_stray'][:5]}")
         n_decl = len(s['modified_tracked']) - len(s['undeclared_changes'])
         report.add('G13', 'FAIL' if bad else 'PASS',
                    f"{repo}: " + ('; '.join(bad) if bad else
                                   f"HEAD {pin}, tree {s['tracked_sha256'][:16]}, "
                                   f"{n_decl} declared change(s) (BF#3), "
-                                  f"nothing else modified"))
+                                  f"nothing else modified or stray"))
     report.add('G13', 'INFO', f"arm T pip freeze {state['pip_freeze_sha256'][:16]}")
     inst = state['tampura_installed']
     bad = [f"{k}: {inst[k][:5]}" for k in ('differ', 'missing', 'untracked_extra')
