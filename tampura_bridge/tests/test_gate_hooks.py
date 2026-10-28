@@ -284,3 +284,60 @@ def test_oracle_path_and_gate_record(w):
     assert rec['counts']['G16'] == 1
     assert rec['info']['G16_update_object_positions_noop'] == 1
     assert _ledger(w.run_dir, 'gate_record')[-1]['counts']['G16'] == 1
+
+
+# ----- G8(c): the plan twin (GF7) ----------------------------------------
+
+def _twin_env(w, body, twin):
+    info = types.SimpleNamespace(object_id=body, is_tray=False)
+    return types.SimpleNamespace(objects={'die': info}, _gui_to_plan={body: twin},
+                                 plan_client_id=w.c1,
+                                 _PLAN_CLIENT_PARK=(5.0, 5.0, -1.0))
+
+
+def _registry(centre):
+    return types.SimpleNamespace(
+        get_boxel=lambda name: types.SimpleNamespace(center=centre))
+
+
+def _offset_twin(w, dz):
+    """A 4 cm box twin whose collision shape sits dz above its origin."""
+    col = p.createCollisionShape(p.GEOM_BOX, halfExtents=[0.02] * 3,
+                                 collisionFramePosition=[0, 0, dz],
+                                 physicsClientId=w.c1)
+    return p.createMultiBody(0.1, col, basePosition=[0.5, 0.0, 0.05],
+                             physicsClientId=w.c1)
+
+
+def test_twin_at_its_centre_upright_passes(w):
+    gh._check_twin(_twin_env(w, w.known, w.twin), None, _registry((0.5, 0.0, 0.05)))
+    assert gh.counts().get('G8', 0) == 0
+
+
+def test_rotated_twin_trips_g8(w):
+    p.resetBasePositionAndOrientation(w.twin, [0.5, 0.0, 0.05],
+                                      p.getQuaternionFromEuler([0, 0, 0.3]),
+                                      physicsClientId=w.c1)
+    _trips('G8', gh._check_twin, _twin_env(w, w.known, w.twin), None,
+           _registry((0.5, 0.0, 0.05)))
+
+
+def test_twin_aabb_centre_within_the_stated_tolerance(w):
+    near, far = _offset_twin(w, 0.003), _offset_twin(w, 0.008)
+    gh._check_twin(_twin_env(w, w.known, near), None, _registry((0.5, 0.0, 0.05)))
+    assert gh.counts().get('G8', 0) == 0
+    assert 2900 <= gh.gate_record()['info']['G8c_aabb_offset_max_um'] <= 3100
+    _trips('G8', gh._check_twin, _twin_env(w, w.known, far), None,
+           _registry((0.5, 0.0, 0.05)))
+
+
+def test_held_twin_must_sit_at_the_ee(w, monkeypatch):
+    monkeypatch.setattr(gh, '_ee_link', lambda: 11)
+    ee = p.getLinkState(w.robot, 11, physicsClientId=w.c0)[0]
+    p.resetBasePositionAndOrientation(w.twin, ee, [0, 0, 0, 1], physicsClientId=w.c1)
+    gh._check_twin(_twin_env(w, w.known, w.twin), w.known, _registry((0.5, 0.0, 0.05)))
+    assert gh.counts().get('G8', 0) == 0
+    p.resetBasePositionAndOrientation(w.twin, [ee[0], ee[1], ee[2] - 0.05],
+                                      [0, 0, 0, 1], physicsClientId=w.c1)
+    _trips('G8', gh._check_twin, _twin_env(w, w.known, w.twin), w.known,
+           _registry((0.5, 0.0, 0.05)))

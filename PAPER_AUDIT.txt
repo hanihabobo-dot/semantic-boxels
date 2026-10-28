@@ -6701,6 +6701,37 @@ BF#22 [DONE]  GF6: THE 'SETUP' PHASE COVERS D9 ONLY  (B2 gate fix,
   RESULT: GF6 done; GF7 (G8(c): identity quaternion, held twin, AABB
   centre) is next.
 
+BF#23 [DONE]  GF7: G8(c) CHECKS ORIENTATION, THE HELD TWIN AND THE AABB
+      CENTRE  (B2 gate fix, 2026-10-28)
+  WHAT: gate_hooks._check_twin, after every belief-posed sync on the
+  executing env: every non-static twin has the identity quaternion; the
+  held body's twin sits at the EE (link state read on the executing
+  client, proprioception); a boxel-less body at the park pose; every other
+  body at its registry centre, and its twin's collision AABB centre within
+  TWIN_AABB_TOL_M = 6 mm of that centre (option one of GF7: a stated
+  tolerance, not a compensated twin, so the main pipeline is unchanged;
+  gate 1's feasibility check measured at most 4.7 mm over every class).
+  The largest offset per episode is logged (G8c_aabb_offset_max_um), and
+  held-twin checks are counted.  Two reviewed allowlist lines (the
+  unwrapped getAABB on plan_client_id, class plan twin).
+  EVIDENCE: archive/tampura_bridge_plan_2026-10-25/bf/BF23_gf7/.
+  test_gate_hooks.py gains 4 tests: an upright twin at its centre passes;
+  a twin yawed 0.3 rad fails; a collision shape 3 mm off its origin passes
+  (offset logged as 3.0 mm) and 8 mm fails; a held twin at the EE passes,
+  5 cm below it fails.  Seed 0 stop_before_planning: 2 syncs, every count
+  0, largest offset 2.85 mm.  Two full seed 0 episodes on the laptop
+  (reward 0, the known die loss): 8 and 5 syncs, every gate PASS, every
+  count 0, largest offset 2.85 mm; neither replanned while holding, so the
+  held-twin branch is covered by the unit test only so far.  Static gates
+  green.
+  BEFORE / AFTER: position only, held body skipped / orientation, held
+  twin and AABB centre checked.
+  CLAIM EFFECT: none.
+  HONESTY CLASS: infrastructure (gates).
+  DECISION 2026-10-28 (executor): the tolerance option of BF#14 GF7.
+  RESULT: GF7 done; GF8 (main() in arm O's run directory, G13's untracked
+  files) is next.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

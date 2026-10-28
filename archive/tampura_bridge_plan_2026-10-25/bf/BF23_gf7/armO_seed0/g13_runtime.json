@@ -1,0 +1,17 @@
+{
+ "arm": "O",
+ "failures": [],
+ "their_root": "/root/tampura-work",
+ "policy_methods": [
+  "__init__",
+  "get_action"
+ ],
+ "their_modules": {
+  "in_checkout": 53,
+  "identical_copy": 0
+ },
+ "schemas_of_ours": [
+  "boxel_episode"
+ ],
+ "ok": true
+}

@@ -441,6 +441,10 @@ def _make_observer(name, orig):
 _registry_ref = None
 _bodies_at_install = None
 _TWIN_TOL = 1e-9
+# G8(c), GF7: a twin's collision AABB centre against its registry centre.
+# Gate 1's feasibility check measured at most 4.7 mm over every find_dice
+# class (the YCB mesh origin is not its AABB centre); 1.3 mm of headroom.
+TWIN_AABB_TOL_M = 0.006
 
 
 def _make_sync_check(orig):
@@ -453,26 +457,63 @@ def _make_sync_check(orig):
     return sync_to_plan_client
 
 
+def _far(a, b, tol):
+    return max(abs(float(x) - float(y)) for x, y in zip(a, b)) > tol
+
+
 def _check_twin(env, held_body_id, registry):
-    """G8(c) on the plan twin (a plan-client read)."""
+    """G8(c) on the plan twin (plan-client reads; the held body's EE is
+    proprioception).  Every non-static twin is upright (identity
+    quaternion); a boxel-less body sits at the park pose, the held body at
+    the EE, every other body at its registry centre, and that twin's
+    collision AABB centre lies within TWIN_AABB_TOL_M of the registry
+    centre (YCB twins are posed by their origin, not their AABB centre)."""
     get = _pybullet_originals.get('getBasePositionAndOrientation',
                                   pybullet.getBasePositionAndOrientation)
+    aabb = _pybullet_originals.get('getAABB', pybullet.getAABB)
     park = env._PLAN_CLIENT_PARK
     for name, info in env.objects.items():
         if name in ('plane', 'table', 'robot') or info.is_tray:
             continue
         pid = env._gui_to_plan.get(info.object_id)
-        if pid is None or info.object_id == held_body_id:
+        if pid is None:
             continue
-        pos = get(pid, physicsClientId=env.plan_client_id)[0]
+        pos, orn = get(pid, physicsClientId=env.plan_client_id)
+        _info['G8c_bodies_checked'] += 1
+        if _far(orn, (0.0, 0.0, 0.0, 1.0), _TWIN_TOL):
+            _violation('G8', 'sync_to_plan_client',
+                       f'{name}: plan twin not upright ({list(orn)})')
+        if info.object_id == held_body_id:
+            _info['G8c_held_checked'] += 1
+            ee = pybullet.getLinkState(
+                _cfg.robot_id, _ee_link(),
+                physicsClientId=_cfg.executing_client)[0]
+            if _far(pos, ee, _TWIN_TOL):
+                _violation('G8', 'sync_to_plan_client',
+                           f'{name}: held twin at {list(pos)}, not at the EE')
+            continue
         bd = registry.get_boxel(name)
         want = bd.center if bd is not None else park
-        _info['G8c_bodies_checked'] += 1
-        if max(abs(float(a) - float(b)) for a, b in zip(pos, want)) > _TWIN_TOL:
+        if _far(pos, want, _TWIN_TOL):
             _violation('G8', 'sync_to_plan_client',
                        f'{name}: plan twin at {list(pos)}, expected '
                        f'{"its registry centre" if bd is not None else "the park pose"}')
+        elif bd is not None:
+            lo, hi = aabb(pid, physicsClientId=env.plan_client_id)
+            centre = [(a + b) / 2.0 for a, b in zip(lo, hi)]
+            off = max(abs(c - float(w)) for c, w in zip(centre, want))
+            _info['G8c_aabb_offset_max_um'] = max(
+                _info['G8c_aabb_offset_max_um'], int(round(off * 1e6)))
+            if off > TWIN_AABB_TOL_M:
+                _violation('G8', 'sync_to_plan_client',
+                           f'{name}: twin AABB centre {off * 1e3:.2f} mm from '
+                           f'the registry centre')
     _info['G8c_syncs'] += 1
+
+
+def _ee_link():
+    import robot_utils
+    return robot_utils.robot_model().ee_link
 
 
 def _make_registry_init(orig):
