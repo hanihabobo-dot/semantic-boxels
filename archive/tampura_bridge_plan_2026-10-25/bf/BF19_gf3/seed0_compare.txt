@@ -1,0 +1,4 @@
+base   seed 0  noised {}  tactile permuted 0  boxels [None, {'total': 8, 'objects': 1, 'shadows': 1, 'free_space': 6}]  casts 1  renders 2  registry db3b832a4dc5
+base   seed 0  noised {}  tactile permuted 0  boxels [None, {'total': 8, 'objects': 1, 'shadows': 1, 'free_space': 6}]  casts 1  renders 2  registry db3b832a4dc5
+noise  seed 0  noised {'getBasePositionAndOrientation': 6, 'getCameraImage': 2, 'getLinkState': 1, 'getJointState': 9, 'getAABB': 2}  tactile permuted 0  boxels [None, {'total': 8, 'objects': 1, 'shadows': 1, 'free_space': 6}]  casts 1  renders 2  registry db3b832a4dc5
+PASS

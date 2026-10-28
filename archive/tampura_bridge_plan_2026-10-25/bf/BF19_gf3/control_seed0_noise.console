@@ -1,0 +1,291 @@
+pybullet build time: Jan 29 2025 23:17:20
+/root/tampura-work/tampura_environments/tampura_environments/__init__.py:20: UserWarning: tampura_environments: skipping subpackage 'toy_discrete': No module named 'tampura_environments.toy_discrete'
+  _warnings.warn(f"tampura_environments: skipping subpackage '{_name}': {_e}")
+Loading scene from 1747173591.670785.json
+/root/armO-venvA/lib/python3.11/site-packages/trimesh/grouping.py:99: RuntimeWarning: invalid value encountered in cast
+  stacked = np.column_stack(stacked).round().astype(np.int64)
+
+==========t=0==========
+State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1386a0a590>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e148957b610>
+Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+Reward: 0.0
+Action: boxel_episode()
+  started 2026-10-28_12-17-50
+  log: /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/archive/tampura_bridge_plan_2026-10-25/bf/BF19_gf3/run_control_seed0_noise/ours/run_2026-10-28_12-17-50/run_2026-10-28_12-17-50.log
+b3Warning[examples/Importers/ImportURDFDemo/BulletUrdfImporter.cpp,126]:
+No inertial data for link, using mass=1, localinertiadiagonal = 1,1,1, identity local inertial frameb3Warning[examples/Importers/ImportURDFDemo/BulletUrdfImporter.cpp,126]:
+panda_link0b3Warning[examples/Importers/ImportURDFDemo/BulletUrdfImporter.cpp,126]:
+No inertial data for link, using mass=1, localinertiadiagonal = 1,1,1, identity local inertial frameb3Warning[examples/Importers/ImportURDFDemo/BulletUrdfImporter.cpp,126]:
+panda_tool_tipb3Warning[examples/Importers/ImportURDFDemo/BulletUrdfImporter.cpp,126]:
+No inertial data for link, using mass=1, localinertiadiagonal = 1,1,1, identity local inertial frameb3Warning[examples/Importers/ImportURDFDemo/BulletUrdfImporter.cpp,126]:
+camera_frameb3Warning[examples/Importers/ImportURDFDemo/BulletUrdfImporter.cpp,126]:
+No inertial data for link, using mass=1, localinertiadiagonal = 1,1,1, identity local inertial frameb3Warning[examples/Importers/ImportURDFDemo/BulletUrdfImporter.cpp,126]:
+panda_handvb3Warning[examples/Importers/ImportURDFDemo/BulletUrdfImporter.cpp,126]:
+No inertial data for link, using mass=1, localinertiadiagonal = 1,1,1, identity local inertial frameb3Warning[examples/Importers/ImportURDFDemo/BulletUrdfImporter.cpp,126]:
+panda_hand  Adopted executing client 0; plan twin client 2
+Semantic Boxels · PDDLStream pipeline
+
+◆ Phase 1 · Environment Setup
+  [audit-66/67] Effective minimum boxel size: 0.082 m (largest object AABB 0.072 m + 0.01 m headroom).
+  ✓ boxel test environment initialised
+  • robot id 0 · 5 bodies in scene
+  • camera [0.17861445 0.04880322 0.58831882] → [ 3.28582478 -0.16977984 -3.32287836]
+  [D9] the die is VISIBLE to the eye after the settle: scene_changed_by_settle (reported in its own row)
+
+◆ Phase 2 · Calculating Boxels
+  ✓ merged 29 → 6 boxels
+  ✓ computed 8 boxels
+
+◆ Phase 3 · Creating BoxelRegistry
+  → saved 8 boxels to boxel_data.json
+  • 8 boxels · 1 shadows · 1 occluders
+
+◆ Phase 4 · Hidden Object Scenario
+  target: dice (given; not in the first observation; the robot must search)
+  shadow blockers:
+    shadow_of_d_cups_ud  ← ['d_cups_ud']
+  • boxel→pybullet mapping: 1 objects
+
+◆ Phase 5 · Planning with Replanning
+  [eye #1] initial observation (phase 2-4) | held=none | unknown shadows=1 | d_cups_ud@(-0.207,0.159)[bel 1725mm] dice@(-1.724,-0.281)[NO BOXEL]
+  stop_before_planning: returning after the first plan-twin sync
+
+  finished 2026-10-28_12-17-51
+  log: /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/archive/tampura_bridge_plan_2026-10-25/bf/BF19_gf3/run_control_seed0_noise/ours/run_2026-10-28_12-17-50/run_2026-10-28_12-17-50.log
+INFO:root:Observation: SceneObservation(...)
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e138841d490>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=1==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e138712d410>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e138841d490>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e13827f9310>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=2==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388b5a790>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e13827f9310>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383060550>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=3==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1383073450>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383060550>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383070550>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=4==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e13863b4450>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383070550>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383060e90>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=5==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1383098c50>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383060e90>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e138309ac90>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=6==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e138305da90>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e138309ac90>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e138305e6d0>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=7==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e138305f750>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e138305e6d0>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e138309bd10>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=8==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1383025c10>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e138309bd10>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383026350>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=9==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e13863b41d0>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383026350>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e138639ddd0>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=10==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1383020f50>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e138639ddd0>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383020e90>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=11==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e13830237d0>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383020e90>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e13875e49d0>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=12==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1383010f50>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e13875e49d0>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383010e90>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=13==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1383013110>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383010e90>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383013710>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=14==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e13830055d0>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383013710>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383005cd0>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=15==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1383007550>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383005cd0>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383007c90>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=16==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e13830b8f50>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383007c90>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e13830b8e90>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=17==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e13830bae10>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e13830b8e90>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e13830bb550>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=18==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1383044c90>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e13830bb550>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383045350>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:
+==========t=19==========
+INFO:root:State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e13830467d0>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383045350>
+INFO:root:Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Reward: 0.0
+INFO:root:Action: no-op()
+INFO:root:Observation: None
+INFO:root:Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7e1388baf990>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
+INFO:root:Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7e1383046f10>
+INFO:root:Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
+INFO:root:Next Reward: 0.0
+INFO:root:====================
+seed 0: their RolloutHistory rewards[-1] = 0.0; details in /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/archive/tampura_bridge_plan_2026-10-25/bf/BF19_gf3/run_control_seed0_noise
+{"seed": 0, "mode": "noise", "noised": {"getBasePositionAndOrientation": 7, "getCameraImage": 2, "getLinkState": 1, "getJointState": 9, "getAABB": 2}, "tactile_permuted": 0, "registry_sha256": "db882687c3581e8d9aab7300bc3aa47b858366575e323cc3f34a068ffdd5fcec", "registry_summary": [null, {"total": 8, "objects": 1, "shadows": 1, "free_space": 6}], "casts": 1, "casts_sha256": "0e8495886adab74999f1625e527669ff2d9e7b02d98d2fb6001e1ba297a3b8bb", "renders": 2, "renders_sha256": "be73af20f92b6766828efc908f2f15dfba927c72222a8878485313fb267e076c", "episode_error": null, "gate_counts": {}}

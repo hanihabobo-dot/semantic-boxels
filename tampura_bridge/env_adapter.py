@@ -14,7 +14,8 @@ plan-twin sync: those run as BoxelTestEnv's own code.
 
 The object table carries no pose, orientation or AABB of any body (G8(a)):
 ObjectInfo.size is the CLASS size from task_spec (D8's auto_cell input),
-position and orientation stay None.
+position and orientation stay None, and reading position raises (G16,
+PoselessObjectInfo).
 """
 from collections import Counter
 
@@ -34,6 +35,20 @@ def _wrap_client(client_id):
     bc._pid = None
     bc._client = client_id
     return bc
+
+
+class PoselessObjectInfo(ObjectInfo):
+    """The bridge's object table entry: no pose (G8(a)).  Reading position
+    is the oracle path (G2, G16) and raises; it may only be set to None."""
+
+    @property
+    def position(self):
+        gate_hooks.oracle_called('ObjectInfo.position')
+
+    @position.setter
+    def position(self, value):
+        if value is not None:
+            gate_hooks.oracle_called('ObjectInfo.position set')
 
 
 def symbol_names(categories):
@@ -99,19 +114,19 @@ class TampuraWorldEnv(BoxelTestEnv):
         for name in ('plane', 'table'):
             # Their world has no ground plane; main() names both supports,
             # so both names map to their table (one body, one twin).
-            self.objects[name] = ObjectInfo(
+            self.objects[name] = PoselessObjectInfo(
                 object_id=floor, name=name, position=None, orientation=None,
                 size=none, is_visible=False, is_occluder=False)
         self._plan_register_twin(floor, plan_floor)
         robot = w.robot.body
-        self.objects['robot'] = ObjectInfo(
+        self.objects['robot'] = PoselessObjectInfo(
             object_id=robot, name='robot', position=None, orientation=None,
             size=none, is_visible=False, is_occluder=False)
         self.plan_robot_id = self._plan_load_urdf(robot, PANDA_PATH,
                                                   useFixedBase=True)
         names = symbol_names(list(w.categories))
         for body, cat, name in zip(w.objects, w.categories, names):
-            self.objects[name] = ObjectInfo(
+            self.objects[name] = PoselessObjectInfo(
                 object_id=body, name=name, position=None, orientation=None,
                 size=np.array(task_spec.CLASS_EXTENTS[cat]),
                 is_visible=False,

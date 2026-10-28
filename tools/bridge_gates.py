@@ -81,10 +81,13 @@ G1_NAMES = frozenset((
 G2_CALLS = frozenset(('getBasePositionAndOrientation', 'get_pose', 'get_aabb',
                       'getAABB', 'rayTest', 'rayTestBatch'))
 G2_ATTRS = frozenset(('object_poses', 'visibility_grid'))
+# 'gate hook': gate_hooks.py's own machinery (the names it wraps, the reads
+# its checks make with the unwrapped functions); allowed in that file only.
 G1_CLASSES = ('plan client', 'D9 set-up', 'G14 exemption',
-              'unreachable on the bridge path', 'test control')
+              'unreachable on the bridge path', 'test control', 'gate hook')
 G2_CLASSES = ('write-only', 'scoring', 'plan twin',
-              'unreachable on the bridge path', 'test control')
+              'unreachable on the bridge path', 'test control', 'gate hook')
+GATE_HOOK_FILE = 'tampura_bridge/gate_hooks.py'
 
 G7_PATTERNS = (re.compile(r'cup_\d'), re.compile(r'^die$'),
                re.compile(r'1747173\d{3}'), re.compile(r'problems/'),
@@ -208,12 +211,34 @@ def import_graph():
 # ----- AST scans ---------------------------------------------------------
 
 class _Scanner(ast.NodeVisitor):
-    def __init__(self, path, lines):
+    """G1 / G2 hits: calls by name, `from pybullet import`, getattr with a
+    constant name, and (RG1.17, GF3) any other Load of such a name on the
+    pybullet module or an alias of it (`get = p.getAABB`) and any string
+    constant equal to one (a lookup by name)."""
+
+    def __init__(self, path, lines, tree):
         self.path = rel(path)
         self.lines = lines
         self.scope = []
         self.calls = []
         self.hits = []
+        self.modules = {'p', 'pybullet'}
+        self.seen = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == 'pybullet':
+                        self.modules.add(alias.asname or 'pybullet')
+            if isinstance(node, (ast.Module, ast.FunctionDef, ast.ClassDef,
+                                 ast.AsyncFunctionDef)):
+                doc = node.body[0] if node.body else None
+                if (isinstance(doc, ast.Expr)
+                        and isinstance(doc.value, ast.Constant)):
+                    self.seen.add(id(doc.value))
+
+    @staticmethod
+    def _gate_of(name):
+        return 'G1' if name in G1_NAMES else 'G2' if name in G2_CALLS else None
 
     def _qual(self):
         return '.'.join(self.scope) or '<module>'
@@ -248,16 +273,28 @@ class _Scanner(ast.NodeVisitor):
             self._hit('G1', node, name)
         if name in G2_CALLS:
             self._hit('G2', node, name)
+        if isinstance(func, ast.Attribute):
+            self.seen.add(id(func))
         if (name == 'getattr' and len(node.args) >= 2
                 and isinstance(node.args[1], ast.Constant)
                 and node.args[1].value in (G1_NAMES | G2_CALLS)):
             self._hit('G1' if node.args[1].value in G1_NAMES else 'G2',
                       node, f'getattr {node.args[1].value}')
+            self.seen.add(id(node.args[1]))
         self.generic_visit(node)
+
+    def visit_Constant(self, node):
+        gate = (self._gate_of(node.value) if isinstance(node.value, str)
+                else None)
+        if gate and id(node) not in self.seen:
+            self._hit(gate, node, f'name {node.value!r} as a string')
 
     def visit_Attribute(self, node):
         if isinstance(node.ctx, ast.Load):
             base = node.value.id if isinstance(node.value, ast.Name) else None
+            gate = self._gate_of(node.attr)
+            if gate and base in self.modules and id(node) not in self.seen:
+                self._hit(gate, node, f'{base}.{node.attr} referenced, not called')
             if node.attr in G2_ATTRS:
                 self._hit('G2', node, node.attr)
             elif node.attr == 'poses' and base == 'world':
@@ -272,8 +309,9 @@ def scan(files):
     for path in files:
         with open(path, 'r', encoding='utf-8') as f:
             text = f.read()
-        sc = _Scanner(path, text.splitlines())
-        sc.visit(ast.parse(text, filename=path))
+        tree = ast.parse(text, filename=path)
+        sc = _Scanner(path, text.splitlines(), tree)
+        sc.visit(tree)
         hits.extend(sc.hits)
     return hits
 
@@ -295,6 +333,9 @@ def _parse_allowlist():
             allowed = G1_CLASSES if gate == 'G1' else G2_CLASSES
             if cls not in allowed:
                 problems.append(f'allowlist line {n}: class {cls!r}')
+            if cls == 'gate hook' and file != GATE_HOOK_FILE:
+                problems.append(f'allowlist line {n}: gate hook outside '
+                                f'{GATE_HOOK_FILE}')
             if not reason or reason == 'UNREVIEWED':
                 problems.append(f'allowlist line {n}: no reviewed reason')
             entries.append({'gate': gate, 'file': file, 'func': func,

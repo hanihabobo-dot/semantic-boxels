@@ -4216,7 +4216,16 @@ B7  [OPEN]  FIRST FULL EPISODES, WATCHED.  Seed 0 (1-cup layout), then seed 1
     (pre-registered, process only, rewards never enter it): G1-G21 green
     with no gate trip in any of the four episodes (a trip blocks GO), the G6
     positive and negative controls pass, and every episode reaches a logged
-    exit reason with no harness exception.  Class: verification.  Abort: any
+    exit reason with no harness exception.  G2's LEAK TEST, PLANNING HALF
+    (pre-registered by GF3, BF#19; runs with the headless episodes, after
+    them, so B7 stays the first planned run in their world): seeds 0 and 1,
+    tampura_bridge/tests/leak_probe.py without stop_before_planning, modes
+    base, base and noise; compared: the registry at every belief-posed sync,
+    the ray casts, the renders and every plan() result (its action list), up
+    to the first point where the two base runs differ (wall-clock budgets
+    make planning nondeterministic; that point and the share of the episode
+    it covers are reported).  A base/noise difference before it fails GO;
+    so does a noise run that replaces no value.  Class: verification.  Abort: any
     gate red; any temptation to add a helper motion, retry or fallback (H2,
     R7).  Effort 3 days.
 
@@ -6542,6 +6551,55 @@ BF#18 [DONE]  GF2: G13 HASHES ARM T'S INSTALLED TAMPURA  (B2 gate fix,
   HONESTY CLASS: infrastructure (gates).
   DECISION 2026-10-28 (executor): as BF#14 GF2 specified.
   RESULT: GF2 done; GF3 (G2's leak test) is next.
+
+BF#19 [PARTLY DONE]  GF3: G2'S LEAK TEST (PRE-PLANNING HALF), THE WIDER
+      SCAN, A RAISING ObjectInfo.position  (B2 gate fix, 2026-10-28)
+  WHAT: (1) tampura_bridge/tests/leak_probe.py runs arm O's real driver on
+  one seed with stop_before_planning and puts a probe layer over pybullet's
+  state reads after gate_hooks.install.  Mode noise replaces every value
+  read inside gate_hooks.write_only with noise of the same shape (its own
+  generator; the global streams untouched) and permutes the non-robot body
+  ids of every tactile contact list among the task bodies.  Compared with
+  mode base: the registry at every belief-posed plan-twin sync (the first
+  observation's object estimates, then the registry), every ray cast
+  outside write-only (arguments and results, arrays in full) and every
+  render outside write-only.  The comparison counts only when two base runs
+  agree and the noise run replaced at least one value.  (2) The planning
+  half is pre-registered in B7's GO criterion.  (3) TampuraWorldEnv's
+  object table is PoselessObjectInfo: reading position is G16's oracle path
+  (a counted GateViolation), and it may only be set to None.  (4) G2's AST
+  scan also flags a Load of a G1/G2 name on pybullet, p or any `import
+  pybullet as` alias that is not a direct call (`get = p.getAABB`), and any
+  string constant equal to such a name (docstrings and the getattr
+  argument already counted excepted).  The 37 new hits are all in
+  gate_hooks.py: its hook tables, two name comparisons, G14's
+  collision-check pose read and G8(c)'s plan-twin read; they are
+  allowlisted under a new class, gate hook, valid in that file only
+  (G8(c)'s read as plan twin).
+  EVIDENCE: archive/tampura_bridge_plan_2026-10-25/bf/BF19_gf3/.  Seed 0
+  (laptop, armO-venvA, scene 1747173591): base, base and noise agree on the
+  registry (2 snapshots; 8 boxels: 1 object, 1 shadow, 6 free), 1 ray cast
+  and 2 renders, while noise replaced 20 values (6 poses, 2 renders, 9
+  joint states, 1 link state, 2 AABBs); no tactile query before planning;
+  gate counts empty, so ObjectInfo.position was never read.  Positive
+  control (--plant-leak: after_settle adds 1e-3 times a write-only pose's z
+  to env.table_surface_height): base and noise differ in the registry and
+  the ray cast, FAIL as it must.  G1 75 and G2 44 hits, all reviewed;
+  tampura_bridge/tests/test_gf3.py 11 passed (scan cases, the class rule,
+  the poseless entry).
+  OPEN: seed 1 cannot run on the laptop.  G19 stops it: the laptop lists
+  their problems directory in another order, so seed 1 loads 1747173590
+  there, not the pinned 1747173593 (the 4-cup layout).  Only the seeds of
+  scene 1747173591 match on both machines.  Seed 1 runs on the cluster
+  once the user approves that run.
+  BEFORE / AFTER: the leak test missing, the scan blind to aliases and
+  lookups by name, ObjectInfo.position None / the pre-planning half run on
+  seed 0 with a positive control, the scan alias- and string-aware,
+  position raising.
+  CLAIM EFFECT: none.
+  HONESTY CLASS: infrastructure (gates).
+  DECISION 2026-10-28 (executor): as BF#14 GF3 specified.
+  RESULT: GF3 done except seed 1; GF4 (G6 controls) is next.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS

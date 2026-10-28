@@ -1,0 +1,7 @@
+pybullet build time: Jan 29 2025 23:17:20
+/root/tampura-work/tampura_environments/tampura_environments/__init__.py:20: UserWarning: tampura_environments: skipping subpackage 'toy_discrete': No module named 'tampura_environments.toy_discrete'
+  _warnings.warn(f"tampura_environments: skipping subpackage '{_name}': {_e}")
+Loading scene from 1747173590.312597.json
+/root/armO-venvA/lib/python3.11/site-packages/trimesh/grouping.py:99: RuntimeWarning: invalid value encountered in cast
+  stacked = np.column_stack(stacked).round().astype(np.int64)
+G19: seed 1 loaded 1747173590.312597.json, pinned 1747173593
