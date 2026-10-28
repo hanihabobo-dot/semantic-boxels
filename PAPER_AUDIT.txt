@@ -6420,7 +6420,16 @@ BF#15 [DONE, decisions]  THE USER'S ANSWERS TO Q10, Q14, Q15 AND Q16
   for the others.
   HONESTY CLASS: configuration (protocol).
   DECISION 2026-10-28 (user).
-  RESULT: decisions recorded; the laptop arm O venv is built next.
+  RESULT: decisions recorded.  The laptop arm O venv is built
+  (tools/setup_local_arm_o.sh, 2026-10-28): /root/armO-venvA from the same
+  base interpreter as the laptop's arm T venv (Python 3.11.15), holding arm
+  T's package set minus tampura and tampura_environments, which load from
+  their checkouts through PYTHONPATH (no editable install, so nothing is
+  written into their tree); arm T's freeze unchanged before and after; the
+  new venv's freeze equals the pins; tampura imports from the hashed
+  checkout, numpy 1.24.4, the bridge imports; freeze sha256 82ac31f7...
+  6b6a.  Evidence: archive/tampura_bridge_plan_2026-10-25/bf/BF15_venv/
+  and BF15_venv_console.txt.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
