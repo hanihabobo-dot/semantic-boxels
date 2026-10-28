@@ -6840,6 +6840,93 @@ BF#26 [PARTLY DONE]  THE PICK FLOOR FOR THEIR PANDA; THE SENSE POSE HIDES
   HONESTY CLASS: parameterisation of the bridge (D8), from robot geometry.
   DECISION 2026-10-28 (executor, after the user's diagnosis): as above.
 
+BF#27 [OPEN, FOR LATER]  OUR DEBUG CAMERA PANES IN THEIR GUI  (user request,
+      2026-10-28; display only)
+  REQUEST (user): bring our env's debug camera panes into the bridge's
+  --vis 1 GUI.  The second pane shows the eye's view WITH THE BOXELS
+  DRAWN; free-space boxels are not drawn by default (our show_free
+  default, test_full_pipeline.py --show-free).  The other panes stay
+  as in our env: the depth camera and the segmentation result of the
+  camera.
+  TODAY: our GUI (boxel_env.py:533-537, refresh_debug_camera_views :1748,
+  get_camera_observation :1785) feeds the ExampleBrowser preview panes
+  from a hardware OpenGL render of the fixed eye; the boxel phantoms are
+  visual-only bodies, so the OpenGL panes show them, while the perception
+  render conceals them (visualization.py F19).  The bridge adopts their
+  executing client (TampuraWorldEnv), and their GUI shows none of this.
+  CONSTRAINTS FOR WHEN IT IS DONE: display only, nothing it renders may
+  reach perception or the planner (F19 concealment stays the one
+  observation chokepoint); the display render must pass G20's
+  getCameraImage hook (gate_hooks.py) as a non-observation call; headless
+  runs and campaign episodes unchanged; boxels drawn on the plan twin or
+  as visual-only bodies in their executing client, decided then (bodies
+  in their client must not touch their tree state, G13).
+  OPEN QUESTION for then: whether "the second window" means the second
+  preview pane (RGB replaced by the boxel view) or a second GUI window
+  beside the main view; built as the pane unless the user says otherwise.
+  CLAIM EFFECT: none (visualisation).
+  HONESTY CLASS: display, outside the honesty contract's decision path.
+
+BF#28 [DONE]  SAMPLERS PLAN STEP 1: THE SEED-0 ABORT PROBE  (2026-10-28,
+      PLAN_P4_POSE_GRASP_SAMPLERS.md step 1)
+  WHAT: tools/_probe_seed0_die.py on find_dice seed 0 in arm O's venv,
+  diagnostic only (ground truth read, nothing calibrated from it, seed 0 is
+  an evaluation layout).  Their initialize, D9's set-up, main()'s 50-step
+  settle with the arm held at q_home; the cup moved by a pose reset to
+  plan#1's place (0.538, -0.125) and 240 more steps, so the die is in view.
+  Output: archive/tampura_bridge_plan_2026-10-25/bf/probe_seed0_die.json.
+  RESULTS:
+  (a) The die's true pose.  Scene file yaw 0.  After the 50-step settle
+      it leans inside the cup, tilt 21.2 deg; once the cup is lifted it
+      lies flat, yaw 0.7 deg, tilt 0.01 deg.  Evidence item 2's corner
+      hypothesis (yaw about 8 deg) is refuted for the settled die; the
+      10.0 mm measured half-width at the first pick stays unexplained (a
+      die still tilted at the pick is possible, not measured).
+  (b) Wrist camera: their camera_frame link and the declared
+      hand-to-camera transform (panda.urdf:282-287) agree to 0.0 mm and
+      0.0 deg.  View matrix of the straight-down camera: optical +z
+      forward, -y up (their get_image's world-z up is degenerate there).
+  (c) Belief margins (from the eye's detection at q_home, as the registry
+      holds them): dice half 8.05 mm, margin 4.03 mm; d_cups_ud half
+      34.9 mm, margin 3.10 mm (m_pinch).
+  (d) Wrist detections, 2 standoffs (0.20, 0.30 m) x 2 wrist yaws, all
+      four complete for both objects, IK and collision-free at every one.
+      Pixel term (1 px, declared, not fitted): die 0.38-0.57 mm, cup
+      0.40-0.59 mm.  Largest YAW_NOISE that keeps the radius within the
+      margin: die 24.6-25.9 deg, cup 4.1-4.4 deg.  Error against ground
+      truth: die centre 0.23-0.56 mm, yaw 0.8 deg (one look 4.6 deg); cup
+      centre 0.32-0.48 mm (the cup is round, its rectangle yaw is
+      arbitrary, 21-32 deg off).  Fixed eye at q_home for comparison: die
+      pixel term 1.41 mm, centre 0.96 mm, yaw 1.6 deg; cup 1.19 mm.
+  (e) Plan twin vs executing client, same render test (lattice hidden by
+      the robot and by any body), 4 sense candidates and 8 looks: 12
+      agree, 0 disagree.
+  (f) The arm hides 100 % of the die's lattice from the eye at both the
+      pregrasp (0.10 m) and the contact configuration over the die
+      (evidence item 3 confirmed).  The region under the cup is clear of
+      the arm from q_home and two of three retracted configurations.
+  (g) Source read: TAMPURA's find_dice DOES image away from
+      DEFAULT_ARM_POS.  Its look(?o1 ?o2 ?q) action (find_dice/env.py:523-
+      545, :963-974) renders the wrist camera at look configurations from
+      look-conf-sample (:584-680): camera 0.2-0.3 m above the object, xy
+      offset N(0, 0.1), aimed at it.  So M8's observe matches a capability
+      their policy has; the plan's "capability difference" sentence for
+      C2 is void, and M8's CLAIM EFFECT says so instead.
+  ABORT CHECK: not triggered for the die (margin 4.03 mm, radius at most
+  0.86 mm even at 2 deg).  CONDITIONAL for d_cups_ud: it passes only if
+  step 2's YAW_NOISE is at most 4.1 deg (registry-derived margin).  Step 2
+  re-checks this after calibrating YAW_NOISE and aborts to the user if it
+  fails.
+  NOTE FOR M9: the top-face rectangle of an upside-down cup is its narrow
+  base (52.8 mm), not its rim (71.8 mm).  The pinch at top - 5 mm meets
+  the narrow part, so body_extents from the top face size the grip there,
+  but they also feed GRASP_MAX_SPAN and the margin: e_cups_ud (76.7 mm rim,
+  no grasp family today) would get one.  Recorded for step 3; our scenes'
+  boxes are prisms and are unaffected.
+  CLAIM EFFECT: none (diagnostic).
+  HONESTY CLASS: diagnostic probe, ground truth allowed, nothing feeds the
+  planner.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
