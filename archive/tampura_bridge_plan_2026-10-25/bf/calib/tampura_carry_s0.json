@@ -1,0 +1,222 @@
+[
+ {
+  "teleport_arg": true,
+  "sim_steps_arg": 0,
+  "die_body": 10,
+  "die_world_start": [
+   0.6727,
+   0.2161,
+   0.0493
+  ],
+  "die_world_end": [
+   0.673,
+   0.2102,
+   0.149
+  ],
+  "die_in_tool_frame_start": [
+   0.031258,
+   0.00057,
+   -0.000134
+  ],
+  "die_in_tool_frame_end": [
+   0.031246,
+   0.000481,
+   -0.000168
+  ],
+  "die_quat_in_tool_frame_start": [
+   0.337863,
+   -0.660185,
+   -0.34383,
+   0.576008
+  ],
+  "die_quat_in_tool_frame_end": [
+   0.337872,
+   -0.660183,
+   -0.343822,
+   0.57601
+  ],
+  "die_pose_resets_during": 7,
+  "calls_during": {
+   "resetJointState": 7,
+   "resetBasePositionAndOrientation": 7
+  },
+  "robot_die_contacts_at_end": 0,
+  "robot_die_normal_force_at_end": 0
+ },
+ {
+  "teleport_arg": true,
+  "sim_steps_arg": 0,
+  "die_body": 10,
+  "die_world_start": [
+   0.673,
+   0.2102,
+   0.149
+  ],
+  "die_world_end": [
+   -0.4459,
+   -0.2042,
+   0.0469
+  ],
+  "die_in_tool_frame_start": [
+   0.031246,
+   0.000481,
+   -0.000168
+  ],
+  "die_in_tool_frame_end": [
+   0.031246,
+   0.000481,
+   -0.000168
+  ],
+  "die_quat_in_tool_frame_start": [
+   0.337872,
+   -0.660183,
+   -0.343822,
+   0.57601
+  ],
+  "die_quat_in_tool_frame_end": [
+   0.337872,
+   -0.660183,
+   -0.343822,
+   0.57601
+  ],
+  "die_pose_resets_during": 7,
+  "calls_during": {
+   "resetJointState": 7,
+   "resetBasePositionAndOrientation": 7
+  },
+  "robot_die_contacts_at_end": 0,
+  "robot_die_normal_force_at_end": 0
+ },
+ {
+  "teleport_arg": true,
+  "sim_steps_arg": 0,
+  "die_body": 10,
+  "die_world_start": [
+   -0.4459,
+   -0.2042,
+   0.0469
+  ],
+  "die_world_end": [
+   -0.4459,
+   -0.2042,
+   0.0469
+  ],
+  "die_in_tool_frame_start": [
+   0.031246,
+   0.000481,
+   -0.000168
+  ],
+  "die_in_tool_frame_end": [
+   0.031246,
+   0.000481,
+   -0.000168
+  ],
+  "die_quat_in_tool_frame_start": [
+   0.337872,
+   -0.660183,
+   -0.343822,
+   0.57601
+  ],
+  "die_quat_in_tool_frame_end": [
+   0.337872,
+   -0.660183,
+   -0.343822,
+   0.57601
+  ],
+  "die_pose_resets_during": 2,
+  "calls_during": {
+   "resetJointState": 2,
+   "resetBasePositionAndOrientation": 2
+  },
+  "robot_die_contacts_at_end": 0,
+  "robot_die_normal_force_at_end": 0
+ },
+ {
+  "teleport_arg": true,
+  "sim_steps_arg": 0,
+  "die_body": 11,
+  "die_world_start": [
+   0.6727,
+   0.2161,
+   0.0493
+  ],
+  "die_world_end": [
+   0.6712,
+   0.2262,
+   0.1483
+  ],
+  "die_in_tool_frame_start": [
+   0.003818,
+   -0.000662,
+   0.001235
+  ],
+  "die_in_tool_frame_end": [
+   0.003811,
+   -0.000616,
+   0.001316
+  ],
+  "die_quat_in_tool_frame_start": [
+   0.716557,
+   -0.12177,
+   -0.686514,
+   -0.020404
+  ],
+  "die_quat_in_tool_frame_end": [
+   0.716549,
+   -0.121774,
+   -0.686522,
+   -0.020406
+  ],
+  "die_pose_resets_during": 7,
+  "calls_during": {
+   "resetJointState": 7,
+   "resetBasePositionAndOrientation": 7
+  },
+  "robot_die_contacts_at_end": 0,
+  "robot_die_normal_force_at_end": 0
+ },
+ {
+  "teleport_arg": false,
+  "sim_steps_arg": 0,
+  "die_body": 11,
+  "die_world_start": [
+   0.6712,
+   0.2262,
+   0.1483
+  ],
+  "die_world_end": [
+   0.1766,
+   0.0147,
+   0.5284
+  ],
+  "die_in_tool_frame_start": [
+   0.003811,
+   -0.000616,
+   0.001316
+  ],
+  "die_in_tool_frame_end": [
+   0.00381,
+   -0.000616,
+   0.001316
+  ],
+  "die_quat_in_tool_frame_start": [
+   0.716549,
+   -0.121774,
+   -0.686522,
+   -0.020406
+  ],
+  "die_quat_in_tool_frame_end": [
+   0.716549,
+   -0.121774,
+   -0.686522,
+   -0.020406
+  ],
+  "die_pose_resets_during": 741,
+  "calls_during": {
+   "resetJointState": 5187,
+   "resetBasePositionAndOrientation": 741
+  },
+  "robot_die_contacts_at_end": 0,
+  "robot_die_normal_force_at_end": 0
+ }
+]

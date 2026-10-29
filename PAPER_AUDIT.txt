@@ -4362,7 +4362,8 @@ M3  GOAL CONJUNCT at_config(q_home) AND D7's LOOP (D7, switched on by the
 M4  SCORING (D2, D3): success for both systems = TAMPURA's reward on
     TAMPURA's belief through TAMPURA's observation channel; our belief inputs
     come from physical readback through the store-symbol lookup; theirs from
-    their kinematic executor.  The paper states both.
+    their kinematic executor.  The paper states both.  SUPERSEDED
+    2026-10-29 by BF#35: one success criterion for both arms (Q17).
 
 M5  HEADLINE SENTENCES.  BEFORE: abstract.tex:18 (comparable end-to-end cost
     about 144 s vs 166 s and reliability 65.6 % vs the >= 63 % implied, "on
@@ -4850,6 +4851,14 @@ Q16 Local smokes and probes (BF#12 (5), BF#11) ran in the laptop's arm T
     Proposed: record it as a deviation and build a local arm O venv (a
     clone of the local arm T package set) for smokes and probes from now on.
     ANSWERED 2026-10-28 (user): as proposed (BF#15).
+Q17 One success criterion for both arms (user decision 2026-10-29, BF#35):
+    TAMPURA's die rides by a pose reset to the gripper every waypoint with
+    no physics, and their reward reads their belief; ours is friction held
+    and scored from pad contact.  Proposed: (a) the bridge carries a held
+    body the way their environment does after our verified grasp, holding
+    scored from that grasp, at-home from the joint readback; or (b) both
+    physical, which changes their executor.  Plus: keep or drop our
+    both-pads grasp check (theirs has none).  OPEN.
 
 --------------------------------------------------------------------------------
 P4.11 CRITIQUE LOG, ROUND 1 (draft 1, 2026-10-25; four adversarial critics,
@@ -7321,6 +7330,60 @@ BF#34 [DONE, decisions]  SAMPLERS PLAN STEP 6: M8-M10 DEFAULT ON (Q-F) AND
   not seeded); s999's 787 s vs 12 s is one sample per arm and claims
   nothing.  Seed 13 at 2 occluders did not show the F7/F32 behaviour.
   NOT LOCAL: the BF#13 A/B and the CB#113 re-run on the chair's cloud.
+
+BF#35 [OPEN, decision]  ONE ENVIRONMENT, ONE SUCCESS CRITERION; HOW TAMPURA
+      CARRIES AND SCORES THE DIE  (code reading + probes, 2026-10-29)
+  DECISION (user, 2026-10-29): the comparison is one to one.  The planners
+  differ; the environment and the success criterion are the same for both
+  arms.  Supersedes M4's asymmetric scoring (our belief inputs from
+  physical readback, theirs from their kinematic executor).
+  EVIDENCE, THEIR CARRY (tampura_environments/tampura_environments/):
+  pick_execute_fn sets state.grasp (find_dice/env.py:396); from then on
+  SceneState.apply_sequence (panda_utils/panda_env_utils.py) calls
+  enforce_grasp() on every waypoint, which is Grasp.create_attachment(...)
+  .assign() -> Attachment.assign (panda_utils/pb_utils.py:2656) ->
+  set_pose -> resetBasePositionAndOrientation (pb_utils.py:944).  The arm
+  moves by resetJointState (step_curve, pb_utils.py:1605); headless pick
+  and place teleport to the path end (teleport = not has_gui).  Physics
+  steps only for sim_steps, default 0.  MEASURED on their unmodified
+  run_planner.py, seed 0 (reward 1.0; tools/_probe_tampura_carry.py counts
+  calls at BulletClient.__getattr__; archive/tampura_bridge_plan_2026-10-25/
+  bf/calib/tampura_carry_s0.json): the carry home made 0 stepSimulation and
+  0 motor calls, 5187 resetJointState and 741 die pose resets; the die's
+  offset in the tool frame stayed (3.81, -0.62, 1.32) mm to 0.001 mm while
+  it rose 0.38 m; robot-die contacts at home: 0.  Their die cannot slip.
+  EVIDENCE, THEIR SUCCESS TEST: reward = holding(target) and at-home on
+  their abstract BELIEF (find_dice/env.py:993-1004, policy.py rollout).
+  holding comes from the observation's grasp, which pick_execute_fn sets
+  whenever grasp IK and the motion plan succeed (no contact check);
+  at-home is np.allclose(belief conf, DEFAULT_ARM_POS, 1e-4), and
+  home_execute_fn (env.py:563-580) builds its observation with
+  conf=DEFAULT_ARM_POS BEFORE planning and returns it when planning fails,
+  so their belief can read at-home with the arm never moved.  Whether this
+  path occurs in their 20 seeds is not checked.
+  EVIDENCE, OUR CARRY (tools/_probe_grip_transport.py, die-class box on our
+  table, M9 on, yaws 0/15/30/45, carry to the start configuration; files
+  bf/calib/grip_transport*.json): held at home 0/4 at today's 60 N and
+  3 mm squeeze; 70 N identical (the cap does not bind, pad force 11-35 N);
+  6 mm and a full close worse; 200 solver iterations (pad force 50-100 N),
+  frictionAnchor, both, spinning friction 0.002-0.02 and a carry at 1/2
+  and 1/4 joint speed: 1 of 48 held; squeeze 0.5 mm: 4/4, 1 mm: 1/4.  At
+  loss the fingers sit at the hold target: the position overdrive drives
+  the pads into the 5 g body until it is expelled.  NOT the Q14 probe
+  (not its 96 trials, payloads or order); informal, picks no remedy.
+  OPEN QUESTION Q17 (user): how the shared criterion is realised.
+  Proposed: (a) the bridge carries a held body the way their environment
+  does, a pose reset to the gripper each step after OUR physically
+  verified grasp, and scoring reads holding from that grasp instead of pad
+  contact; at-home stays the joint readback (equal to theirs or stricter,
+  the conf quirk disclosed).  (b) Both physical: needs a change to their
+  executor, so not "their system as is".  Sub-question either way: our
+  grasp must pass a both-pads contact check, theirs passes on IK and a
+  motion plan; same criterion means deciding whether to keep that check.
+  CLAIM EFFECT: no number before Q17 is answered; M4's sentence "The paper
+  states both" is replaced by one shared criterion.  GF10 (Q14) stays the
+  remedy track for our own scenes, where the carry stays physical.
+  HONESTY CLASS: evaluation protocol.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
