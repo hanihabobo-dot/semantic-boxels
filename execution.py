@@ -1048,11 +1048,13 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     pinch_half = (x_half, y_half)[_pinch]
     # M9 (PLAN_P4_POSE_GRASP_SAMPLERS.md D): with a valid fitted yaw the
     # pinch is sized on the yawed rectangle along the pads' closing
-    # direction, and the descent aims at the rectangle's centre, shifted
-    # by the pre-descent re-observation like the AABB centre above.
+    # direction (or the AABB's, if wider: Q-H (a)), and the descent aims
+    # at the rectangle's centre, shifted by the pre-descent
+    # re-observation like the AABB centre above.
     if pose_belief.uses_fitted_pose(pose):
-        pinch_half = pose_belief.pinch_half_extent(
-            pinch_direction(grasp.orientation), pose.yaw, pose.body_extents)
+        pinch_half = pose_belief.sized_pinch_half(
+            pinch_direction(grasp.orientation), pose.yaw, pose.body_extents,
+            rigid_ext)
         if pose.rect_center is not None:
             _shift = est_centre[:2] - (np.asarray(obj_aabb[0], dtype=float)[:2]
                                        + np.asarray(obj_aabb[1], dtype=float)[:2]) / 2.0

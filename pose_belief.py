@@ -132,8 +132,33 @@ def _wrap(angle: float, period: float) -> float:
     return float((angle + period / 2.0) % period - period / 2.0)
 
 
+def pad_direction(grasp_yaw: float) -> np.ndarray:
+    """Unit xy direction the pads close along for a top-down grasp at this
+    yaw (the hand's y axis; robot_utils.pinch_direction)."""
+    return np.array([-math.sin(grasp_yaw), math.cos(grasp_yaw)])
+
+
+def aabb_half_along(pinch_dir_xy, aabb_ext) -> float:
+    """Half the width of the axis-aligned box along a pinch direction."""
+    return pinch_half_extent(pinch_dir_xy, 0.0, aabb_ext)
+
+
+def sized_pinch_half(pinch_dir_xy, yaw: float, body_extents, aabb_ext) -> float:
+    """Q-H (a), user decision 2026-10-29: M9 keeps the fitted yaw and aim
+    but sizes the pinch on the wider of the fitted rectangle and the
+    registry AABB along the pads.  The top face can be narrower than the
+    body where the pads close (an upturned cup's base, BF#33 seed 0); the
+    AABB covers the whole body.  At a yaw away from the axes the AABB
+    projection overstates a prism (up to 2x for a square at 45 deg),
+    which only widens the aperture and the width window."""
+    fitted = pinch_half_extent(pinch_dir_xy, yaw, body_extents)
+    if aabb_ext is None:
+        return fitted
+    return max(fitted, aabb_half_along(pinch_dir_xy, aabb_ext))
+
+
 def fitted_grasp_candidates(yaw: float, body_extents,
-                            square_tol: float):
+                            square_tol: float, aabb_ext=None):
     """M9: the top-down grasps of an object with a valid yaw, as (grasp
     yaw, pinch span) pairs.  The pads close along the hand's y axis, so at
     grasp yaw = the object's yaw they pinch across it (span = the second
@@ -141,13 +166,18 @@ def fitted_grasp_candidates(yaw: float, body_extents,
     yaw is the smallest wrist rotation of its class (the pinch is
     symmetric under a half turn, a near-square footprint under a quarter
     turn); a near-square footprint gets one grasp, a rectangle both, the
-    shorter span first, as the AABB sampler orders them."""
+    shorter span first, as the AABB sampler orders them.  With
+    ``aabb_ext`` each span is sized by sized_pinch_half (Q-H (a))."""
     e0, e1 = float(body_extents[0]), float(body_extents[1])
     if abs(e0 - e1) <= square_tol:
-        return [(_wrap(yaw, math.pi / 2.0), max(e0, e1))]
-    return sorted([(_wrap(yaw, math.pi), e1),
-                   (_wrap(yaw + math.pi / 2.0, math.pi), e0)],
-                  key=lambda c: c[1])
+        cands = [(_wrap(yaw, math.pi / 2.0), max(e0, e1))]
+    else:
+        cands = [(_wrap(yaw, math.pi), e1),
+                 (_wrap(yaw + math.pi / 2.0, math.pi), e0)]
+    if aabb_ext is not None:
+        cands = [(gy, max(span, 2.0 * aabb_half_along(pad_direction(gy), aabb_ext)))
+                 for gy, span in cands]
+    return sorted(cands, key=lambda c: c[1])
 
 
 def pinch_half_extent(pinch_dir_xy, yaw: float, body_extents) -> float:
@@ -164,12 +194,23 @@ def believed_margin(boxel, gripper_half_open: float, max_span: float,
     """B: the commit margin from the belief, over the grasp families the
     sampler would offer this boxel: the fused rectangle when M9 uses it,
     else the registry AABB.  None when no family is offered."""
-    if uses_fitted_pose(boxel):
-        ext = np.asarray(boxel.body_extents, dtype=float)
-    else:
-        ext = (np.asarray(boxel.max_corner, dtype=float)
-               - np.asarray(boxel.min_corner, dtype=float))
-    return commit_margin(ext[:2], gripper_half_open, max_span, square_tol)
+    aabb = (np.asarray(boxel.max_corner, dtype=float)
+            - np.asarray(boxel.min_corner, dtype=float))
+    if not uses_fitted_pose(boxel):
+        return commit_margin(aabb[:2], gripper_half_open, max_span, square_tol)
+    # M9: the fitted families, spans sized as the sampler sizes them
+    # (Q-H (a)); the perpendicular half from the fitted rectangle.
+    margins = []
+    for gy, span in fitted_grasp_candidates(boxel.yaw, boxel.body_extents,
+                                            square_tol, aabb):
+        if span > max_span:
+            continue
+        d = pad_direction(gy)
+        perp = pinch_half_extent(np.array([d[1], -d[0]]), boxel.yaw,
+                                 boxel.body_extents)
+        margins.append(min(gripper_half_open - span / 2.0 - PINCH_CLEARANCE,
+                           PERP_COMMIT_FRACTION * perp))
+    return min(margins) if margins else None
 
 
 def pose_known(boxel, gripper_half_open: float, max_span: float,

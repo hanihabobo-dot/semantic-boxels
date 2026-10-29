@@ -7195,6 +7195,19 @@ BF#33 [DONE, SWITCHES OFF]  SAMPLERS PLAN STEP 5: M8'S DOMAIN, VIEWS AND
   AABB width along the pads; (b) M9 applies only where the fitted
   rectangle and the AABB agree within GRASP_SQUARE_TOL (prisms); (c) as
   is, the M10 + observe detour absorbs it at the cost of one failed pick.
+  ANSWERED (user, 2026-10-29): (a).  pose_belief.sized_pinch_half: the
+  wider of the fitted rectangle and the registry AABB along the pads,
+  used by sample_grasp's spans, believed_margin and execute_pick's
+  aperture and width window; yaw and aim stay fitted.  Known cost: away
+  from the axes the AABB projection overstates a prism (2x for a square
+  at 45 deg), widening only the aperture and the width window.  Tests
+  +2 in tests/test_m9_grasp.py (36 main tests pass).
+  Run 3 (seed 0, all on, with (a)): the cup's margin is now 2.1 mm (the
+  pinch sized on its 71.8 mm body), so plan 1 observed it before the
+  first pick (wrist 0.49 mm) and that pick held.  The place then failed
+  (IK at free_000, a failed drop at free_005), the die was picked from
+  the eye's 1 mm pose and HELD, and slipped out again on the move home
+  (physics_mismatch, reward 0, GF10's class).  No gate failed.
   CLAIM EFFECT: none yet (switches OFF).
   HONESTY CLASS: model tweak M8 (registered in P4.5 at step 6).
 

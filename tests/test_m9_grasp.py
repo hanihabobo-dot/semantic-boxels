@@ -87,3 +87,31 @@ def test_sample_grasp_m9_without_a_valid_yaw_falls_back(m9_on):
     off = sampler(boxel(False))
     pose_belief.SWITCHES['M9'] = True
     assert sampler(boxel(False)) == off
+
+
+def test_q_h_a_sizes_the_pinch_on_the_wider_of_fitted_and_aabb():
+    # Q-H (a): an upturned cup's top face (52.8 mm) is narrower than its
+    # body (71.8 mm AABB); the pinch is sized on the body.
+    top, aabb = np.array([0.0528, 0.0528, 0.1]), np.array([0.0718, 0.0718, 0.1])
+    d = pose_belief.pad_direction(0.0)
+    assert pose_belief.sized_pinch_half(d, 0.0, top, aabb) == pytest.approx(0.0359)
+    assert pose_belief.fitted_grasp_candidates(0.0, top, 0.005, aabb) == \
+        [(pytest.approx(0.0), pytest.approx(0.0718))]
+    # A prism at yaw 0: the two agree, nothing changes.
+    die = np.array([0.0176, 0.0176, 0.0178])
+    assert pose_belief.sized_pinch_half(d, 0.0, die, die) == pytest.approx(0.0088)
+    assert pose_belief.fitted_grasp_candidates(0.0, die, 0.005, die) == \
+        pose_belief.fitted_grasp_candidates(0.0, die, 0.005)
+    # The pad direction is the hand's y axis of the sampler's orientation.
+    orn = p.getQuaternionFromEuler([0, math.pi, 0.7])
+    assert abs(float(robot_utils.pinch_direction(orn) @ pose_belief.pad_direction(0.7))) \
+        == pytest.approx(1.0)
+
+
+def test_q_h_a_margin_uses_the_sized_span(m9_on):
+    b = BoxelData(id='c', boxel_type=BoxelType.OBJECT, min_corner=np.zeros(3),
+                  max_corner=np.array([0.0718, 0.0718, 0.1]))
+    b.yaw, b.yaw_valid = 0.0, True
+    b.body_extents = np.array([0.0528, 0.0528, 0.1])
+    m = pose_belief.believed_margin(b, 0.04, 0.076, 0.005)
+    assert m == pytest.approx(0.04 - 0.0359 - 0.002)

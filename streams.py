@@ -831,7 +831,8 @@ class BoxelStreams:
         # extents; else the AABB candidates below exactly.
         if pose_belief.uses_fitted_pose(obj_boxel):
             candidates = pose_belief.fitted_grasp_candidates(
-                obj_boxel.yaw, obj_boxel.body_extents, self.GRASP_SQUARE_TOL)
+                obj_boxel.yaw, obj_boxel.body_extents, self.GRASP_SQUARE_TOL,
+                aabb_ext=ext)
         elif abs(float(ext[0]) - float(ext[1])) <= self.GRASP_SQUARE_TOL:
             candidates = [(0.0, max(float(ext[0]), float(ext[1])))]
         else:
