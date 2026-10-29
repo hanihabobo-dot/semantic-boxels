@@ -80,6 +80,7 @@ NOMINAL_HIDDEN_EXTENTS_MIN = np.array([0.03, 0.03, 0.03])
 HOME_PSEUDO_BOXEL = 'home'
 
 from boxel_data import BoxelRegistry, BoxelData, BoxelType
+import pose_belief
 from robot_utils import (robot_model,
                          JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH, JOINT_RANGES,
                          REST_POSES, RenderingLock, IK_ORN_TOL_DEG,
@@ -821,7 +822,13 @@ class BoxelStreams:
         # candidate at every far cell, and FastDownward's searches grew
         # past 30 s each until the 900 s cap.  A rectangular footprint
         # gets both yaws, the shorter span first.
-        if abs(float(ext[0]) - float(ext[1])) <= self.GRASP_SQUARE_TOL:
+        # M9 (PLAN_P4_POSE_GRASP_SAMPLERS.md D): an object with a valid
+        # fitted yaw gets its grasps at that yaw, spans from its fused
+        # extents; else the AABB candidates below exactly.
+        if pose_belief.uses_fitted_pose(obj_boxel):
+            candidates = pose_belief.fitted_grasp_candidates(
+                obj_boxel.yaw, obj_boxel.body_extents, self.GRASP_SQUARE_TOL)
+        elif abs(float(ext[0]) - float(ext[1])) <= self.GRASP_SQUARE_TOL:
             candidates = [(0.0, max(float(ext[0]), float(ext[1])))]
         else:
             candidates = sorted([(0.0, float(ext[1])),

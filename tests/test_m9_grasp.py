@@ -1,0 +1,89 @@
+"""PLAN_P4_POSE_GRASP_SAMPLERS.md step 3: M9's object-fitted grasp."""
+import math
+from types import SimpleNamespace
+
+import numpy as np
+import pybullet as p
+import pytest
+
+import pose_belief
+import robot_utils
+import streams
+from boxel_data import BoxelData, BoxelType
+
+
+@pytest.fixture
+def m9_on():
+    saved = dict(pose_belief.SWITCHES)
+    pose_belief.SWITCHES['M9'] = True
+    yield
+    pose_belief.SWITCHES.clear()
+    pose_belief.SWITCHES.update(saved)
+
+
+def test_fitted_candidates_rectangle_and_square():
+    c = pose_belief.fitted_grasp_candidates(0.3, [0.04, 0.02, 0.02], 0.005)
+    assert c[0] == pytest.approx((0.3, 0.02))
+    assert c[1][0] == pytest.approx(0.3 + math.pi / 2 - math.pi)
+    assert c[1][1] == pytest.approx(0.04)
+    assert pose_belief.fitted_grasp_candidates(1.0, [0.0176, 0.0173, 0.0178], 0.005) == \
+        [pytest.approx((1.0 - math.pi / 2, 0.0176))]
+
+
+@pytest.mark.parametrize('yaw', [0.0, 0.3, -0.7, 1.2])
+def test_pinch_direction_matches_pinch_axis_and_the_sampler(yaw):
+    q = p.getQuaternionFromEuler([0, math.pi, yaw])
+    d = robot_utils.pinch_direction(q)
+    assert np.allclose(d, [-math.sin(yaw), math.cos(yaw)], atol=1e-9)
+    assert robot_utils.pinch_axis(q) == (0 if abs(d[0]) > abs(d[1]) else 1)
+
+
+def test_pinch_half_extent_at_and_off_the_object_yaw():
+    ext = [0.04, 0.02, 0.02]
+    for grasp_yaw, span in pose_belief.fitted_grasp_candidates(0.3, ext, 0.005):
+        d = robot_utils.pinch_direction(p.getQuaternionFromEuler([0, math.pi, grasp_yaw]))
+        assert pose_belief.pinch_half_extent(d, 0.3, ext) == pytest.approx(span / 2)
+    # A die yawed 8 deg pinched at yaw 0: the pads meet its corners.
+    d = robot_utils.pinch_direction(p.getQuaternionFromEuler([0, math.pi, 0.0]))
+    w = pose_belief.pinch_half_extent(d, math.radians(8), [0.0176, 0.0176, 0.0176])
+    assert w == pytest.approx(0.0088 * (math.cos(math.radians(8)) + math.sin(math.radians(8))))
+
+
+def sampler(boxel):
+    reg = SimpleNamespace(get_boxel=lambda i: boxel)
+    s = SimpleNamespace(ungraspable_objects=set(), registry=reg, _grasp_counter=0,
+                        GRASP_MAX_SPAN=streams.BoxelStreams.GRASP_MAX_SPAN,
+                        GRASP_SQUARE_TOL=streams.BoxelStreams.GRASP_SQUARE_TOL,
+                        _GRASP_Z_OFFSETS=list(streams.BoxelStreams._GRASP_Z_OFFSETS))
+    out = []
+    for (g,) in streams.BoxelStreams.sample_grasp(s, 'o'):
+        d = robot_utils.pinch_direction(g.orientation)
+        out.append((round(math.atan2(-d[0], d[1]), 6), float(g.position[2])))
+    return out
+
+
+def boxel(yaw_valid):
+    b = BoxelData(id='o', boxel_type=BoxelType.OBJECT,
+                  min_corner=np.array([0.0, 0.0, 0.0]),
+                  max_corner=np.array([0.044, 0.035, 0.02]))
+    b.yaw, b.yaw_valid = 0.4, yaw_valid
+    b.body_extents = np.array([0.04, 0.02, 0.02])
+    return b
+
+
+def test_sample_grasp_off_is_the_aabb_sampler():
+    got = sampler(boxel(True))
+    assert [y for y, _ in got] == [pytest.approx(0.0)] * 2 + [pytest.approx(math.pi / 2)] * 2
+
+
+def test_sample_grasp_m9_uses_the_fitted_yaw(m9_on):
+    got = sampler(boxel(True))
+    assert [y for y, _ in got] == [pytest.approx(0.4)] * 2 + \
+        [pytest.approx(0.4 + math.pi / 2 - math.pi)] * 2
+
+
+def test_sample_grasp_m9_without_a_valid_yaw_falls_back(m9_on):
+    pose_belief.SWITCHES['M9'] = False
+    off = sampler(boxel(False))
+    pose_belief.SWITCHES['M9'] = True
+    assert sampler(boxel(False)) == off

@@ -21,7 +21,7 @@ import cycles.
 """
 
 from dataclasses import dataclass
-from typing import Dict, FrozenSet, List, Tuple
+from typing import Dict, FrozenSet, List, Optional, Tuple
 
 import numpy as np
 
@@ -335,6 +335,18 @@ DETECTION_SUPPORT_SNAP = 0.02
 SUPPORT_FOOTPRINT_MIN_FRACTION = 0.25
 
 
+# M9 (PLAN_P4_POSE_GRASP_SAMPLERS.md D): the yaw comes from a minimum-area
+# rectangle of the top face, the cloud points within TOP_FACE_BAND of its
+# highest point; below YAW_MIN_TOP_PIXELS of them the fit is not trusted
+# (yaw_valid False).  Footprints whose sides differ by at most
+# YAW_SQUARE_TOL are near-square and their yaw is taken modulo pi/2, else
+# modulo pi (the same tolerance as streams.GRASP_SQUARE_TOL; this module
+# imports no stream code).  Declared, not fitted.
+TOP_FACE_BAND = 0.003
+YAW_MIN_TOP_PIXELS = 30
+YAW_SQUARE_TOL = 0.005
+
+
 @dataclass
 class ObjectDetection:
     """One detected object: segmentation pixels -> world-frame estimate."""
@@ -343,10 +355,97 @@ class ObjectDetection:
     pixel_count: int
     est_min: np.ndarray       # estimated AABB min corner (world frame)
     est_max: np.ndarray       # estimated AABB max corner (world frame)
+    # M9: the top-face rectangle (yaw, its centre in xy, and the extents
+    # along yaw, across, and the box height), valid only when yaw_valid.
+    yaw: float = 0.0
+    yaw_valid: bool = False
+    rect_center: Optional[np.ndarray] = None
+    body_extents: Optional[np.ndarray] = None
+    # M8 A: the world xy displacement of one column step and one row step
+    # at the cloud's central pixel (rows of a 2x2 array), and the xy
+    # extents of the raw cloud before the square-footprint completion.
+    pixel_steps: Optional[np.ndarray] = None
+    raw_xy_ext: Optional[np.ndarray] = None
 
     @property
     def est_center(self) -> np.ndarray:
         return (self.est_min + self.est_max) / 2.0
+
+
+def _convex_hull(xy: np.ndarray) -> np.ndarray:
+    """Andrew's monotone chain; the hull vertices counter-clockwise."""
+    pts = np.unique(np.asarray(xy, dtype=float), axis=0)
+    if len(pts) < 3:
+        return pts
+
+    def half(seq):
+        out = []
+        for q in seq:
+            while len(out) >= 2:
+                a, b = out[-2], out[-1]
+                if (b[0] - a[0]) * (q[1] - a[1]) - (b[1] - a[1]) * (q[0] - a[0]) > 0:
+                    break
+                out.pop()
+            out.append(q)
+        return out
+
+    lower, upper = half(pts), half(pts[::-1])
+    return np.array(lower[:-1] + upper[:-1])
+
+
+def min_area_rect(xy):
+    """Minimum-area rectangle of a 2-D point set (rotating calipers on the
+    convex hull).  Returns (centre, extents, angle): the extents are the
+    side lengths along the angle's direction and across it.  None for
+    fewer than three distinct points or a degenerate hull."""
+    hull = _convex_hull(xy)
+    if len(hull) < 3:
+        return None
+    best = None
+    for i in range(len(hull)):
+        e = hull[(i + 1) % len(hull)] - hull[i]
+        if not np.any(e):
+            continue
+        ang = float(np.arctan2(e[1], e[0]))
+        c, s = np.cos(ang), np.sin(ang)
+        local = hull @ np.array([[c, -s], [s, c]])
+        lo, hi = local.min(axis=0), local.max(axis=0)
+        area = float(np.prod(hi - lo))
+        if best is None or area < best[0]:
+            mid = (lo + hi) / 2.0
+            best = (area, np.array([c * mid[0] - s * mid[1], s * mid[0] + c * mid[1]]),
+                    hi - lo, ang)
+    if best is None or best[0] <= 0.0:
+        return None
+    return best[1], best[2], best[3]
+
+
+def canonical_yaw(angle: float, extents) -> Tuple[float, np.ndarray]:
+    """The rectangle's yaw in its symmetry class: modulo pi/2 for a
+    near-square footprint (extents swapped on an odd quarter turn so the
+    first stays along the yaw), modulo pi otherwise; in [-period/2,
+    period/2)."""
+    ext = np.asarray(extents, dtype=float).copy()
+    square = abs(ext[0] - ext[1]) <= YAW_SQUARE_TOL
+    period = np.pi / 2 if square else np.pi
+    k = int(np.floor((angle + period / 2) / period))
+    yaw = float(angle - k * period)
+    if square and k % 2:
+        ext = ext[::-1].copy()
+    return yaw, ext
+
+
+def _pixel_steps(rows, cols, depth_buffer, view_matrix, projection_matrix,
+                 width, height) -> np.ndarray:
+    """World xy of one column step and one row step at the object pixel
+    nearest the cloud's median pixel, at that pixel's depth."""
+    rm, cm = np.median(rows), np.median(cols)
+    k = int(np.argmin((rows - rm) ** 2 + (cols - cm) ** 2))
+    r, c = int(rows[k]), int(cols[k])
+    d = float(np.asarray(depth_buffer)[r, c])
+    pts = unproject_depth_pixels([r, r, r + 1], [c, c + 1, c], [d, d, d],
+                                 view_matrix, projection_matrix, width, height)
+    return np.array([pts[1, :2] - pts[0, :2], pts[2, :2] - pts[0, :2]])
 
 
 def unproject_depth_pixels(rows, cols, depth_values,
@@ -417,6 +516,9 @@ def detect_objects_from_render(seg_mask: np.ndarray,
             view_matrix, projection_matrix, width, height)
         est_min = pts.min(axis=0)
         est_max = pts.max(axis=0)
+        raw_xy_ext = est_max[:2] - est_min[:2]
+        top = pts[pts[:, 2] >= est_max[2] - TOP_FACE_BAND, :2]
+        fit = min_area_rect(top) if len(top) >= YAW_MIN_TOP_PIXELS else None
         if name not in no_footprint_completion:
             away = (est_min[:2] + est_max[:2]) / 2.0 - cam_xy
             ext_x = est_max[0] - est_min[0]
@@ -431,10 +533,23 @@ def detect_objects_from_render(seg_mask: np.ndarray,
                     est_max[1] += ext_x - ext_y
                 else:
                     est_min[1] -= ext_x - ext_y
-        detections[name] = ObjectDetection(
+        det = ObjectDetection(
             name=name, body_id=int(body_id), pixel_count=int(rows.size),
-            est_min=est_min, est_max=est_max)
+            est_min=est_min, est_max=est_max,
+            pixel_steps=_pixel_steps(rows, cols, depth_buffer, view_matrix,
+                                     projection_matrix, width, height),
+            raw_xy_ext=raw_xy_ext)
+        if fit is not None:
+            centre, ext, ang = fit
+            det.yaw, ext = canonical_yaw(ang, ext)
+            det.yaw_valid = True
+            det.rect_center = centre
+            det.body_extents = np.array([ext[0], ext[1], 0.0])
+        detections[name] = det
     _rest_on_support(detections, support_z)
+    for det in detections.values():
+        if det.body_extents is not None:
+            det.body_extents[2] = float(det.est_max[2] - det.est_min[2])
     return detections
 
 

@@ -103,7 +103,8 @@ from execution import (audit_robot_held_state,
                        execute_pick, execute_place, execute_stack,
                        handle_sense_action, EmptyHandError,
                        world_integrity_check, register_new_detections,
-                       held_cargo_config)
+                       held_cargo_config, detection_complete)
+import pose_belief
 
 
 def goal_satisfied(goal, on_relations=None, target_found=False) -> bool:
@@ -1925,7 +1926,7 @@ def main(gui=True, run_logger=None, scene_config=None,
 
                 result = execute_pick(
                     robot_id, env, pick_obj_name, pick_pos,
-                    grasp, config, gui, obj_aabb=pick_aabb)
+                    grasp, config, gui, obj_aabb=pick_aabb, pose=_pick_bd)
                 if result[0] is None:
                     print(f"    IK or grip failure during pick — replanning "
                           f"(audit #82 / #P1 grip verification)")
@@ -1973,9 +1974,19 @@ def main(gui=True, run_logger=None, scene_config=None,
                             _lost, registry, viz, shadows,
                             shadow_occluder_map, boxel_centers,
                             occluders, belief, env=env)
+                    # M10 (PLAN_P4_POSE_GRASP_SAMPLERS.md E): every body
+                    # the pads touched, bystanders too, has an unknown
+                    # pose until a complete detection says otherwise
+                    # (set after the refresh, which cannot undo it).
+                    for _tn in sorted(result.touched):
+                        _tb = registry.get_boxel(_tn)
+                        if _tb is not None:
+                            _tb.pose_radius = float('inf')
+                            print(f"    [M10] {_tn} touched by the pads in the "
+                                  f"failed pick — pose unknown")
                     dispatch_end('pick_failure')
                     break
-                held_body_id, current_config = result
+                held_body_id, current_config = result.held_body_id, result.config
                 # #P4 B3(d), D7 (iv): the cargo offset in xy is the plan's
                 # grasp; the post-pick readback carries the held body.
                 held_grasp_xy = np.array(grasp.position[:2], dtype=float)
@@ -2184,7 +2195,11 @@ def main(gui=True, run_logger=None, scene_config=None,
                         # re-posed at the consumed cell (the plan's
                         # intended placement); the next observation
                         # corrects it.
-                        _det = env.detect_objects()[0].get(placed_name)
+                        _pdets, _, _pbuf, _pseg = env.detect_objects()
+                        _det = _pdets.get(placed_name)
+                        _prender = (env._depth_buffer_to_meters(_pbuf), _pseg,
+                                    *env._view_and_projection_matrices())
+                        _commanded = _det is None
                         _prev_bd = registry.get_boxel(obj_str)
                         _prev_ext = (
                             np.asarray(_prev_bd.max_corner, dtype=float)
@@ -2224,6 +2239,18 @@ def main(gui=True, run_logger=None, scene_config=None,
                             placed_max=aabb_max,
                             table_surface_height=env.table_surface_height,
                         )
+                        # M8 A: an observed placement takes the formula (if
+                        # complete); the occluded fallback is the commanded
+                        # cell, PLACE_POSE_TOL.
+                        _placed_bd = registry.get_boxel(obj_str)
+                        if _commanded:
+                            pose_belief.mark_pose_commanded(_placed_bd)
+                        elif _placed_bd is not None:
+                            pose_belief.record_detection(
+                                _placed_bd, _det, 'eye',
+                                detection_complete(env, aabb_min, aabb_max,
+                                                   _det, _prender),
+                                rigid_ext=_prev_ext)
 
                         if viz is not None:
                             viz.remove_boxel_viz(boxel_id_str)
@@ -2450,6 +2477,12 @@ def main(gui=True, run_logger=None, scene_config=None,
                             print(f"    [perception] {obj_str} occluded in "
                                   f"the post-stack render — re-posing its "
                                   f"known-size box on {on_obj_str}'s top")
+                        # M8 A: the occluded re-pose is inferred (pose
+                        # unknown); a seen stack is a commanded placement.
+                        if _det is None:
+                            pose_belief.mark_pose_unknown(bd)
+                        else:
+                            pose_belief.mark_pose_commanded(bd)
                         bd.min_corner = a_min
                         bd.max_corner = a_max
                         bd.on_surface = None

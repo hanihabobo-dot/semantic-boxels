@@ -70,6 +70,81 @@ def pinch_axis(orientation) -> int:
     axis = rot @ np.array([0.0, 1.0, 0.0])
     return 0 if abs(axis[0]) > abs(axis[1]) else 1
 
+
+def pinch_direction(orientation) -> np.ndarray:
+    """Unit xy direction the finger pads close along (the hand's local y
+    axis) for an EE orientation quaternion; M9 sizes the pinch on the
+    yawed rectangle along it."""
+    rot = np.asarray(p.getMatrixFromQuaternion(
+        [float(v) for v in orientation])).reshape(3, 3)
+    d = (rot @ np.array([0.0, 1.0, 0.0]))[:2]
+    return d / np.linalg.norm(d)
+
+
+# M8 C2 (PLAN_P4_POSE_GRASP_SAMPLERS.md): the wrist camera, rigidly on
+# panda_hand, as TAMPURA's Panda carries it: their URDF's camera_frame
+# joint (models/srl/franka_panda/panda.urdf:282-287) with D4's intrinsics
+# (640 x 480, vertical fov 2 atan(240 / 525), near 0.02, far 5.0).  Our
+# Panda has no such link, so both robots use this one declared mount; on
+# theirs it agrees with the link to 0.0 mm and 0.0 deg (BF#28 (b)).  Its
+# pose at run time is the hand's forward kinematics times the mount
+# (proprioception, never a simulator object read).
+WRIST_CAMERA_XYZ = (0.036499, -0.034889, 0.0574)
+WRIST_CAMERA_RPY = (-0.0056067, 0.0145899, 1.5605169)
+WRIST_CAMERA_WIDTH, WRIST_CAMERA_HEIGHT = 640, 480
+WRIST_CAMERA_FOV_DEG = math.degrees(2.0 * math.atan(240.0 / 525.0))
+WRIST_CAMERA_NEAR, WRIST_CAMERA_FAR = 0.02, 5.0
+
+_hand_links = {}
+
+
+def _hand_link(robot_id: int, physics_client: int) -> int:
+    key = (robot_id, physics_client)
+    if key not in _hand_links:
+        for j in range(p.getNumJoints(robot_id, physicsClientId=physics_client)):
+            info = p.getJointInfo(robot_id, j, physicsClientId=physics_client)
+            if info[12].decode() == HAND_LINK_NAME:
+                _hand_links[key] = j
+                break
+        else:
+            raise ValueError(f"no {HAND_LINK_NAME} in body {robot_id}")
+    return _hand_links[key]
+
+
+def wrist_camera_mount() -> np.ndarray:
+    """The hand-to-camera transform (4 x 4)."""
+    m = np.eye(4)
+    m[:3, :3] = np.array(p.getMatrixFromQuaternion(
+        p.getQuaternionFromEuler(WRIST_CAMERA_RPY))).reshape(3, 3)
+    m[:3, 3] = WRIST_CAMERA_XYZ
+    return m
+
+
+def wrist_camera_pose(robot_id: int, physics_client: int = 0) -> np.ndarray:
+    """World pose (4 x 4) of the wrist camera from the hand's FK."""
+    s = p.getLinkState(robot_id, _hand_link(robot_id, physics_client),
+                       computeForwardKinematics=True,
+                       physicsClientId=physics_client)
+    hand = np.eye(4)
+    hand[:3, :3] = np.array(p.getMatrixFromQuaternion(s[5])).reshape(3, 3)
+    hand[:3, 3] = s[4]
+    return hand @ wrist_camera_mount()
+
+
+def wrist_camera_matrices(camera_pose: np.ndarray):
+    """(view, projection) of a wrist camera pose: optical +z forward, -y
+    up (a world-z up vector is degenerate for a straight-down camera)."""
+    eye = np.asarray(camera_pose[:3, 3], dtype=float)
+    view = p.computeViewMatrix(
+        cameraEyePosition=eye.tolist(),
+        cameraTargetPosition=(eye + camera_pose[:3, 2]).tolist(),
+        cameraUpVector=(-np.asarray(camera_pose[:3, 1])).tolist())
+    proj = p.computeProjectionMatrixFOV(
+        fov=WRIST_CAMERA_FOV_DEG,
+        aspect=WRIST_CAMERA_WIDTH / WRIST_CAMERA_HEIGHT,
+        nearVal=WRIST_CAMERA_NEAR, farVal=WRIST_CAMERA_FAR)
+    return view, proj
+
 JOINT_LIMITS_LOW = np.array([
     -2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973
 ])
@@ -801,7 +876,7 @@ def solve_ik(robot_id: int, target_pos: np.ndarray,
 
 def move_robot_smooth(robot_id: int, target_joints, gui: bool = False,
                       steps: int = 60, settle: bool = False,
-                      velocity_bounded: bool = True):
+                      velocity_bounded: bool = True, on_step=None):
     """
     Smoothly interpolate joint positions from the current state to
     *target_joints*.
@@ -836,6 +911,9 @@ def move_robot_smooth(robot_id: int, target_joints, gui: bool = False,
         steps: MINIMUM number of interpolation steps.  Short hops keep
             exactly this many, so existing call sites are unchanged; only
             hops that would exceed a joint's velocity limit are stretched.
+        on_step: Optional callable run after every simulation step of the
+            stream and the hold (M10's pre-close pad contact poll; it may
+            only read).
         velocity_bounded: Set False to restore the old fixed schedule
             (diagnostic use only — it can throw the cargo).
         settle: When True, hold the final target after the stream until
@@ -883,6 +961,8 @@ def move_robot_smooth(robot_id: int, target_joints, gui: bool = False,
                                     targetPosition=interp[k], force=240)
         p.stepSimulation()
         telemetry.tick()
+        if on_step is not None:
+            on_step()
         if gui:
             time.sleep(1 / 120)
 
@@ -912,6 +992,8 @@ def move_robot_smooth(robot_id: int, target_joints, gui: bool = False,
                                     targetPosition=target[k], force=240)
         p.stepSimulation()
         telemetry.tick()
+        if on_step is not None:
+            on_step()
         if gui:
             time.sleep(1 / 120)
 

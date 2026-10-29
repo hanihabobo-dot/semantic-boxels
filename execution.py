@@ -34,6 +34,7 @@ handler.
 
 import os
 import time
+from collections import namedtuple
 from dataclasses import dataclass
 from typing import Optional, Set, Tuple
 
@@ -50,9 +51,16 @@ from perception import (DETECTION_MIN_PIXELS, DETECTION_SUPPORT_SNAP,
                         first_surface_interceptors, sense_ray_slices)
 from reboxelize import reboxelize_free_space
 from streams import NOMINAL_HIDDEN_EXTENTS, RobotConfig
+import pose_belief
 from robot_utils import (robot_model, solve_ik,
                          move_robot_smooth, open_gripper, close_gripper,
-                         close_gripper_until_contact, pinch_axis)
+                         close_gripper_until_contact, pinch_axis,
+                         pinch_direction)
+
+# execute_pick's result (M10, PLAN_P4_POSE_GRASP_SAMPLERS.md E): the held
+# body and the final config on success; on a failure both None and the
+# names of the registered bodies the finger pads touched.
+PickResult = namedtuple('PickResult', 'held_body_id config touched')
 
 
 # The pick's contact floor above the table (#P1 F24): the pads reach
@@ -840,6 +848,7 @@ def release_held_object_in_place(
             obj_bd.max_corner = obj_bd.min_corner + ext
             print(f"    [WP2c] {dropped_name} not visible after the emergency "
                   f"drop — its boxel is placed under the hand")
+            pose_belief.mark_pose_unknown(obj_bd)
             if viz is not None:
                 viz.remove_boxel_viz(held_object_boxel_id)
                 viz.draw_boxel_data(obj_bd)
@@ -897,7 +906,7 @@ def _apply_post_action_lift(robot_id, contact_ee, orientation, contact_joints,
 
 
 def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
-                 obj_aabb=None, _retry: bool = False
+                 obj_aabb=None, _retry: bool = False, pose=None
                  ) -> Tuple[Optional[int], Optional[RobotConfig]]:
     """
     Execute pick action using the plan's grasp pose.
@@ -999,7 +1008,7 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     if obj_aabb is None:
         print(f"    ERROR: execute_pick({obj_name}) needs the object's "
               f"estimated box (#P1 F24) — none passed; aborting")
-        return None, None
+        return PickResult(None, None, frozenset())
     est_min = np.asarray(obj_aabb[0], dtype=float).copy()
     est_max = np.asarray(obj_aabb[1], dtype=float).copy()
     rigid_ext = est_max - est_min
@@ -1037,6 +1046,18 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     # aperture and the width plausibility are sized on THAT extent.
     _pinch = pinch_axis(grasp.orientation)
     pinch_half = (x_half, y_half)[_pinch]
+    # M9 (PLAN_P4_POSE_GRASP_SAMPLERS.md D): with a valid fitted yaw the
+    # pinch is sized on the yawed rectangle along the pads' closing
+    # direction, and the descent aims at the rectangle's centre, shifted
+    # by the pre-descent re-observation like the AABB centre above.
+    if pose_belief.uses_fitted_pose(pose):
+        pinch_half = pose_belief.pinch_half_extent(
+            pinch_direction(grasp.orientation), pose.yaw, pose.body_extents)
+        if pose.rect_center is not None:
+            _shift = est_centre[:2] - (np.asarray(obj_aabb[0], dtype=float)[:2]
+                                       + np.asarray(obj_aabb[1], dtype=float)[:2]) / 2.0
+            est_centre = est_centre.copy()
+            est_centre[:2] = np.asarray(pose.rect_center, dtype=float)[:2] + _shift
 
     _GRASP_MARGIN_FROM_TOP = 0.005  # 5 mm below cube top
     table_z = env.table_surface_height
@@ -1078,7 +1099,37 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     # Pre-grasp aperture first (see the comment further down) so the
     # horizontal align above the block also sweeps with narrowed
     # fingers, not the full-open 0.04 m.
-    pregrasp_aperture = min(0.04, pinch_half + 0.008)
+    # M10 (PLAN_P4_POSE_GRASP_SAMPLERS.md E): the registered non-held
+    # bodies the finger PADS touch, polled at every control step of the
+    # align and the descent and once after the close, read only on a
+    # failed return (PickResult.touched).  No other link is read.
+    _m10 = pose_belief.SWITCHES['M10']
+    _pad_set = frozenset(robot_model().finger_joints)
+    _named = {info.object_id: n for n, info in env.objects.items()
+              if n not in ("plane", "table", "robot")}
+    _touched_ids = set()
+
+    def _poll_pads():
+        for c in p.getContactPoints(bodyA=robot_id):
+            if c[3] in _pad_set and c[2] in _named:
+                _touched_ids.add(c[2])
+
+    def _failed():
+        return PickResult(None, None,
+                          frozenset(_named[b] for b in _touched_ids))
+
+    def _retry_allowed():
+        return not _retry and not (_m10 and obj_id in _touched_ids)
+
+    _on_step = _poll_pads if _m10 else None
+    # The open limit is the robot model's finger limit (0.04 m on both
+    # Pandas).  M8's aperture rule widens the pre-grasp opening by the
+    # pose uncertainty (fully open while the pose is unknown).
+    _open = robot_model().finger_limits[0][1]
+    if pose_belief.SWITCHES['pick_aperture_from_pose'] and pose is not None:
+        pregrasp_aperture = min(_open, pinch_half + float(pose.pose_radius) + 0.008)
+    else:
+        pregrasp_aperture = min(_open, pinch_half + 0.008)
     close_gripper(robot_id, gui, target_finger_pos=pregrasp_aperture)
 
     live_ee_now = p.getLinkState(robot_id, robot_model().ee_link)[0]
@@ -1088,7 +1139,8 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
                             seed=config.joint_positions)
     contact_seed = config.joint_positions
     if above_joints is not None:
-        move_robot_smooth(robot_id, above_joints, gui, settle=True)
+        move_robot_smooth(robot_id, above_joints, gui, settle=True,
+                          on_step=_on_step)
         contact_seed = above_joints
     else:
         print(f"    WARNING: horizontal re-aim IK failed for {obj_name} — "
@@ -1103,7 +1155,7 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     # to an arbitrary configuration (audit #82).
     if contact_joints is None:
         print(f"    ERROR: IK failed for pick contact of {obj_name} — aborting")
-        return None, None
+        return _failed()
 
     # Defensive open_gripper removed (audit #37/#38).  Gripper state is
     # implicit in the PDDL predicate (holding ?o) — init = open, only
@@ -1124,7 +1176,8 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     # settle=True: the contact descent is precision-critical (#P1) —
     # the friction grasp needs lateral centering within the descent
     # clearance, so hold the endpoint until the arm converges.
-    move_robot_smooth(robot_id, contact_joints, gui, settle=True)
+    move_robot_smooth(robot_id, contact_joints, gui, settle=True,
+                      on_step=_on_step)
 
     # #P1 pick-arrival diagnostic (mirrors the audit-#84 stack diag).
     # With the weld gone, a lateral arrival error beyond the descent
@@ -1159,6 +1212,8 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
                             for n in ("table", "plane") if n in env.objects)
     measured_half = close_gripper_until_contact(
         robot_id, gui, force=60.0, squeeze=0.003, ignore_body_ids=_static_ids)
+    if _m10:
+        _poll_pads()
     if measured_half is None:
         print(f"    [step 4] {obj_name}: the fingers closed without both "
               f"pads touching anything")
@@ -1184,7 +1239,7 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
               f"{list(robot_model().finger_joints)}), pad_normal_force={grip_nf:.2f}N. "
               f"Opening gripper.")
         open_gripper(robot_id, gui)
-        if not _retry:
+        if _retry_allowed():
             # #P1 grasp resample (2026-08-21, user step 2): the failed
             # descent/close may itself have shoved the block, so a full
             # replan would regenerate the same grasp against stale
@@ -1196,9 +1251,13 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
             retreat = (above_joints if above_joints is not None
                        else config.joint_positions)
             move_robot_smooth(robot_id, retreat, gui, settle=True)
-            return execute_pick(robot_id, env, obj_name, obj_pos, grasp,
-                                config, gui, obj_aabb=obj_aabb, _retry=True)
-        return None, None
+            again = execute_pick(robot_id, env, obj_name, obj_pos, grasp,
+                                 config, gui, obj_aabb=obj_aabb, _retry=True,
+                                 pose=pose)
+            if again.held_body_id is None:
+                again = again._replace(touched=again.touched | _failed().touched)
+            return again
+        return _failed()
     # #P1 F1(d) width plausibility: link identity alone cannot
     # distinguish a pinch from both fingertips STANDING ON the object
     # top (the phantom first pick read both pads "in contact" with the
@@ -1226,7 +1285,7 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
               f"(standing-on-top phantom, partial pinch or wrong axis). "
               f"Opening gripper (#P1 F1).")
         open_gripper(robot_id, gui)
-        if not _retry:
+        if _retry_allowed():
             # #P1 grasp resample — same one-shot retry as the pad-contact
             # failure above (the block may have been nudged by this very
             # attempt).
@@ -1235,9 +1294,13 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
             retreat = (above_joints if above_joints is not None
                        else config.joint_positions)
             move_robot_smooth(robot_id, retreat, gui, settle=True)
-            return execute_pick(robot_id, env, obj_name, obj_pos, grasp,
-                                config, gui, obj_aabb=obj_aabb, _retry=True)
-        return None, None
+            again = execute_pick(robot_id, env, obj_name, obj_pos, grasp,
+                                 config, gui, obj_aabb=obj_aabb, _retry=True,
+                                 pose=pose)
+            if again.held_body_id is None:
+                again = again._replace(touched=again.touched | _failed().touched)
+            return again
+        return _failed()
     print(f"    Grip verified for {obj_name}: both pads in contact, "
           f"pad_normal_force={grip_nf:.2f}N, measured half-width "
           f"{width * 1000:.1f} mm vs estimate {pinch_half * 1000:.1f} mm")
@@ -1274,7 +1337,7 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
               f"obj_z={obj_z_now:.4f}. Opening gripper and replanning "
               f"(#P1 F1).")
         open_gripper(robot_id, gui)
-        return None, None
+        return _failed()
 
     # Read the actual joint state — position control may not reach the
     # exact IK target.  Tracking the true state prevents PDDL state
@@ -1285,7 +1348,7 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     )
     final_config = RobotConfig(joint_positions=actual_joints,
                                name="post_pick_contact")
-    return obj_id, final_config
+    return PickResult(obj_id, final_config, frozenset())
 
 
 def pick_contact_floor(env) -> float:
@@ -1889,6 +1952,10 @@ def world_integrity_check(*, env, registry, belief, viz, shadows, occluders,
             det = dets[bd.id]
             bd.min_corner = np.asarray(det.est_min, dtype=float).copy()
             bd.max_corner = np.asarray(det.est_max, dtype=float).copy()
+            # M8 A / M9: a toppled body's pose is unknown and its fused
+            # rectangle no longer describes its top.
+            pose_belief.mark_pose_unknown(bd)
+            bd.yaw, bd.yaw_valid, bd.body_extents, bd.rect_center = 0.0, False, None, None
             if viz is not None and viz.tracks_boxel(bd.id):
                 viz.remove_boxel_viz(bd.id)
                 viz.draw_boxel_data(bd)
@@ -1897,6 +1964,11 @@ def world_integrity_check(*, env, registry, belief, viz, shadows, occluders,
                            "box_cm": [round(float(v) * 100, 1)
                                       for v in (bd.max_corner - bd.min_corner)]})
         elif shift > INTEGRITY_DISTURB_M:
+            # M8 A: disturbed without a complete detection: pose unknown
+            # (a complete one already set the radius in the refresh).
+            if not detection_complete(env, bd.min_corner, bd.max_corner,
+                                      dets.get(bd.id), render):
+                pose_belief.mark_pose_unknown(bd)
             events.append({"kind": "disturbed", "object": bd.id,
                            "label": label, "shift_mm": round(shift * 1000, 1)})
     for obj, sup in list(on_relations.items()):
@@ -1936,6 +2008,22 @@ def world_integrity_check(*, env, registry, belief, viz, shadows, occluders,
         print(f"    [integrity] after {label}: {n_obs}/{len(obj_boxels)} "
               f"believed bodies observed where believed, none disturbed")
     return events, dets, render
+
+
+def detection_complete(env, box_min, box_max, det, render) -> bool:
+    """M8 A: a COMPLETE detection has at least DETECTION_MIN_PIXELS, its
+    box lattice (3 x 3 x 3) all in view, and no lattice point hidden by
+    the robot or by another registered body (the seg-mask id of the
+    surface in front, the identity map's ids)."""
+    if render is None or det is None or det.pixel_count < DETECTION_MIN_PIXELS:
+        return False
+    g = [np.linspace(float(box_min[k]), float(box_max[k]), 3) for k in range(3)]
+    pts = np.array([[x, y, z] for x in g[0] for y in g[1] for z in g[2]])
+    icp, hids, in_view = first_surface_interceptors(pts, render[0], render[1],
+                                                    render[2], render[3])
+    others = {info.object_id for n, info in env.objects.items()
+              if n not in ("plane", "table")} - {int(det.body_id)}
+    return bool(np.all(in_view) and not np.any(icp & np.isin(hids, list(others))))
 
 
 def refresh_object_aabbs(env, registry, viz=None, detections=None,
@@ -2041,6 +2129,13 @@ def refresh_object_aabbs(env, registry, viz=None, detections=None,
                             centre_xy[1] + canon_ext[1] / 2.0,
                             det.est_max[2]])
         new_min = new_max - canon_ext
+        # M8 A: the radius rule runs before the unchanged-box early
+        # return, so a complete render confirming the box still tightens
+        # the radius.
+        pose_belief.record_detection(
+            obj_boxel, det, 'eye',
+            detection_complete(env, new_min, new_max, det, render),
+            rigid_ext=cur_ext)
         if (np.allclose(new_min, obj_boxel.min_corner, atol=_aabb_tol) and
                 np.allclose(new_max, obj_boxel.max_corner, atol=_aabb_tol)):
             continue
@@ -2377,6 +2472,12 @@ def register_new_detections(*, env, registry, belief, viz, detections,
             surface_z=table_z,
         )
         registry.add_boxel(obj_bd)
+        # M8 A: first registration, formula if complete, else plus half
+        # its completion.
+        pose_belief.record_detection(
+            obj_bd, det, 'eye',
+            detection_complete(env, aabb_min, aabb_max, det, render),
+            first=True)
         boxel_centers[name] = obj_bd.center
         object_body_ids[name] = env.plan_body_id(info.object_id)
         boxel_to_pybullet[name] = {
@@ -2635,6 +2736,12 @@ def handle_sense_action(
                     surface_z=env.table_surface_height,
                 )
                 registry.add_boxel(target_bd)
+                pose_belief.record_detection(
+                    target_bd, t_det, 'eye',
+                    detection_complete(
+                        env, t_det.est_min, t_det.est_max, t_det,
+                        (sense_depth_m, sense_seg, sense_view, sense_proj)),
+                    first=True)
                 boxel_centers[target_obj_str] = target_bd.center
                 object_body_ids[target_obj_str] = env.plan_body_id(t_bid)
                 boxel_to_pybullet[target_obj_str] = {
@@ -2976,6 +3083,12 @@ def handle_sense_action(
                     surface_z=env.table_surface_height,
                 )
                 registry.add_boxel(obj_bd)
+                pose_belief.record_detection(
+                    obj_bd, det, 'eye',
+                    detection_complete(
+                        env, aabb_min, aabb_max, det,
+                        (sense_depth_m, sense_seg, sense_view, sense_proj)),
+                    first=True)
                 boxel_centers[obj_name] = obj_bd.center
                 # object_body_ids is the planner-side mapping
                 # (audit #46): translate the GUI body id to the

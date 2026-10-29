@@ -9,6 +9,7 @@ This module provides:
 """
 
 import json
+import math
 import numpy as np
 from typing import List, Dict, Optional, Set, Tuple, Any
 from dataclasses import dataclass, field, asdict
@@ -41,6 +42,17 @@ class BoxelData:
     })
     on_surface: Optional[str] = None
     surface_z: Optional[float] = None
+    # M8/M9 pose belief (PLAN_P4_POSE_GRASP_SAMPLERS.md A): xy uncertainty
+    # of the centre in metres (inf = pose unknown, never None), the
+    # object's yaw from a top-face rectangle fit, its fused rigid extents
+    # (along yaw, across, height) and that rectangle's xy centre (M9's
+    # aim; the AABB stays the region every other consumer reads).  In
+    # memory only: to_dict and the ledger are unchanged.
+    pose_radius: float = math.inf
+    yaw: float = 0.0
+    yaw_valid: bool = False
+    body_extents: Optional[np.ndarray] = None
+    rect_center: Optional[np.ndarray] = None
 
     @classmethod
     def from_center_extent(cls, center, extent,

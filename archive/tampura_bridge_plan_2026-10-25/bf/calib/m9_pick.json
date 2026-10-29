@@ -1,0 +1,50 @@
+[
+ {
+  "M9": false,
+  "yaw_deg": 0,
+  "fitted_yaw_deg": -0.0,
+  "grasp_yaw_deg": -0.0,
+  "held": true,
+  "die_z_above_table_mm": 85.0
+ },
+ {
+  "M9": false,
+  "yaw_deg": 30,
+  "fitted_yaw_deg": 29.74,
+  "grasp_yaw_deg": -0.0,
+  "held": true,
+  "die_z_above_table_mm": 91.6
+ },
+ {
+  "M9": false,
+  "yaw_deg": 45,
+  "fitted_yaw_deg": 45.0,
+  "grasp_yaw_deg": -0.0,
+  "held": true,
+  "die_z_above_table_mm": 84.8
+ },
+ {
+  "M9": true,
+  "yaw_deg": 0,
+  "fitted_yaw_deg": -0.0,
+  "grasp_yaw_deg": -0.0,
+  "held": true,
+  "die_z_above_table_mm": 84.7
+ },
+ {
+  "M9": true,
+  "yaw_deg": 30,
+  "fitted_yaw_deg": 29.74,
+  "grasp_yaw_deg": 29.74,
+  "held": true,
+  "die_z_above_table_mm": 84.8
+ },
+ {
+  "M9": true,
+  "yaw_deg": 45,
+  "fitted_yaw_deg": 45.0,
+  "grasp_yaw_deg": 45.0,
+  "held": false,
+  "die_z_above_table_mm": -0.0
+ }
+]

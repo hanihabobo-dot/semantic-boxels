@@ -206,7 +206,7 @@ def main():
     # same as the dispatcher's preceding 'move' action.
     move_robot_smooth(exec_robot_id, q_pick.joint_positions, gui=False,
                       steps=EXECUTOR_STEPS, settle=True)
-    held_body_id, post_pick_config = execute_pick(
+    held_body_id, post_pick_config, _touched = execute_pick(
         exec_robot_id, env, "orange_object", orange_pos, grasp, q_pick, gui=False)
     if held_body_id is None:
         print("FATAL: execute_pick failed to grasp orange_object in the probe")

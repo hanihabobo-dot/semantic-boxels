@@ -6927,6 +6927,141 @@ BF#28 [DONE]  SAMPLERS PLAN STEP 1: THE SEED-0 ABORT PROBE  (2026-10-28,
   HONESTY CLASS: diagnostic probe, ground truth allowed, nothing feeds the
   planner.
 
+BF#29 [DONE]  SAMPLERS PLAN STEP 2: YAW FIT, POSE BELIEF, CALIBRATIONS
+      (2026-10-28, PLAN_P4_POSE_GRASP_SAMPLERS.md step 2)
+  CODE: perception.py: min_area_rect (rotating calipers on a monotone-chain
+  hull), canonical_yaw (modulo pi/2 near-square, YAW_SQUARE_TOL 5 mm, else
+  modulo pi), ObjectDetection gains yaw, yaw_valid, rect_center,
+  body_extents (top face = points within TOP_FACE_BAND 3 mm of the top;
+  yaw_valid needs YAW_MIN_TOP_PIXELS 30, declared), pixel_steps and
+  raw_xy_ext.  pose_belief.py (new, pure numpy): A's formula
+  (pixel_footprint, completion_term, pose_radius with first_partial) and
+  B's commit_margin over exactly the families sample_grasp offers.
+  BoxelData gains pose_radius (inf), yaw, yaw_valid, body_extents,
+  rect_center, in memory only (to_dict, boxel_data.json and the ledger
+  unchanged).  robot_utils: the WRIST_CAMERA mount (BF#28 (b)) with
+  wrist_camera_pose (hand FK x mount) and wrist_camera_matrices.
+  Tests: tests/test_pose_belief.py (13, synthetic point sets and DIRECT
+  renders: yaw, extents, centre, footprint, every formula branch).
+  CALIBRATION (tools/_calib_pose_noise.py; outputs in
+  archive/tampura_bridge_plan_2026-10-25/bf/calib/; ground truth, our
+  table and scenes only, 95th percentile fixed before measuring):
+  (a) die-class box (17.6 x 17.3 x 17.8 mm) on our emptied table, yaws
+      0-85 deg in 5 deg steps, five spots, fixed eye plus wrist looks (2
+      standoffs x 2 wrist yaws, straight down).  Wrist: 180 detections,
+      all yaw_valid, yaw error p95 0.20 deg (max 0.26).  Eye: only the
+      nearest spot reaches 30 top-face pixels (18 of 90 views yaw_valid);
+      there the eye's estimate snaps yaws within about 10 deg of an axis
+      to 0 (true 5/10/80/85 deg read 0, errors 4.4-9.6 deg), exact
+      elsewhere; p95 9.475 deg.
+  (b) census, random-pairs n_occluders 2-4, seeds 0-4, holding and
+      find-and-tray-stack (24 scenes; 6 fail pre-flight as in CB#113):
+      eye yaw error of our boxes p95 0.007 deg (all stand at yaw 0).
+  DEVIATION FROM THE PLAN (one YAW_NOISE): YAW_NOISE is per camera, eye
+  9.475 deg (the die sweep alone) and wrist 0.202 deg.  Pooling our yaw-0
+  boxes with the sweep gives 0.06 deg for the eye: they agree with the
+  eye's snap to 0 trivially and would hide its blind zone.  Q-C deadband
+  = the producing camera's YAW_NOISE, applied when a yaw is fused.
+  PLACE_POSE_TOL = 3.609 mm: 30 serial runs (random-pairs seeds 0-4,
+  n_occluders 2-4, holding and find-and-tray-stack; 16 exit 0, 12 exit 1,
+  2 timeouts at 600 s), 36 placements, |true centre - place_target| from
+  the ledger and eye.jsonl: p50 1.8 mm, p95 3.6 mm, max 5.4 mm.
+  YAW_VALID RATE (the M9 fallback rate) per class, seeds 0-4: 100 % for
+  every detected box class (18 size classes, 108 detections incl. the
+  36 hidden targets after their occluders are moved off), from the eye.
+  ABORT CHECKS: (1) census at eye YAW_NOISE 9.475 deg: every detected
+  object pose_known, 64 of 72 initial detections complete, the 8 partly
+  occluded ones pass as first-partial; all 36 hidden targets, seen once
+  their occluders are moved away, complete and pose_known.  Not
+  triggered.  (2) PLACE_POSE_TOL 3.6 mm <= every placed object's margin on
+  our scenes (at least about 8 mm): not triggered.  NOTE for the bridge:
+  d_cups_ud's registry margin is 3.1 mm < 3.6 mm and the die's 4.03 mm is
+  close, so there place's optimistic obj_pose_known overstates the cup
+  until the next replan recomputes it from pose_radius.
+  (3) BF#28's conditional for d_cups_ud (wrist YAW_NOISE <= 4.1 deg):
+  0.20 deg, passes.
+  CLAIM EFFECT: none yet (switches OFF).
+  HONESTY CLASS: ground-truth calibration on our scenes and a die-class
+  body on our table (disclosed in M8/M9's entries); never a TAMPURA
+  layout.
+
+BF#30 [DONE, SWITCH OFF]  SAMPLERS PLAN STEP 3: M9, THE OBJECT-FITTED GRASP
+      (2026-10-28, PLAN_P4_POSE_GRASP_SAMPLERS.md step 3)
+  CODE: pose_belief.SWITCHES (M8, M9, M10, pick_aperture_from_pose; all
+  OFF until step 6's Q-F entry).  sample_grasp: with M9 and a valid fused
+  yaw, fitted_grasp_candidates (grasp yaw = object yaw pinches across it,
+  a quarter turn later along it; smallest wrist rotation per symmetry
+  class; one grasp for near-square, both for a rectangle, shorter span
+  first); else today's AABB candidates exactly.  robot_utils.pinch_
+  direction (unit pad-closing direction; pinch_axis kept for the OFF
+  path).  execute_pick(pose=...): with M9 the pinch half is the yawed
+  rectangle's half-width along the pads (pinch_half_extent) and the aim
+  is the fused rectangle's centre shifted by F24's re-observation; the
+  aperture literal 0.04 is the robot model's finger limit (0.04 on both
+  Pandas, their URDF :348), and pick_aperture_from_pose widens it by
+  pose_radius (fully open while unknown).  The dispatcher passes the
+  registry boxel; with every switch OFF nothing reads it.
+  Tests: tests/test_m9_grasp.py (9): candidates, pinch direction against
+  pinch_axis and the sampler's yaw convention, pinch half at and off the
+  object yaw (a die 8 deg off meets its corners), sample_grasp OFF = AABB
+  sampler, ON = fitted yaw, ON without a valid yaw = OFF.
+  SMOKE (tools/_smoke_m9_pick.py, our env, die-class box, 5.2 g, floor
+  13.2 mm): OFF holds at 0, 30, 45 deg (at 30 and 45 the pads meet the
+  corners, measured half-width 12.1 and 12.6 mm); ON holds at 0 and 30 deg
+  (face pinch, 9.3 mm) and at 45 deg verifies the grip (10.0 N) then
+  loses it on the post-pick lift, where OFF's corner pinch held at
+  20.7 N.  One sample each: a flag, not a rate.  Grip loss in transport is
+  GF10's (Q-D, not addressed here); the BF#13 A/B decides M9.
+  NOT YET CHECKED (plan D): held_cargo_config, _grasp_ee_to_obj_z, place
+  and stack at non-zero yaw.  The held object keeps its world yaw from
+  pick to place (same grasp orientation), so the footprint the place
+  checks is unchanged; to be confirmed by a seed run with M9 ON.
+  CLAIM EFFECT: none yet (switch OFF).
+  HONESTY CLASS: model tweak M9 (registered in P4.5 at step 6).
+
+BF#31 [DONE, SWITCHES OFF]  SAMPLERS PLAN STEP 4: M10 AND THE POSE WRITERS
+      (2026-10-28, PLAN_P4_POSE_GRASP_SAMPLERS.md step 4)
+  M10: execute_pick returns PickResult(held_body_id, config, touched)
+  at every site (all early returns, success, both recursive retries,
+  which merge the first attempt's touched set; the dispatcher unpacks by
+  field; probe_C_motion.py updated).  move_robot_smooth gains on_step,
+  run after every simulation step of the stream and the hold; with M10
+  the align and the descent poll pad-only contacts (finger links, ids
+  from env.objects), plus one poll after the close.  Target touched: no
+  in-action retry.  Every touched registered body gets pose_radius inf
+  in the dispatcher, after the refresh.
+  A RULES (pose_belief.record_detection / mark_pose_unknown /
+  mark_pose_commanded; no-ops while every switch is OFF except
+  mark_pose_unknown, which writes the default):
+  - refresh_object_aabbs: formula if complete (execution.detection_
+    complete: pixel floor, lattice in view, no lattice point behind the
+    robot or another body), BEFORE the unchanged-box early return;
+    M9 fusion (quarter-turn alignment, per-axis max, outlier guard of
+    one pixel each side, GRASP_MAX_SPAN cap, deadband).  Covers
+    world_integrity_check's re-pose.
+  - first registrations (register_new_detections, the sense's target,
+    the sense's discovered objects incl. F9 rediscovery): formula if
+    complete, else plus half the completion.
+  - post-place carve: the post-place detection by the formula; the
+    occluded fallback (commanded cell) PLACE_POSE_TOL.  Note: the plan
+    called update_after_place "commanded"; the carve feeds it a render
+    estimate whenever the object is seen, so only the fallback is
+    commanded.
+  - post-stack: occluded re-pose inf; a seen stack PLACE_POSE_TOL (the
+    domain's stack adds obj_pose_known at that tolerance).
+  - WP2c drop placed under the hand, topple re-init (also clears the M9
+    fusion), #P2 disturbed without a complete detection: inf.
+  - F24 writes nothing (unchanged).
+  NOT DONE: "grip lost after the post-pick lift: inf" with M10 OFF and M8
+  ON (with M10 ON the post-close poll puts the target in touched).
+  Tests: tests/test_pose_writers.py (6): OFF no-op, complete / partial /
+  first-partial / unknown / commanded, fusion alignment and swap,
+  outlier and cap, per-camera deadband, refresh_object_aabbs tightening
+  an unchanged box.  All 28 main-pipeline tests pass; bridge tests 86
+  passed, 3 skipped (as before); bridge_gates static PASS.
+  CLAIM EFFECT: none yet (switches OFF).
+  HONESTY CLASS: model tweaks M8 (A) and M10 (registered at step 6).
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
