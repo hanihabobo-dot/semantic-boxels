@@ -79,7 +79,7 @@ def main():
     ap.add_argument('--max-plan-time', type=float, default=900.0)
     # M8-M10 (P4.5 model tweaks), passed through to main()'s CLI flags.
     for flag in ('--m8', '--m9', '--m10', '--pick-aperture-from-pose'):
-        ap.add_argument(flag, choices=('off', 'on'), default='off')
+        ap.add_argument(flag, choices=('off', 'on'), default='on')
     a = ap.parse_args()
     arg_dict = {'config': a.config, 'global_seed': a.global_seed,
                 'vis': bool(a.vis), 'save_dir': a.save_dir}

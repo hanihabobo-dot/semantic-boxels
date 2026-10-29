@@ -790,23 +790,23 @@ def parse_pipeline_args(argv=None):
              'test, streams.test_target_can_hide_in_shadow). A/B decides '
              'the default for CB#113.')
     # M8-M10 (PLAN_P4_POSE_GRASP_SAMPLERS.md, P4.5 model tweaks): each
-    # behind its own switch; the defaults stay off until the Q-F decision
-    # entry lands.
+    # behind its own switch, default ON by the Q-F decision (BF#34); off
+    # gives the pipeline without them (the BEFORE arm).
     parser.add_argument(
-        '--m8', choices=['off', 'on'], default='off',
+        '--m8', choices=['off', 'on'], default='on',
         help='M8: pose-gated pick, view-clear sense configurations and the '
              'wrist-camera observe action (loads the generated domain '
              'pddl/domain_pddlstream_m8.pddl).')
     parser.add_argument(
-        '--m9', choices=['off', 'on'], default='off',
+        '--m9', choices=['off', 'on'], default='on',
         help='M9: object-fitted grasps (yaw and extents of the top-face '
              'rectangle) instead of the AABB grasp candidates.')
     parser.add_argument(
-        '--m10', choices=['off', 'on'], default='off',
+        '--m10', choices=['off', 'on'], default='on',
         help='M10: a failed pick that touched the target makes its pose '
              'unknown (no in-action retry).')
     parser.add_argument(
-        '--pick-aperture-from-pose', choices=['off', 'on'], default='off',
+        '--pick-aperture-from-pose', choices=['off', 'on'], default='on',
         help="M8's aperture rule: open the pads to the pinch half-width "
              "plus pose_radius plus 8 mm (capped at the finger limit).")
     parser.add_argument(

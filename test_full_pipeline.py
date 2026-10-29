@@ -532,9 +532,16 @@ def main(gui=True, run_logger=None, scene_config=None,
     # domain (the live file plus M8's delta); OFF loads the live file.
     for _key, _flag in (('M8', 'm8'), ('M9', 'm9'), ('M10', 'm10'),
                         ('pick_aperture_from_pose', 'pick_aperture_from_pose')):
-        pose_belief.SWITCHES[_key] = getattr(args, _flag, 'off') == 'on'
+        pose_belief.SWITCHES[_key] = getattr(args, _flag, 'on') == 'on'
     if domain_file is None and pose_belief.SWITCHES['M8']:
         domain_file = m8_domain.domain_file(True)
+    # The two known domains must match the switch (a caller may pass
+    # another file deliberately; that one is not judged here).
+    _dom = os.path.abspath(domain_file) if domain_file else m8_domain.LIVE_FILE
+    if _dom in (m8_domain.LIVE_FILE, m8_domain.GENERATED_FILE) and \
+            (_dom == m8_domain.GENERATED_FILE) != pose_belief.SWITCHES['M8']:
+        raise ValueError(f"domain {os.path.basename(_dom)} does not match "
+                         f"M8 {'on' if pose_belief.SWITCHES['M8'] else 'off'}")
     print(f"  model tweaks: {pose_belief.SWITCHES}; domain "
           f"{os.path.basename(domain_file or m8_domain.LIVE_FILE)}")
 

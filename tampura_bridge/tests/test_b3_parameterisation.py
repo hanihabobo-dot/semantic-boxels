@@ -150,7 +150,11 @@ def _source_world(seed):
 def _run_main(tmp_path, env, target, **kwargs):
     tfp.args = parse_pipeline_args(['--no-gui', '--scene', 'random-pairs',
                                     '--seed', str(SEED), '--goal', 'holding',
-                                    '--log-level', 'quiet'])
+                                    '--log-level', 'quiet',
+                                    # D7's tests assume the first move to
+                                    # q_home is the post-pick one; M8 adds
+                                    # sense moves there (BF#34).
+                                    '--m8', 'off'])
     logger = RunLogger(verbosity='quiet', log_dir=str(tmp_path / 'logs'))
     try:
         out = tfp.main(gui=False, run_logger=logger, goal_kind='holding',

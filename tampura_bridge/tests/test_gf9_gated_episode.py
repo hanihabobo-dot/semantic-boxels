@@ -84,7 +84,11 @@ def test_gated_goal_at_home_episode(world, tmp_path, monkeypatch):
     t_plain = _time_collision_checks(env)
     tfp.args = parse_pipeline_args(['--no-gui', '--scene', 'random-pairs',
                                     '--seed', str(SEED), '--goal', 'holding',
-                                    '--log-level', 'quiet'])
+                                    '--log-level', 'quiet',
+                                    # D7's tests assume the first move to
+                                    # q_home is the post-pick one; M8 adds
+                                    # sense moves there (BF#34).
+                                    '--m8', 'off'])
     logger = RunLogger(verbosity='quiet', log_dir=str(tmp_path / 'logs'))
 
     def has_object_boxel(body):

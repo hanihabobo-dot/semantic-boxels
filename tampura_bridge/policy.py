@@ -173,7 +173,7 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 nearVal=task_spec.EYE_NEAR, farVal=task_spec.EYE_FAR)
             # B4 / M8: the domain the planner loads (the generated one
             # with M8 on), the same path for main() and G10's runtime pin.
-            domain_file = m8_domain.domain_file(cfg.switches.get('m8') == 'on')
+            domain_file = m8_domain.domain_file(cfg.switches.get('m8', 'on') == 'on')
             gate_hooks.install(gate_hooks.GateConfig(
                 executing_client=c, robot_id=robot,
                 arm_joints=tuple(model.arm_joints),
