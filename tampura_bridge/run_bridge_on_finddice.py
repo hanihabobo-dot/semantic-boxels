@@ -77,6 +77,9 @@ def main():
     ap.add_argument('--stop-before-planning', type=int, default=0)
     ap.add_argument('--log-level', default='smart')
     ap.add_argument('--max-plan-time', type=float, default=900.0)
+    # M8-M10 (P4.5 model tweaks), passed through to main()'s CLI flags.
+    for flag in ('--m8', '--m9', '--m10', '--pick-aperture-from-pose'):
+        ap.add_argument(flag, choices=('off', 'on'), default='off')
     a = ap.parse_args()
     arg_dict = {'config': a.config, 'global_seed': a.global_seed,
                 'vis': bool(a.vis), 'save_dir': a.save_dir}
@@ -122,7 +125,9 @@ def main():
         seed=a.global_seed, scene_file=scene.name_seen,
         log_dir=os.path.join(config['save_dir'], 'ours'), vis=bool(a.vis),
         stop_before_planning=bool(a.stop_before_planning),
-        log_level=a.log_level, max_plan_time=a.max_plan_time)
+        log_level=a.log_level, max_plan_time=a.max_plan_time,
+        switches={'m8': a.m8, 'm9': a.m9, 'm10': a.m10,
+                  'pick_aperture_from_pose': a.pick_aperture_from_pose})
     cfg.driver = {'events': events, 'seed': config['global_seed'],
                   'rng_untouched': rng_untouched,
                   'pythonhashseed': os.environ.get('PYTHONHASHSEED')}

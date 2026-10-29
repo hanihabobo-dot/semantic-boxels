@@ -27,6 +27,7 @@ ledger's gate_record row (G21).
 import argparse
 import ast
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -136,7 +137,7 @@ G5_UNRENDERED = 'superseded_unrendered'
 G3_STATUSES = ('ok', 'sense_outcome', 'integrity_replan',
                'motion_resolve_failed', 'pick_failure', 'place_failure',
                'stack_failure', 'empty_hand', 'stale_precondition',
-               'home_not_reached')
+               'home_not_reached', 'observe_ok', 'observe_incomplete')
 G4_TOL_M = 1e-6
 # G18: the arm O driver's clock stamps, in order.  Between their
 # initialize() returning and the rollout's first env.step it may only load
@@ -510,17 +511,55 @@ def _pddl_sha(name):
         return hashlib.sha256(f.read().encode('utf-8')).hexdigest()
 
 
+def _m8_domain():
+    spec = importlib.util.spec_from_file_location(
+        'm8_domain', os.path.join(REPO, 'm8_domain.py'))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def run_domain(report):
     d, s = _pddl_sha('domain_pddlstream.pddl'), _pddl_sha('stream.pddl')
     report.add('G10', 'INFO', f"domain_pddlstream.pddl {d[:16]}  "
                               f"stream.pddl {s[:16]}")
     gen = os.path.join(REPO, 'tools', 'gen_bridge_domain.py')
-    if os.path.isfile(gen):
-        report.add('G10', 'FAIL', 'gen_bridge_domain.py exists but its '
-                                  'regeneration check is not written yet (B4)')
-    else:
+    if not os.path.isfile(gen):
         report.add('G10', 'PASS', 'no generated domain (M1 not adopted); the '
                                   'planner must read the files above')
+        return
+    # B4 / M8: the generated domain must be exactly the live file plus
+    # M8's declared delta, regenerated here.
+    m8 = _m8_domain()
+    want = m8.generate(m8.read(m8.LIVE_FILE))
+    have = (m8.read(m8.GENERATED_FILE)
+            if os.path.isfile(m8.GENERATED_FILE) else None)
+    if have != want:
+        report.add('G10', 'FAIL', f'{rel(m8.GENERATED_FILE)} is missing or not '
+                                  f'the regenerated live domain plus M8\'s delta')
+    else:
+        report.add('G10', 'PASS', f'{rel(m8.GENERATED_FILE)} {m8.sha(want)[:16]} '
+                                  f'= regenerated (live + M8 delta); an OFF run '
+                                  f'must load the live file, an ON run this one')
+
+
+def ledger_domain(report, rows):
+    """G10 on a run: the domain the planner loaded is the live file with
+    M8 off and the regenerated M8 domain with it on."""
+    doms = [r for r in rows if r['kind'] == 'domain']
+    if not doms:
+        return          # a run from before the domain row existed
+    m8 = _m8_domain()
+    live = m8.read(m8.LIVE_FILE)
+    bad = []
+    for r in doms:
+        on = bool((r.get('switches') or {}).get('M8'))
+        want = m8.sha(m8.generate(live) if on else live)
+        if r.get('sha') != want:
+            bad.append(f"M8 {'on' if on else 'off'}: loaded {r.get('file')} "
+                       f"{str(r.get('sha'))[:16]} != {want[:16]}")
+    report.add('G10r', 'FAIL' if bad else 'PASS',
+               '; '.join(bad) or f"{doms[-1].get('file')} as the switches require")
 
 
 # ----- G13 ---------------------------------------------------------------
@@ -800,6 +839,8 @@ def run_ledger(report, run_dir, m7='on'):
     bad5, unrendered, counts = [], 0, {}
     sense_regions = {}
     for s in steps:
+        # The region is the second argument with or without M8's
+        # appended sensing configuration.
         if s['action'] == 'sense' and len(s['args']) >= 2:
             sense_regions[(s['plan'], s['step'])] = s['args'][1]
     for r in rows:
@@ -835,6 +876,9 @@ def run_ledger(report, run_dir, m7='on'):
     report.add('G15', 'FAIL' if missing else 'PASS',
                f'no outcome for {missing[:5]}' if missing else
                f'{len(sense_steps)} senses, each classified on its planned region')
+
+    # G10 on the run: the loaded domain matches the M8 switch.
+    ledger_domain(report, rows)
 
     # G19: the loaded scene file per seed equals the pinned map.  The
     # 'episode' row is written by the bridge driver (B2).

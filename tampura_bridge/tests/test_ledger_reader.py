@@ -117,6 +117,54 @@ def test_unrendered_rediscovery_depends_on_m7(tmp_path):
     assert run(tmp_path, rows, m7='off')['G5'] == 'PASS'
 
 
+def _m8_rows(region='shadow_3'):
+    """clean() with M8's three-argument sense and an observe that ends
+    its plan (plan 2)."""
+    rows = clean()
+    for r in rows:
+        if r['kind'] == 'plan':
+            r['actions'] = [a + ['cfg:q_home'] if a[0] == 'sense' else a
+                            for a in r['actions']]
+        if r['kind'] == 'step' and r['action'] == 'sense':
+            r['args'] = r['args'] + ['cfg:q_home']
+        if r['kind'] == 'belief':
+            r['region'] = region
+    close = rows.pop()
+    obs = [['move', 'cfg:q1', 'cfg:look_die_0', 'view__look_die_0', 'Trajectory@3'],
+           ['observe', 'die', 'cfg:look_die_0'],
+           ['pick', 'die', 'die', 'Grasp@4', 'cfg:q5']]
+    rows.append({'kind': 'plan', 'plan_id': 2, 'call': 'mission',
+                 'actions': obs, 'plan_obj': 88})
+    for k, a in enumerate(obs[:2], 1):
+        rows.append({'kind': 'step', 'plan': 2, 'step': k, 'action': a[0],
+                     'args': a[1:], 'plan_obj': 88})
+        rows.append({'kind': 'step_end', 'plan': 2, 'step': k,
+                     'status': 'observe_incomplete' if a[0] == 'observe' else 'ok'})
+    rows.append(close)
+    return rows
+
+
+def test_m8_three_arg_sense_and_observe_pass_g3_g5(tmp_path):
+    res = run(tmp_path, _m8_rows())
+    assert res['G3'] == res['G5'] == res['G15'] == 'PASS'
+    # G5 still reads the region at index 1 of the three arguments.
+    assert run(tmp_path, _m8_rows(region='shadow_8'))['G5'] == 'FAIL'
+
+
+def test_g10_on_the_run_checks_the_loaded_domain(tmp_path):
+    import m8_domain
+    live = m8_domain.read(m8_domain.LIVE_FILE)
+    rows = clean()
+    rows.insert(1, {'kind': 'domain', 'file': 'domain_pddlstream_m8.pddl',
+                    'sha': m8_domain.sha(m8_domain.generate(live)),
+                    'switches': {'M8': True}})
+    assert run(tmp_path, rows)['G10r'] == 'PASS'
+    rows[1]['switches'] = {'M8': False}            # M8 off must load the live file
+    assert run(tmp_path, rows)['G10r'] == 'FAIL'
+    rows[1]['sha'] = m8_domain.sha(live)
+    assert run(tmp_path, rows)['G10r'] == 'PASS'
+
+
 def test_scene_map_g19(tmp_path):
     rows = clean()
     rows.insert(1, {'kind': 'episode', 'seed': 0,

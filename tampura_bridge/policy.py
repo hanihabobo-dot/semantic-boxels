@@ -32,6 +32,7 @@ from typing import Optional
 import numpy as np
 import pybullet as p
 
+import m8_domain
 import robot_utils
 import telemetry
 import test_full_pipeline
@@ -52,6 +53,8 @@ class EpisodeConfig:
     stop_before_planning: bool = False
     log_level: str = 'smart'
     max_plan_time: float = 900.0
+    # M8-M10's switches as main()'s CLI flags: {'m8': 'on'|'off', ...}.
+    switches: dict = field(default_factory=dict)
     out: dict = field(default_factory=dict)
     # The driver's clock stamps and RNG record (G18, G19's seed hygiene),
     # written to the ledger as its driver_clock row.
@@ -168,15 +171,19 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 fov=task_spec.EYE_FOV_DEG,
                 aspect=task_spec.EYE_WIDTH / task_spec.EYE_HEIGHT,
                 nearVal=task_spec.EYE_NEAR, farVal=task_spec.EYE_FAR)
+            # B4 / M8: the domain the planner loads (the generated one
+            # with M8 on), the same path for main() and G10's runtime pin.
+            domain_file = m8_domain.domain_file(cfg.switches.get('m8') == 'on')
             gate_hooks.install(gate_hooks.GateConfig(
                 executing_client=c, robot_id=robot,
                 arm_joints=tuple(model.arm_joints),
                 task_body_ids=frozenset(world.objects),
                 has_object_boxel=has_object_boxel,
                 camera_view=tuple(view), camera_proj=tuple(proj),
+                wrist_robots={c: robot},
                 mission_goal=('and', ('holding', target[0]),
                               ('at_config', 'q_home')),
-                target_symbol=target[0]))
+                target_symbol=target[0], domain_file=domain_file))
             with gate_hooks.write_only('settle_disclosure'):
                 before = _poses(world)
             d9_setup(world, model)
@@ -186,11 +193,15 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
             t_setup = time.perf_counter()
             env = TampuraWorldEnv(world, gui=cfg.vis)
             assert env.target_symbol() == target[0]
+            # G20: the plan twin's wrist renders (M8's look test).
+            gate_hooks.declare_wrist_robot(env.plan_client_id, env.plan_robot_id)
             ledger_event('bridge_timing', d9_setup_s=t_setup - t0,
                          env_build_s=time.perf_counter() - t_setup)
             test_full_pipeline.args = parse_pipeline_args([
                 '--no-gui', '--goal', 'holding', '--log-level', cfg.log_level,
-                '--max-plan-time', str(cfg.max_plan_time)])
+                '--max-plan-time', str(cfg.max_plan_time)]
+                + [x for k, v in sorted(cfg.switches.items())
+                   for x in (f"--{k.replace('_', '-')}", v)])
             from tampura_environments.panda_utils.robot import DEFAULT_ARM_POS
             test_full_pipeline.main(
                 gui=cfg.vis, run_logger=logger, goal_kind='holding',
@@ -201,7 +212,7 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 home_joints=list(DEFAULT_ARM_POS), goal_at_home=True,
                 held_cargo_resolve=True,
                 home_hold_step_cap=task_spec.HOME_HOLD_STEP_CAP,
-                telemetry_enabled=False)
+                telemetry_enabled=False, domain_file=domain_file)
             gate_hooks.set_phase('post')
             # G6: the arm at main() return, compared bit for bit with the
             # observation's conf below.

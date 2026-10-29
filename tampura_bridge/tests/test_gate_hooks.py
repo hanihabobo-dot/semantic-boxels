@@ -234,6 +234,23 @@ def test_renders_must_use_the_declared_eye(w):
     assert [r['matched'] for r in renders] == [True, False, None]
 
 
+def test_wrist_render_passes_only_at_the_robots_fk_pose(w):
+    # M8 C2: a declared wrist robot may render its own camera, at the
+    # pose its forward kinematics gives, and nowhere else.
+    import robot_utils
+    cam = robot_utils.wrist_camera_pose(w.robot, w.c0)
+    view, proj = robot_utils.wrist_camera_matrices(cam)
+    _trips('G20', p.getCameraImage, 32, 24, view, proj, physicsClientId=w.c0)
+    gh.declare_wrist_robot(w.c0, w.robot)
+    p.getCameraImage(32, 24, view, proj, physicsClientId=w.c0)
+    cam[:3, 3] += [0.0, 0.0, 0.05]
+    moved, _ = robot_utils.wrist_camera_matrices(cam)
+    _trips('G20', p.getCameraImage, 32, 24, moved, proj, physicsClientId=w.c0)
+    renders = _ledger(w.run_dir, 'render')
+    assert [(r['matched'], r['camera']) for r in renders] == [
+        (False, None), (True, 'wrist'), (False, None)]
+
+
 # ----- G10 and G11(ii): planner identity, goal pin, call path ------------
 
 def _bare_planner(cls=None):

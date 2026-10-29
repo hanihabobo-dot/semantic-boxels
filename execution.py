@@ -2559,6 +2559,78 @@ def register_new_detections(*, env, registry, belief, viz, detections,
     return registered
 
 
+def record_initial_detections(env, registry) -> None:
+    """M8 A for the initial observation's registrations (Phase 3): every
+    OBJECT boxel built from the first render is a first registration,
+    formula if its detection is complete, else plus half its completion.
+    One eye render, identical to the one the boxels came from (no step
+    in between).  No-op while every switch is OFF."""
+    if not pose_belief._any_on():
+        return
+    dets, _, buf, seg = env.detect_objects()
+    render = (env._depth_buffer_to_meters(buf), seg,
+              *env._view_and_projection_matrices())
+    for bd in registry.get_boxels_by_type(BoxelType.OBJECT):
+        det = dets.get(bd.id)
+        if det is None:
+            continue
+        pose_belief.record_detection(
+            bd, det, 'eye',
+            detection_complete(env, bd.min_corner, bd.max_corner, det, render),
+            first=True)
+
+
+def handle_observe_action(*, env, registry, viz, obj, robot_id, pose_known):
+    """M8 C2: one wrist render at the current configuration.  Re-poses
+    every REGISTERED object the render shows completely (the A rule with
+    the wrist camera's noise, M9 fusion), registers nothing new and
+    touches no shadow or free boxel (Q-G).  ``pose_known(boxel)`` is the
+    planner's commit rule.  Returns (status, lost): status observe_ok when
+    the target was seen completely and its radius is within the margin,
+    else observe_incomplete; lost when the wrist did not see the target
+    at all and its believed region renders empty (the caller retires it,
+    as after a sense, with no strike)."""
+    import observe_views
+    dets, render = observe_views.wrist_observation(env, robot_id)
+    reposed = []
+    for bd in registry.get_boxels_by_type(BoxelType.OBJECT):
+        det = dets.get(bd.id)
+        if det is None:
+            continue
+        cur_ext = (np.asarray(bd.max_corner, dtype=float)
+                   - np.asarray(bd.min_corner, dtype=float))
+        canon_ext = np.maximum(cur_ext, det.est_max - det.est_min)
+        centre_xy = (det.est_min[:2] + det.est_max[:2]) / 2.0
+        new_max = np.array([centre_xy[0] + canon_ext[0] / 2.0,
+                            centre_xy[1] + canon_ext[1] / 2.0, det.est_max[2]])
+        new_min = new_max - canon_ext
+        if not detection_complete(env, new_min, new_max, det, render):
+            continue
+        pose_belief.record_detection(bd, det, 'wrist', True, rigid_ext=cur_ext)
+        reposed.append(bd.id)
+        if (np.allclose(new_min, bd.min_corner, atol=1e-4)
+                and np.allclose(new_max, bd.max_corner, atol=1e-4)):
+            continue
+        bd.min_corner = new_min
+        bd.max_corner = new_max
+        setattr(registry, "_dirty", True)
+        if viz is not None and viz.tracks_boxel(bd.id):
+            viz.remove_boxel_viz(bd.id)
+            viz.draw_boxel_data(bd)
+    target = registry.get_boxel(obj)
+    radius = float(target.pose_radius) if target is not None else float('inf')
+    print(f"    [M8] observe {obj}: wrist re-posed {reposed}; {obj} "
+          f"{'complete' if obj in reposed else 'seen, not complete' if obj in dets else 'NOT SEEN'}"
+          f", pose_radius {radius * 1e3:.2f} mm")
+    if target is None:
+        return 'observe_incomplete', False
+    if obj in reposed:
+        return ('observe_ok' if pose_known(target) else 'observe_incomplete'), False
+    if obj not in dets and _fragment_renders_empty(target, render):
+        return 'observe_incomplete', True
+    return 'observe_incomplete', False
+
+
 @provenance_channel('planned_sense_render')
 def handle_sense_action(
     *,
@@ -2608,7 +2680,9 @@ def handle_sense_action(
     #                              (contains_nontarget also registers the
     #                               discovered objects + their new shadows)
     #   still_blocked           → occluder not fully cleared, break to replan
-    obj, shadow_id = action_params
+    # M8 C1 appends the sensing configuration ?q; only the first two
+    # parameters name what is sensed.
+    obj, shadow_id = action_params[:2]
     print(f"    Sensing {shadow_id} (fixed camera)...")
 
     # Retract arm to home so it doesn't block the camera's

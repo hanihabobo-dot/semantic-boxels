@@ -103,8 +103,12 @@ from execution import (audit_robot_held_state,
                        execute_pick, execute_place, execute_stack,
                        handle_sense_action, EmptyHandError,
                        world_integrity_check, register_new_detections,
-                       held_cargo_config, detection_complete)
+                       held_cargo_config, detection_complete,
+                       record_initial_detections, handle_observe_action)
 import pose_belief
+import m8_domain
+import observe_views
+from streams import HOME_PSEUDO_BOXEL
 
 
 def goal_satisfied(goal, on_relations=None, target_found=False) -> bool:
@@ -523,6 +527,17 @@ def main(gui=True, run_logger=None, scene_config=None,
         for k, v in run_config.items():
             print(f"  {k:18s} = {v}")
 
+    # M8-M10 (PLAN_P4_POSE_GRASP_SAMPLERS.md, P4.5): the model tweaks'
+    # switches from the CLI, set once per run.  M8 ON loads the generated
+    # domain (the live file plus M8's delta); OFF loads the live file.
+    for _key, _flag in (('M8', 'm8'), ('M9', 'm9'), ('M10', 'm10'),
+                        ('pick_aperture_from_pose', 'pick_aperture_from_pose')):
+        pose_belief.SWITCHES[_key] = getattr(args, _flag, 'off') == 'on'
+    if domain_file is None and pose_belief.SWITCHES['M8']:
+        domain_file = m8_domain.domain_file(True)
+    print(f"  model tweaks: {pose_belief.SWITCHES}; domain "
+          f"{os.path.basename(domain_file or m8_domain.LIVE_FILE)}")
+
     # =========================================================
     # PHASE 1: Setup Environment
     # =========================================================
@@ -696,6 +711,9 @@ def main(gui=True, run_logger=None, scene_config=None,
     registry = BoxelRegistry()
     for bd in all_boxels:
         registry.add_boxel(bd)
+    # M8 A: the initial registrations' pose radius (no-op, no render,
+    # while every switch is OFF).
+    record_initial_detections(env, registry)
     registry.save_to_json("boxel_data.json")
     if run_logger:
         run_logger.save_artefact("boxel_data.json")
@@ -1037,6 +1055,10 @@ def main(gui=True, run_logger=None, scene_config=None,
                                 camera_pos=env.camera_position,
                                 tray_name=tray_name,
                                 domain_file=domain_file)
+    # G10: which domain text the planner loaded, under which switches.
+    ledger_event('domain', file=os.path.basename(domain_file or m8_domain.LIVE_FILE),
+                 sha=m8_domain.sha(planner.domain_pddl),
+                 switches=dict(pose_belief.SWITCHES))
     # #P4 B3(d): the scene's reach envelope (None: streams' constants),
     # and D7 (i) to (iii): the home joints, and with a declared goal
     # configuration its init facts and the goal conjunct.
@@ -1102,6 +1124,11 @@ def main(gui=True, run_logger=None, scene_config=None,
     print(f"  Exported initial problem to {problem_path}")
     if run_logger:
         run_logger.save_artefact(problem_path, "problem_initial.pddl")
+    # M8 C: the observation configurations, computed in the plan twin at
+    # every _build_init from here on (the export above has none).
+    if pose_belief.SWITCHES['M8']:
+        planner.m8_views = observe_views.ObserveViews(
+            env, planner.streams._robot_base_xy)
 
     boxel_centers = {b.id: b.center for b in registry.boxels.values()}
 
@@ -1111,6 +1138,11 @@ def main(gui=True, run_logger=None, scene_config=None,
     # regardless of outcome).  Mirrors plan_count plumbing through
     # to report_run_outcome → timing_summary.json.
     sense_count = 0
+    # M8 C2: executed observes, and the observe bound's strikes per
+    # object as (count, the box at the last strike, the boxel object).
+    observe_count = 0
+    observe_strikes: Dict[str, tuple] = {}
+    m8_per_plan: list = []
     # Per-call planner.plan() durations.  Captured originally for
     # audit #30 baseline timing; now consumed by the eval runner
     # (audit #9) for scalability plots.
@@ -1378,6 +1410,22 @@ def main(gui=True, run_logger=None, scene_config=None,
                       f"the grasp stream after 4 replans (#P1 "
                       f"non-absorbing giveup)")
 
+        # M8 C2: an object's observe strikes, removed look pairs and
+        # parking reset once it is re-registered or a later detection
+        # re-poses it (its box moved by more than 1 mm).
+        if planner.m8_views is not None:
+            for _obj, (_n, _box, _bd0) in list(observe_strikes.items()):
+                _bd = registry.get_boxel(_obj)
+                if (_bd is None or _bd is not _bd0 or not np.allclose(
+                        np.concatenate([_bd.min_corner, _bd.max_corner]), _box,
+                        atol=1e-3)):
+                    observe_strikes.pop(_obj)
+                    planner.m8_views.parked.discard(_obj)
+                    planner.m8_views.removed = {r for r in planner.m8_views.removed
+                                                if r[0] != _obj}
+                    print(f"  [M8] observe strikes of {_obj} reset (re-registered "
+                          f"or re-posed)")
+
         print(f"\n=== PLAN #{plan_count} ===")
         if goal_kind == 'find-and-tray-stack':
             print(f"Tray-stack progress: {on_relations} "
@@ -1492,6 +1540,8 @@ def main(gui=True, run_logger=None, scene_config=None,
             held_obj=held_obj_name,  # audit #58 — preserve grasp across replans
         )
         plan_dt = time.perf_counter() - plan_t0
+        if planner.last_m8_stats:
+            m8_per_plan.append(dict(planner.last_m8_stats, plan=plan_count))
         # #P4 B0: every plan() call and its result go to the run ledger
         # (gates G3, G10, G11).
         ledger_event('plan', plan_id=plan_count, call='mission', goal=goal,
@@ -1660,9 +1710,10 @@ def main(gui=True, run_logger=None, scene_config=None,
                       if held_body_id is not None else None),
                 on_relations=on_relations,
                 shadow_occluder_map=shadow_occluder_map)
-            # #P4 B3(d), D7 (vi): any action but a sense may move the arm,
-            # so the at-home state holds only until the next one.
-            if action_name != 'sense':
+            # #P4 B3(d), D7 (vi): any action but a sense or an observe
+            # (M8 C2: one render, no motion) may move the arm, so the
+            # at-home state holds only until the next one.
+            if action_name not in ('sense', 'observe'):
                 at_home_ok = False
             # #P1 F17: segment the telemetry stream by dispatched action,
             # so every frame, event and summary is attributable to the
@@ -1796,7 +1847,14 @@ def main(gui=True, run_logger=None, scene_config=None,
                         current_config = _readback_config(actual_joints,
                                                           q2.name)
                     else:
-                        home_misses += 1
+                        # M8 C1: q_home is also a sense view spot; a miss
+                        # counts toward home_not_reached for a planned
+                        # move to the goal's home boxel, or for the plan's
+                        # final move (the goal move, whichever boxel names
+                        # q_home), not for a move made to sense from there.
+                        if (dest_boxel_id == HOME_PSEUDO_BOXEL
+                                or i == len(plan) - 1):
+                            home_misses += 1
                         readback_count += 1
                         current_config = _readback_config(
                             actual_joints, f"q_readback_{readback_count}")
@@ -1871,6 +1929,51 @@ def main(gui=True, run_logger=None, scene_config=None,
                     dispatch_end('sense_outcome')
                     break
 
+            elif action_name == 'observe':
+                # OBSERVE (M8 C2): one wrist render at the look
+                # configuration re-poses the registered objects it shows
+                # completely; every observe forces a replan.
+                obj_str, look_q = str(params[0]), params[1]
+                observe_count += 1
+                status, lost = handle_observe_action(
+                    env=env, registry=registry, viz=viz, obj=obj_str,
+                    robot_id=robot_id,
+                    pose_known=lambda bd: pose_belief.pose_known(
+                        bd, robot_model().finger_limits[0][1],
+                        planner.streams.GRASP_MAX_SPAN,
+                        planner.streams.GRASP_SQUARE_TOL))
+                if lost:
+                    # Not seen at all and its region renders empty: the
+                    # lost path, exactly as after a sense; no strike.
+                    retire_lost_objects([obj_str], registry, viz, shadows,
+                                        shadow_occluder_map, boxel_centers,
+                                        occluders, belief, env=env)
+                    if obj_str in planner_target_objects:
+                        target_lost_seen = True
+                elif (status == 'observe_incomplete'
+                      and registry.get_boxel(obj_str) is not None):
+                    _bd = registry.get_boxel(obj_str)
+                    _k = observe_views.look_index(look_q.name, obj_str)
+                    planner.m8_views.removed.add((obj_str, _k))
+                    _n = observe_strikes.get(obj_str, (0,))[0] + 1
+                    observe_strikes[obj_str] = (
+                        _n, np.concatenate([_bd.min_corner, _bd.max_corner]), _bd)
+                    _left = (len(observe_views.LOOK_STANDOFFS)
+                             * len(observe_views.LOOK_WRIST_YAWS)
+                             - sum(1 for r in planner.m8_views.removed
+                                   if r[0] == obj_str))
+                    if _n >= 3 or _left <= 0:
+                        planner.m8_views.parked.add(obj_str)
+                    print(f"    [M8] observe strike {_n}/3 for {obj_str}; look "
+                          f"{look_q.name} removed"
+                          f"{'; PARKED (no look configurations)' if obj_str in planner.m8_views.parked else ''}")
+                else:
+                    observe_strikes.pop(obj_str, None)
+                ledger_event('observe_result', obj=obj_str, status=status,
+                             lost=lost, config=look_q.name)
+                dispatch_end(status)
+                break
+
             elif action_name == 'pick':
                 # PICK: approach → open gripper → lower to contact →
                 # close gripper (friction squeeze, #P1) → verify grip →
@@ -1918,6 +2021,20 @@ def main(gui=True, run_logger=None, scene_config=None,
                     print(f"    ERROR: no registry estimate for {obj_str} — "
                           f"the pick was grounded on a fact the belief no "
                           f"longer holds; replanning (#P1 F24)")
+                    dispatch_end('stale_precondition')
+                    break
+                # M8 B: the pick's (obj_pose_known ?o) must still hold in
+                # the belief (a sense's effect assumes it; the detection
+                # that registered the object may leave it outside the
+                # margin): replan, which observes first.
+                if pose_belief.SWITCHES['M8'] and not pose_belief.pose_known(
+                        _pick_bd, robot_model().finger_limits[0][1],
+                        planner.streams.GRASP_MAX_SPAN,
+                        planner.streams.GRASP_SQUARE_TOL):
+                    print(f"    [M8] {obj_str} pose_radius "
+                          f"{_pick_bd.pose_radius * 1e3:.2f} mm is outside its "
+                          f"commit margin — the pick's obj_pose_known no longer "
+                          f"holds; replanning")
                     dispatch_end('stale_precondition')
                     break
                 pick_pos = np.asarray(_pick_bd.center, dtype=float).copy()
@@ -2103,6 +2220,8 @@ def main(gui=True, run_logger=None, scene_config=None,
                         env, robot_id, expected_held_body_id=None,
                         tag=f"post-empty-hand-place:{obj_str}")
                     env.update_object_positions()
+                    # M8 A: lost in transit, its pose is unknown.
+                    pose_belief.mark_pose_unknown(registry.get_boxel(obj_str))
                     # #P1 step (3c): a transit-slipped object that fell
                     # somewhere visible is re-posed by the refresh; one
                     # that fell OFF the table (or out of view) leaves
@@ -2151,6 +2270,10 @@ def main(gui=True, run_logger=None, scene_config=None,
                         # planner.plan() sees the actual location and
                         # doesn't re-pick from the stale boxel in an
                         # infinite cascade.
+                        # M8 A: the released object is loose at a pose
+                        # nothing observed yet; a complete detection in
+                        # the refresh sets it again.
+                        pose_belief.mark_pose_unknown(registry.get_boxel(obj_str))
                         refresh_object_aabbs(env, registry, viz=viz)
                     else:
                         print(f"    IK failure during place — replanning (audit #82)")
@@ -2363,6 +2486,8 @@ def main(gui=True, run_logger=None, scene_config=None,
                         env, robot_id, expected_held_body_id=None,
                         tag=f"post-empty-hand-stack:{obj_str}")
                     env.update_object_positions()
+                    # M8 A: lost in transit, its pose is unknown.
+                    pose_belief.mark_pose_unknown(registry.get_boxel(obj_str))
                     # #P1 step (3c): see the place-edition comment.
                     _lost = refresh_object_aabbs(env, registry, viz=viz,
                                                  check_lost=True)
@@ -2420,6 +2545,9 @@ def main(gui=True, run_logger=None, scene_config=None,
                         # time location, so the next plan re-picks
                         # from the wrong boxel and the failure
                         # cascades.  Refresh from live PyBullet.
+                        # M8 A: the released object's pose is unknown
+                        # until a complete detection (as for place).
+                        pose_belief.mark_pose_unknown(registry.get_boxel(obj_str))
                         refresh_object_aabbs(env, registry, viz=viz)
                     else:
                         print(f"    IK failure during stack — replanning (audit #30)")
@@ -2632,6 +2760,11 @@ def main(gui=True, run_logger=None, scene_config=None,
         belief=belief,
         plan_count=plan_count,
         sense_count=sense_count,
+        m8_stats=({"n_observe_actions": observe_count,
+                   "parked": sorted(planner.m8_views.parked),
+                   "view_kin_skips": planner.streams.view_kin_skips,
+                   "per_plan": m8_per_plan}
+                  if planner.m8_views is not None else None),
         shadows=shadows,
         blocked_giveup_shadows=blocked_giveup_shadows,
         plan_times=plan_times,
@@ -2739,6 +2872,8 @@ if __name__ == "__main__":
         "planner":      args.planner,
         "sense_gate":   args.sense_gate,
         "corridor_test": args.corridor_test,
+        "m8": args.m8, "m9": args.m9, "m10": args.m10,
+        "pick_aperture_from_pose": args.pick_aperture_from_pose,
         "search_sample_ratio": getattr(args, 'search_sample_ratio', None),
         "path_check_step": getattr(args, 'path_check_step', None),
         "path_check_diag": bool(getattr(args, 'path_check_diag', False)),

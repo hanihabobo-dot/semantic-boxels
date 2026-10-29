@@ -40,7 +40,9 @@ from perception import (sense_ray_slices, segment_aabb_hit_mask,
                         SENSE_MARGINAL_BLOCKED_FRACTION)
 from streams import (BoxelStreams, RobotConfig, Trajectory, Grasp,
                      NOMINAL_HIDDEN_EXTENTS, HOME_PSEUDO_BOXEL)
-from robot_utils import REST_POSES
+from robot_utils import REST_POSES, robot_model
+import pose_belief
+from observe_views import VIEW_PREFIX
 
 
 # F7 remedy 3 (2026-09-19): pddlstream solve() search_sample_ratio (its
@@ -180,6 +182,11 @@ class PDDLStreamPlanner:
         # (Boxel home) and (config_for_boxel q_home home), so a move can
         # reach q_home from any configuration.  None: no such facts.
         self.goal_config: Optional[RobotConfig] = None
+        # M8 (PLAN_P4_POSE_GRASP_SAMPLERS.md C): the observation
+        # configurations' static facts (observe_views.ObserveViews, set by
+        # main() when M8 is on), and what the last _build_init emitted.
+        self.m8_views = None
+        self.last_m8_stats: Dict[str, Any] = {}
 
         # Load PDDL files (use PDDLStream-compatible untyped domain)
         if domain_file is None:
@@ -639,6 +646,12 @@ class PDDLStreamPlanner:
 
         init = []
         shadows = []
+        m8 = pose_belief.SWITCHES['M8']
+
+        def _pose_known(bd) -> bool:
+            return pose_belief.pose_known(
+                bd, robot_model().finger_limits[0][1],
+                self.streams.GRASP_MAX_SPAN, self.streams.GRASP_SQUARE_TOL)
 
         for boxel in self.registry.boxels.values():
             init.append(('Boxel', boxel.id))
@@ -675,6 +688,9 @@ class PDDLStreamPlanner:
                 if boxel.id != held_obj:
                     init.append(('obj_at_boxel', boxel.id, boxel.id))
                     init.append(('obj_at_boxel_KIF', boxel.id, boxel.id))
+                    # M8 B: pick commits only within the margin.
+                    if m8 and _pose_known(boxel):
+                        init.append(('obj_pose_known', boxel.id))
 
                 # KIF for target objects: only emit "known not here" if this
                 # region has been observed clear.  When observed_clear_regions
@@ -819,7 +835,10 @@ class PDDLStreamPlanner:
         for tgt, boxel_id in visible_target_locations.items():
             init.append(('obj_at_boxel', tgt, boxel_id))
             init.append(('obj_at_boxel_KIF', tgt, boxel_id))
-            init.append(('obj_pose_known', tgt))
+            # M8 B: the same gate as every registered object.
+            _tbd = self.registry.get_boxel(tgt)
+            if not m8 or (_tbd is not None and _pose_known(_tbd)):
+                init.append(('obj_pose_known', tgt))
 
         # Static boxel_fits facts (audit #102): do NOT use a PDDLStream test stream.
         # Adaptive search re-invokes test streams heavily across skeletons; a cheap
@@ -913,6 +932,45 @@ class PDDLStreamPlanner:
             init.append(('Boxel', HOME_PSEUDO_BOXEL))
             init.append(('config_for_boxel', self.goal_config,
                          HOME_PSEUDO_BOXEL))
+        # M8 C: the observation configurations as static facts, each with
+        # its own view pseudo-boxel (not a registry boxel, like "home";
+        # compute_kin returns at once on these ids).
+        self.streams.view_boxel_ids = frozenset()
+        self.last_m8_stats = {}
+        if m8 and self.m8_views is not None:
+            _clash = [b for b in self.registry.boxels if str(b).startswith(VIEW_PREFIX)]
+            if _clash:
+                raise ValueError(f"registry boxels carry the view prefix: {_clash}")
+            _sense = [self.registry.get_boxel(s) for s in shadows
+                      if s not in known_empty_shadows]
+            _look = [b for b in self.registry.boxels.values()
+                     if b.boxel_type == BoxelType.OBJECT and b.id != held_obj
+                     and b.id not in self.streams.ungraspable_objects
+                     and not _pose_known(b)
+                     and pose_belief.believed_margin(
+                         b, robot_model().finger_limits[0][1],
+                         self.streams.GRASP_MAX_SPAN,
+                         self.streams.GRASP_SQUARE_TOL) is not None]
+            _declared = [current_config] + (
+                [self.goal_config] if self.goal_config is not None else [])
+            _t0 = time.perf_counter()
+            _facts, _views = self.m8_views.init_facts(
+                current_config, self.home_config, _sense, _look, _declared)
+            init.extend(_facts)
+            self.streams.view_boxel_ids = frozenset(_views)
+            self.last_m8_stats = dict(self.m8_views.last_stats,
+                                      build_s=time.perf_counter() - _t0,
+                                      look_objects=[b.id for b in _look],
+                                      sense_regions=len(_sense),
+                                      fallback=list(self.m8_views.last_fallback))
+            print(f"  [M8] init: {self.last_m8_stats['sense_view']} sense_view, "
+                  f"{self.last_m8_stats['look_config']} look_config facts "
+                  f"(pose unknown: {self.last_m8_stats['look_objects']}), "
+                  f"{len(_views)} view boxels, "
+                  f"{self.last_m8_stats['sense_fallback']} shadows on the "
+                  f"current-config fallback; {self.last_m8_stats['twin_renders']} "
+                  f"twin renders {self.last_m8_stats['twin_render_s']:.2f}s, "
+                  f"total {self.last_m8_stats['build_s']:.2f}s")
         if held_obj is None:
             init.append(('handempty',))
         else:

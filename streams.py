@@ -279,6 +279,10 @@ class BoxelStreams:
         # reports no plan.  Persistent across replans (one BoxelStreams
         # instance per PDDLStreamPlanner, which lives for the episode).
         self.ungraspable_objects: set = set()
+        # M8 C0: the view pseudo-boxels of the current init (set by
+        # _build_init) and how many compute-kin calls they turned away.
+        self.view_boxel_ids: frozenset = frozenset()
+        self.view_kin_skips = 0
         # F18 (2026-09-20): the resolution of every path collision check,
         # in radians of the largest-moving joint between samples.
         # DEFAULT 0 = the fixed RRT_EDGE_CHECKS count, because that is
@@ -1397,6 +1401,10 @@ class BoxelStreams:
         # #P4 B3(d): the goal configuration's pseudo-boxel holds no object
         # and admits no placement; nothing is picked from or placed there.
         if boxel_id == HOME_PSEUDO_BOXEL:
+            return
+        # M8 C0: nor are the observation configurations' view boxels.
+        if boxel_id in self.view_boxel_ids:
+            self.view_kin_skips += 1
             return
 
         # --- Look up the boxel's 3D center from the grid registry ---------------

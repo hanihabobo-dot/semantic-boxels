@@ -4683,6 +4683,14 @@ R7  The implementer "helps" with a fallback (retry, nudge, re-aim, park,
     lands in the main pipeline with the B3 acceptance and a BF#.  The new
     bounds are home_not_reached and HOME_HOLD_STEP_CAP (D7), both
     pre-registered here; the cap's value comes only from D7 (vii)'s rule.
+    M8's observe bound is pre-registered here too (samplers plan C2, BF#33,
+    main pipeline, accepted with M8 by B3's BF#13 test): an observe that
+    sees its object but not completely within the margin is a strike and
+    removes that (look configuration, object) pair; the object is parked
+    (no look facts) after 3 strikes or once no pair is left; strikes,
+    removed pairs and parking reset when the object is re-registered or
+    re-posed (box moved > 1 mm).  An observe that does not see the object
+    takes the lost path, no strike.
 R8  Constants or rules fitted to the released layouts or to outcomes.  Gate:
     G9; B1 decisions run on an empty table; B6 before B7; task_spec hash in
     campaign.json.
@@ -7061,6 +7069,134 @@ BF#31 [DONE, SWITCHES OFF]  SAMPLERS PLAN STEP 4: M10 AND THE POSE WRITERS
   passed, 3 skipped (as before); bridge_gates static PASS.
   CLAIM EFFECT: none yet (switches OFF).
   HONESTY CLASS: model tweaks M8 (A) and M10 (registered at step 6).
+
+BF#32 [OPEN, FOR LATER]  DELETE THE SENSE ACTION, KEEP ONLY OBSERVE  (user
+      request, 2026-10-29; big step, not now)
+  REQUEST (user): try removing the sense action from the domain and keep
+  only observe (M8's view-clear wrist observe, samplers plan step 5) as
+  the one perception action.
+  WHY LATER: it changes the domain's sensing model and every plan that
+  reaches a hidden target, so it waits until the samplers plan (steps 5
+  and 6) is finished and its switch decision is made.
+  RELATED: BF#28 (g), TAMPURA's look action already images from the
+  wrist away from home, so observe adds no capability they lack.
+  CLAIM EFFECT: to be decided then (changes the system under test).
+  HONESTY CLASS: to be decided then.
+
+BF#33 [DONE, SWITCHES OFF]  SAMPLERS PLAN STEP 5: M8'S DOMAIN, VIEWS AND
+      OBSERVE  (2026-10-29, PLAN_P4_POSE_GRASP_SAMPLERS.md step 5)
+  DOMAIN: m8_domain.py declares M8's delta (predicates is_view, sense_view,
+  look_config; sense gains ?q appended last with (at_config ?q)
+  (sense_view ?q ?region); pick requires (obj_pose_known ?o); place,
+  place_hiding and stack add it; new action observe(?o ?q), cost 1) and
+  applies it at anchors that must each occur once.  tools/gen_bridge_
+  domain.py writes pddl/domain_pddlstream_m8.pddl (sha e49e249bb03b7fdd);
+  the live file is unchanged (a21877fe170997c7).  M8 off loads the live
+  file, on the generated one; main() refuses a stale generated file.
+  G10: bridge_gates.py domain regenerates and compares (replaces the hard
+  FAIL); main() writes a 'domain' ledger row (file, sha, switches) and
+  run_ledger's G10r checks it against the switch.  Plumbing: --m8, --m9,
+  --m10, --pick-aperture-from-pose (default off) in parse_pipeline_args
+  and run_bridge_on_finddice.py; policy.py passes one domain path to
+  GateConfig and main().
+  INIT (pddlstream_planner._build_init, M8 only): obj_pose_known for
+  every registered unheld object (and the visible-target line) iff
+  pose_radius <= the believed margin (pose_belief.pose_known: the fused
+  rectangle when M9 uses it, else the registry AABB, over the families
+  sample_grasp offers, GRIPPER_HALF_OPEN = finger_limits).  observe_
+  views.ObserveViews computes, in the plan twin, the sense_view facts for
+  the unknown shadows (current config, q_home, three declared retracted
+  configs; robot-hidden worst-slice fraction of the twin's eye render <=
+  0.05; fallback to the current config) and the look_config facts for
+  every object whose pose is not known (LOOK_STANDOFFS 0.20/0.30 m x
+  wrist yaws 0/90 deg, IK, collision-free, box inside the wrist image
+  with 8 px, no lattice point behind another body or the robot), each
+  config with its own view__<name> pseudo-boxel (compute_kin returns at
+  once on these ids).  q_home gets view__q_home in both pipelines.
+  EXECUTOR: sense unpacks action_params[:2].  observe: one wrist render
+  in the executing client (FK camera pose, footprint completion off),
+  re-poses every REGISTERED object it shows completely (A rule, wrist
+  noise, M9 fusion), registers nothing, touches no shadow or free boxel;
+  observe_ok / observe_incomplete (new step_end statuses in run_logger and
+  G3); every observe ends the plan.  Observe bound registered under R7.
+  D7: a q_home miss counts toward home_not_reached only when the planned
+  destination boxel is home.  at_home_ok survives an observe.  G20: a
+  render passes with the eye's matrices or with a declared robot's wrist
+  camera at its current FK (executing robot at install, plan twin's robot
+  declared after the adapter is built).  Allowlist: ObserveViews._set_arm
+  (plan client).  world_eye lists is_view, sense_view, look_config.
+  ADDITIONS BEYOND THE PLAN (A's list missed these writers):
+  (1) the initial observation's registrations (Phase 3) now get the A
+  rule (first registration; one extra eye render, only with a switch on);
+  without it every object started at inf with M8 on.  (2) a failed drop
+  (place, stack) and a transit loss (place, stack) make the released
+  object's pose unknown before the refresh: seed 0's first ON run re-
+  picked a cup that had fallen off a failed drop at its stale 0.68 mm
+  radius, three untouched misses.  (3) the dispatcher refuses a pick
+  whose obj_pose_known no longer holds in the belief (stale_precondition,
+  replan): a sense's effect assumes the pose, the registration may not
+  give it.  (4) observe strikes reset on re-registration or a re-pose
+  that moves the box by more than 1 mm, not on every complete detection
+  (the eye's complete renders between observes would reset them forever).
+  TESTS: tests/test_m8_observe.py (6: the delta, a drifted live file
+  refused, look configs over a lone die-class box and a removed pair
+  staying removed, a wrist observe re-posing a 3 mm-off belief to within
+  1.5 mm and leaving a shadow and a free boxel unchanged with nothing
+  registered, an observe that does not see the target taking the lost
+  path, pose_known at the believed margin); test_ledger_reader (+2: a
+  three-argument sense and an observe through G3, G5 and G15, G5 still
+  reading index 1; G10r); test_gate_hooks (+1: G20 wrist render only at
+  the FK pose).  Main tests 34 passed; bridge tests 89 passed, 3 skipped;
+  bridge_gates static all PASS, domain PASS.
+  NOT UNIT-TESTED (covered by runs or by reading): the D7 home-boxel rule,
+  a bystander pushed during the descent (M10's touched set), the sense
+  fallback.
+  OFF = 32c00a1: random-pairs holding seed 0, n_occluders 2 (CB#113 cell,
+  argv from eval_runner.cell_to_argv), the 32c00a1 snapshot and the new
+  code with every switch off: same grounded 7-action plan, same outcome
+  (SUCCESS, 1 plan); the domain loaded is the live file.
+  ON SMOKE (same cell, M8-M10 and the aperture on): SUCCESS, 2 plans of 8
+  actions (OFF: 1 plan of 7); the extra action is the move to a sense
+  view spot (plan 1 sensed from q_home; plan 2's region failed the view
+  test from q_home and was sensed from sense_retract_0).  View facts
+  0.25-0.27 s per plan (2 twin renders), no look facts (every pose
+  known).
+  SEED 0 (bridge, find_dice, all four switches on, headless; runs in
+  bf/gui_runs/step5_seed0_on{,_r2}, not committed).
+  Run 1 (before addition (2)): reward 0.  Cup pick 1 rejected by the grip
+  width check (M9 sized the pinch at 24.6 mm half from the upturned cup's
+  top face, its narrow base; the pads closed on the body at 33.1 mm, the
+  window is [5, 33]: BF#28's NOTE FOR M9, now observed); M10 made the cup
+  unknown; the planner inserted move + observe at look_d_cups_ud_3; the
+  wrist re-posed the cup to 0.68 mm; pick 2 held; the place's drop
+  verification failed (fingertip still in contact, cup tilted 8 deg); the
+  re-picks aimed at the stale pose with its old 0.68 mm radius and missed
+  without touching three times.  Led to addition (2).
+  Run 2 (with it): reward 0, every ledger gate PASS (G3 14 steps over 6
+  plans, G10r the generated domain, G21 all runtime counts 0, so no G20
+  trip from the wrist or twin renders).  The same cup sequence up to the
+  failed drop; then the cup's pose was unknown, the planner observed it
+  (0.61 mm), the die came into the eye's view at 1 mm, and the die pick
+  HELD (M9 face pinch, the evidence's corner-pinch and stale-aim failure
+  did not recur).  The move home passed the at-home test, but the die had
+  slipped out on the way (physics_mismatch, die 149 mm from the belief,
+  grasp_body None): grip loss in transport, GF10's class, which this plan
+  does not address (Q-D).
+  D7 CHANGE AFTER RUN 2: its goal move went to view__q_home, not home, so
+  the plan's "count only home" rule would never have counted a missed
+  goal move.  A miss now counts for the home boxel OR the plan's final
+  move; a move to q_home in order to sense from it does not count.
+  OPEN FOR THE USER: (Q-H) M9 on a non-prism body: the top-face rectangle
+  of the upturned cups is their base, narrower than where the pads close,
+  so with M9 on the cup's first pick failed the width check on seed 0
+  (other seeds with an upturned cup are expected to behave alike; not
+  measured).  Options: (a) M9 keeps the fitted
+  yaw and aim but sizes the pinch from the larger of the fitted and the
+  AABB width along the pads; (b) M9 applies only where the fitted
+  rectangle and the AABB agree within GRASP_SQUARE_TOL (prisms); (c) as
+  is, the M10 + observe detour absorbs it at the cost of one failed pick.
+  CLAIM EFFECT: none yet (switches OFF).
+  HONESTY CLASS: model tweak M8 (registered in P4.5 at step 6).
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS

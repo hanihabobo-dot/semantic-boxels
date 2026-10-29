@@ -65,6 +65,10 @@ class GateConfig:
     camera_view: Optional[tuple] = None
     camera_proj: Optional[tuple] = None
     camera_tol: float = 1e-6
+    # G20, M8 C2: client -> robot whose wrist camera may render there; a
+    # render passes when its matrices are that camera's at the robot's
+    # current forward kinematics (the declared mount, robot_utils).
+    wrist_robots: dict = field(default_factory=dict)
     # G10: the mission goal and the target symbol T (None: not checked).
     mission_goal: Optional[tuple] = None
     target_symbol: Optional[str] = None
@@ -302,16 +306,28 @@ def _make_camera(orig):
         proj = _arg(args, kwargs, 3, 'projectionMatrix')
         capture = _captures[-1] if _captures else None
         matched = None
+        camera = None
         if _cfg.camera_view is not None and capture is None:
             matched = (_close(view, _cfg.camera_view, _cfg.camera_tol)
                        and _close(proj, _cfg.camera_proj, _cfg.camera_tol))
+            camera = 'eye' if matched else None
+            robot = _cfg.wrist_robots.get(_client(kwargs))
+            if not matched and robot is not None:
+                import robot_utils
+                wv, wp = robot_utils.wrist_camera_matrices(
+                    robot_utils.wrist_camera_pose(robot, _client(kwargs)))
+                matched = (_close(view, wv, _cfg.camera_tol)
+                           and _close(proj, wp, _cfg.camera_tol))
+                camera = 'wrist' if matched else None
         run_logger.ledger_event(
             'render', client=_client(kwargs), capture=capture, matched=matched,
+            camera=camera,
             view=list(view) if view is not None else None,
             proj=list(proj) if proj is not None else None)
         if matched is False:
             _violation('G20', 'getCameraImage',
-                       'render with matrices other than the declared eye')
+                       'render with matrices other than the declared eye or '
+                       'the wrist camera at its FK pose')
         return orig(*args, **kwargs)
     return hook
 
@@ -656,6 +672,14 @@ def install(cfg: GateConfig) -> None:
 
 def installed() -> bool:
     return _cfg is not None
+
+
+def declare_wrist_robot(client: int, robot_id: int) -> None:
+    """G20: a robot whose wrist camera may render in this client (the plan
+    twin's, known only once the env adapter has built it)."""
+    _cfg.wrist_robots[client] = robot_id
+    run_logger.ledger_event('gate_info', note='wrist_robot', client=client,
+                            robot=robot_id)
 
 
 def uninstall() -> None:

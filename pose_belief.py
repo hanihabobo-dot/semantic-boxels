@@ -159,6 +159,26 @@ def pinch_half_extent(pinch_dir_xy, yaw: float, body_extents) -> float:
                   + abs(float(d @ v)) * float(body_extents[1]))
 
 
+def believed_margin(boxel, gripper_half_open: float, max_span: float,
+                    square_tol: float) -> Optional[float]:
+    """B: the commit margin from the belief, over the grasp families the
+    sampler would offer this boxel: the fused rectangle when M9 uses it,
+    else the registry AABB.  None when no family is offered."""
+    if uses_fitted_pose(boxel):
+        ext = np.asarray(boxel.body_extents, dtype=float)
+    else:
+        ext = (np.asarray(boxel.max_corner, dtype=float)
+               - np.asarray(boxel.min_corner, dtype=float))
+    return commit_margin(ext[:2], gripper_half_open, max_span, square_tol)
+
+
+def pose_known(boxel, gripper_half_open: float, max_span: float,
+               square_tol: float) -> bool:
+    """B's commit rule: pose_radius <= the believed commit margin."""
+    m = believed_margin(boxel, gripper_half_open, max_span, square_tol)
+    return m is not None and float(boxel.pose_radius) <= m
+
+
 def uses_fitted_pose(boxel) -> bool:
     """M9 is on and the boxel carries a valid yaw and fused extents."""
     return bool(SWITCHES['M9'] and boxel is not None
@@ -217,6 +237,8 @@ def record_detection(boxel, det, camera: str, complete: bool,
         boxel.pose_radius = pose_radius(
             det, YAW_NOISE[camera], boxel.body_extents, rigid_ext,
             first_partial=not complete)
+    if complete:
+        boxel.complete_detections += 1
 
 
 def mark_pose_unknown(boxel) -> None:

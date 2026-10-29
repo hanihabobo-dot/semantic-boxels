@@ -54,7 +54,7 @@ _SUPPORTS = ("plane", "table", "robot")
 _VERBATIM_PREDICATES = {
     "obj_at_boxel", "holding", "handempty", "on", "clear", "on_table",
     "at_config", "is_object", "is_shadow", "is_tray", "obj_pose_known",
-    "Obj",
+    "Obj", "is_view", "sense_view", "look_config",
 }
 
 _ACTIVE: "WorldEye | None" = None

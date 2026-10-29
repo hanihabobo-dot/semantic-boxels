@@ -53,6 +53,9 @@ class BoxelData:
     yaw_valid: bool = False
     body_extents: Optional[np.ndarray] = None
     rect_center: Optional[np.ndarray] = None
+    # M8 C2: how many complete detections have set pose_radius (the
+    # observe bound resets its strikes when this moves on).
+    complete_detections: int = 0
 
     @classmethod
     def from_center_extent(cls, center, extent,

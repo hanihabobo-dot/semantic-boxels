@@ -235,7 +235,8 @@ _provenance = []
 STEP_END_STATUSES = (
     'ok', 'sense_outcome', 'integrity_replan', 'motion_resolve_failed',
     'pick_failure', 'place_failure', 'stack_failure', 'empty_hand',
-    'stale_precondition', 'home_not_reached', 'unlabelled',
+    'stale_precondition', 'home_not_reached', 'observe_ok',
+    'observe_incomplete', 'unlabelled',
 )
 
 
@@ -383,6 +384,7 @@ def report_run_outcome(
     belief,
     plan_count: int,
     sense_count: int = 0,  # audit #73 step 3(c) plot 4
+    m8_stats: Optional[dict] = None,  # M8: observes and view-fact metrics
     shadows: list,
     blocked_giveup_shadows: set,
     pick_giveup_objects: Optional[set] = None,  # #P1 F2 pick 3-strike giveup
@@ -601,6 +603,7 @@ def report_run_outcome(
                 # Audit #73 step 3(c) plot 4: total sense actions
                 # executed across all replans (any outcome).
                 "n_sense_actions": sense_count,
+                **({"m8": m8_stats} if m8_stats is not None else {}),
                 "total_planning_time_s": round(total_plan_time, 3),
                 "per_call_planning_time_s": [round(t, 3) for t in plan_times],
                 # Audit #40: structured physics-vs-symbolic failure log
@@ -786,6 +789,26 @@ def parse_pipeline_args(argv=None):
              'a target-class box can rest fully occluded (dense hideability '
              'test, streams.test_target_can_hide_in_shadow). A/B decides '
              'the default for CB#113.')
+    # M8-M10 (PLAN_P4_POSE_GRASP_SAMPLERS.md, P4.5 model tweaks): each
+    # behind its own switch; the defaults stay off until the Q-F decision
+    # entry lands.
+    parser.add_argument(
+        '--m8', choices=['off', 'on'], default='off',
+        help='M8: pose-gated pick, view-clear sense configurations and the '
+             'wrist-camera observe action (loads the generated domain '
+             'pddl/domain_pddlstream_m8.pddl).')
+    parser.add_argument(
+        '--m9', choices=['off', 'on'], default='off',
+        help='M9: object-fitted grasps (yaw and extents of the top-face '
+             'rectangle) instead of the AABB grasp candidates.')
+    parser.add_argument(
+        '--m10', choices=['off', 'on'], default='off',
+        help='M10: a failed pick that touched the target makes its pose '
+             'unknown (no in-action retry).')
+    parser.add_argument(
+        '--pick-aperture-from-pose', choices=['off', 'on'], default='off',
+        help="M8's aperture rule: open the pads to the pinch half-width "
+             "plus pose_radius plus 8 mm (capped at the finger limit).")
     parser.add_argument(
         '--planner',
         choices=['ff-astar1', 'ff-astar2', 'ff-astar', 'ff-wastar1',

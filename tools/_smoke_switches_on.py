@@ -15,10 +15,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 os.chdir(REPO)
 
-import pose_belief  # noqa: E402
-
-pose_belief.SWITCHES.update({'M9': True, 'M10': True, 'pick_aperture_from_pose': True})
-if pose_belief.PLACE_POSE_TOL is None:
-    pose_belief.PLACE_POSE_TOL = float(os.environ.get('PLACE_POSE_TOL', '0.004'))
-sys.argv = [os.path.join(REPO, 'test_full_pipeline.py')] + sys.argv[1:]
+# Since step 5 the switches are CLI flags that main() applies.
+sys.argv = ([os.path.join(REPO, 'test_full_pipeline.py')] + sys.argv[1:]
+            + ['--m9', 'on', '--m10', 'on', '--pick-aperture-from-pose', 'on'])
 runpy.run_path(sys.argv[0], run_name='__main__')
