@@ -7287,6 +7287,40 @@ BF#34 [DONE, decisions]  SAMPLERS PLAN STEP 6: M8-M10 DEFAULT ON (Q-F) AND
   CLAIM EFFECT: the system under test changes on both pipelines once the
   defaults flip; nothing is claimed for it before BF#13's test.
   HONESTY CLASS: configuration (protocol).
+  DEFAULTS FLIPPED (3ed7866), after this entry (56b5619).  main() refuses
+  a known domain file that disagrees with the M8 switch.  Two bridge
+  tests (test_b3_parameterisation and test_gf9's goal-at-home episodes)
+  are pinned to --m8 off: their injected at-home miss assumes the first
+  move to q_home is the post-pick one, and with M8 the plan first moves
+  to view__q_home to sense.  NOTE: in that M8-on episode the held block
+  was lost on the move home (one sample, not analysed; GF10's class).
+  SECTION 5 SMOKE (local, WSL, serial, PYTHONHASHSEED 0; argv from
+  eval_runner.cell_to_argv, CB#113's cells where the matrix has them;
+  find-and-tray-stack 999 and holding 13 are not in it and were built
+  with n_occluders 2; ON = the new defaults, OFF = all four switches off;
+  script and logs agent-backups/smoke_s6, outside the repo):
+    cell                 arm   success plans plan_s  senses observes
+    holding s0 (2 occ)   snap  yes     1     0.8     1      -
+                         off   yes     2     1.8     2      -
+                         on    yes     2     2.0     2      0
+    stack s0 (h 2)       snap  yes     1     0.6     0      -
+                         off   yes     1     0.8     0      -
+                         on    yes     1     0.7     0      0
+    tray-stack s999      snap  yes     10    881     10     -  (900 s cap hit
+                                                               after the summary)
+                         off   yes     11    787     11     -
+                         on    yes     3     12.3    3      0
+    holding s13 (2 occ)  snap  yes     1     0.7     1      -
+                         off   yes     1     1.0     1      -
+                         on    yes     1     2.1     1      0
+  ON arm: no object parked, no shadow on the current-config fallback, no
+  look facts needed (every pose known from the eye), view facts 0.1-0.6 s
+  per run.  The ABORT (an object parked ON that the snapshot picks) is
+  not triggered.  Run-to-run variation is real: the same holding s0 OFF
+  argv gave 1 plan in BF#33 and 2 here (FastDownward's tie-breaking is
+  not seeded); s999's 787 s vs 12 s is one sample per arm and claims
+  nothing.  Seed 13 at 2 occluders did not show the F7/F32 behaviour.
+  NOT LOCAL: the BF#13 A/B and the CB#113 re-run on the chair's cloud.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
