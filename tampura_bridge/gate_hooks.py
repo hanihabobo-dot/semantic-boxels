@@ -405,7 +405,7 @@ def check_plan_call(planner, goal, target_objects):
     if _sha(getattr(planner, 'domain_pddl', '')) != _expected_sha['domain']:
         problems.append('domain text differs from the declared domain file')
     if _sha(getattr(planner, 'stream_pddl', '')) != _expected_sha['stream']:
-        problems.append('stream text differs from pddl/stream.pddl')
+        problems.append('stream text differs from the declared stream file')
     if _cfg.mission_goal is not None:
         allowed = (_norm(_cfg.mission_goal), _norm(('handempty',)))
         if _norm(goal) not in allowed:

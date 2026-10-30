@@ -82,7 +82,11 @@ def main():
     # GUI run, never scored; the ledger's G19 gate records the mismatch.
     ap.add_argument('--allow-g19-mismatch', type=int, default=0)
     # M8-M10 (P4.5 model tweaks), passed through to main()'s CLI flags.
-    for flag in ('--m8', '--m9', '--m10', '--pick-aperture-from-pose'):
+    # (--sense-anywhere, BF#52: sense from the pick configuration over the
+    # region when the arm there does not block the eye's view; off returns
+    # to a view spot before every sense as before.)
+    for flag in ('--m8', '--m9', '--m10', '--pick-aperture-from-pose',
+                 '--sense-anywhere'):
         ap.add_argument(flag, choices=('off', 'on'), default='on')
     # GF10 (BF#38): the pick close's squeeze (0.5 mm since BF#44), passed through like the switches.
     ap.add_argument('--grip-squeeze-mm', type=float, default=0.5)
@@ -157,6 +161,7 @@ def main():
         log_level=a.log_level, max_plan_time=a.max_plan_time,
         switches={'m8': a.m8, 'm9': a.m9, 'm10': a.m10,
                   'pick_aperture_from_pose': a.pick_aperture_from_pose,
+                  'sense_anywhere': a.sense_anywhere,
                   'grip_squeeze_mm': str(a.grip_squeeze_mm),
                   'save_screenshots': a.save_screenshots})
     cfg.driver = {'events': events, 'seed': config['global_seed'],

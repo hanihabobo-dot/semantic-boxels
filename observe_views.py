@@ -163,6 +163,14 @@ class ObserveViews:
         self._retract_q: Optional[List[Optional[np.ndarray]]] = None
         self.last_stats: Dict[str, float] = {}
         self.last_fallback: List[str] = []
+        # BF#52: the test stream's renders of this init, one per
+        # configuration name, and its counters (reset by init_facts).
+        self._test_renders: Dict[str, tuple] = {}
+        self.test_stats: Dict[str, float] = self._fresh_test_stats()
+
+    @staticmethod
+    def _fresh_test_stats() -> Dict[str, float]:
+        return {'tests': 0, 'passes': 0, 'renders': 0, 'render_s': 0.0}
 
     # ----- the plan twin ------------------------------------------------
 
@@ -320,6 +328,35 @@ class ObserveViews:
             passing[sid].append(current_config)
         return passing, fallback
 
+    def sense_view_test(self, q, shadow) -> bool:
+        """BF#52, the test stream's rule: at ``q`` the robot hides at most
+        SENSE_MARGINAL_BLOCKED_FRACTION of every sense slice of ``shadow``
+        in the twin's EYE render (C1's rule on any configuration).  One
+        render per configuration name per init, the twin's bodies as the
+        last _build_init left them; the arm is put back after."""
+        key = str(getattr(q, 'name', q))
+        rend = self._test_renders.get(key)
+        if rend is None:
+            env = self.env
+            view, proj = env._view_and_projection_matrices()
+            saved = self._arm()
+            try:
+                self._set_arm(q.joint_positions)
+                t0 = time.perf_counter()
+                _, depth_m, seg = _render(self.client, view, proj, env.image_width,
+                                          env.image_height, env.near_plane,
+                                          env.far_plane)
+                self.test_stats['render_s'] += time.perf_counter() - t0
+                self.test_stats['renders'] += 1
+            finally:
+                self._set_arm(saved)
+            rend = (depth_m, seg, view, proj)
+            self._test_renders[key] = rend
+        ok = self._robot_blocked(shadow, *rend) <= SENSE_MARGINAL_BLOCKED_FRACTION
+        self.test_stats['tests'] += 1
+        self.test_stats['passes'] += int(ok)
+        return ok
+
     # ----- init facts ---------------------------------------------------
 
     def init_facts(self, current_config, home_config, shadows, look_boxels,
@@ -330,6 +367,8 @@ class ObserveViews:
                            'look_ik': 0, 'sense_view': 0, 'look_config': 0,
                            'sense_fallback': 0}
         self.last_fallback = []
+        self._test_renders = {}                 # BF#52: a new twin state
+        self.test_stats = self._fresh_test_stats()
         saved = self._arm()
         facts: List[tuple] = []
         configs = {}

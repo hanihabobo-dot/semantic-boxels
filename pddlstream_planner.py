@@ -32,7 +32,7 @@ from typing import List, Tuple, Optional, Dict, Any, Union
 
 from pddlstream.algorithms.meta import solve
 from pddlstream.language.constants import PDDLProblem, print_solution
-from pddlstream.language.generator import from_gen_fn, from_fn
+from pddlstream.language.generator import from_gen_fn, from_fn, from_test
 from pddlstream.utils import read
 
 from boxel_data import BoxelRegistry, BoxelType
@@ -121,7 +121,8 @@ class PDDLStreamPlanner:
                  support_body_ids: frozenset = None,
                  camera_pos: 'np.ndarray' = None,
                  tray_name: Optional[str] = None,
-                 domain_file: Optional[str] = None):
+                 domain_file: Optional[str] = None,
+                 stream_file: Optional[str] = None):
         """
         Initialize the planner.
 
@@ -194,7 +195,13 @@ class PDDLStreamPlanner:
         else:
             with open(domain_file, 'r') as f:
                 self.domain_pddl = f.read()
-        self.stream_pddl = read_pddl_file('stream.pddl')
+        # BF#52: the stream file follows the M8 switch like the domain (the
+        # generated one holds test-sense-view); None reads the live file.
+        if stream_file is None:
+            self.stream_pddl = read_pddl_file('stream.pddl')
+        else:
+            with open(stream_file, 'r') as f:
+                self.stream_pddl = f.read()
 
         # Audit #73 step 1(b): cache the most recent _build_init output
         # so the run logger can dump n_init_state_facts + per-predicate
@@ -213,12 +220,16 @@ class PDDLStreamPlanner:
         Returns:
             Dict mapping stream names to generator functions
         """
-        return {
+        stream_map = {
             'sample-grasp': from_gen_fn(self.streams.sample_grasp),
             'plan-motion': from_gen_fn(self.streams.plan_motion),
             'compute-kin': from_gen_fn(self.streams.compute_kin_solution),
             'compute-stack-kin': from_gen_fn(self.streams.compute_stack_kin_solution),
         }
+        # BF#52: the sense-from-anywhere test, only in the M8 stream file.
+        if '(:stream test-sense-view' in self.stream_pddl:
+            stream_map['test-sense-view'] = from_test(self.streams.test_sense_view)
+        return stream_map
     
     def create_problem(self,
                        target_objects: List[str],
@@ -1244,6 +1255,11 @@ class PDDLStreamPlanner:
         plan, cost, certificate = solution
         _plan_elapsed = time.perf_counter() - _plan_start_t
         _plan_outcome = 'plan_found' if plan is not None else 'no_plan'
+        # BF#52: the sense-from-anywhere test's work during this solve, into
+        # the call's M8 record (timing_summary.json's m8.per_plan).
+        if self.m8_views is not None and self.last_m8_stats:
+            self.last_m8_stats.update(
+                {'sense_view_' + k: v for k, v in self.m8_views.test_stats.items()})
         print(f"  [#76-diag] outcome={_plan_outcome}, "
               f"elapsed={_plan_elapsed:.3f}s, "
               f"plan_len={len(plan) if plan else 0}, cost={cost}")

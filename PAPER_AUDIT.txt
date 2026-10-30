@@ -8055,6 +8055,84 @@ BF#51 [OPEN]  FINDING: CLOSING THE GUI WINDOW MID-EPISODE LEAVES THE BRIDGE
   infrastructure (tooling).
 
 
+BF#52 [OPEN]  TIME CUT (1): THE BASELINE RECORDED; THE EYE SENSES FROM THE
+      TARGET'S PICK CONFIGURATION OVER THE REGION INSTEAD OF RETURNING HOME
+      (user, 2026-10-30)
+  WHAT: Hani: "we need to cut time. look at the past run i have just done,
+  and record the time and certain metrics. we are gonna compare against
+  that later on ... it always returns the arm even when it is not
+  blocking. we need to change that, except for the goal, sense doesn't
+  require to move the arm back, we only return it if it is actually
+  blocking a sense action. then let me run it again and compare the
+  times."  And the boxel env (our own scenes) is to be re-run later to see
+  whether the change hurts our task.
+  BASELINE (tools/episode_metrics.py, new: the time and action metrics of
+  a run directory from its own records, several side by side with the
+  change of the last against the first; the JSON in archive/
+  tampura_bridge_plan_2026-10-25/bf/BF52_baseline/): Hani's GUI run
+  watch_s10_2026-10-30_18-09-41 (seed 10 on 1747173593, four cups, M8-M10
+  on, squeeze 0.5 mm, GUI): success in 7 plans; wall 154.5 s (ledger open
+  to close; the bridge's loop 155.1 s); planning 42.9 s (first call 16.9,
+  the other six 4.3 mean; M8 init 8.4 of it); execution 105.8 s over 31
+  steps: 16 moves 63.8 s, 5 picks 21.4 s, 4 places 18.8 s, 4 senses 1.4 s,
+  2 observes 0.5 s; every sense preceded by move(view__q_home): 4 returns,
+  18.1 s; 2 look moves; the goal's final move home.
+  WHY THE RETURN: M8 C1 certifies (sense_view ?q ?region) as static init
+  facts for the current configuration, q_home and the retract arc only;
+  a place leaves the arm at a stream configuration no fact names, so every
+  plan had to move to q_home before sensing, needed or not.
+  THE CHANGE: with M8 on the planner reads pddl/stream_m8.pddl =
+  stream.pddl plus test-sense-view (m8_domain.generate_stream and
+  stream_file; tools/gen_bridge_domain.py writes both generated files;
+  G10 regenerates and compares both; the run's domain row records
+  stream_file and stream_sha and G10r checks them; gate_hooks and the
+  bridge policy pin the same file): a test stream over (configuration,
+  shadow) certifying sense_view by the executor's own render rule in the
+  plan twin (observe_views.ObserveViews.sense_view_test: one eye render
+  per configuration per init, the robot hides at most
+  SENSE_MARGINAL_BLOCKED_FRACTION of every sense slice, the arm put back;
+  streams.BoxelStreams.test_sense_view gates on the tester and on the
+  region being a shadow).  The goal's (at_config q_home) conjunct is
+  untouched.  --sense-anywhere off|on (run_logger, the bridge driver,
+  tools/watch.ps1 -ReturnHome) selects the live stream file for the A/B;
+  it is recorded in the domain row's switches and in the run record, and
+  it is not a pose_belief switch (those gate the pose writers as a set).
+  FIRST VERSION, MEASURED: the test over ANY (Config, shadow) pair.  Hani
+  ran seed 10 again at 18:41 (watch_s10_2026-10-30_18-41-22, same scene,
+  GUI): success in 5 plans; execution 74.3 s over 23 steps (-30 %: 12
+  moves 44.7 s, 4 picks, 3 places, 3 senses, 1 observe; 2 returns home,
+  9.2 s; the third sense made from q_kin_dice_22, the dice's pick
+  configuration over shadow_of_e_cups_ud, the pick following from there)
+  but planning 166.9 s (first call 141.7 s, +125 s; 25 pddlstream
+  iterations in all): every test of a configuration a place left the arm
+  at failed (q0, q1, q37 for shadow_of_b_cups_ud, q77, q78 for
+  shadow_of_a_cups_ud: the arm reaching a cell near the base stands in the
+  eye's view of the farther region) and each failure cost a search round,
+  the F7 class stream.pddl's own boxel_fits note describes; the two tests
+  over the region passed (q98, q101 for shadow_of_e_cups_ud); 18 twin
+  renders, 9.3 s.  Wall 249.3 s against 154.5: worse.
+  DECISION (executor, 2026-10-30 19:05): the stream's domain gains
+  (config_for_boxel ?q ?region): only the target's pick configurations
+  over the region are candidates, so a passing test folds the sense into
+  the approach to the pick (place, move to the pick configuration, sense,
+  pick: one move fewer than place, home, sense, move, pick, and never more
+  moves than sensing from the place configuration would take) and a
+  failing one leaves the plan as before; the instances are a handful per
+  region.  tests/test_sense_view_test.py: the generated stream file, the
+  render test on a DIRECT world (the arm at rest out of a top-down eye's
+  view of a region, a hand parked over it in the view, the arm put back,
+  the render cached per configuration), the stream gate (no tester, a
+  non-shadow region).
+  EVIDENCE: tests/ 46 passed, the static gates PASS, both generated files
+  up to date (domain e49e249b, stream 2b269596).  RESULT: pending, the
+  headless pairs off/on (bridge seeds 10 and 0, our random-pairs scene
+  seed 0) are running; Hani's next GUI run of seed 10 is the comparison he
+  asked for.
+  CLAIM EFFECT: none yet (the queued B8 campaigns run from snapshots
+  before this).  HONESTY CLASS: model change (the sense action's
+  configurations), disclosed.
+
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

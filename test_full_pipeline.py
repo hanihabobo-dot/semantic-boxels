@@ -542,6 +542,12 @@ def main(gui=True, run_logger=None, scene_config=None,
     world_eye.SAVE_IMAGES = getattr(args, 'save_screenshots', 'off') == 'on'
     if domain_file is None and pose_belief.SWITCHES['M8']:
         domain_file = m8_domain.domain_file(True)
+    # BF#52: the stream file follows M8 and --sense-anywhere (the M8 one
+    # holds the sense-from-anywhere test stream; off keeps the live file
+    # even with M8 on, the A/B).  Not a pose_belief switch: those gate the
+    # pose writers as a set.
+    sense_anywhere = getattr(args, 'sense_anywhere', 'on') == 'on'
+    stream_file = m8_domain.stream_file(pose_belief.SWITCHES['M8'] and sense_anywhere)
     # The two known domains must match the switch (a caller may pass
     # another file deliberately; that one is not judged here).
     _dom = os.path.abspath(domain_file) if domain_file else m8_domain.LIVE_FILE
@@ -1068,11 +1074,15 @@ def main(gui=True, run_logger=None, scene_config=None,
                                 support_body_ids=planner_support_body_ids,
                                 camera_pos=env.camera_position,
                                 tray_name=tray_name,
-                                domain_file=domain_file)
-    # G10: which domain text the planner loaded, under which switches.
+                                domain_file=domain_file,
+                                stream_file=stream_file)
+    # G10: which domain and stream texts the planner loaded, under which
+    # switches (the stream file follows the M8 switch, BF#52).
     ledger_event('domain', file=os.path.basename(domain_file or m8_domain.LIVE_FILE),
                  sha=m8_domain.sha(planner.domain_pddl),
-                 switches=dict(pose_belief.SWITCHES))
+                 stream_file=os.path.basename(stream_file),
+                 stream_sha=m8_domain.sha(planner.stream_pddl),
+                 switches=dict(pose_belief.SWITCHES, sense_anywhere=sense_anywhere))
     # #P4 B3(d): the scene's reach envelope (None: streams' constants),
     # and D7 (i) to (iii): the home joints, and with a declared goal
     # configuration its init facts and the goal conjunct.
@@ -1148,6 +1158,9 @@ def main(gui=True, run_logger=None, scene_config=None,
     if pose_belief.SWITCHES['M8']:
         planner.m8_views = observe_views.ObserveViews(
             env, planner.streams._robot_base_xy)
+        # BF#52: the sense-from-anywhere test stream judges by the same
+        # render rule in the same twin.
+        planner.streams.sense_view_test = planner.m8_views.sense_view_test
 
     boxel_centers = {b.id: b.center for b in registry.boxels.values()}
 
@@ -2895,6 +2908,7 @@ if __name__ == "__main__":
         "pick_aperture_from_pose": args.pick_aperture_from_pose,
         "grip_squeeze_mm": getattr(args, 'grip_squeeze_mm', '0.5'),
         "save_screenshots": getattr(args, 'save_screenshots', 'off'),   # BF#50
+        "sense_anywhere": getattr(args, 'sense_anywhere', 'on'),        # BF#52
         "search_sample_ratio": getattr(args, 'search_sample_ratio', None),
         "path_check_step": getattr(args, 'path_check_step', None),
         "path_check_diag": bool(getattr(args, 'path_check_diag', False)),
