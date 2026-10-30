@@ -119,9 +119,21 @@ def main():
 
     gates = _bridge_gates()
     pinned = gates.SCENE_MAP.get(a.global_seed)
-    if scene.name_seen is None or pinned is None or pinned not in scene.name_seen:
+    mismatch = (scene.name_seen is None or pinned is None
+                or pinned not in scene.name_seen)
+    if mismatch and not a.vis:
         raise SystemExit(f"G19: seed {a.global_seed} loaded {scene.name_seen}, "
                          f"pinned {pinned}")
+    if mismatch:
+        # BF#39: a GUI run is for watching only and is never scored (P4.6
+        # MODE).  Their problems/ listing order differs between the laptop
+        # and the cluster (BF#8), so most seeds load another scene here than
+        # the campaign map pins; the run goes on with the scene this machine
+        # gave the seed, and the ledger's G19 gate records the mismatch (the
+        # outcome field then says gate_failed).  Headless runs still stop.
+        print(f"G19: seed {a.global_seed} loaded {scene.name_seen}, the campaign "
+              f"pins {pinned}: a GUI run, watching only, never scored "
+              f"(the ledger's G19 gate records the mismatch)", flush=True)
     stamp('scene_map_asserted')
     cfg = bridge_policy.EpisodeConfig(
         seed=a.global_seed, scene_file=scene.name_seen,

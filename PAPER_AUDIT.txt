@@ -7568,6 +7568,33 @@ BF#38 [DONE, measurement and decision]  GF10: Q14'S PROBE; THE 0.5 MM
   RESULT FILES: archive/tampura_bridge_plan_2026-10-25/bf/BF38_q14/ (one
   JSON and log per level; smoke_base.json is the 3-cell smoke).
 
+BF#39 [DONE]  GUI RUNS GO ON PAST A G19 SCENE-MAP MISMATCH, FLAGGED  (user
+      report, 2026-10-30)
+  WHAT: watch.ps1 -Seed 10 -Squeeze 1 ended in "G19: seed 10 loaded
+  1747173593.826745.json, pinned 1747173590" and pybullet's GUI teardown
+  segfault.  The pinned map is the cluster's listing order of their
+  problems/ (BF#8); the laptop lists [1747173590, 1747173591, 1747173593],
+  so only seeds 0, 7, 9, 11, 12, 13 and 16 (1747173591) load the pinned
+  scene here; seeds 5, 6, 10, 17 and 19 load 1747173593, and 1, 2, 3, 4,
+  8, 14, 15 and 18 load 1747173590 (SCENE_MAP_LAPTOP_2026_05_26).  The
+  driver's assertion exited before the episode, and the exit with the GUI
+  client open is the segfault.  Now a GUI run (--vis 1) prints the
+  mismatch and goes on with the scene this machine gave the seed; the
+  ledger's G19 gate records the mismatch, so the outcome field says
+  gate_failed and the console's last line still shows their rewards[-1].
+  Headless runs stop as before (P4.6 PER-RUN GATES); no run is ever scored
+  from the GUI (P4.6 MODE).
+  EVIDENCE: tampura_bridge/run_bridge_on_finddice.py (the G19 branch);
+  archive/tampura_bridge_plan_2026-10-25/bf/gui_runs/watch_s10_2026-10-30_
+  10-50-02/ (the stopped run's empty log).
+  BEFORE / AFTER: a mismatching seed cannot be watched / it can, flagged.
+  CLAIM EFFECT: none.  HONESTY CLASS: infrastructure (gates).
+  DECISION 2026-10-30 (executor): the headless behaviour is kept; mapping a
+  seed to the campaign's scene on the laptop was rejected (their env picks
+  the scene by random.choice over the listing, and G19h forbids any draw of
+  ours before it).
+
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
