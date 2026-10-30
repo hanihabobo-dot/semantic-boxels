@@ -7595,6 +7595,63 @@ BF#39 [DONE]  GUI RUNS GO ON PAST A G19 SCENE-MAP MISMATCH, FLAGGED  (user
   ours before it).
 
 
+BF#40 [DONE, smoke pending]  B8'S HARNESS: tools/_bridge_campaign.py,
+      tools/cluster/b8_campaign.sbatch, tools/_bridge_report.py  (B8,
+      2026-10-30)
+  WHAT: the campaign driver P4.6 names (D10, MACHINE, B8): both arms on
+  find_dice, seeds 0-19, two repetitions, serial, interleaved per seed
+  within a repetition (T k, then O k; repetition 1 is complete before
+  repetition 2 starts, so its table exists if the job is cut), one wall
+  cap of 900 s per episode owned by the harness (the process group killed
+  at the cap), the MACHINE pgrep check before every episode (a hit stops
+  the campaign), resumable (campaign.jsonl, one record per episode as it
+  lands; campaign.json with the snapshot sha, their two commits, both
+  venvs' pip-freeze hashes, find_dice.yml, the task_spec hash, the domain
+  hashes, CPU, kernel, PYTHONHASHSEED and the protocol constants).  Arm T:
+  tools/run_tampura_timed.py in their venv, --planner tampura_policy_timed,
+  --save-dir always, --vis never, PYTHONPATH the snapshot; their
+  RolloutHistory read in their venv with nothing of ours on the path, the
+  get_action spans from the side log.  Arm O: run_bridge_on_finddice.py in
+  armO-venvA, --vis 0, --max-plan-time 900, bridge_run.sbatch's
+  environment; the outcome field, the ledger gates, the run's
+  timing_summary and ledger (dispatched steps, macro actions = the
+  non-move steps, the set-up share from rollout_start to the first plan
+  call).  Rules as pre-registered: killed and crashed episodes are failures
+  censored at the cap; a gate-failed episode keeps its times and its gate's
+  name; the per-run gates (G13, G19) and the stop rule (three gate-failed
+  episodes of one arm with the same gate) stop the campaign with the reason
+  recorded; a stalled episode (wall clock above 1.5 x cap) is re-run once,
+  flagged.  The sbatch wrapper runs bridge_gates.py all (--save) before the
+  first episode and tree --compare plus static after the last, on an
+  exclusive node.  The report: the paired table of repetition 1, McNemar
+  exact on the discordant seeds, Fisher two-sided, Wilson 95 % on every
+  rate, per layout without tests, repetition 2 flips, t1 to t5 as mean +/-
+  std and median with n (all episodes censored at the cap, flagged;
+  success-only), arm T against B1(g) under P4.6 ARMS' rule, the anytime
+  figure and the per-seed loop-time figure (CB#111) as new files named
+  after the campaign directory.
+  DISCLOSURES: (1) D10's episode-deadline keyword is absent (BF#14 state):
+  --max-plan-time is the cap and the harness kill is the bound, so an
+  episode whose planning exceeds the cap is killed and censored.  (2) The
+  shared success test of BF#37 item 2 is not applied (Q18 open): success
+  is P4.6 G12, arm T's rewards[-1] from their RolloutHistory, arm O's the
+  outcome field (rewards[-1], the error, the ledger gates), never
+  rewards[-1] alone on arm O.  (3) Smoke mode (T --max-steps 1, O
+  stop_before_planning) tests the plumbing only.  (4) The t4 macro count
+  on arm O folds every move into the action it serves by counting the
+  non-move dispatched steps; the raw dispatched count stands beside it.
+  EVIDENCE: a local test of arm O's post-processing on BF#38's seed-0 run
+  (status success, loop 9.58 s, 10 steps, 4 macro actions, 3 plans,
+  planning 3.1 s, set-up share 1.4 s) and of the crashed and killed paths;
+  the report on a synthetic campaign (scratch, not a result).
+  CLAIM EFFECT: none before the campaign.  HONESTY CLASS: infrastructure
+  (harness).
+  DECISION 2026-10-30 (executor): repetition-outer order (the protocol's
+  "interleaved per seed" read as T k, O k within a repetition); the
+  campaign runs on cn-110 (user, 2026-10-30).
+  RESULT: smoke pending.
+
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
