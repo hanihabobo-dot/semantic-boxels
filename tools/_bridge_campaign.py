@@ -411,6 +411,7 @@ def episode_o(a, rep, seed, order, scene_map, others, stall_rerun=False):
         rec['readback_identical'] = be.get('readback_identical')
         rec['ledger_gates'] = be.get('ledger_gates')
         rec['gate_info'] = be.get('gates')
+        rec['switches'] = be.get('switches')      # BF#41: M8 to M10, the squeeze
         out = be.get('outcome') or {}
         rec['outcome_status'] = out.get('status')
         rec['error'] = out.get('error')
@@ -473,6 +474,22 @@ def git_head(path):
         return f'unavailable: {e!r}'
 
 
+def squeeze_defaults(snapshot):
+    """The pipeline's pick squeeze (robot_utils.GRIP_SQUEEZE) and the
+    driver's --grip-squeeze-mm default, read from the snapshot's source so
+    the campaign record names the value every arm O episode ran with
+    (BF#38, BF#41); None where a line is not found."""
+    out = {}
+    m = re.search(r'^GRIP_SQUEEZE\s*=\s*([0-9.eE+-]+)',
+                  read_text(os.path.join(snapshot, 'robot_utils.py')), re.M)
+    out['robot_utils_GRIP_SQUEEZE_m'] = float(m.group(1)) if m else None
+    m = re.search(r"--grip-squeeze-mm'[^\n]*default=([0-9.eE+-]+)",
+                  read_text(os.path.join(snapshot, 'tampura_bridge',
+                                         'run_bridge_on_finddice.py')))
+    out['driver_grip_squeeze_mm_default'] = float(m.group(1)) if m else None
+    return out
+
+
 def metadata(a, seeds, arms):
     domain = ''
     try:
@@ -494,6 +511,7 @@ def metadata(a, seeds, arms):
         'pip_freeze_sha256': {'arm_T': freeze_sha(a.venv_t), 'arm_O': freeze_sha(a.venv_o)},
         'find_dice_yml': read_text(os.path.join(a.their_envs, 'env_configs', 'find_dice.yml')),
         'task_spec_sha256': sha256_file(os.path.join(a.snapshot, 'tampura_bridge', 'task_spec.py')),
+        'squeeze': squeeze_defaults(a.snapshot),
         'domain_gates': domain,
         'machine': {'host': os.uname().nodename, 'cpu_model': cpu_model(),
                     'nproc': os.cpu_count(), 'kernel': os.uname().release,

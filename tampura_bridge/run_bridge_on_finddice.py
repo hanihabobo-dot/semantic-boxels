@@ -112,10 +112,18 @@ def main():
     # (voxel_utils.draw_intervals, cloud_vis False); clear them so the GUI
     # shows the scene alone.  Debug lines are not in camera renders, so the
     # eye images are the same either way.
-    if a.vis:
+    def clear_debug_lines():
         for w in {id(x): x for x in (env.world, getattr(env, 'sim_world', None))
                   if x is not None}.values():
             w.client.removeAllUserDebugItems()
+
+    if a.vis:
+        clear_debug_lines()
+        # BF#41: their rollout redraws the grid after every step
+        # (Policy.rollout calls env.vis_updated_belief), so our get_action
+        # clears it before each step and the driver once more after the
+        # rollout.  Nothing is set when headless.
+        bridge_policy.GUI_CLEANUP = clear_debug_lines
 
     gates = _bridge_gates()
     pinned = gates.SCENE_MAP.get(a.global_seed)
@@ -158,6 +166,8 @@ def main():
     stamp('g13_checked')
     stamp('rollout_start')
     history, _ = policy.rollout(env, b0, store)
+    if a.vis:
+        clear_debug_lines()
 
     cfg.out['rewards'] = [float(r) for r in history.rewards]
     cfg.out['time_deltas'] = [float(t) for t in history.time_deltas]
@@ -172,8 +182,12 @@ def main():
     cfg.out['outcome'] = gates.episode_outcome(
         cfg.out['rewards'], cfg.out.get('error'), report)
     with open(os.path.join(config['save_dir'], 'bridge_episode.json'), 'w') as f:
+        # BF#41: the switches (M8 to M10, the aperture rule, the squeeze)
+        # travel with the episode; bridge runs leave main()'s run_config
+        # empty, so this is the one record of them.
         json.dump({'seed': a.global_seed, 'scene_file': scene.name_seen,
-                   **cfg.out}, f, indent=1, default=str)
+                   'switches': dict(cfg.switches), **cfg.out}, f, indent=1,
+                  default=str)
     report.show()
     print(f"seed {a.global_seed}: outcome {cfg.out['outcome']['status']}, their "
           f"RolloutHistory rewards[-1] = {history.rewards[-1]}; details in "

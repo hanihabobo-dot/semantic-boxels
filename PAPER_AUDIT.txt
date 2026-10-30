@@ -7652,6 +7652,36 @@ BF#40 [DONE, smoke pending]  B8'S HARNESS: tools/_bridge_campaign.py,
   RESULT: smoke pending.
 
 
+BF#41 [DONE]  GUI RUNS: THEIR BELIEF GRID CLEARED BETWEEN STEPS; THE
+      SWITCHES RECORDED PER EPISODE  (user report, 2026-10-30)
+  WHAT: (1) In a GUI run their rollout redraws the belief's visibility
+  grid as blue debug lines after every step (tampura policies/policy.py:133
+  calls env.vis_updated_belief, find_dice/env.py:813, which runs
+  voxel_utils.draw_intervals), so the boxes reappear behind the cups after
+  our episode and on each of their no-op steps; the driver cleared them
+  only once after initialize.  Now the driver installs a cleanup
+  (bridge_policy.GUI_CLEANUP) that our get_action runs before every step
+  and the driver runs once more after the rollout; headless runs set
+  nothing.  Their grid is their belief, which arm O never reads; removing
+  debug items changes no physics and no render (debug lines are not in
+  camera images).  The "User debug draw failed" lines are pybullet's own
+  warning from their draw and stay (their file, GUI only).  (2) The seed
+  10 GUI run (BF#42) recorded its squeeze nowhere: bridge runs leave
+  timing_summary's run_config empty and bridge_episode.json carried no
+  switches.  bridge_episode.json now carries cfg.switches (m8, m9, m10,
+  pick_aperture_from_pose, grip_squeeze_mm), the campaign record copies
+  it, and campaign.json names the snapshot's robot_utils.GRIP_SQUEEZE and
+  the driver's flag default.
+  EVIDENCE: tampura_bridge/policy.py (GUI_CLEANUP, get_action),
+  tampura_bridge/run_bridge_on_finddice.py (clear_debug_lines, the json
+  dump), tools/_bridge_campaign.py (switches, squeeze_defaults);
+  archive/tampura_bridge_plan_2026-10-25/bf/gui_runs/
+  watch_s10_2026-10-30_11-30-53/ (no squeeze value anywhere).
+  CLAIM EFFECT: none.  HONESTY CLASS: infrastructure (GUI, recording).
+  DECISION 2026-10-30 (executor): setting their env's vis flag false after
+  initialize was rejected (a runtime change of their object's state, the
+  spirit of G13); the cleanup runs from our side only.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

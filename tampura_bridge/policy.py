@@ -259,6 +259,14 @@ def register_schema(their_env, execute_fn):
         effects=[], execute_fn=execute_fn))
 
 
+# BF#41: a GUI run's cleanup between their steps, set by the driver with
+# --vis 1 and None when headless.  Their rollout redraws the belief's
+# visibility grid as debug lines after every step (vis_updated_belief);
+# that grid is their belief, which arm O never reads, so our get_action
+# clears it before each step and the GUI shows the scene alone.
+GUI_CLEANUP = None
+
+
 def bridge_policy_class():
     from tampura.policies.policy import Policy
     from tampura.symbolic import Action
@@ -271,6 +279,8 @@ def bridge_policy_class():
             self._issued = False
 
         def get_action(self, belief, store):
+            if GUI_CLEANUP is not None:
+                GUI_CLEANUP()
             if not self._issued:
                 self._issued = True
                 return Action(SCHEMA_NAME, []), {}, store
