@@ -8031,6 +8031,30 @@ BF#50 [DONE]  SIM SCREENSHOTS OFF UNLESS --save-screenshots on  (user rule,
   CLAIM EFFECT: none (the queued campaigns run from snapshots whose job
   script exports BOXEL_EYE_IMAGES=0; arm O's wall-clock time on the
   cluster is as before).  HONESTY CLASS: infrastructure (configuration).
+BF#51 [OPEN]  FINDING: CLOSING THE GUI WINDOW MID-EPISODE LEAVES THE BRIDGE
+      PROCESS SPINNING AT FULL CPU  (2026-10-30)
+  WHAT: Hani's watch.ps1 run of 16:42 (seed 0, GUI) had its PyBullet
+  window closed during the first pick ("Picking dice from dice..." is the
+  run log's last line, then "X connection to :0 broken (explicit kill or
+  server shutdown)" at 16:43:31).  The python process did not exit: at
+  18:00 it was still alive under /init (its terminal gone), its main
+  thread at 99 % CPU with no kernel wait channel, 1 h 20 min of CPU
+  burnt, nothing written since 16:43:31.  That is PyBullet's GUI client
+  after its graphics thread dies: the main thread busy-waits for a
+  command status that never comes, so no Python code runs and nothing of
+  ours can notice.  Killed by hand at 18:01 (kill, then kill -9).  Hani:
+  "all gui runs are closed. is it an orphan run?"  Consequence: a closed
+  GUI run keeps a core busy for ever and blocks the next pipeline run
+  (the pddlstream temp/ rule), unseen.
+  FIX CANDIDATES: (a) tools/watch.ps1 ends the python when the window
+  goes: a watchdog that kills the process once its console_debug.log
+  carries "X connection to :0 broken" (or once the X window is gone) and
+  says so; (b) end GUI runs with Ctrl+C in the terminal, never by closing
+  the window (a note in watch.ps1's header).  Not fixed; (a) is small.
+  CLAIM EFFECT: none (GUI runs are never scored).  HONESTY CLASS:
+  infrastructure (tooling).
+
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
