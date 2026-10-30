@@ -115,3 +115,27 @@ def test_q_h_a_margin_uses_the_sized_span(m9_on):
     b.body_extents = np.array([0.0528, 0.0528, 0.1])
     m = pose_belief.believed_margin(b, 0.04, 0.076, 0.005)
     assert m == pytest.approx(0.04 - 0.0359 - 0.002)
+
+def test_aabb_sizing_uses_the_nearest_axis_side_not_the_projection(m9_on):
+    # BF#46: a cup is a square 69.6 mm box with an arbitrary fitted yaw (a
+    # round footprint); the support projection read 85 mm at 0.3 rad and
+    # the cup lost every grasp family.  The side along the nearest axis
+    # is its width along the pads whatever the yaw.
+    aabb = np.array([0.0696, 0.0696, 0.0703])
+    body = np.array([0.0696, 0.0696, 0.0703])
+    for gy in (0.0, 0.3, -0.7, 1.2):
+        d = robot_utils.pinch_direction(p.getQuaternionFromEuler([0, math.pi, gy]))
+        assert pose_belief.aabb_half_along(d, aabb) == pytest.approx(0.0348)
+    cands = pose_belief.fitted_grasp_candidates(0.3, body, 0.005, aabb)
+    assert [span for _, span in cands] == [pytest.approx(0.0696)]
+    b = BoxelData(id='cup', boxel_type=BoxelType.OBJECT,
+                  min_corner=np.zeros(3), max_corner=aabb.copy())
+    b.yaw, b.yaw_valid, b.body_extents = 0.3, True, body
+    assert pose_belief.believed_margin(b, 0.04, 0.076, 0.005) is not None
+    # A rectangle pinched along its own axes keeps its sides (the axis
+    # nearest the pads is the one the fitted yaw aligns them with).
+    rect = np.array([0.04, 0.02, 0.02])
+    d = robot_utils.pinch_direction(p.getQuaternionFromEuler([0, math.pi, 0.0]))
+    assert pose_belief.aabb_half_along(d, rect) == pytest.approx(0.01)
+    d = robot_utils.pinch_direction(p.getQuaternionFromEuler([0, math.pi, math.pi / 2]))
+    assert pose_belief.aabb_half_along(d, rect) == pytest.approx(0.02)

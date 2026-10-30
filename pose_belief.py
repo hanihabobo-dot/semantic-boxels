@@ -139,8 +139,25 @@ def pad_direction(grasp_yaw: float) -> np.ndarray:
 
 
 def aabb_half_along(pinch_dir_xy, aabb_ext) -> float:
-    """Half the width of the axis-aligned box along a pinch direction."""
-    return pinch_half_extent(pinch_dir_xy, 0.0, aabb_ext)
+    """Half the registry box's side along the axis the pads close nearest
+    to (x when the pinch direction is within 45 deg of it, else y).
+
+    BF#46 (2026-10-30): this was the box's support width along the pinch
+    direction, 0.5 (|d.x| ex + |d.y| ey), which for a pinch away from the
+    axes adds up to the other side.  A cup is a square 69.6 mm box whose
+    fitted yaw is arbitrary (a round footprint), so it read 85 to 98 mm,
+    wider than GRASP_MAX_SPAN, and lost every grasp family, with it every
+    look configuration and the pose commit: the planner had no way to move
+    it (find_dice seed 10 on 1747173593, two of four cups never considered,
+    no plan with their shadows unsearched).  The pads close along the
+    fitted yaw, where a box's width is its own side and a round body's its
+    diameter; the registry box's side along the nearest axis bounds both
+    (a box yawed within 45 deg has sides at least its body extents along
+    them unless its footprint is thinner than 0.41 of its length).
+    """
+    d = np.asarray(pinch_dir_xy, dtype=float)[:2]
+    axis = 0 if abs(float(d[0])) >= abs(float(d[1])) else 1
+    return 0.5 * float(aabb_ext[axis])
 
 
 def sized_pinch_half(pinch_dir_xy, yaw: float, body_extents, aabb_ext) -> float:
@@ -148,9 +165,9 @@ def sized_pinch_half(pinch_dir_xy, yaw: float, body_extents, aabb_ext) -> float:
     but sizes the pinch on the wider of the fitted rectangle and the
     registry AABB along the pads.  The top face can be narrower than the
     body where the pads close (an upturned cup's base, BF#33 seed 0); the
-    AABB covers the whole body.  At a yaw away from the axes the AABB
-    projection overstates a prism (up to 2x for a square at 45 deg),
-    which only widens the aperture and the width window."""
+    AABB covers the whole body, its side along the axis nearest the pads
+    (aabb_half_along; the support projection used before inflated a yawed
+    pinch by up to the other side, BF#46)."""
     fitted = pinch_half_extent(pinch_dir_xy, yaw, body_extents)
     if aabb_ext is None:
         return fitted

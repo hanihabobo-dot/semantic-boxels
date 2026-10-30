@@ -7824,6 +7824,50 @@ BF#45 [DONE]  COMPUTE-KIN CERTIFIES AN APPROACH ONLY WITH ITS CONTACT
   picked, and the die found under it.  The episode then failed for two
   other reasons, BF#47.
 
+BF#46 [DONE]  THE PINCH SPAN READS THE REGISTRY BOX'S SIDE ALONG THE NEAREST
+      AXIS, NOT ITS PROJECTION  (user report, 2026-10-30)
+  WHAT: in the same runs the planner moved b and a, then reported no plan
+  with the shadows of d_cups_ud and e_cups_ud unsearched, the die under
+  e: "in case of 4 bells, it only ever searched/moved to somewhere else
+  twice".  d and e were never candidates: from plan 1 the [M8] init line
+  listed a and b alone as pose-unknown look objects (8 look_config facts,
+  4 per object), and no obj_pose_known fact was ever emitted for d or e.
+  _build_init offers look configurations only to an object with a
+  believed grasp family (pose_belief.believed_margin not None), and the
+  margin was None for both: their registry boxes are square (69.6 and
+  73.5 mm, a cup's footprint from the overhead camera; a and b 56.7 and
+  60.1 mm), their fitted yaw from the M9 rectangle fit is arbitrary for a
+  round footprint, and Q-H (a)'s sizing (2026-10-29) read the box ALONG
+  THE PADS as its support width 0.5 (|d.x| ex + |d.y| ey), which for a
+  yaw more than a few degrees off an axis exceeds GRASP_MAX_SPAN (69.6 mm
+  reads 76 mm at 5 deg, 85 at 15, 98 at 45): no family, no grasp
+  (sample_grasp uses the same candidates), no look configuration, no
+  pose commit, no pick, no plan.  Now pose_belief.aabb_half_along returns
+  half the box's side along the axis nearest the pinch direction: a cup's
+  diameter at any yaw, a box's own side at its fitted yaw (a box yawed
+  within 45 deg has sides at least its body extents along them unless its
+  footprint is thinner than 0.41 of its length).  Q-H (a)'s rule stands,
+  the wider of the fitted rectangle and the registry box; only how the
+  box is read along the pads changed.  The pre-grasp aperture
+  (execution.sized_pinch_half) no longer widens with the yaw either: b's
+  estimate was 35.3 mm against a measured half-width of 28.4; the +8 mm
+  clearance and the tactile close are unchanged.
+  EVIDENCE: the initial registry of the 13:23 run (ours/run_2026-10-30_
+  13-25-12/boxel_data.json, the four boxes above); its six [M8] init
+  lines; tests/test_m9_grasp.py::test_aabb_sizing_uses_the_nearest_axis_
+  side_not_the_projection (the cup keeps a 69.6 mm family at yaw 0.3 and
+  a margin; a rectangle keeps its sides at yaw 0 and pi/2); the existing
+  M9 tests at yaw 0 unchanged.
+  CLAIM EFFECT: arm O's B8 rate, before/after as BF#45.  HONESTY CLASS:
+  planner correctness (belief sizing).
+  RESULT (the BF#45 run): the [M8] init lines list d and e as the look
+  objects (pose unknown: d, e; a and b pose-known at once, their margins
+  9.6 and 8.0 mm against 4 mm radii, d's 3.2 mm and e's 1.3 mm below
+  theirs); plan 1 picked b without an observe, plan 3 observed e, plan 4
+  picked it (measured half-width 35.7 mm, estimate 36.8) and the die
+  appeared under it.  Pre-grasp estimates 30.0 and 28.3 mm for b and a
+  against 35.3 and 35.2 in the GUI runs.  Then BF#47.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
