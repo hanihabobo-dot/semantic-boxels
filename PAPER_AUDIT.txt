@@ -7704,6 +7704,33 @@ BF#42 [FINDING, not analysed]  SEED 10 GUI RUN ON 1747173593:
   CLAIM EFFECT: none (a GUI run, never scored).  HONESTY CLASS: finding.
 
 
+BF#43 [DONE]  PUSH_SNAPSHOT.PS1 NEVER UNPACKED A SNAPSHOT, AND ITS ARCHIVES
+      HELD CRLF TEXT FILES  (found 2026-10-30 by the B8 smoke)
+  WHAT: (1) The script pipes its unpack commands into "ssh cn-04 bash -s".
+  PowerShell ends a string piped into a native command with CRLF, so bash
+  read "fi\r", never closed the if and stopped with "line 7: syntax error:
+  unexpected end of file" after every upload (the script's .Replace of CRs
+  acts inside the string, not on that trailing newline); the 115 MB archive
+  sat in $W/inbox and sbatch found no $W/sb_<sha>.  The remote side now
+  strips every CR (tr -d '\r') before bash, the archive is gzip-tested, and
+  the script stops on a failed scp or unpack instead of printing the sbatch
+  lines.  (2) git archive on this laptop (core.autocrlf=true, no
+  .gitattributes) writes every LF text blob as CRLF: 4566 of the 6801 files
+  of sb_d8b51d4, every .sbatch and .sh among them (Slurm: "Batch script
+  contains DOS line breaks"), the pddl/ files too.  The archive is now made
+  with core.autocrlf=false and holds the commit's blobs byte for byte.
+  (3) The uploaded sb_d8b51d4 was converted in place on cn-04 (sed on the
+  4566 files, read-only again afterwards) and verified: a scratch git index
+  over the directory writes tree fde84285e05bcfb092c9d6620a87829d929cdd02,
+  the tree of commit d8b51d4; the 22 files that still hold CRs hold lone
+  CRs, which git never converts.  BF#40's smoke runs on that directory.
+  EVIDENCE: tools/cluster/push_snapshot.ps1; the laptop reproduction (the
+  same here-string piped into wsl bash -n fails the same way, cat -A shows
+  "fi^M"); git ls-files --eol (no index blob holds CRLF or mixed endings,
+  so the in-place conversion is exact).
+  CLAIM EFFECT: none; nothing of B8 had run.  HONESTY CLASS: infrastructure.
+
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
