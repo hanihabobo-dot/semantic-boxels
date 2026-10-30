@@ -1,0 +1,93 @@
+key: startup
+width: 10
+period_ms: 200
+pingpong: no
+notes: the boxel boots: a power bead at the bottom left corner splits in two and runs round the outline, edges warming from grey to steel blue to cyan, and where the lights meet at the top corner a spark flares
+frame 1
+  ╭────╮
+ ╱    ╱│
+╭────╮ │
+│    │╱
+●────╯
+  kkkkkk
+ k    kk
+kkkkkk k
+k    kk
+Wkkkkk
+frame 2
+  ╭────╮
+ ╱    ╱│
+●────╮ │
+│    │╱
+╰─●──╯
+  kkkkkk
+ k    kk
+Wkkkkk k
+C    kk
+BCWkkk
+frame 3
+  ●────╮
+ ╱    ╱│
+╭────╮ │
+│    │╱
+╰───●╯
+  Wkkkkk
+ C    kk
+Bkkkkk k
+b    kk
+sbBCWk
+frame 4
+  ╭─●──╮
+ ╱    ╱│
+╭────╮ │
+│    │●
+╰────╯
+  BCWkkk
+ b    kk
+skkkkk k
+s    kW
+sssbBC
+frame 5
+  ╭───●╮·
+ ╱    ╱●
+╭────╮ │
+│    │╱
+╰────╯
+  sbBCWkY
+ s    kW
+skkkkk C
+s    kB
+sssssb
+frame 6
+  ╭────╮✶
+ ╱    ╱│ ·
+╭────╮ │
+│    │╱
+╰────╯
+  CCCCWWW
+ C    sW d
+Csssss C
+C    sC
+CCCCCC
+frame 7
+  ╭────╮✦
+ ╱    ╱│ ·
+╭────╮ │
+│    │╱
+╰────╯
+  CCCCCWY
+ C    BC d
+CBBBBB C
+C    BC
+CCCCCC
+frame 8
+  ╭────╮✧
+ ╱    ╱│
+╭────╮ │
+│    │╱
+╰────╯
+  bbbbbbd
+ b    sb
+bsssss b
+b    sb
+Bbbbbb

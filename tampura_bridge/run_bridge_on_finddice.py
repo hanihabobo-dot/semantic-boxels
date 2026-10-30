@@ -28,6 +28,12 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO not in sys.path:
     sys.path.insert(0, REPO)
 
+# The curated console (console_ui, 2026-10-30): installed only when this
+# file runs as the script at --log-level smart, before pybullet's import
+# banner; the raw stdout and stderr go to the run's console_debug.log.
+import console_ui                                # noqa: E402
+console_ui.install_early(__name__)
+
 from tampura.config import config as tconfig    # noqa: E402
 import tampura_environments                      # noqa: E402,F401
 
@@ -147,12 +153,21 @@ def main():
         # BF#39: a GUI run is for watching only and is never scored (P4.6
         # MODE).  Their problems/ listing order differs between the laptop
         # and the cluster (BF#8), so most seeds load another scene here than
+    # The console's start-up note names their scene file the way their
+    # logger does, before the G19 check, so a console reader finds
+    # "Loading scene from" in every captured console as before.
+    if scene.name_seen is not None:
+        console_ui.startup(f"Loading scene from {scene.name_seen}"
+                           + ('' if mismatch else " (the campaign's pinned scene for this seed)"))
         # the campaign map pins; the run goes on with the scene this machine
         # gave the seed, and the ledger's G19 gate records the mismatch (the
         # outcome field then says gate_failed).  Headless runs still stop.
-        print(f"G19: seed {a.global_seed} loaded {scene.name_seen}, the campaign "
-              f"pins {pinned}: a watching or diagnostic run, never scored "
-              f"(the ledger's G19 gate records the mismatch)", flush=True)
+        g19_note = (f"G19: seed {a.global_seed} loaded {scene.name_seen}, the campaign "
+                    f"pins {pinned}: a watching or diagnostic run, never scored "
+                    f"(the ledger's G19 gate records the mismatch)")
+        print(g19_note, flush=True)
+        console_ui.warn(g19_note)       # verbatim on the console as well
+    console_ui.set_context(scene=f"find_dice seed {a.global_seed}")
     stamp('scene_map_asserted')
     cfg = bridge_policy.EpisodeConfig(
         seed=a.global_seed, scene_file=scene.name_seen,
@@ -201,12 +216,18 @@ def main():
         json.dump({'seed': a.global_seed, 'scene_file': scene.name_seen,
                    'switches': dict(cfg.switches), **cfg.out}, f, indent=1,
                   default=str)
-    report.show()
-    print(f"seed {a.global_seed}: outcome {cfg.out['outcome']['status']}, their "
-          f"RolloutHistory rewards[-1] = {history.rewards[-1]}; details in "
-          f"{config['save_dir']}")
+    # The gate table and the outcome line are curated output: on the
+    # terminal (and mirrored into console_debug.log) under the console.
+    with console_ui.terminal():
+        report.show()
+        print(f"seed {a.global_seed}: outcome {cfg.out['outcome']['status']}, their "
+              f"RolloutHistory rewards[-1] = {history.rewards[-1]}; details in "
+              f"{config['save_dir']}")
     return 0 if cfg.out['outcome']['success'] else 1
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    # sys.exit(main()), except that with the console installed the process
+    # ends right after the flush: pybullet's GUI teardown segfaults at
+    # interpreter exit (bash's 'Segmentation fault' line under the console).
+    console_ui.finish(main())

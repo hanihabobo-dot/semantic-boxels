@@ -1,0 +1,93 @@
+key: look
+width: 12
+period_ms: 200
+pingpong: yes
+notes: the eye glides in from the upper left, its cyan view rays shorten and tighten on the box, and the box brightens to bright orange with a glint
+frame 1
+◉ · ·
+ ╲    · · ·
+  ╲
+   ╲   ╭──╮
+▔▔▔▔▔▔▔╰──╯▔
+C c c
+ c    c c c
+  c
+   c   oooo
+kkkkkkkooook
+frame 2
+ ◉  ·
+  ╲   · · ·
+   ╲
+    ╲  ╭──╮
+▔▔▔▔▔▔▔╰──╯▔
+ C  c
+  c   c c c
+   c
+    c  oooo
+kkkkkkkooook
+frame 3
+
+  ◉ · ·
+   ╲    · ·
+    ╲  ╭──╮
+▔▔▔▔▔▔▔╰──╯▔
+
+  C c c
+   c    c c
+    c  oooo
+kkkkkkkooook
+frame 4
+
+   ◉  ·
+    ╲   · ·
+     ╲ ╭──╮
+▔▔▔▔▔▔▔╰──╯▔
+
+   C  c
+    c   c c
+     c Oooo
+kkkkkkkOoook
+frame 5
+
+    ◉ ·
+     ╲  · ·
+      ╲╭──╮
+▔▔▔▔▔▔▔╰──╯▔
+
+    C c
+     c  c c
+      cOOoo
+kkkkkkkOOook
+frame 6
+
+     ◉ ·
+      ╲ · ·
+       ╭──╮
+▔▔▔▔▔▔▔╰──╯▔
+
+     C c
+      c c c
+       OOOo
+kkkkkkkOOOok
+frame 7
+
+      ◉ ·
+       ╲  ·
+       ╭──╮·
+▔▔▔▔▔▔▔╰──╯▔
+
+      C c
+       C  Y
+       OOOOY
+kkkkkkkOOOOk
+frame 8
+
+      ◉ ·
+       ╲  ✦
+       ╭──╮✧
+▔▔▔▔▔▔▔╰──╯▔
+
+      C c
+       C  Y
+       OOOOW
+kkkkkkkOOOOk

@@ -1,0 +1,93 @@
+key: stack
+width: 10
+period_ms: 200
+pingpong: no
+notes: a held orange box arrives, drops onto the yellow box with a sparkle, the gripper opens and rises away, the tower gleams and stands
+frame 1
+ ╵╭──╮╵
+  ╰──╯
+
+   ╭──╮
+▔▔▔╰──╯▔▔▔
+ CooooC
+  oooo
+
+   yyyy
+kkkyyyykkk
+frame 2
+  ╵╭──╮╵
+   ╰──╯
+
+   ╭──╮
+▔▔▔╰──╯▔▔▔
+  CooooC
+   oooo
+
+   yyyy
+kkkyyyykkk
+frame 3
+   ═╤═
+  ╵╭──╮╵
+   ╰──╯
+  ✦╭──╮✦
+▔▔▔╰──╯▔▔▔
+   ccc
+  COOOOC
+   OOOO
+  YYYYYY
+kkkyyyykkk
+frame 4
+   ═╤═
+ ╵ ╭──╮ ╵
+   ╰──╯
+ ✶ ╭──╮ ✶
+▔▔▔╰──╯▔▔▔
+   ccc
+ C OOOO C
+   OOOO
+ Y yyyy Y
+kkkyyyykkk
+frame 5
+ ╵      ╵
+ · ╭──╮ ·
+   ╰──╯
+✧  ╭──╮  ✧
+▔▔▔╰──╯▔▔▔
+ C      C
+ c OOOO c
+   OOOO
+d  yyyy  d
+kkkyyyykkk
+frame 6
+
+   ╭──╮
+   ╰──╯
+·  ╭──╮  ·
+▔▔▔╰──╯▔▔▔
+
+   OOOO
+   OOOO
+d  yyyy  d
+kkkyyyykkk
+frame 7
+       ✧
+   ╭──╮
+   ╰──╯
+   ╭──╮
+▔▔▔╰──╯▔▔▔
+       W
+   OOOO
+   OOOO
+   yyyy
+kkkyyyykkk
+frame 8
+
+   ╭──╮
+   ╰──╯
+   ╭──╮
+▔▔▔╰──╯▔▔▔
+
+   OOOO
+   OOOO
+   yyyy
+kkkyyyykkk

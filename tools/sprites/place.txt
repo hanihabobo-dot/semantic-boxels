@@ -1,0 +1,93 @@
+key: place
+width: 10
+period_ms: 180
+pingpong: no
+notes: the gripper lowers the orange box onto the table, settle marks flash at its feet, the fingers spread open and the empty gripper rises away, leaving the box standing
+frame 1
+    │
+  ╵╭──╮╵
+   ╰──╯
+
+▔▔▔▔▔▔▔▔▔▔
+    C
+  COOOOC
+   OOOO
+
+kkkkkkkkkk
+frame 2
+   ═╤═
+    │
+  ╵╭──╮╵
+   ╰──╯
+▔▔▔▔▔▔▔▔▔▔
+   CCC
+    C
+  COOOOC
+   OOOO
+kkkkkkkkkk
+frame 3
+
+   ═╤═
+    │
+  ╵╭──╮╵
+▔▔✧╰──╯✧▔▔
+
+   CCC
+    C
+  COOOOC
+kkYOOOOYkk
+frame 4
+
+   ═╤═
+    │
+ ╵ ╭──╮ ╵
+▔▔·╰──╯·▔▔
+
+   ccc
+    c
+ C oooo C
+kkdoooodkk
+frame 5
+
+   ═╤═
+    │
+╵  ╭──╮  ╵
+▔▔▔╰──╯▔▔▔
+
+   ccc
+    c
+C  oooo  C
+kkkooookkk
+frame 6
+   ═╤═
+    │
+╵        ╵
+   ╭──╮
+▔▔▔╰──╯▔▔▔
+   CCC
+    C
+C        C
+   oooo
+kkkooookkk
+frame 7
+    │
+ ╵      ╵
+
+   ╭──╮
+▔▔▔╰──╯▔▔▔
+    C
+ C      C
+
+   oooo
+kkkooookkk
+frame 8
+    │
+  ╵    ╵
+
+   ╭──╮
+▔▔▔╰──╯▔▔▔
+    c
+  c    c
+
+   oooo
+kkkooookkk

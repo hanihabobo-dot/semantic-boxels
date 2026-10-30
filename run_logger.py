@@ -8,10 +8,13 @@ Provides a RunLogger that:
   - Supports four verbosity levels via a single parameter
 
 Verbosity levels:
-  - 'smart'   (default): Claude-Code-style filtered console output —
-                drops PyBullet/PDDLStream boilerplate, dedupes repeated
-                blocks, and reformats the surviving lines into a clean
-                narrative.  Full raw stream still goes to the log file.
+  - 'smart'   (default): the curated console (console_ui.py): a header,
+                one line per planner call, per dispatched action with its
+                outcome, per sense result and notable observation,
+                warnings as single lines, a closing summary.  The raw
+                stdout and stderr of the whole process go to
+                <run_dir>/console_debug.log; our narration goes to the
+                log file as before.
   - 'normal':   Console at INFO level, raw stdout untouched.
   - 'quiet':    Console at WARNING level, raw stdout untouched.
   - 'verbose':  Console at DEBUG level, raw stdout untouched.
@@ -46,7 +49,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
-from smart_filter import SmartConsoleFilter
+import console_ui
 
 if TYPE_CHECKING:
     from boxel_data import BoxelRegistry
@@ -56,8 +59,9 @@ NORMAL = logging.INFO
 VERBOSE = logging.DEBUG
 
 # 'smart' is a console-presentation mode, not a filter level — the
-# console handler still runs at INFO so all narrative ``logging.info``
-# calls reach the SmartConsoleFilter, which decides what to render.
+# console handler still runs at INFO, into the raw stream (the debug
+# file), so console_debug.log reads like the old raw terminal; the
+# curated console takes ERROR and above through its own handler.
 _LEVEL_MAP = {
     'quiet':   QUIET,
     'normal':  NORMAL,
@@ -69,16 +73,25 @@ VALID_VERBOSITIES = ('smart', 'normal', 'quiet', 'verbose')
 
 
 class _TeeStream:
-    """Duplicates writes to both the original stream and a log file."""
+    """Duplicates writes to both the original stream and a log file.  With
+    a line hook (the curated console's narration reader) every complete
+    line is handed over as well, after it is written."""
 
-    def __init__(self, original, log_file):
+    def __init__(self, original, log_file, line_hook=None):
         self.original = original
         self.log_file = log_file
+        self._line_hook = line_hook
+        self._line_buf = ''
 
     def write(self, text):
         self.original.write(text)
         self.log_file.write(text)
         self.log_file.flush()
+        if self._line_hook is not None and text:
+            self._line_buf += text
+            while '\n' in self._line_buf:
+                line, self._line_buf = self._line_buf.split('\n', 1)
+                self._line_hook(line)
 
     def flush(self):
         self.original.flush()
@@ -122,15 +135,19 @@ class RunLogger:
         self._log_file = open(self.log_path, 'w', encoding='utf-8')
         self._original_stdout = sys.stdout
 
-        # In smart mode the console target is wrapped by a filter that
-        # rewrites the noisy parts.  Other modes keep the raw stdout so
-        # PyBullet/PDDLStream output appears verbatim.  The tee always
-        # forks a copy to the log file, untouched, for full fidelity.
+        # In smart mode the curated console (console_ui) owns the terminal
+        # and the raw stdout is the debug file next to this log; the tee's
+        # line hook feeds it our narration.  Other modes keep the raw
+        # stdout so PyBullet/PDDLStream output appears verbatim.  The tee
+        # always forks a copy to the log file, untouched, for full fidelity.
+        self._console_target = self._original_stdout
         if verbosity == 'smart':
-            self._console_target = SmartConsoleFilter(self._original_stdout)
+            self._console = console_ui.attach(self.run_dir, self.log_path)
+            line_hook = self._console.narration
         else:
-            self._console_target = self._original_stdout
-        sys.stdout = _TeeStream(self._console_target, self._log_file)
+            self._console = None
+            line_hook = None
+        sys.stdout = _TeeStream(self._console_target, self._log_file, line_hook)
 
         console_level = _LEVEL_MAP.get(verbosity, NORMAL)
 
@@ -152,6 +169,8 @@ class RunLogger:
         ch.setFormatter(logging.Formatter('[%(levelname)-7s] %(message)s'))
         root.addHandler(ch)
         self._console_handler = ch
+        if self._console is not None:
+            root.addHandler(self._console.log_handler())
 
         logging.info('Run started  : %s', self._timestamp)
         logging.info('Log file     : %s', self.log_path)
@@ -188,14 +207,8 @@ class RunLogger:
         root = logging.getLogger()
         root.removeHandler(self._file_handler)
         root.removeHandler(self._console_handler)
-
-        # Flush the smart filter so any buffered partial line lands on
-        # screen before we restore the original stdout.
-        if isinstance(self._console_target, SmartConsoleFilter):
-            try:
-                self._console_target.flush()
-            except Exception:
-                pass
+        if self._console is not None:
+            console_ui.detach()
 
         sys.stdout = self._original_stdout
         self._log_file.close()
@@ -304,6 +317,9 @@ def ledger_event(kind: str, **fields) -> None:
     except Exception as e:
         _ledger_write_errors += 1
         print(f"  WARNING: ledger write failed ({kind}): {e}")
+    # The curated console reads the row after it is written (a no-op
+    # without a console; it never raises and feeds no decision).
+    console_ui.on_ledger_event(kind, row)
 
 
 def dispatch_begin(plan_id, step, action, args, plan_obj=None) -> None:
@@ -633,6 +649,12 @@ def report_run_outcome(
         except Exception as e:
             print(f"  WARNING: could not write timing_summary.json: {e}")
     print("=" * 60)
+    # The curated console's closing block (a no-op without a console).
+    console_ui.summary(success=success, exit_reason=exit_reason,
+                       plan_count=plan_count, plan_times=plan_times,
+                       total_plan_time=total_plan_time,
+                       log_path=(run_logger.log_path if run_logger is not None
+                                 else None))
 
 
 # ---------------------------------------------------------------------------
@@ -665,11 +687,13 @@ def parse_pipeline_args(argv=None):
     parser.add_argument('--log-level',
                         choices=['smart', 'normal', 'quiet', 'verbose'],
                         default='smart',
-                        help='Console verbosity. "smart" (default) renders a '
-                             'Claude-Code-style narrative and drops PyBullet / '
-                             'PDDLStream boilerplate. "normal", "quiet", and '
-                             '"verbose" leave stdout untouched. The log file '
-                             'always captures everything.')
+                        help='Console verbosity. "smart" (default) shows the '
+                             'curated console (header, planner calls, actions '
+                             'with outcomes, sense results, warnings, summary) '
+                             'and sends the raw stdout and stderr of the whole '
+                             'process to <run_dir>/console_debug.log. "normal", '
+                             '"quiet", and "verbose" leave stdout untouched. '
+                             'The log file always captures everything.')
     parser.add_argument('--scene', choices=['default', 'mixed',
                                             'scalability', 'stack',
                                             'random-pairs'],

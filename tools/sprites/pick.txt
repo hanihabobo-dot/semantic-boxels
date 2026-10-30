@@ -1,0 +1,93 @@
+key: pick
+width: 10
+period_ms: 180
+pingpong: no
+notes: the empty gripper opens wide and descends over the orange box, the fingers close in with a spark, and it lifts the lit box off the table
+frame 1
+    │
+  ╵    ╵
+
+   ╭──╮
+▔▔▔╰──╯▔▔▔
+    c
+  c    c
+
+   oooo
+kkkooookkk
+frame 2
+   ═╤═
+    │
+ ╵      ╵
+   ╭──╮
+▔▔▔╰──╯▔▔▔
+   CCC
+    C
+ C      C
+   oooo
+kkkooookkk
+frame 3
+
+   ═╤═
+    │
+╵  ╭──╮  ╵
+▔▔▔╰──╯▔▔▔
+
+   CCC
+    C
+C  oooo  C
+kkkooookkk
+frame 4
+
+   ═╤═
+    │
+ ╵ ╭──╮ ╵
+▔▔▔╰──╯▔▔▔
+
+   ccc
+    c
+ C oooo C
+kkkooookkk
+frame 5
+
+   ═╤═
+    │   ✦
+  ╵╭──╮╵
+▔▔▔╰──╯▔▔▔
+
+   ccc
+    c   Y
+  COOOOC
+kkkOOOOkkk
+frame 6
+   ═╤═
+    │   ✧
+  ╵╭──╮╵
+   ╰──╯
+▔▔▔▔▔▔▔▔▔▔
+   CCC
+    C   Y
+  COOOOC
+   OOOO
+kkkkkkkkkk
+frame 7
+    │   ·
+  ╵╭──╮╵
+   ╰──╯
+
+▔▔▔▔▔▔▔▔▔▔
+    C   d
+  COOOOC
+   OOOO
+
+kkkkkkkkkk
+frame 8
+    │
+  ╵╭──╮╵
+   ╰──╯
+
+▔▔▔▔▔▔▔▔▔▔
+    c
+  COOOOC
+   OOOO
+
+kkkkkkkkkk

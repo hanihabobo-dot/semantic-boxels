@@ -1,0 +1,100 @@
+key: sense
+width: 12
+period_ms: 180
+pingpong: no
+notes: an eye sends a bright scan line sweeping through the grey shade behind a box, and the shade clears where it has passed
+frame 1
+◉
+  · ·
+      ·║░░░░
+  ╭──╮ ║░░░░
+▔▔╰──╯▔║░░░░
+C
+  c c
+      cWkKKK
+  yyyy WkKKK
+kkyyyykWkKKK
+
+frame 2
+◉
+  · · ·
+       ·║░░░
+  ╭──╮  ║░░░
+▔▔╰──╯▔▔║░░░
+C
+  c c c
+       cWkKK
+  yyyy  WkKK
+kkyyyykkWkKK
+
+frame 3
+◉ ·
+    · ·
+        ·║░░
+  ╭──╮   ║░░
+▔▔╰──╯▔▔▔║░░
+C c
+    c c
+        cWkK
+  yyyy   WkK
+kkyyyykkkWkK
+
+frame 4
+◉ ·
+    · · ·
+         ·║░
+  ╭──╮    ║░
+▔▔╰──╯▔▔▔▔║░
+C c
+    c c c
+         cWk
+  yyyy    Wk
+kkyyyykkkkWk
+
+frame 5
+◉ ·
+    · · ·
+          ·║
+  ╭──╮     ║
+▔▔╰──╯▔▔▔▔▔║
+C c
+    c c c
+          cW
+  yyyy     W
+kkyyyykkkkkW
+
+frame 6
+◉ ·
+    · · ·
+          ·✦
+  ╭──╮     ✧
+▔▔╰──╯▔▔▔▔▔▔
+C c
+    c c c
+          cY
+  yyyy     W
+kkyyyykkkkkk
+
+frame 7
+◉ ·
+    · ·
+           ░
+  ╭──╮  ░
+▔▔╰──╯▔▔▔░▔▔
+c c
+    c c
+           K
+  yyyy  K
+kkyyyykkkKkk
+
+frame 8
+◉
+  · ·
+       │ ░ ░
+  ╭──╮ │░ ░
+▔▔╰──╯▔│▔░▔░
+c
+  c c
+       c K K
+  yyyy cK K
+kkyyyykckKkK

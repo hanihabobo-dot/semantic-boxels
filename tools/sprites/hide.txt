@@ -1,0 +1,93 @@
+key: hide
+width: 12
+period_ms: 220
+pingpong: no
+notes: the gripper carries the orange box right (gold speed dots), lowers it beside a dark screen with a spark and lets go, a grey shade closes over half the box while the dim eye beyond the screen looks away, and the gripper lifts off, closes and retreats left
+frame 1
+ ═╤═
+  │
+╵╭──╮╵   ▌
+ ╰──╯░░░░▌◌·
+▔▔▔▔▔░░░░▌▔▔
+ CCC
+  C
+COOOOC   K
+ OOOOKKKKKkK
+kkkkkKKKKKkk
+frame 2
+  ═╤═
+   │
+ ╵╭──╮╵  ▌
+ ·╰──╯░░░▌◌·
+▔▔▔▔▔░░░░▌▔▔
+  CCC
+   C
+ COOOOC  K
+ dOOOOKKKKkK
+kkkkkKKKKKkk
+frame 3
+   ═╤═
+    │
+  ╵╭──╮╵ ▌
+ ··╰──╯░░▌◌·
+▔▔▔▔▔░░░░▌▔▔
+   CCC
+    C
+  COOOOC K
+ ddOOOOKKKkK
+kkkkkKKKKKkk
+frame 4
+
+   ═╤═
+    │    ▌
+  ╵╭──╮╵░▌◌·
+▔▔✧╰──╯░░▌▔▔
+
+   CCC
+    C    K
+  COOOOCKKkK
+kkYOOOOKKKkk
+frame 5
+
+   ═╤═
+    │    ▌
+ ╵ ╭──░░╵▌◌·
+▔▔·╰──░░░▌▔▔
+
+   ccc
+    c    K
+ C oooKKCKkK
+kkdoooKKKKkk
+frame 6
+   ═╤═
+    │
+ ╵      ╵▌
+   ╭─░░░░▌◌·
+▔▔▔╰─░░░░▌▔▔
+   CCC
+    C
+ C      CK
+   ooKKKKKkK
+kkkooKKKKKkk
+frame 7
+   ═╤═
+    │
+  ╵    ╵ ▌
+   ╭─░░░░▌◌·
+▔▔▔╰─░░░░▌▔▔
+   ccc
+    c
+  C    C K
+   ooKKKKKkK
+kkkooKKKKKkk
+frame 8
+  ═╤═
+   │
+ ╵    ╵  ▌
+   ╭─░░░░▌◌·
+▔▔▔╰─░░░░▌▔▔
+  CCC
+   C
+ C    C  K
+   ooKKKKKkK
+kkkooKKKKKkk

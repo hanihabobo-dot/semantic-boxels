@@ -1,0 +1,93 @@
+key: move
+width: 12
+period_ms: 150
+pingpong: no
+notes: the empty gripper travels left to right above the table, leaves at the right edge and comes back in from the left, a fading two-dot trail behind it
+frame 1
+ ═╤═        
+  │         
+╵    ╵      
+            
+▔▔▔▔▔▔▔▔▔▔▔▔
+ ccc        
+  c         
+C    C      
+            
+kkkkkkkkkkkk
+frame 2
+ · ═╤═      
+    │       
+· ╵    ╵    
+            
+▔▔▔▔▔▔▔▔▔▔▔▔
+ k ccc      
+    c       
+k C    C    
+            
+kkkkkkkkkkkk
+frame 3
+ · · ═╤═    
+      │     
+· · ╵    ╵  
+            
+▔▔▔▔▔▔▔▔▔▔▔▔
+ K k ccc    
+      c     
+K k C    C  
+            
+kkkkkkkkkkkk
+frame 4
+   · · ═╤═  
+        │   
+  · · ╵    ╵
+            
+▔▔▔▔▔▔▔▔▔▔▔▔
+   K k ccc  
+        c   
+  K k C    C
+            
+kkkkkkkkkkkk
+frame 5
+     · · ═╤═
+          │ 
+    · · ╵   
+            
+▔▔▔▔▔▔▔▔▔▔▔▔
+     K k ccc
+          c 
+    K k C   
+            
+kkkkkkkkkkkk
+frame 6
+       · · ═
+            
+      · · ╵ 
+            
+▔▔▔▔▔▔▔▔▔▔▔▔
+       K k c
+            
+      K k C 
+            
+kkkkkkkkkkkk
+frame 7
+            
+            
+ ╵          
+            
+▔▔▔▔▔▔▔▔▔▔▔▔
+            
+            
+ C          
+            
+kkkkkkkkkkkk
+frame 8
+╤═          
+│           
+   ╵        
+            
+▔▔▔▔▔▔▔▔▔▔▔▔
+cc          
+c           
+   C        
+            
+kkkkkkkkkkkk

@@ -1,0 +1,93 @@
+key: home
+width: 12
+period_ms: 180
+pingpong: no
+notes: the empty gripper glides right, hops up into its docking bracket under the house pad, and the pad lights up green with sparks
+frame 1
+        ⌂
+      ╘═══╛
+· ═╤═
+   │
+  ╵ ╵
+        g
+      ggggg
+d CCC
+   C
+  C C
+frame 2
+        ⌂
+      ╘═══╛
+ · ═╤═
+    │
+   ╵ ╵
+        g
+      ggggg
+ d CCC
+    C
+   C C
+frame 3
+        ⌂
+      ╘═══╛
+· · ═╤═
+     │
+    ╵ ╵
+        g
+      ggggg
+d d CCC
+     C
+    C C
+frame 4
+        ⌂
+      ╘═══╛
+ · · ═╤═
+      │
+     ╵ ╵
+        g
+      ggggg
+ d d CCC
+      C
+     C C
+frame 5
+        ⌂
+      ╘═══╛
+  · · ═╤═
+       │
+      ╵ ╵
+        g
+      ggggg
+  d d CCC
+       C
+      C C
+frame 6
+      ✦ ⌂ ✦
+      ╘═╤═╛
+        │
+       ╵ ╵
+
+      Y G Y
+      GCCCG
+        C
+       C C
+
+frame 7
+     ✧  ⌂  ✧
+      ╘═╤═╛
+        │
+       ╵ ╵
+
+     Y  G  Y
+      GcccG
+        c
+       c c
+
+frame 8
+     ·  ⌂  ·
+      ╘═╤═╛
+        │
+       ╵ ╵
+
+     d  G  d
+      GcccG
+        c
+       c c
+

@@ -71,6 +71,11 @@ except ImportError:
         f"or invoke via scripts/_run_in_wsl.sh).\n"
     )
     sys.exit(2)
+# The curated console (console_ui, 2026-10-30): installed only when this
+# file runs as the script at --log-level smart, before pybullet's import
+# banner, so the terminal shows the curated lines and nothing else.
+import console_ui
+console_ui.install_early(__name__)
 import pybullet as p
 
 from boxel_env import (BoxelTestEnv, SceneConfig,
@@ -568,6 +573,19 @@ def main(gui=True, run_logger=None, scene_config=None,
 
     # audit #10 — uniform-grid baseline.  Toggle BoxelTestEnv's
     # free-space dispatch and (re)build the lattice at the requested
+    # The curated console's header (a no-op without console_ui installed).
+    _switch_text = ', '.join(f"{k} {'on' if v else 'off'}"
+                             for k, v in pose_belief.SWITCHES.items())
+    console_ui.header(
+        scene=(f"{run_config.get('scene')} seed {run_config.get('seed')}, "
+               f"{run_config.get('n_occluders')} occluders, "
+               f"{run_config.get('n_targets')} targets, "
+               f"{run_config.get('n_hidden')} hidden" if run_config else None),
+        goal=(goal_kind + (f" {target_name}" if target_name else "")
+              + (" at home" if goal_at_home else "")),
+        switches=(f"{_switch_text}, grip squeeze "
+                  f"{robot_utils.GRIP_SQUEEZE * 1000:g} mm, planner "
+                  f"{getattr(args, 'planner', '?')}"))
     # cell size before any boxel/registry work in Phase 2.  Default
     # path (baseline='semantic') leaves env.use_uniform_grid=False, so
     # generate_free_space falls through to the octree pipeline as before.
@@ -3020,4 +3038,7 @@ if __name__ == "__main__":
         telemetry.disable()
         world_eye.disable()
         logger.close()
-    sys.exit(0 if success else 1)
+    # sys.exit, except that with the console installed the process ends
+    # right after the flush: pybullet's GUI teardown segfaults at
+    # interpreter exit (bash's 'Segmentation fault' line under the console).
+    console_ui.finish(0 if success else 1)

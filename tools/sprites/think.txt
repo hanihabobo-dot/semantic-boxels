@@ -1,0 +1,71 @@
+key: think
+width: 12
+period_ms: 160
+pingpong: no
+notes: the steel-blue boxel sits still while three thought sparkles circle it, glinting white in front and twinkling violet behind, and grey thought dots rise beside it
+frame 1
+    ╭────╮
+   ╱✧   ╱│ …
+  ╭────╮ │✧
+  │✷   │╱
+  ╰────╯   ·
+    ssssss
+   sv   ss k
+  ssssss sv
+  sW   ss
+  ssssss   k
+frame 2
+  ✦ ╭────╮ …
+   ╱    ╱│✦
+  ╭────╮ │
+  │ ✶  │╱  ·
+  ╰────╯
+  p ssssss k
+   s    ssp
+  ssssss s
+  s M  ss  k
+  ssssss
+frame 3
+    ╭────╮✧
+ ✧ ╱    ╱│
+  ╭────╮ │ ‥
+  │  ✷ │╱
+  ╰────╯
+    ssssssv
+ v s    ss
+  ssssss s k
+  s  W ss
+  ssssss
+frame 4
+    ╭────╮
+   ╱   ·╱│ …
+✦ ╭────╮ │
+  │   ✶│╱
+  ╰────╯   ·
+    ssssss
+   s   vss k
+p ssssss s
+  s   Mss
+  ssssss   k
+frame 5
+    ╭────╮ …
+   ╱  ✧ ╱│
+  ╭────╮ │
+✧ │    │╱  ·
+  ╰────╯ ✷
+    ssssss k
+   s  v ss
+  ssssss s
+v s    ss  k
+  ssssss W
+frame 6
+    ╭────╮
+   ╱ ·  ╱│
+  ╭────╮ │ ‥
+  │    │╱ ✦
+ ✶╰────╯
+    ssssss
+   s v  ss
+  ssssss s k
+  s    ss p
+ Mssssss

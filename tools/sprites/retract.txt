@@ -1,0 +1,93 @@
+key: retract
+width: 12
+period_ms: 200
+pingpong: no
+notes: the eye pulls back up and to the left; its view cone widens and lights the table until all of it is covered
+frame 1
+
+       ◉
+      ╱ ╲
+      ╭──╮
+▔▔▔▔▔▔╰──╯▔▔
+
+       C
+      c c
+      OOOO
+kkkkkkOOOOkk
+frame 2
+
+     ⇠ ◉
+      ╱ ╲
+      ╭──╮
+▔▔▔▔▔▔╰──╯▔▔
+
+     k C
+      c c
+      OOOO
+kkkkkkOOOOkk
+frame 3
+     ⇠ ◉
+      ╱ ╲
+     ╱   ╲
+    ╱ ╭──╮ ·
+▔▔▔▔▔▔╰──╯▔▔
+     k C
+      c c
+     c   c
+    c OOOO c
+kkkCccOOOOcc
+frame 4
+    ⇠ ◉
+     ╱ ╲
+    ╱    ·
+   ╱  ╭──╮ ·
+▔▔▔▔▔▔╰──╯▔▔
+    k C
+     c c
+    c    c
+   c  oooo c
+kkCcccoooocc
+frame 5
+   ⇠ ◉
+    ╱  ·
+   ╱     ·
+  ╱   ╭──╮ ·
+▔▔▔▔▔▔╰──╯▔▔
+   k C
+    c  c
+   c     c
+  c   oooo c
+kCccccoooocc
+frame 6
+  ⇠ ◉
+   ╱  ·
+  ╱      ·
+ ╱    ╭──╮ ·
+▔▔▔▔▔▔╰──╯▔▔
+  k C
+   c  c
+  c      c
+ c    oooo c
+Ccccccoooocc
+frame 7
+    ◉
+   ╱  ·
+  ╱      ·
+ ╱    ╭──╮ ·
+✦▔▔▔▔▔╰──╯▔✦
+    C
+   c  c
+  c      c
+ c    oooo c
+YcccccoooocY
+frame 8
+    ◉
+   ╱  ·
+  ╱      ·
+ ╱    ╭──╮ ·
+✧▔▔▔▔▔╰──╯▔✧
+    C
+   c  c
+  c      c
+ c    oooo c
+dcccccoooocd

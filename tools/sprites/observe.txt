@@ -1,0 +1,82 @@
+key: observe
+width: 12
+period_ms: 200
+pingpong: yes
+notes: a hexagonal magnifying glass slides back and forth over the orange box; the box columns under the lens light bright and a white glint swells on the glass as it passes the centre
+frame 1
+     ╱
+╱▔▔╲╱
+╲▁▁╱
+   ╭──╮
+▔▔▔╰──╯▔▔▔▔▔
+     c
+CCCCc
+CCCC
+   oooo
+kkkooookkkkk
+frame 2
+      ╱
+ ╱✧▔╲╱
+ ╲▁▁╱
+   ╭──╮
+▔▔▔╰──╯▔▔▔▔▔
+      c
+ CWCCc
+ CCCC
+   Oooo
+kkkOoookkkkk
+frame 3
+       ╱
+  ╱✦▔╲╱
+  ╲▁▁╱
+   ╭──╮
+▔▔▔╰──╯▔▔▔▔▔
+       c
+  CWCCc
+  CCCC
+   OOoo
+kkkOOookkkkk
+frame 4
+        ╱
+   ╱✶▔╲╱
+   ╲▁▁╱
+   ╭──╮
+▔▔▔╰──╯▔▔▔▔▔
+        c
+   CWCCc
+   CCCC
+   oOOo
+kkkoOOokkkkk
+frame 5
+         ╱
+    ╱✦▔╲╱
+    ╲▁▁╱
+   ╭──╮
+▔▔▔╰──╯▔▔▔▔▔
+         c
+    CWCCc
+    CCCC
+   ooOO
+kkkooOOkkkkk
+frame 6
+          ╱
+     ╱✧▔╲╱
+     ╲▁▁╱
+   ╭──╮
+▔▔▔╰──╯▔▔▔▔▔
+          c
+     CWCCc
+     CCCC
+   oooO
+kkkoooOkkkkk
+frame 7
+           ╱
+      ╱▔▔╲╱
+      ╲▁▁╱
+   ╭──╮
+▔▔▔╰──╯▔▔▔▔▔
+           c
+      CCCCc
+      CCCC
+   oooo
+kkkooookkkkk

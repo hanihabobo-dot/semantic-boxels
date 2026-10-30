@@ -1,0 +1,93 @@
+key: carry
+width: 12
+period_ms: 150
+pingpong: no
+notes: the gripper with the orange box between its fingers travels left to right above the table, leaves at the right edge and comes back in from the left
+frame 1
+ ═╤═        
+╵╭──╮╵      
+ ╰──╯       
+            
+▔▔▔▔▔▔▔▔▔▔▔▔
+ ccc        
+COOOOC      
+ oooo       
+            
+kkkkkkkkkkkk
+frame 2
+   ═╤═      
+· ╵╭──╮╵    
+·  ╰──╯     
+            
+▔▔▔▔▔▔▔▔▔▔▔▔
+   ccc      
+k COOOOC    
+k  oooo     
+            
+kkkkkkkkkkkk
+frame 3
+     ═╤═    
+· · ╵╭──╮╵  
+· ·  ╰──╯   
+            
+▔▔▔▔▔▔▔▔▔▔▔▔
+     ccc    
+K k COOOOC  
+K k  oooo   
+            
+kkkkkkkkkkkk
+frame 4
+       ═╤═  
+  · · ╵╭──╮╵
+  · ·  ╰──╯ 
+            
+▔▔▔▔▔▔▔▔▔▔▔▔
+       ccc  
+  K k COOOOC
+  K k  oooo 
+            
+kkkkkkkkkkkk
+frame 5
+         ═╤═
+    · · ╵╭──
+    · ·  ╰──
+            
+▔▔▔▔▔▔▔▔▔▔▔▔
+         ccc
+    K k COOO
+    K k  ooo
+            
+kkkkkkkkkkkk
+frame 6
+           ═
+      · · ╵╭
+      · ·  ╰
+            
+▔▔▔▔▔▔▔▔▔▔▔▔
+           c
+      K k CO
+      K k  o
+            
+kkkkkkkkkkkk
+frame 7
+            
+╮╵          
+╯           
+            
+▔▔▔▔▔▔▔▔▔▔▔▔
+            
+OC          
+o           
+            
+kkkkkkkkkkkk
+frame 8
+╤═          
+──╮╵        
+──╯         
+            
+▔▔▔▔▔▔▔▔▔▔▔▔
+cc          
+OOOC        
+ooo         
+            
+kkkkkkkkkkkk
