@@ -3,10 +3,12 @@
 #   pwsh tools/watch.ps1 -Seed 7      another find_dice seed
 #   pwsh tools/watch.ps1 -Ours        our own holding scene, seed 0
 #   pwsh tools/watch.ps1 -Off         the same without M8-M10 (the old pipeline)
+#   pwsh tools/watch.ps1 -LightGrip   GF10's 0.5 mm pick squeeze (BF#38)
 # Never start it while another pipeline run is going (pddlstream temp/ race).
-param([int]$Seed = 0, [switch]$Ours, [switch]$Off)
+param([int]$Seed = 0, [switch]$Ours, [switch]$Off, [switch]$LightGrip)
 $S = '/mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels'
 $sw = if ($Off) { '--m8 off --m9 off --m10 off --pick-aperture-from-pose off' } else { '' }
+if ($LightGrip) { $sw += ' --grip-squeeze-mm 0.5' }
 if ($Ours) {
     $cmd = "cd $S && PYTHONHASHSEED=0 /root/armO-venvA/bin/python test_full_pipeline.py " +
            "--scene random-pairs --seed $Seed --goal holding --n-occluders 2 $sw"

@@ -4833,7 +4833,8 @@ Q14 GF10, the die loss on the move home (BF#11: 91 of 96 probe trials; BF#14
     accepted M8-M10 configuration, it runs after M9's BF#13 acceptance,
     and a remedy qualifies only with M9 and the aperture rule ON.  Nothing
     in the samplers plan is a remedy for GF10 (seed 0 with M8-M10 on still
-    loses the die on the move home, BF#33).
+    loses the die on the move home, BF#33).  RUN 2026-10-30 (BF#38): the
+    0.5 mm squeeze qualifies (die 93 of 96); default off until accepted.
 Q15PDDLStream's stream statistics (BF#14 RG1.12): every solve() loads and
     rewrites statistics/py3/boxel-streams.pkl in the working directory, so
     arm O episodes and acceptance arms depend on the runs before them.
@@ -7501,6 +7502,62 @@ BF#37 [OPEN, decision]  PHYSICAL DIE CARRY FIRST; THEN ONE SUCCESS TEST
     3. A GUI run of seed 0 in which the die is carried home.
   CLAIM EFFECT: arm O keeps D1's whole pipeline with physical execution.
   HONESTY CLASS: evaluation protocol.
+
+BF#38 [DONE, measurement and decision]  GF10: Q14'S PROBE; THE 0.5 MM
+      SQUEEZE QUALIFIES  (BF#37 item 1, 2026-10-30)
+  WHAT: tools/_probe_q14_grip.py, committed with its levels before the
+  first run (01047dc), run serially in the local arm T venv (Q16's
+  deviation, as BF#11).  B1(i)'s set-up on their empty table with D9's
+  values: per payload class and per cell of W's 96 (5 cm grid), the arm at
+  the class's post-place lift pose (top-down, yaw 0, the pick contact height
+  plus 0.10 m), the pads at the aperture rule's opening (pose radius 0), a
+  static body of the class created between them at the pick's contact
+  height (top 5 mm above the EE, or D8's floor), close_gripper_until_contact
+  at 60 N, the declared mass and inertia, 60 settle steps,
+  move_robot_smooth to DEFAULT_ARM_POS with the endpoint settle and
+  hold_at_config with HOME_HOLD_STEP_CAP.  HELD = both pads on the body at
+  >= 0.5 N after the hold.  Payloads: their die and five cup classes
+  (create_ycb, D9's masses, inertias and frictions), the 100 g control (our
+  40 mm cube class) and BF#37's block check (our 60 x 60 x 75 mm, 0.5 kg
+  block class).  M9 and the aperture rule ON (the body is axis-aligned with
+  the pads, so the M9 and the AABB pinch coincide), no retry, masses and
+  frictions as declared.  QUALIFIES: die >= 95 % AND every cup class
+  >= 95 % (stricter than Q14's "a cup-class body") AND the cube and the
+  block >= 95 % or not below base.  Levels in Q14's order, smallest
+  departure first: squeeze 2, 1, 0.5 mm, then caps 40 N, 20 N; speed 0.5,
+  0.25; solver iterations 200, substeps 4; the table pick last.
+  RESULT, held of 96 (die / cups a b c d e / cube / block):
+    base (3 mm)   1 / 87 96 77 93 96 / 94 / 96
+    2 mm          0 / 96 96 94 96 96 / 95 / 96
+    1 mm         18 / 96 95 78 96 96 / 96 / 96
+    0.5 mm       93 / 96 96 94 96 96 / 95 / 96   QUALIFIES
+  The first qualifying level is 0.5 mm, so by Q14's rule it is adopted and
+  the later levels and factors did not run.  Every grip closed with both
+  pads in all trials; every loss happened in the carry.  At 0.5 mm the
+  three lost dice settled at 1.8 to 3.0 N (median of the held ones 3.8 N at
+  home), the two lost c cups slipped within 50 steps, the lost cube at step
+  157.  Disclosures: the grip is light; in held trials the pad force dips
+  during the carry (median minimum: die 0.81 N, cube 0.11 N, contact
+  flicker on one pad included) and recovers by home, so a held body may
+  shift in the hand on the way; the cube's and the block's at-home test
+  passes in 96 of 96 at 0.5 mm against 70 and 60 of 96 at 3 mm (the
+  overdrive's pad force loads the arm's hold), which the re-measure of
+  HOME_HOLD_STEP_CAP (BF#14) must take into account.
+  CODE: robot_utils.GRIP_SQUEEZE (3 mm) is the squeeze execute_pick's close
+  holds; main() sets it from --grip-squeeze-mm {3, 0.5} (default 3, run
+  config records it); the bridge driver passes it through like M8 to M10;
+  tools/watch.ps1 -LightGrip turns it on.  Pipeline-wide: the one pick
+  close of every scene, no find_dice-only path.  Default OFF until its
+  acceptance: B3's and BF#13's test on our scenes (Q14), not run yet.
+  SEED 0 (find_dice, arm O, headless, --grip-squeeze-mm 0.5, local):
+  success, reward 1.0, every gate passes; the die picked at 3.28 N and
+  scoring's final world has it between both pads at >= 0.5 N with the arm
+  at home (BF#33 lost it on the move home at 3 mm).  One episode, not an
+  acceptance.
+  CLAIM EFFECT: none before the acceptance.  HONESTY CLASS: measurement
+  and a pre-registered remedy choice.
+  RESULT FILES: archive/tampura_bridge_plan_2026-10-25/bf/BF38_q14/ (one
+  JSON and log per level; smoke_base.json is the 3-cell smoke).
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS

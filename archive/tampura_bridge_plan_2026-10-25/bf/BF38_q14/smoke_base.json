@@ -1,0 +1,699 @@
+{
+ "level": "base",
+ "params": {},
+ "force": 60.0,
+ "squeeze": 0.003,
+ "cells": 3,
+ "summary": {
+  "dice": {
+   "n": 3,
+   "held": 0,
+   "grip": 3,
+   "ik_fail": 0
+  },
+  "a_cups_ud": {
+   "n": 3,
+   "held": 2,
+   "grip": 3,
+   "ik_fail": 0
+  },
+  "b_cups_ud": {
+   "n": 3,
+   "held": 3,
+   "grip": 3,
+   "ik_fail": 0
+  },
+  "c_cups_ud": {
+   "n": 3,
+   "held": 2,
+   "grip": 3,
+   "ik_fail": 0
+  },
+  "d_cups_ud": {
+   "n": 3,
+   "held": 3,
+   "grip": 3,
+   "ik_fail": 0
+  },
+  "e_cups_ud": {
+   "n": 3,
+   "held": 3,
+   "grip": 3,
+   "ik_fail": 0
+  },
+  "cube100g": {
+   "n": 3,
+   "held": 3,
+   "grip": 3,
+   "ik_fail": 0
+  },
+  "block500g": {
+   "n": 3,
+   "held": 3,
+   "grip": 3,
+   "ik_fail": 0
+  }
+ },
+ "rows": [
+  {
+   "payload": "dice",
+   "cell": [
+    0.375,
+    -0.255
+   ],
+   "close": {
+    "half_mm": 10.52,
+    "both": true,
+    "nf": 120.16
+   },
+   "settled": {
+    "both": true,
+    "nf": 6.89
+   },
+   "grip": true,
+   "held": false,
+   "home_nf": 0.0,
+   "home_both": false,
+   "at_home": true,
+   "hold_steps": 24,
+   "carry_steps": 326,
+   "nf_min_carry": 0.0,
+   "lost_at": {
+    "step": 64,
+    "ee_z": 0.187
+   },
+   "rest_pos": [
+    0.529,
+    -0.034,
+    0.01
+   ]
+  },
+  {
+   "payload": "dice",
+   "cell": [
+    0.375,
+    -0.205
+   ],
+   "close": {
+    "half_mm": 10.5,
+    "both": true,
+    "nf": 120.03
+   },
+   "settled": {
+    "both": true,
+    "nf": 6.91
+   },
+   "grip": true,
+   "held": false,
+   "home_nf": 0.0,
+   "home_both": false,
+   "at_home": true,
+   "hold_steps": 23,
+   "carry_steps": 331,
+   "nf_min_carry": 0.0,
+   "lost_at": {
+    "step": 65,
+    "ee_z": 0.172
+   },
+   "rest_pos": [
+    0.425,
+    0.002,
+    0.009
+   ]
+  },
+  {
+   "payload": "dice",
+   "cell": [
+    0.375,
+    -0.155
+   ],
+   "close": {
+    "half_mm": 10.52,
+    "both": true,
+    "nf": 119.14
+   },
+   "settled": {
+    "both": true,
+    "nf": 17.83
+   },
+   "grip": true,
+   "held": false,
+   "home_nf": 0.0,
+   "home_both": false,
+   "at_home": true,
+   "hold_steps": 23,
+   "carry_steps": 363,
+   "nf_min_carry": 0.0,
+   "lost_at": {
+    "step": 116,
+    "ee_z": 0.283
+   },
+   "rest_pos": [
+    0.072,
+    0.126,
+    0.012
+   ]
+  },
+  {
+   "payload": "a_cups_ud",
+   "cell": [
+    0.375,
+    -0.255
+   ],
+   "close": {
+    "half_mm": 25.53,
+    "both": true,
+    "nf": 115.84
+   },
+   "settled": {
+    "both": true,
+    "nf": 49.75
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 33.52,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 23,
+   "carry_steps": 323,
+   "nf_min_carry": 20.63,
+   "lost_at": null
+  },
+  {
+   "payload": "a_cups_ud",
+   "cell": [
+    0.375,
+    -0.205
+   ],
+   "close": {
+    "half_mm": 25.53,
+    "both": true,
+    "nf": 120.59
+   },
+   "settled": {
+    "both": true,
+    "nf": 57.11
+   },
+   "grip": true,
+   "held": false,
+   "home_nf": 0.0,
+   "home_both": false,
+   "at_home": true,
+   "hold_steps": 23,
+   "carry_steps": 322,
+   "nf_min_carry": 0.0,
+   "lost_at": {
+    "step": 278,
+    "ee_z": 0.529
+   },
+   "rest_pos": [
+    0.173,
+    0.063,
+    0.12
+   ]
+  },
+  {
+   "payload": "a_cups_ud",
+   "cell": [
+    0.375,
+    -0.155
+   ],
+   "close": {
+    "half_mm": 25.54,
+    "both": true,
+    "nf": 119.39
+   },
+   "settled": {
+    "both": true,
+    "nf": 55.72
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 33.92,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 24,
+   "carry_steps": 321,
+   "nf_min_carry": 31.91,
+   "lost_at": null
+  },
+  {
+   "payload": "b_cups_ud",
+   "cell": [
+    0.375,
+    -0.255
+   ],
+   "close": {
+    "half_mm": 27.94,
+    "both": true,
+    "nf": 119.4
+   },
+   "settled": {
+    "both": true,
+    "nf": 51.14
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 48.17,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 23,
+   "carry_steps": 323,
+   "nf_min_carry": 28.91,
+   "lost_at": null
+  },
+  {
+   "payload": "b_cups_ud",
+   "cell": [
+    0.375,
+    -0.205
+   ],
+   "close": {
+    "half_mm": 27.94,
+    "both": true,
+    "nf": 119.31
+   },
+   "settled": {
+    "both": true,
+    "nf": 43.75
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 40.55,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 24,
+   "carry_steps": 321,
+   "nf_min_carry": 30.59,
+   "lost_at": null
+  },
+  {
+   "payload": "b_cups_ud",
+   "cell": [
+    0.375,
+    -0.155
+   ],
+   "close": {
+    "half_mm": 27.94,
+    "both": true,
+    "nf": 119.14
+   },
+   "settled": {
+    "both": true,
+    "nf": 48.22
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 29.98,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 24,
+   "carry_steps": 320,
+   "nf_min_carry": 28.52,
+   "lost_at": null
+  },
+  {
+   "payload": "c_cups_ud",
+   "cell": [
+    0.375,
+    -0.255
+   ],
+   "close": {
+    "half_mm": 30.31,
+    "both": true,
+    "nf": 117.75
+   },
+   "settled": {
+    "both": true,
+    "nf": 53.97
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 13.13,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 23,
+   "carry_steps": 323,
+   "nf_min_carry": 11.9,
+   "lost_at": null
+  },
+  {
+   "payload": "c_cups_ud",
+   "cell": [
+    0.375,
+    -0.205
+   ],
+   "close": {
+    "half_mm": 30.3,
+    "both": true,
+    "nf": 129.2
+   },
+   "settled": {
+    "both": true,
+    "nf": 68.2
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 41.93,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 23,
+   "carry_steps": 321,
+   "nf_min_carry": 23.47,
+   "lost_at": null
+  },
+  {
+   "payload": "c_cups_ud",
+   "cell": [
+    0.375,
+    -0.155
+   ],
+   "close": {
+    "half_mm": 30.31,
+    "both": true,
+    "nf": 115.61
+   },
+   "settled": {
+    "both": true,
+    "nf": 67.4
+   },
+   "grip": true,
+   "held": false,
+   "home_nf": 0.0,
+   "home_both": false,
+   "at_home": true,
+   "hold_steps": 23,
+   "carry_steps": 320,
+   "nf_min_carry": 0.0,
+   "lost_at": {
+    "step": 209,
+    "ee_z": 0.479
+   },
+   "rest_pos": [
+    0.213,
+    -0.043,
+    0.029
+   ]
+  },
+  {
+   "payload": "d_cups_ud",
+   "cell": [
+    0.375,
+    -0.255
+   ],
+   "close": {
+    "half_mm": 32.36,
+    "both": true,
+    "nf": 119.57
+   },
+   "settled": {
+    "both": true,
+    "nf": 76.11
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 73.66,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 24,
+   "carry_steps": 322,
+   "nf_min_carry": 38.32,
+   "lost_at": null
+  },
+  {
+   "payload": "d_cups_ud",
+   "cell": [
+    0.375,
+    -0.205
+   ],
+   "close": {
+    "half_mm": 32.36,
+    "both": true,
+    "nf": 120.3
+   },
+   "settled": {
+    "both": true,
+    "nf": 92.77
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 83.72,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 23,
+   "carry_steps": 321,
+   "nf_min_carry": 40.12,
+   "lost_at": null
+  },
+  {
+   "payload": "d_cups_ud",
+   "cell": [
+    0.375,
+    -0.155
+   ],
+   "close": {
+    "half_mm": 32.35,
+    "both": true,
+    "nf": 119.37
+   },
+   "settled": {
+    "both": true,
+    "nf": 91.77
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 56.58,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 24,
+   "carry_steps": 319,
+   "nf_min_carry": 42.6,
+   "lost_at": null
+  },
+  {
+   "payload": "e_cups_ud",
+   "cell": [
+    0.375,
+    -0.255
+   ],
+   "close": {
+    "half_mm": 34.99,
+    "both": true,
+    "nf": 118.77
+   },
+   "settled": {
+    "both": true,
+    "nf": 85.35
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 45.27,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 23,
+   "carry_steps": 322,
+   "nf_min_carry": 44.82,
+   "lost_at": null
+  },
+  {
+   "payload": "e_cups_ud",
+   "cell": [
+    0.375,
+    -0.205
+   ],
+   "close": {
+    "half_mm": 34.99,
+    "both": true,
+    "nf": 118.66
+   },
+   "settled": {
+    "both": true,
+    "nf": 62.26
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 48.82,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 23,
+   "carry_steps": 320,
+   "nf_min_carry": 42.65,
+   "lost_at": null
+  },
+  {
+   "payload": "e_cups_ud",
+   "cell": [
+    0.375,
+    -0.155
+   ],
+   "close": {
+    "half_mm": 34.98,
+    "both": true,
+    "nf": 119.06
+   },
+   "settled": {
+    "both": true,
+    "nf": 61.08
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 56.86,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 23,
+   "carry_steps": 319,
+   "nf_min_carry": 42.11,
+   "lost_at": null
+  },
+  {
+   "payload": "cube100g",
+   "cell": [
+    0.375,
+    -0.255
+   ],
+   "close": {
+    "half_mm": 21.08,
+    "both": true,
+    "nf": 113.57
+   },
+   "settled": {
+    "both": true,
+    "nf": 68.06
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 98.82,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 26,
+   "carry_steps": 325,
+   "nf_min_carry": 17.2,
+   "lost_at": null
+  },
+  {
+   "payload": "cube100g",
+   "cell": [
+    0.375,
+    -0.205
+   ],
+   "close": {
+    "half_mm": 21.08,
+    "both": true,
+    "nf": 113.61
+   },
+   "settled": {
+    "both": true,
+    "nf": 68.07
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 102.07,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 23,
+   "carry_steps": 327,
+   "nf_min_carry": 47.27,
+   "lost_at": null
+  },
+  {
+   "payload": "cube100g",
+   "cell": [
+    0.375,
+    -0.155
+   ],
+   "close": {
+    "half_mm": 21.08,
+    "both": true,
+    "nf": 113.6
+   },
+   "settled": {
+    "both": true,
+    "nf": 68.08
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 78.91,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 28,
+   "carry_steps": 329,
+   "nf_min_carry": 9.91,
+   "lost_at": null
+  },
+  {
+   "payload": "block500g",
+   "cell": [
+    0.375,
+    -0.255
+   ],
+   "close": {
+    "half_mm": 31.08,
+    "both": true,
+    "nf": 113.53
+   },
+   "settled": {
+    "both": true,
+    "nf": 99.52
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 97.89,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 46,
+   "carry_steps": 322,
+   "nf_min_carry": 61.42,
+   "lost_at": null
+  },
+  {
+   "payload": "block500g",
+   "cell": [
+    0.375,
+    -0.205
+   ],
+   "close": {
+    "half_mm": 31.08,
+    "both": true,
+    "nf": 113.54
+   },
+   "settled": {
+    "both": true,
+    "nf": 99.55
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 104.57,
+   "home_both": true,
+   "at_home": true,
+   "hold_steps": 30,
+   "carry_steps": 320,
+   "nf_min_carry": 58.66,
+   "lost_at": null
+  },
+  {
+   "payload": "block500g",
+   "cell": [
+    0.375,
+    -0.155
+   ],
+   "close": {
+    "half_mm": 31.08,
+    "both": true,
+    "nf": 113.57
+   },
+   "settled": {
+    "both": true,
+    "nf": 99.56
+   },
+   "grip": true,
+   "held": true,
+   "home_nf": 99.22,
+   "home_both": true,
+   "at_home": false,
+   "hold_steps": 52,
+   "carry_steps": 318,
+   "nf_min_carry": 50.26,
+   "lost_at": null
+  }
+ ]
+}

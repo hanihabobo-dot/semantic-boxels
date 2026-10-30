@@ -1212,8 +1212,10 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     # without it counting as contact.
     _static_ids = frozenset(env.objects[n].object_id
                             for n in ("table", "plane") if n in env.objects)
+    # The squeeze is robot_utils.GRIP_SQUEEZE (3 mm, or GF10's 0.5 mm with
+    # --grip-squeeze-mm 0.5, BF#38).
     measured_half = close_gripper_until_contact(
-        robot_id, gui, force=60.0, squeeze=0.003, ignore_body_ids=_static_ids)
+        robot_id, gui, force=60.0, ignore_body_ids=_static_ids)
     if _m10:
         _poll_pads()
     if measured_half is None:

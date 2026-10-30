@@ -1,0 +1,377 @@
+09:00:03 [INFO   ] root: Run started  : 2026-10-30_09-00-03
+09:00:03 [INFO   ] root: Log file     : /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/archive/tampura_bridge_plan_2026-10-25/bf/BF38_q14/seed0_sq0.5mm/ours/run_2026-10-30_09-00-03/run_2026-10-30_09-00-03.log
+09:00:03 [INFO   ] root: Verbosity    : smart (console), DEBUG (file)
+09:00:03 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IHDR' 16 13
+09:00:03 [DEBUG  ] PIL.PngImagePlugin: STREAM b'pHYs' 41 9
+09:00:03 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IDAT' 62 8192
+09:00:03 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IHDR' 16 13
+09:00:03 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IDAT' 41 8192
+Boxel Test Environment initialized successfully!
+Camera position: [0.17861445 0.04880322 0.58831882]
+Camera target: [ 3.28582478 -0.16977984 -3.32287836]
+Adopted executing client 0; plan twin client 2
+Objects in scene: ['plane', 'table', 'robot', 'd_cups_ud', 'dice']
+============================================================
+FULL PIPELINE: PDDLStream + Replanning
+============================================================
+  model tweaks: {'M8': True, 'M9': True, 'M10': True, 'pick_aperture_from_pose': True}; domain domain_pddlstream_m8.pddl
+
+--- Phase 1: Environment Setup ---
+  [audit-66/67] Effective minimum boxel size: 0.082 m (largest object AABB 0.072 m + 0.01 m headroom).
+Robot ID: 0
+
+--- Phase 2: Calculating Boxels ---
+  Merge iteration 1: 14 merges, 15 boxels remaining
+  Merge iteration 2: 6 merges, 9 boxels remaining
+  Merge iteration 3: 3 merges, 6 boxels remaining
+  Merging complete: 29 -> 6 boxels
+  Calculated 8 boxels
+
+--- Phase 3: Creating BoxelRegistry ---
+Saved 8 boxels to boxel_data.json
+09:00:04 [DEBUG  ] root: Saved artefact: boxel_data.json -> /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/archive/tampura_bridge_plan_2026-10-25/bf/BF38_q14/seed0_sq0.5mm/ours/run_2026-10-30_09-00-03/boxel_data.json
+  8 boxels, 1 shadows, 1 occluders
+
+--- Phase 4: Hidden Object Scenario ---
+  Target: dice (given; not in the first observation; the robot must search)
+  Shadow blockers (audit #78):
+    shadow_of_d_cups_ud blocked by: ['d_cups_ud']
+  Boxel->PyBullet mapping: 1 objects
+
+--- Phase 5: Planning with Replanning ---
+    [eye #1] initial observation (phase 2-4) | held=none | unknown shadows=1 | d_cups_ud@(0.673,0.216)[bel 4mm] dice@(0.669,0.216)[NO BOXEL]
+  Exported initial problem to /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/pddl/problem_debug.pddl
+09:00:04 [DEBUG  ] root: Saved artefact: /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/pddl/problem_debug.pddl -> /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/archive/tampura_bridge_plan_2026-10-25/bf/BF38_q14/seed0_sq0.5mm/ours/run_2026-10-30_09-00-03/problem_initial.pddl
+
+=== PLAN #1 ===
+Unknown shadows remaining: 1
+  [M8] init: 1 sense_view, 4 look_config facts (pose unknown: ['d_cups_ud']), 5 view boxels, 0 shadows on the current-config fallback; 5 twin renders 0.44s, total 0.45s
+  [#76-diag] init facts: 83 total, by predicate: {'Boxel': 14, 'boxel_fits': 13, 'obj_at_boxel_KIF': 9, 'is_free_space': 6, 'config_for_boxel': 6, 'Config': 5, 'on_surface': 5, 'is_view': 5, 'blocks_view_at': 4, 'look_config': 4, 'clear': 2, 'on_table': 2, 'Obj': 2, 'at_config': 1, 'is_object': 1, 'is_shadow': 1, 'obj_at_boxel': 1, 'sense_view': 1, 'handempty': 1}
+  [#76-diag] goal: ('and', ('holding', 'dice'), ('at_config', q_home))
+  [#76-diag] held_obj=None, max_time=900.0s, verbose=False
+  [#76-diag] boxel_fits per obj: {'d_cups_ud': 6, 'dice': 7}
+  [#76-diag] shadows (1 total, 0 view-clear NOW): ['shadow_of_d_cups_ud(blockers=1)']
+  [#76-diag] sense_options per obj (view-clear AND fits AND not-KIF): {'d_cups_ud': [], 'dice': []}
+  [#76-diag] obj_at_boxel per obj: {'d_cups_ud': ['d_cups_ud'], 'dice': []}
+
+Iteration: 1 | Complexity: 0 | Skeletons: 0 | Skeleton Queue: 0 | Disabled: 0 | Evaluations: 83 | Eager Calls: 0 | Cost: inf | Search Time: 0.000 | Sample Time: 0.000 | Total Time: 0.000
+Attempt: 1 | Results: 0 | Depth: 0 | Success: False | Time: 0.057
+Stream plan (inf, 0, inf): None
+Action plan (inf, inf): None
+No plan: increasing complexity from 0 to 1
+
+Iteration: 2 | Complexity: 1 | Skeletons: 0 | Skeleton Queue: 0 | Disabled: 0 | Evaluations: 83 | Eager Calls: 0 | Cost: inf | Search Time: 0.062 | Sample Time: 0.000 | Total Time: 0.062
+Attempt: 1 | Results: 27 | Depth: 0 | Success: False | Time: 0.018
+Stream plan (inf, 0, inf): None
+Action plan (inf, inf): None
+No plan: increasing complexity from 1 to 2
+
+Iteration: 3 | Complexity: 2 | Skeletons: 0 | Skeleton Queue: 0 | Disabled: 0 | Evaluations: 83 | Eager Calls: 0 | Cost: inf | Search Time: 0.084 | Sample Time: 0.000 | Total Time: 0.084
+Attempt: 1 | Results: 59 | Depth: 0 | Success: False | Time: 0.081
+Stream plan (inf, 0, inf): None
+Action plan (inf, inf): None
+No plan: increasing complexity from 2 to 3
+
+Iteration: 4 | Complexity: 3 | Skeletons: 0 | Skeleton Queue: 0 | Disabled: 0 | Evaluations: 83 | Eager Calls: 0 | Cost: inf | Search Time: 0.170 | Sample Time: 0.000 | Total Time: 0.170
+Attempt: 1 | Results: 83 | Depth: 1 | Success: False | Time: 0.321
+Attempt: 2 | Results: 155 | Depth: 1 | Success: False | Time: 0.566
+Attempt: 3 | Results: 155 | Depth: 0 | Success: True | Time: 0.746
+Stream plan (11, 11, 0.001): [sample-grasp:(d_cups_ud)->(#g1), sample-grasp:(dice)->(#g0), compute-kin:(d_cups_ud, free_003, #g1)->(#q1), compute-kin:(dice, shadow_of_d_cups_ud, #g0)->(#q0), compute-kin:(d_cups_ud, d_cups_ud, #g1)->(#q3), plan-motion:(q_home, look_d_cups_ud_0)->(#t3), plan-motion:(#q1, q_home)->(#t4), plan-motion:(#q0, q_home)->(#t0), plan-motion:(q_home, #q0)->(#t1), plan-motion:(look_d_cups_ud_0, #q3)->(#t6), plan-motion:(#q3, #q1)->(#t5)]
+Action plan (11, 11.000): [move(q_home, look_d_cups_ud_0, view__look_d_cups_ud_0, #t3), observe(d_cups_ud, look_d_cups_ud_0), move(look_d_cups_ud_0, #q3, d_cups_ud, #t6), pick(d_cups_ud, d_cups_ud, #g1, #q3), move(#q3, #q1, free_003, #t5), place(d_cups_ud, free_003, #g1, #q1), move(#q1, q_home, home, #t4), sense(dice, shadow_of_d_cups_ud, q_home), move(q_home, #q0, shadow_of_d_cups_ud, #t1), pick(dice, shadow_of_d_cups_ud, #g0, #q0), move(#q0, q_home, home, #t0)]
+09:00:06 [DEBUG  ] streams: sample_grasp: d_cups_ud -> grasp_d_cups_ud_1 (yaw=0.00 span=0.070 z=0.10)
+09:00:06 [DEBUG  ] streams: sample_grasp: dice -> grasp_dice_2 (yaw=0.00 span=0.040 z=0.10)
+09:00:06 [DEBUG  ] streams: compute_kin: d_cups_ud at free_003 -> q_kin_d_cups_ud_1  ee_target=[0.6425, 0.06875, 0.1625] ignored_body=10 seed=0
+09:00:06 [DEBUG  ] streams: compute_kin: dice at shadow_of_d_cups_ud -> q_kin_dice_2  ee_target=[0.7234359658012915, 0.23161209636680233, 0.13523141849845963] ignored_body=11 seed=0
+09:00:06 [DEBUG  ] streams: compute_kin: d_cups_ud at d_cups_ud -> q_kin_d_cups_ud_3  ee_target=[0.6718882346400856, 0.21773880746064778, 0.13523141849845963] ignored_body=10 seed=0
+09:00:06 [DEBUG  ] streams: plan_motion: q_home -> look_d_cups_ud_0  endpoint_ignored={} path_ignored== gripper_relax=False held={}
+09:00:06 [INFO   ] streams: plan_motion: direct path clear — linear trajectory
+09:00:06 [DEBUG  ] streams: plan_motion: q_kin_d_cups_ud_1 -> q_home  endpoint_ignored=[0, 10] path_ignored== gripper_relax=True held={}
+09:00:06 [INFO   ] streams: plan_motion: direct path clear — linear trajectory
+09:00:06 [DEBUG  ] streams: plan_motion: q_kin_dice_2 -> q_home  endpoint_ignored=[0, 11] path_ignored== gripper_relax=True held={}
+09:00:06 [INFO   ] streams: plan_motion: direct path clear — linear trajectory
+09:00:06 [DEBUG  ] streams: plan_motion: q_home -> q_kin_dice_2  endpoint_ignored=[0, 11] path_ignored== gripper_relax=True held={}
+09:00:06 [INFO   ] streams: plan_motion: direct path clear — linear trajectory
+09:00:06 [DEBUG  ] streams: plan_motion: look_d_cups_ud_0 -> q_kin_d_cups_ud_3  endpoint_ignored=[0, 10] path_ignored== gripper_relax=True held={}
+09:00:06 [INFO   ] streams: plan_motion: direct path clear — linear trajectory
+09:00:06 [DEBUG  ] streams: plan_motion: q_kin_d_cups_ud_3 -> q_kin_d_cups_ud_1  endpoint_ignored=[0, 10] path_ignored== gripper_relax=True held=[10]
+09:00:06 [INFO   ] streams: plan_motion: direct path clear — linear trajectory
+Summary: {complexity: 3, cost: 11.000, evaluations: 108, iterations: 4, length: 2, run_time: 0.962, sample_time: 0.037, search_time: 0.925, skeletons: 1, solutions: 1, solved: True, timeout: False}
+  [#76-diag] outcome=plan_found, elapsed=0.980s, plan_len=11, cost=11.0
+    [eye #2] plan#1 planned (11 actions) | held=none | unknown shadows=1 | d_cups_ud@(0.673,0.216)[bel 4mm] dice@(0.669,0.216)[NO BOXEL]
+  [timing] planner.plan() #1: 1.443s (cumulative 1.443s)
+Plan: 11 actions
+  1. move
+  2. observe
+  3. move
+  4. pick
+  5. move
+  6. place
+  7. move
+  8. sense
+  9. move
+  10. pick
+  11. move
+
+  Executing: move
+    [eye #3] plan#1 before action 1/11 move(view__look_d_cups_ud_0) | held=none | unknown shadows=1 | d_cups_ud@(0.673,0.216)[bel 4mm] dice@(0.669,0.216)[NO BOXEL]
+    Moving to view__look_d_cups_ud_0 (10 waypoints)...
+09:00:06 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 37 steps — joint 1 moves 0.3336 rad, which needs 0.154 s at its 2.175 rad/s limit [F14]
+09:00:06 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 38 steps — joint 1 moves 0.3387 rad, which needs 0.158 s at its 2.175 rad/s limit [F14]
+09:00:06 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 38 steps — joint 1 moves 0.3379 rad, which needs 0.158 s at its 2.175 rad/s limit [F14]
+09:00:06 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 38 steps — joint 1 moves 0.3377 rad, which needs 0.158 s at its 2.175 rad/s limit [F14]
+09:00:06 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 38 steps — joint 1 moves 0.3376 rad, which needs 0.158 s at its 2.175 rad/s limit [F14]
+09:00:06 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 38 steps — joint 1 moves 0.3376 rad, which needs 0.158 s at its 2.175 rad/s limit [F14]
+09:00:06 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 38 steps — joint 1 moves 0.3375 rad, which needs 0.158 s at its 2.175 rad/s limit [F14]
+09:00:06 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 38 steps — joint 1 moves 0.3375 rad, which needs 0.158 s at its 2.175 rad/s limit [F14]
+    -> Arrived at view__look_d_cups_ud_0
+    [perception] 1 object(s) not visible in the refresh render — keeping last estimate: ['d_cups_ud']
+    [integrity] after plan#1 move(view__look_d_cups_ud_0): 0/1 believed bodies observed where believed, none disturbed
+
+  Executing: observe
+    [eye #4] plan#1 before action 2/11 observe(d_cups_ud) | held=none | unknown shadows=1 | d_cups_ud@(0.673,0.216)[bel 4mm] dice@(0.673,0.216)[NO BOXEL]
+    [M9] d_cups_ud: rectangle [52.9 52.8] mm exceeds the fused [51.3 49.3] mm by more than the pixel noise — not fused
+    [M8] observe d_cups_ud: wrist re-posed ['d_cups_ud']; d_cups_ud complete, pose_radius 0.49 mm
+
+=== PLAN #2 ===
+Unknown shadows remaining: 1
+  Merge iteration 1: 14 merges, 15 boxels remaining
+  Merge iteration 2: 6 merges, 9 boxels remaining
+  Merge iteration 3: 3 merges, 6 boxels remaining
+  Merging complete: 29 -> 6 boxels
+    Re-boxelize: 0 removed, 0 new, 6 unchanged (6 free total)
+  [M8] init: 1 sense_view, 0 look_config facts (pose unknown: []), 1 view boxels, 0 shadows on the current-config fallback; 2 twin renders 0.37s, total 0.37s
+  [#76-diag] init facts: 65 total, by predicate: {'boxel_fits': 13, 'Boxel': 10, 'obj_at_boxel_KIF': 9, 'is_free_space': 6, 'on_surface': 5, 'blocks_view_at': 4, 'clear': 2, 'config_for_boxel': 2, 'Config': 2, 'Obj': 2, 'on_table': 2, 'sense_view': 1, 'obj_pose_known': 1, 'is_shadow': 1, 'at_config': 1, 'is_view': 1, 'handempty': 1, 'obj_at_boxel': 1, 'is_object': 1}
+  [#76-diag] goal: ('and', ('holding', 'dice'), ('at_config', q_home))
+  [#76-diag] held_obj=None, max_time=900.0s, verbose=False
+  [#76-diag] boxel_fits per obj: {'d_cups_ud': 6, 'dice': 7}
+  [#76-diag] shadows (1 total, 0 view-clear NOW): ['shadow_of_d_cups_ud(blockers=1)']
+  [#76-diag] sense_options per obj (view-clear AND fits AND not-KIF): {'d_cups_ud': [], 'dice': []}
+  [#76-diag] obj_at_boxel per obj: {'d_cups_ud': ['d_cups_ud'], 'dice': []}
+
+Iteration: 1 | Complexity: 0 | Skeletons: 0 | Skeleton Queue: 0 | Disabled: 0 | Evaluations: 65 | Eager Calls: 0 | Cost: inf | Search Time: 0.000 | Sample Time: 0.000 | Total Time: 0.000
+Attempt: 1 | Results: 0 | Depth: 0 | Success: False | Time: 0.013
+Stream plan (inf, 0, inf): None
+Action plan (inf, inf): None
+No plan: increasing complexity from 0 to 1
+
+Iteration: 2 | Complexity: 1 | Skeletons: 0 | Skeleton Queue: 0 | Disabled: 0 | Evaluations: 65 | Eager Calls: 0 | Cost: inf | Search Time: 0.017 | Sample Time: 0.000 | Total Time: 0.017
+Attempt: 1 | Results: 6 | Depth: 0 | Success: False | Time: 0.014
+Stream plan (inf, 0, inf): None
+Action plan (inf, inf): None
+No plan: increasing complexity from 1 to 2
+
+Iteration: 3 | Complexity: 2 | Skeletons: 0 | Skeleton Queue: 0 | Disabled: 0 | Evaluations: 65 | Eager Calls: 0 | Cost: inf | Search Time: 0.036 | Sample Time: 0.000 | Total Time: 0.036
+Attempt: 1 | Results: 30 | Depth: 0 | Success: False | Time: 0.074
+Stream plan (inf, 0, inf): None
+Action plan (inf, inf): None
+No plan: increasing complexity from 2 to 3
+
+Iteration: 4 | Complexity: 3 | Skeletons: 0 | Skeleton Queue: 0 | Disabled: 0 | Evaluations: 65 | Eager Calls: 0 | Cost: inf | Search Time: 0.115 | Sample Time: 0.000 | Total Time: 0.115
+Attempt: 1 | Results: 42 | Depth: 1 | Success: False | Time: 0.133
+Attempt: 2 | Results: 90 | Depth: 1 | Success: False | Time: 0.285
+Attempt: 3 | Results: 90 | Depth: 0 | Success: True | Time: 0.477
+Stream plan (10, 10, 0.001): [sample-grasp:(d_cups_ud)->(#g2), sample-grasp:(dice)->(#g3), compute-kin:(d_cups_ud, d_cups_ud, #g2)->(#q7), compute-kin:(dice, shadow_of_d_cups_ud, #g3)->(#q6), compute-kin:(d_cups_ud, free_003, #g2)->(#q5), plan-motion:(q_home, #q6)->(#t13), plan-motion:(#q5, q_home)->(#t14), plan-motion:(look_d_cups_ud_0, #q7)->(#t11), plan-motion:(#q6, q_home)->(#t10), plan-motion:(#q7, #q5)->(#t12)]
+Action plan (9, 9.000): [move(look_d_cups_ud_0, #q7, d_cups_ud, #t11), pick(d_cups_ud, d_cups_ud, #g2, #q7), move(#q7, #q5, free_003, #t12), place(d_cups_ud, free_003, #g2, #q5), move(#q5, q_home, home, #t14), sense(dice, shadow_of_d_cups_ud, q_home), move(q_home, #q6, shadow_of_d_cups_ud, #t13), pick(dice, shadow_of_d_cups_ud, #g3, #q6), move(#q6, q_home, home, #t10)]
+09:00:07 [DEBUG  ] streams: sample_grasp: d_cups_ud -> grasp_d_cups_ud_3 (yaw=0.00 span=0.070 z=0.10)
+09:00:07 [DEBUG  ] streams: sample_grasp: dice -> grasp_dice_4 (yaw=0.00 span=0.040 z=0.10)
+09:00:07 [DEBUG  ] streams: compute_kin: d_cups_ud at d_cups_ud -> q_kin_d_cups_ud_4  ee_target=[0.6707498087238406, 0.21862046167181487, 0.1342511186097736] ignored_body=10 seed=0
+09:00:07 [DEBUG  ] streams: compute_kin: dice at shadow_of_d_cups_ud -> q_kin_dice_5  ee_target=[0.7234359658012915, 0.23161209636680233, 0.13523141849845963] ignored_body=11 seed=0
+09:00:07 [DEBUG  ] streams: compute_kin: d_cups_ud at free_003 -> q_kin_d_cups_ud_6  ee_target=[0.6425, 0.06875, 0.1625] ignored_body=10 seed=0
+09:00:07 [DEBUG  ] streams: plan_motion: q_home -> q_kin_dice_5  endpoint_ignored=[0, 11] path_ignored== gripper_relax=True held={}
+09:00:07 [INFO   ] streams: plan_motion: direct path clear — linear trajectory
+09:00:07 [DEBUG  ] streams: plan_motion: q_kin_d_cups_ud_6 -> q_home  endpoint_ignored=[0, 10] path_ignored== gripper_relax=True held={}
+09:00:07 [INFO   ] streams: plan_motion: direct path clear — linear trajectory
+09:00:07 [DEBUG  ] streams: plan_motion: look_d_cups_ud_0 -> q_kin_d_cups_ud_4  endpoint_ignored=[0, 10] path_ignored== gripper_relax=True held={}
+09:00:07 [INFO   ] streams: plan_motion: direct path clear — linear trajectory
+09:00:07 [DEBUG  ] streams: plan_motion: q_kin_dice_5 -> q_home  endpoint_ignored=[0, 11] path_ignored== gripper_relax=True held={}
+09:00:07 [INFO   ] streams: plan_motion: direct path clear — linear trajectory
+09:00:07 [DEBUG  ] streams: plan_motion: q_kin_d_cups_ud_4 -> q_kin_d_cups_ud_6  endpoint_ignored=[0, 10] path_ignored== gripper_relax=True held=[10]
+09:00:07 [INFO   ] streams: plan_motion: direct path clear — linear trajectory
+Summary: {complexity: 3, cost: 9.000, evaluations: 88, iterations: 4, length: 2, run_time: 0.631, sample_time: 0.031, search_time: 0.600, skeletons: 1, solutions: 1, solved: True, timeout: False}
+  [#76-diag] outcome=plan_found, elapsed=0.678s, plan_len=9, cost=9.0
+    [eye #5] plan#2 planned (9 actions) | held=none | unknown shadows=1 | d_cups_ud@(0.673,0.216)[bel 5mm] dice@(0.673,0.216)[NO BOXEL]
+  [timing] planner.plan() #2: 1.065s (cumulative 2.508s)
+Plan: 9 actions
+  1. move
+  2. pick
+  3. move
+  4. place
+  5. move
+  6. sense
+  7. move
+  8. pick
+  9. move
+
+  Executing: move
+    [eye #6] plan#2 before action 1/9 move(d_cups_ud) | held=none | unknown shadows=1 | d_cups_ud@(0.673,0.216)[bel 5mm] dice@(0.673,0.216)[NO BOXEL]
+    Moving to d_cups_ud (10 waypoints)...
+    -> Arrived at d_cups_ud
+    [perception] 1 object(s) not visible in the refresh render — keeping last estimate: ['d_cups_ud']
+    [integrity] after plan#2 move(d_cups_ud): 0/1 believed bodies observed where believed, none disturbed
+
+  Executing: pick
+    [eye #7] plan#2 before action 2/9 pick(d_cups_ud, d_cups_ud) | held=none | unknown shadows=1 | d_cups_ud@(0.673,0.216)[bel 5mm] dice@(0.673,0.216)[NO BOXEL]
+    Picking d_cups_ud from d_cups_ud...
+    [F24] d_cups_ud not re-observed before the descent (no detection) — aiming at the registry estimate
+    [#P1-diag] pick arrival d_cups_ud: ee_xy_err=0.17mm ee_vs_obj_xy=3.07mm ee_z=0.0655 contact_z=0.0645
+    Grip verified for d_cups_ud: both pads in contact, pad_normal_force=13.60N, measured half-width 33.1 mm vs estimate 35.0 mm
+    *** d_cups_ud PICKED UP! ***
+    [integrity] after plan#2 pick(d_cups_ud): 0/0 believed bodies observed where believed, none disturbed
+
+  Executing: move
+    [eye #8] plan#2 before action 3/9 move(free_003) | held=d_cups_ud | unknown shadows=1 | d_cups_ud@(0.674,0.218)[bel 89mm] dice@(0.673,0.216)[NO BOXEL]
+    Moving to free_003 (10 waypoints)...
+09:00:08 [DEBUG  ] streams: plan_motion: post_pick_contact_runtime -> q_kin_d_cups_ud_6  endpoint_ignored=[0, 10] path_ignored== gripper_relax=True held=[10]
+09:00:08 [INFO   ] streams: plan_motion: direct path clear — linear trajectory
+    -> Arrived at free_003
+    [perception] detected but UNREGISTERED (no boxel): ['dice'] — only a sense observation registers new objects (#P1 F20); this refresh re-poses known boxels only
+    [integrity] after plan#2 move(free_003): 0/0 believed bodies observed where believed, none disturbed
+    [F20] dice is visible (172 px) but partly behind the arm — not registered from this render
+
+  Executing: place
+    [eye #9] plan#2 before action 4/9 place(d_cups_ud, free_003) | held=d_cups_ud | unknown shadows=1 | d_cups_ud@(0.643,0.068)[bel 184mm] dice@(0.673,0.216)[NO BOXEL]
+    Placing d_cups_ud at free_003...
+    [#84-gt-diag] pre-release d_cups_ud: pos=[0.6432,0.0672,0.0403] aabb=[0.5914,0.0203,0.0004]-[0.6905,0.1185,0.0752] tilt_deg=0.76
+    -> Released d_cups_ud (tactile verify ok; fingers_open=True robot_link_contacts={none} finger_pos=[0.0400,0.0400] | gt-diag: bottom_z=-0.0010 tilt_deg=0.00 non_robot_contacts=[1])
+    [release-obs] d_cups_ud: observed 2685 px, top 0.0703 (expected 0.0705), footprint 7.0 x 7.0 cm, shift 0.0 mm
+  Shadow blockers (audit #78):
+    *** d_cups_ud PLACED at free_003! ***
+    [eye #10] plan#2 after place(d_cups_ud, free_003) | held=none | unknown shadows=1 | d_cups_ud@(0.643,0.067)[bel 4mm] dice@(0.673,0.216)[NO BOXEL]
+    [perception] detected but UNREGISTERED (no boxel): ['dice'] — only a sense observation registers new objects (#P1 F20); this refresh re-poses known boxels only
+    [integrity] after plan#2 place(d_cups_ud): 1/1 believed bodies observed where believed, none disturbed
+    [F20] dice is visible (110 px) but partly behind the arm — not registered from this render
+
+  Executing: move
+    [eye #11] plan#2 before action 5/9 move(home) | held=none | unknown shadows=1 | d_cups_ud@(0.643,0.067)[bel 4mm] dice@(0.673,0.216)[NO BOXEL]
+    Moving to home (10 waypoints)...
+09:00:10 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 33 steps — joint 6 moves 0.3553 rad, which needs 0.138 s at its 2.610 rad/s limit [F14]
+09:00:10 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 42 steps — joint 6 moves 0.4509 rad, which needs 0.175 s at its 2.610 rad/s limit [F14]
+09:00:10 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 42 steps — joint 6 moves 0.4524 rad, which needs 0.175 s at its 2.610 rad/s limit [F14]
+09:00:10 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 42 steps — joint 6 moves 0.4527 rad, which needs 0.175 s at its 2.610 rad/s limit [F14]
+09:00:10 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 42 steps — joint 6 moves 0.4528 rad, which needs 0.175 s at its 2.610 rad/s limit [F14]
+09:00:10 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 42 steps — joint 6 moves 0.4528 rad, which needs 0.175 s at its 2.610 rad/s limit [F14]
+09:00:10 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 42 steps — joint 6 moves 0.4528 rad, which needs 0.175 s at its 2.610 rad/s limit [F14]
+09:00:10 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 42 steps — joint 6 moves 0.4528 rad, which needs 0.175 s at its 2.610 rad/s limit [F14]
+09:00:10 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 42 steps — joint 6 moves 0.4528 rad, which needs 0.175 s at its 2.610 rad/s limit [F14]
+    [D7] at-home test passed: max |dq| 1.62e-04 rad after a 23-step hold (config q_home)
+    -> Arrived at home
+    [perception] detected but UNREGISTERED (no boxel): ['dice'] — only a sense observation registers new objects (#P1 F20); this refresh re-poses known boxels only
+    [integrity] after plan#2 move(home): 1/1 believed bodies observed where believed, none disturbed
+    [F20] dice is visible in this observation but had no boxel — registered at the render estimate [0.673,0.215,0.010] (185 px); the SEARCH TARGET — directly pickable, no sense needed.
+  Shadow blockers (audit #78):
+    [F20] blocker census refreshed for 1 fragment(s) after registering ['dice']
+  belief changed after plan#2 move(home) — replanning (#P2 integrity)
+
+=== PLAN #3 ===
+Unknown shadows remaining: 1
+  Merge iteration 1: 11 merges, 14 boxels remaining
+  Merge iteration 2: 2 merges, 12 boxels remaining
+  Merge iteration 3: 1 merges, 11 boxels remaining
+  Merging complete: 25 -> 11 boxels
+    Re-boxelize: 3 removed, 9 new, 2 unchanged (11 free total)
+  [M8] init: 1 sense_view, 0 look_config facts (pose unknown: []), 1 view boxels, 0 shadows on the current-config fallback; 1 twin renders 0.14s, total 0.14s
+  [#76-diag] init facts: 105 total, by predicate: {'boxel_fits': 20, 'obj_at_boxel_KIF': 17, 'Boxel': 16, 'blocks_view_at': 14, 'is_free_space': 11, 'on_surface': 7, 'Obj': 3, 'clear': 2, 'obj_at_boxel': 2, 'on_table': 2, 'config_for_boxel': 2, 'is_object': 2, 'Config': 1, 'is_shadow': 1, 'handempty': 1, 'sense_view': 1, 'at_config': 1, 'obj_pose_known': 1, 'is_view': 1}
+  [#76-diag] goal: ('and', ('holding', 'dice'), ('at_config', q_home))
+  [#76-diag] held_obj=None, max_time=900.0s, verbose=False
+  [#76-diag] boxel_fits per obj: {'d_cups_ud': 8, 'dice': 12}
+  [#76-diag] shadows (1 total, 1 view-clear NOW): ['shadow_of_d_cups_ud(blockers=0)']
+  [#76-diag] sense_options per obj (view-clear AND fits AND not-KIF): {'d_cups_ud': [], 'dice': []}
+  [#76-diag] obj_at_boxel per obj: {'d_cups_ud': ['d_cups_ud'], 'dice': ['dice']}
+
+Iteration: 1 | Complexity: 0 | Skeletons: 0 | Skeleton Queue: 0 | Disabled: 0 | Evaluations: 103 | Eager Calls: 0 | Cost: inf | Search Time: 0.000 | Sample Time: 0.000 | Total Time: 0.000
+Attempt: 1 | Results: 0 | Depth: 0 | Success: False | Time: 0.015
+Stream plan (inf, 0, inf): None
+Action plan (inf, inf): None
+No plan: increasing complexity from 0 to 1
+
+Iteration: 2 | Complexity: 1 | Skeletons: 0 | Skeleton Queue: 0 | Disabled: 0 | Evaluations: 103 | Eager Calls: 0 | Cost: inf | Search Time: 0.019 | Sample Time: 0.000 | Total Time: 0.019
+Attempt: 1 | Results: 3 | Depth: 0 | Success: False | Time: 0.015
+Stream plan (inf, 0, inf): None
+Action plan (inf, inf): None
+No plan: increasing complexity from 1 to 2
+
+Iteration: 3 | Complexity: 2 | Skeletons: 0 | Skeleton Queue: 0 | Disabled: 0 | Evaluations: 103 | Eager Calls: 0 | Cost: inf | Search Time: 0.039 | Sample Time: 0.000 | Total Time: 0.039
+Attempt: 1 | Results: 39 | Depth: 0 | Success: False | Time: 0.086
+Stream plan (inf, 0, inf): None
+Action plan (inf, inf): None
+No plan: increasing complexity from 2 to 3
+
+Iteration: 4 | Complexity: 3 | Skeletons: 0 | Skeleton Queue: 0 | Disabled: 0 | Evaluations: 103 | Eager Calls: 0 | Cost: inf | Search Time: 0.130 | Sample Time: 0.000 | Total Time: 0.130
+Attempt: 1 | Results: 47 | Depth: 1 | Success: False | Time: 0.128
+Attempt: 2 | Results: 63 | Depth: 0 | Success: True | Time: 0.262
+Stream plan (4, 4, 0.000): [sample-grasp:(dice)->(#g4), compute-kin:(dice, dice, #g4)->(#q8), plan-motion:(#q8, q_home)->(#t15), plan-motion:(q_home, #q8)->(#t16)]
+Action plan (3, 3.000): [move(q_home, #q8, dice, #t16), pick(dice, dice, #g4, #q8), move(#q8, q_home, home, #t15)]
+09:00:11 [DEBUG  ] streams: sample_grasp: dice -> grasp_dice_5 (yaw=0.00 span=0.016 z=0.10)
+09:00:11 [DEBUG  ] streams: compute_kin: dice at dice -> q_kin_dice_7  ee_target=[0.6731139211750921, 0.21534875323738586, 0.10954392914133447] ignored_body=11 seed=0
+09:00:11 [DEBUG  ] streams: plan_motion: q_kin_dice_7 -> q_home  endpoint_ignored=[0, 11] path_ignored== gripper_relax=True held={}
+09:00:11 [INFO   ] streams: plan_motion: direct path clear — linear trajectory
+09:00:11 [DEBUG  ] streams: plan_motion: q_home -> q_kin_dice_7  endpoint_ignored=[0, 11] path_ignored== gripper_relax=True held={}
+09:00:11 [INFO   ] streams: plan_motion: direct path clear — linear trajectory
+Summary: {complexity: 3, cost: 3.000, evaluations: 112, iterations: 4, length: 2, run_time: 0.407, sample_time: 0.010, search_time: 0.397, skeletons: 1, solutions: 1, solved: True, timeout: False}
+  [#76-diag] outcome=plan_found, elapsed=0.435s, plan_len=3, cost=3.0
+    [eye #12] plan#3 planned (3 actions) | held=none | unknown shadows=1 | d_cups_ud@(0.643,0.067)[bel 4mm] dice@(0.673,0.216)[bel 1mm]
+  [timing] planner.plan() #3: 0.589s (cumulative 3.097s)
+Plan: 3 actions
+  1. move
+  2. pick
+  3. move
+
+  Executing: move
+    [eye #13] plan#3 before action 1/3 move(dice) | held=none | unknown shadows=1 | d_cups_ud@(0.643,0.067)[bel 4mm] dice@(0.673,0.216)[bel 1mm]
+    Moving to dice (10 waypoints)...
+09:00:11 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 39 steps — joint 6 moves 0.4179 rad, which needs 0.163 s at its 2.610 rad/s limit [F14]
+09:00:11 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 39 steps — joint 6 moves 0.4195 rad, which needs 0.163 s at its 2.610 rad/s limit [F14]
+09:00:11 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 39 steps — joint 6 moves 0.4199 rad, which needs 0.163 s at its 2.610 rad/s limit [F14]
+09:00:11 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 39 steps — joint 6 moves 0.4199 rad, which needs 0.163 s at its 2.610 rad/s limit [F14]
+09:00:11 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 39 steps — joint 6 moves 0.4200 rad, which needs 0.163 s at its 2.610 rad/s limit [F14]
+09:00:11 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 39 steps — joint 6 moves 0.4200 rad, which needs 0.163 s at its 2.610 rad/s limit [F14]
+09:00:11 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 39 steps — joint 6 moves 0.4200 rad, which needs 0.163 s at its 2.610 rad/s limit [F14]
+09:00:11 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 39 steps — joint 6 moves 0.4200 rad, which needs 0.163 s at its 2.610 rad/s limit [F14]
+    -> Arrived at dice
+    [perception] 2 object(s) not visible in the refresh render — keeping last estimate: ['d_cups_ud', 'dice']
+    [integrity] after plan#3 move(dice): 0/2 believed bodies observed where believed, none disturbed
+
+  Executing: pick
+    [eye #14] plan#3 before action 2/3 pick(dice, dice) | held=none | unknown shadows=1 | d_cups_ud@(0.643,0.067)[bel 4mm] dice@(0.673,0.216)[bel 1mm]
+    Picking dice from dice...
+    [F24] dice not re-observed before the descent (no detection) — aiming at the registry estimate
+    [#P1-diag] pick arrival dice: ee_xy_err=0.27mm ee_vs_obj_xy=1.24mm ee_z=0.0152 contact_z=0.0141
+    Grip verified for dice: both pads in contact, pad_normal_force=3.28N, measured half-width 10.2 mm vs estimate 8.2 mm
+    *** dice PICKED UP! ***
+    [perception] 1 object(s) not visible in the refresh render — keeping last estimate: ['d_cups_ud']
+    [integrity] after plan#3 pick(dice): 0/1 believed bodies observed where believed, none disturbed
+
+  Executing: move
+    [eye #15] plan#3 before action 3/3 move(home) | held=dice | unknown shadows=1 | d_cups_ud@(0.643,0.067)[bel 4mm] dice@(0.674,0.215)[bel 85mm]
+    Moving to home (10 waypoints)...
+09:00:12 [DEBUG  ] streams: plan_motion: post_pick_contact_runtime -> q_home  endpoint_ignored=[0, 11] path_ignored== gripper_relax=True held=[11]
+09:00:12 [INFO   ] streams: plan_motion: direct path clear — linear trajectory
+09:00:12 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 39 steps — joint 1 moves 0.3495 rad, which needs 0.163 s at its 2.175 rad/s limit [F14]
+09:00:12 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 39 steps — joint 1 moves 0.3507 rad, which needs 0.163 s at its 2.175 rad/s limit [F14]
+09:00:12 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 39 steps — joint 1 moves 0.3510 rad, which needs 0.163 s at its 2.175 rad/s limit [F14]
+09:00:12 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 39 steps — joint 1 moves 0.3511 rad, which needs 0.163 s at its 2.175 rad/s limit [F14]
+09:00:12 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 39 steps — joint 1 moves 0.3511 rad, which needs 0.163 s at its 2.175 rad/s limit [F14]
+09:00:12 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 39 steps — joint 1 moves 0.3511 rad, which needs 0.163 s at its 2.175 rad/s limit [F14]
+09:00:12 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 39 steps — joint 1 moves 0.3512 rad, which needs 0.163 s at its 2.175 rad/s limit [F14]
+09:00:12 [DEBUG  ] robot_utils: move_robot_smooth: stretching 30 -> 39 steps — joint 1 moves 0.3512 rad, which needs 0.163 s at its 2.175 rad/s limit [F14]
+    [D7] at-home test passed: max |dq| 1.71e-04 rad after a 23-step hold (config q_home)
+    -> Arrived at home
+    [integrity] after plan#3 move(home): 1/1 believed bodies observed where believed, none disturbed
+    [eye #16] final (SUCCESS: None) | held=dice | unknown shadows=1 | d_cups_ud@(0.643,0.067)[bel 4mm] dice@(0.175,0.014)[bel 744mm]
+
+============================================================
+SUCCESS!
+  Target: dice
+  Found in: picked
+  Plans executed: 3
+  Shadows searched: 0
+
+--- Planning timing summary ---
+  Total plan() calls       : 3
+  Cumulative planning time : 3.097s
+  Average per call         : 1.032s
+  Per-call (s)             : [1.443, 1.065, 0.589]
+  Timing summary written to /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/archive/tampura_bridge_plan_2026-10-25/bf/BF38_q14/seed0_sq0.5mm/ours/run_2026-10-30_09-00-03/timing_summary.json
+============================================================
+09:00:12 [INFO   ] root: Run finished : 2026-10-30_09-00-12
+09:00:12 [INFO   ] root: Full log at  : /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/archive/tampura_bridge_plan_2026-10-25/bf/BF38_q14/seed0_sq0.5mm/ours/run_2026-10-30_09-00-03/run_2026-10-30_09-00-03.log

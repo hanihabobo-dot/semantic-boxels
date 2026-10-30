@@ -8,7 +8,7 @@ here once. Every module that needs robot parameters imports from this file.
 import logging
 import math
 from dataclasses import dataclass
-from typing import FrozenSet, Tuple
+from typing import FrozenSet, Optional, Tuple
 
 import numpy as np
 import pybullet as p
@@ -1122,8 +1122,17 @@ def close_gripper(robot_id: int, gui: bool = False,
             time.sleep(1 / 120)
 
 
+# The squeeze execute_pick's close holds inside the measured width, set once
+# per run by main() from --grip-squeeze-mm.  3 mm is today's pipeline; 0.5 mm
+# is GF10's remedy by Q14's rule (PAPER_AUDIT.txt BF#38): at 3 mm the
+# position overdrive pushes the pads into a 5 g die until it is expelled on
+# the move home (1 of 96 held), at 0.5 mm 93 of 96.  Default off until its
+# acceptance.
+GRIP_SQUEEZE = 0.003
+
+
 def close_gripper_until_contact(robot_id: int, gui: bool = False,
-                                force: float = 60.0, squeeze: float = 0.003,
+                                force: float = 60.0, squeeze: Optional[float] = None,
                                 ignore_body_ids=frozenset(),
                                 step: float = 0.0005, max_steps: int = 240):
     """Close the fingers until BOTH pads touch something, then hold a
@@ -1145,8 +1154,11 @@ def close_gripper_until_contact(robot_id: int, gui: bool = False,
     geometry the pads may brush at the descent floor).  Returns the
     measured half-width (m), or None when the fingers closed to (near)
     zero without both pads touching, i.e. nothing was between them.
+    ``squeeze`` None uses GRIP_SQUEEZE.
     """
     import time
+    if squeeze is None:
+        squeeze = GRIP_SQUEEZE
     fingers = robot_model().finger_joints
     target = min(p.getJointState(robot_id, fj)[0] for fj in fingers)
     for _ in range(max_steps):
