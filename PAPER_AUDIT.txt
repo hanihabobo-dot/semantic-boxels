@@ -7563,8 +7563,8 @@ BF#38 [DONE, measurement and decision]  GF10: Q14'S PROBE; THE 0.5 MM
   test_adopted_goal_at_home_episode and test_gf9_gated_episode.py::
   test_gated_goal_at_home_episode fail intermittently on our scene (a block
   pick misses with no pad contact three times, then no plan); the code
-  before this entry fails the same way (1 of 2 full-suite runs, 9 runs on
-  2026-10-30), so it predates GF10.  Not analysed.
+  before this amendment fails the same way (1 of 4 full-suite runs on
+  2026-10-30), so it is not the flag's.  Not analysed.
   RESULT FILES: archive/tampura_bridge_plan_2026-10-25/bf/BF38_q14/ (one
   JSON and log per level; smoke_base.json is the 3-cell smoke).
 
