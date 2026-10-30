@@ -280,6 +280,52 @@ def figures(latest, seeds, cap, out_dir, tag):
     return written
 
 
+def write_rep_jsons(latest, out_dir, md):
+    """P4.6 OUTPUT: {T,O}/rep<k>.json in the 2026-05-26 JSON's per-seed shape
+    plus scene_file, and for O planning_time_s, plan_count, exit_reason,
+    parked_count, settle_max_disp and scene_changed_by_settle."""
+    written = []
+    by_arm_rep = {}
+    for (arm, rep, seed), r in latest.items():
+        by_arm_rep.setdefault((arm, rep), []).append(r)
+    for (arm, rep), rows in sorted(by_arm_rep.items()):
+        per_seed = []
+        for r in sorted(rows, key=lambda x: x['seed']):
+            rec = {
+                'seed': r['seed'], 'success': bool(r.get('success')),
+                'status': r.get('status'), 'wall_s': r.get('wall_s'),
+                'loop_s': r.get('loop_s'), 'censored': bool(r.get('censored')),
+                'symk_solve_s': r.get('symk_solve_s'), 'solve_step': r.get('solve_step'),
+                'max_reward': r.get('max_reward'), 'n_actions': r.get('n_actions'),
+                'rewards': r.get('rewards'), 'returncode': r.get('returncode'),
+                'timed_out': bool(r.get('timed_out')), 'run_dir': r.get('run_dir') or r.get('save_dir'),
+                'console_log': r.get('console'), 'note': r.get('note', ''),
+                'scene_file': r.get('scene_file'),
+                'gate_failures': sorted((r.get('gate_failures') or {}).keys()),
+                'time_to_success_s': r.get('time_to_success_s'),
+                'planning_time_s': r.get('planning_s'),
+            }
+            if arm == 'O':
+                rec.update({'plan_count': r.get('plan_count'), 'exit_reason': r.get('exit_reason'),
+                            'parked_count': r.get('parked_count'),
+                            'settle_max_disp': r.get('settle_max_dxy_m'),
+                            'scene_changed_by_settle': r.get('scene_changed_by_settle'),
+                            'setup_share_s': r.get('setup_share_s'),
+                            'n_dispatched': r.get('n_dispatched'),
+                            'n_macro_actions': r.get('n_macro_actions')})
+            per_seed.append(rec)
+        d = os.path.join(out_dir, arm)
+        os.makedirs(d, exist_ok=True)
+        p = os.path.join(d, f'rep{rep}.json')
+        with open(p, 'w') as f:
+            json.dump({'arm': arm, 'rep': rep, 'task': 'find_dice',
+                       'n_seeds': len(per_seed), 'per_seed': per_seed,
+                       'snapshot': md.get('snapshot'), 'machine': md.get('machine'),
+                       'protocol': md.get('protocol')}, f, indent=1, default=str)
+        written.append(p)
+    return written
+
+
 def text_report(rep, reps):
     lines = []
     lines.append(f"campaign {rep['campaign_dir']}  status {rep['campaign_status']}  "
@@ -388,6 +434,7 @@ def main():
                        for arm in ('T', 'O') if arm_rows(latest, arm, 2)},
         'b1g_agreement': b1g_agreement(t1, bg),
         'figures': {} if args.no_figures else figures(latest, seeds, cap, out_dir, tag),
+        'rep_jsons': write_rep_jsons(latest, out_dir, md),
     }
     with open(os.path.join(out_dir, f'report_{tag}.json'), 'w') as f:
         json.dump(rep, f, indent=1, default=str)
