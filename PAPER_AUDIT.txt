@@ -7556,6 +7556,15 @@ BF#38 [DONE, measurement and decision]  GF10: Q14'S PROBE; THE 0.5 MM
   acceptance.
   CLAIM EFFECT: none before the acceptance.  HONESTY CLASS: measurement
   and a pre-registered remedy choice.
+  AMENDED 2026-10-30 (user): --grip-squeeze-mm takes any value in mm, and
+  watch.ps1 gains -Squeeze, so the user can judge a tighter grip in the GUI.
+  Only 3 and 0.5 are measured; any other value is for watching only.
+  FINDING: the episode tests test_b3_parameterisation.py::
+  test_adopted_goal_at_home_episode and test_gf9_gated_episode.py::
+  test_gated_goal_at_home_episode fail intermittently on our scene (a block
+  pick misses with no pad contact three times, then no plan); the code
+  before this entry fails the same way (1 of 2 full-suite runs, 9 runs on
+  2026-10-30), so it predates GF10.  Not analysed.
   RESULT FILES: archive/tampura_bridge_plan_2026-10-25/bf/BF38_q14/ (one
   JSON and log per level; smoke_base.json is the 3-cell smoke).
 

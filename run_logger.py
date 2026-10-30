@@ -811,9 +811,10 @@ def parse_pipeline_args(argv=None):
              "plus pose_radius plus 8 mm (capped at the finger limit).")
     # GF10 (PAPER_AUDIT.txt BF#38): the pick close's squeeze, default today's.
     parser.add_argument(
-        '--grip-squeeze-mm', choices=['3', '0.5'], default='3',
+        '--grip-squeeze-mm', type=float, default=3.0,
         help="How far inside the measured width the pick's close holds the "
-             "pads: 3 mm (today) or 0.5 mm (GF10's remedy by Q14's rule).")
+             "pads, in mm: 3 (today), 0.5 (GF10's remedy by Q14's rule); "
+             "other values are for watching only, not measured.")
     parser.add_argument(
         '--planner',
         choices=['ff-astar1', 'ff-astar2', 'ff-astar', 'ff-wastar1',
