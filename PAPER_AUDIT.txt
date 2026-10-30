@@ -7392,7 +7392,7 @@ BF#35 [OPEN, decision]  ONE ENVIRONMENT, ONE SUCCESS CRITERION; HOW TAMPURA
   remedy track for our own scenes, where the carry stays physical.
   HONESTY CLASS: evaluation protocol.
 
-BF#36 [OPEN, design for review]  Q17 ANSWERED: B9, OUR PERCEPTION AND PLANNER
+BF#36 [PARKED 2026-10-30 by BF#37]  Q17 ANSWERED: B9, OUR PERCEPTION AND PLANNER
       ON THEIR CONTROLLERS; ONE WORLD-STATE SUCCESS TEST  (code reading,
       2026-10-30)
   DECISION (user, 2026-10-29): realise BF#35 by running our perception
@@ -7480,6 +7480,27 @@ BF#36 [OPEN, design for review]  Q17 ANSWERED: B9, OUR PERCEPTION AND PLANNER
         then seeds 0 to 2 on both arms locally; cluster only on approval.
   EFFORT: 3 to 4 days.  HONESTY CLASS: evaluation protocol and claim
   scope.
+
+BF#37 [OPEN, decision]  PHYSICAL DIE CARRY FIRST; THEN ONE SUCCESS TEST
+      ON BOTH ARMS  (user, 2026-10-30)
+  DECISION: B9 (BF#36) is parked.  Order of work:
+    1. GF10 on our side, physically: run Q14's pre-registered probe as
+       answered and amended (96 trials, factor order, >= 95 % rule for a
+       die-class and a cup-class body, M9 and the aperture rule ON, no
+       mass or friction change, no retry).  Lead from the informal probe
+       (BF#35): squeeze 0.5 mm held 4/4, 3 mm 0/4; it qualifies only
+       under the rule, and as a pipeline-wide parameter, never a
+       find_dice-only one.  Blocks and cups must still hold (blocks
+       slipped at 40 N historically).
+    2. One success test applied to both arms, read only on each arm's
+       final executing world, their files unedited: the die between both
+       pads and the joint readback at DEFAULT_ARM_POS under their
+       np.allclose(1e-4).  Our arm stays physical (pads >= 0.5 N, D3);
+       for their kinematic arm the pad test is geometric (Q18 decides
+       its form).  Their own reward is reported beside it.
+    3. A GUI run of seed 0 in which the die is carried home.
+  CLAIM EFFECT: arm O keeps D1's whole pipeline with physical execution.
+  HONESTY CLASS: evaluation protocol.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
