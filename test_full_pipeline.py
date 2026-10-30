@@ -104,7 +104,8 @@ from execution import (audit_robot_held_state,
                        handle_sense_action, EmptyHandError,
                        world_integrity_check, register_new_detections,
                        held_cargo_config, detection_complete,
-                       record_initial_detections, handle_observe_action)
+                       record_initial_detections, handle_observe_action,
+                       pick_contact_floor)
 import pose_belief
 import m8_domain
 import observe_views
@@ -1075,6 +1076,11 @@ def main(gui=True, run_logger=None, scene_config=None,
     # configuration its init facts and the goal conjunct.
     if env.reach_envelope is not None:
         planner.streams.set_reach(*env.reach_envelope)
+    # BF#45: the executor's contact rule for the kin stream's contact
+    # check (a task's own floor, D8; the table height for boxels without
+    # a surface of their own).
+    planner.streams.contact_floor = pick_contact_floor(env)
+    planner.streams.surface_z_default = float(env.table_surface_height)
     if home_joints is not None:
         planner.streams.set_home_joints(home_joints)
     if goal_at_home:

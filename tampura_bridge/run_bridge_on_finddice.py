@@ -77,6 +77,10 @@ def main():
     ap.add_argument('--stop-before-planning', type=int, default=0)
     ap.add_argument('--log-level', default='smart')
     ap.add_argument('--max-plan-time', type=float, default=900.0)
+    # BF#45: a headless diagnostic run on a scene the laptop maps to another
+    # seed than the campaign does (BF#8, BF#39) continues past G19 like a
+    # GUI run, never scored; the ledger's G19 gate records the mismatch.
+    ap.add_argument('--allow-g19-mismatch', type=int, default=0)
     # M8-M10 (P4.5 model tweaks), passed through to main()'s CLI flags.
     for flag in ('--m8', '--m9', '--m10', '--pick-aperture-from-pose'):
         ap.add_argument(flag, choices=('off', 'on'), default='on')
@@ -129,7 +133,7 @@ def main():
     pinned = gates.SCENE_MAP.get(a.global_seed)
     mismatch = (scene.name_seen is None or pinned is None
                 or pinned not in scene.name_seen)
-    if mismatch and not a.vis:
+    if mismatch and not a.vis and not a.allow_g19_mismatch:
         raise SystemExit(f"G19: seed {a.global_seed} loaded {scene.name_seen}, "
                          f"pinned {pinned}")
     if mismatch:
@@ -140,7 +144,7 @@ def main():
         # gave the seed, and the ledger's G19 gate records the mismatch (the
         # outcome field then says gate_failed).  Headless runs still stop.
         print(f"G19: seed {a.global_seed} loaded {scene.name_seen}, the campaign "
-              f"pins {pinned}: a GUI run, watching only, never scored "
+              f"pins {pinned}: a watching or diagnostic run, never scored "
               f"(the ledger's G19 gate records the mismatch)", flush=True)
     stamp('scene_map_asserted')
     cfg = bridge_policy.EpisodeConfig(

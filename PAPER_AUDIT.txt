@@ -7775,6 +7775,55 @@ BF#44 [DONE]  THE PICK SQUEEZE DEFAULT IS 0.5 MM  (user decision, 2026-10-30)
   0.5 mm.  HONESTY CLASS: parameter change (user decision).
 
 
+BF#45 [DONE]  COMPUTE-KIN CERTIFIES AN APPROACH ONLY WITH ITS CONTACT
+      REACHABLE  (user report, 2026-10-30)
+  WHAT: Hani watched seed 10 (the laptop's 1747173593, the four-cup
+  layout) pick b_cups_ud, move to free_006, stop ("froze") and place the
+  cup elsewhere: "if that path is invalid, then it should have never been
+  picked up in the first place".  The kin stream certified
+  (kin_solution o b g q) from the IK of the APPROACH pose alone, the boxel
+  centre plus the grasp offset (10 or 6 cm up); the executor then solves
+  the CONTACT pose (execute_pick: the object's top minus 5 mm, never below
+  the finger-tip floor; execute_place: the held object's bottom on the
+  surface, the same end-effector height) with solve_ik seeded from q, and
+  over free_006 (world (0.69, -0.20), the approach at z 0.225, the contact
+  at z 0.06) that IK had no solution: "IK failed for place contact of
+  b_cups_ud", the step failed, the planner replanned to another cell with
+  the cup in hand (plans 2 and 3 of both the 12:33 and the 13:23 run;
+  BF#42's run at 11:30 lost four of five places the same way).  Now
+  BoxelStreams.contact_target computes the executor's contact pose for
+  (o, b, g) from the registry (the object's box height, the destination's
+  surface_z, contact_floor = the task's pick floor, which the planner
+  sets from the scene, the class prior for a target without a box), and
+  compute_kin_solution solves it with the executor's own solve_ik seeded
+  from each approach config: a config whose contact has no IK is counted
+  (contact_ik_rejects) and not certified.  The planner never commits to a
+  pick or place the arm cannot complete from the configuration it
+  certified; it takes another IK branch or another cell at planning time.
+  Pipeline-wide: every pick and place of every scene (stack keeps its own
+  contact rule, compute_stack_kin_solution).
+  EVIDENCE: tests/test_kin_contact.py (the executor's rule reproduced for
+  a pick, a place and a region pick; a cell at the reach edge whose
+  rest-seeded approach has IK and whose contact has none: that branch is
+  turned away, every certified branch lowers to a reachable contact);
+  14 tests green with tests/test_m9_grasp.py; tools/bridge_gates.py
+  static green; the GUI runs archive/tampura_bridge_plan_2026-10-25/bf/
+  gui_runs/watch_s10_2026-10-30_12-33-57 and watch_s10_2026-10-30_13-23-41
+  (console_debug.log holds the curated story).
+  CLAIM EFFECT: arm O's B8 rate; the campaign submitted at 13:53
+  (sb_6e2e27d) runs the pipeline BEFORE this fix, its re-run after is the
+  before/after.  HONESTY CLASS: planner correctness (a stream certified
+  what the executor could not do).  The driver gained --allow-g19-mismatch
+  for such headless diagnostic runs on a laptop-mapped scene (never
+  scored, the G19 gate records the mismatch, as BF#39's GUI rule).
+  RESULT (headless seed 10 on the laptop, the same scene, 14:02, archive/
+  tampura_bridge_plan_2026-10-25/bf/BF45_46/s10_headless_2026-10-30_
+  14-02-25, --allow-g19-mismatch, never scored): five plans, 21 steps,
+  three places all at the planned centre, no contact-IK abort (the two
+  GUI runs had one each in their plan 2); b and a relocated, e observed,
+  picked, and the die found under it.  The episode then failed for two
+  other reasons, BF#47.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

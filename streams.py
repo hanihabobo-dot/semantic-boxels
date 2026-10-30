@@ -85,7 +85,8 @@ from robot_utils import (robot_model,
                          JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH, JOINT_RANGES,
                          REST_POSES, RenderingLock, IK_ORN_TOL_DEG,
                          quat_angle_deg, PATH_CHECK_MAX_STEP_RAD,
-                         is_config_collision_free, is_path_collision_free)
+                         is_config_collision_free, is_path_collision_free,
+                         solve_ik)
 
 
 # =============================================================================
@@ -283,6 +284,9 @@ class BoxelStreams:
         # _build_init) and how many compute-kin calls they turned away.
         self.view_boxel_ids: frozenset = frozenset()
         self.view_kin_skips = 0
+        # BF#45: approach configs compute_kin_solution turned away because
+        # the executor's contact pose below them had no IK.
+        self.contact_ik_rejects = 0
         # F18 (2026-09-20): the resolution of every path collision check,
         # in radians of the largest-moving joint between samples.
         # DEFAULT 0 = the fixed RRT_EDGE_CHECKS count, because that is
@@ -1357,6 +1361,45 @@ class BoxelStreams:
                 smoothed = smoothed[:i + 1] + smoothed[j:]
         return smoothed
     
+    # BF#45 (2026-10-30): the contact pose the executor lowers to from the
+    # certified approach config.  execute_pick stops the fingers
+    # CONTACT_TOP_CLEARANCE below the object's top and never lower than
+    # contact_floor above the surface (execution._FINGER_TIP_DEPTH, or the
+    # task's own floor, D8); execute_place releases the object's bottom on
+    # the surface, which puts the end effector at the same height.  The
+    # planner sets contact_floor and surface_z_default from the scene.
+    CONTACT_TOP_CLEARANCE = 0.005
+    contact_floor = 0.035
+    surface_z_default = 0.0
+
+    def contact_target(self, obj_id: str, boxel: BoxelData, grasp: Grasp) -> np.ndarray:
+        """The end-effector position execute_pick / execute_place lowers to
+        for (obj, boxel, grasp): the boxel's centre plus the grasp's xy, at
+        the object's top minus CONTACT_TOP_CLEARANCE or contact_floor above
+        the surface, whichever is higher.  At a pick (the object's own
+        boxel) the top is the registry box's; at a place or a pick out of
+        a region it is the destination's surface plus the object's height
+        (a pre-sense target without a box takes the class prior
+        NOMINAL_HIDDEN_EXTENTS).  The surface is the destination boxel's
+        surface_z, else the object's, else surface_z_default."""
+        obj_boxel = self.registry.get_boxel(str(obj_id))
+        surface = getattr(boxel, 'surface_z', None)
+        if surface is None and obj_boxel is not None:
+            surface = getattr(obj_boxel, 'surface_z', None)
+        if surface is None:
+            surface = self.surface_z_default
+        surface = float(surface)
+        if obj_boxel is not None and obj_boxel.id == boxel.id:
+            top = float(obj_boxel.max_corner[2])
+        elif obj_boxel is not None:
+            top = surface + float(obj_boxel.max_corner[2] - obj_boxel.min_corner[2])
+        else:
+            top = surface + float(NOMINAL_HIDDEN_EXTENTS[2])
+        contact_z = max(top - self.CONTACT_TOP_CLEARANCE, surface + self.contact_floor)
+        return np.array([float(boxel.center[0]) + float(grasp.position[0]),
+                         float(boxel.center[1]) + float(grasp.position[1]),
+                         contact_z])
+
     # =========================================================================
     # STREAM 2: Compute IK for Pick/Place
     # =========================================================================
@@ -1477,6 +1520,24 @@ class BoxelStreams:
             if sig in seen:
                 continue
             seen.add(sig)
+
+            # BF#45: the executor lowers from this config to the contact pose
+            # with solve_ik seeded here (execute_pick / execute_place, audit
+            # #37/#38).  A config whose contact that solver cannot reach is
+            # not certified, so the planner never commits to a pick or place
+            # the arm then aborts with the occluder already in hand (seed 10
+            # on 1747173593: "IK failed for place contact" at free_006 after
+            # the pick, replanned to another cell).
+            contact = self.contact_target(obj_id, boxel, grasp)
+            if solve_ik(self.robot_id, contact, ee_orn, self.physics_client,
+                        seed=config.joint_positions) is None:
+                self.contact_ik_rejects += 1
+                logger.debug("compute_kin: %s at %s seed %d rejected: the approach "
+                             "%s has IK, its contact %s has none (BF#45)",
+                             obj_id, boxel_id, seed_idx,
+                             np.round(target_pos, 3).tolist(),
+                             np.round(contact, 3).tolist())
+                continue
 
             # Attach the ignored-body set so plan_motion knows to skip this
             # object during collision checks for the entire motion to/from
