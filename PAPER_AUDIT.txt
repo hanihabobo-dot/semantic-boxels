@@ -7682,6 +7682,28 @@ BF#41 [DONE]  GUI RUNS: THEIR BELIEF GRID CLEARED BETWEEN STEPS; THE
   initialize was rejected (a runtime change of their object's state, the
   spirit of G13); the cleanup runs from our side only.
 
+BF#42 [FINDING, not analysed]  SEED 10 GUI RUN ON 1747173593:
+      PLANNER_FAILED AFTER FOUR OF FIVE PLACES FAILED AT THE CONTACT IK
+      (2026-10-30)
+  WHAT: archive/tampura_bridge_plan_2026-10-25/bf/gui_runs/
+  watch_s10_2026-10-30_11-30-53 (the laptop's scene for seed 10,
+  1747173593, the layout of campaign seeds 1, 2, 3, 4, 8, 14, 15 and 18;
+  squeeze value not recorded, BF#41): 9 plans, 22 dispatched steps, 85.9 s
+  planning.  Observe b, pick b ok; place b at free_006 and free_010 "IK
+  failed for place contact" (audit #82, replanning); place at free_012 ok;
+  sense the shadow of b: clear but empty; observe a, pick a ok; place a at
+  free_023 and free_027 IK failures, then "drop verification failed for
+  a_cups_ud after place" (the cup was not where the place put it); observe
+  a incomplete; then no plan with 3 unsearched shadows.  Their reward 0 at
+  every step; G19 FAIL as expected on the laptop, every other gate PASS.
+  The place pose is sampled on the belief and its contact IK is first
+  tried at execution; on this layout four of five sampled places were
+  unreachable at the contact height.  A campaign episode on this layout
+  can fail the same way.  Not analysed further; the samplers plan
+  (PLAN_P4_POSE_GRASP_SAMPLERS.md, M10) owns the place pose.
+  CLAIM EFFECT: none (a GUI run, never scored).  HONESTY CLASS: finding.
+
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
