@@ -7938,6 +7938,55 @@ BF#48 [DONE]  CARRY WATCH: THE HOLD DETECTOR AGAINST THE TRUTH, LIVE IN THE
   CLASS: diagnostic tool.
 
 
+BF#49 [DONE]  RUN DATA HYGIENE: COMPACTED AFTER A DAY, DELETED AFTER TWO
+      WEEKS, 1 GIB ON THE CLUSTER  (user policy, 2026-10-30)
+  WHAT: Hani: "make sure that such debug data is compacted, and then later
+  deleted regularly, and there should be a 1 GiB limit on data we take in
+  the i6 cloud."  Found: 2.5 GB under logs/ (7471 run directories since
+  May, 7427 older than two weeks), 2.4 GB in TAMPURA's runs/ in WSL (278
+  bridge and probe runs, 274 older than two weeks), 18 MB of this week's
+  GUI and check runs under archive/, and 1.41 GB of ours on the cluster
+  (inbox 483 MB: every snapshot archive kept after its unpack, plus
+  pddlstream_lib.tar.gz; snapshots 700 MB; results 7 MB).
+  (1) Laptop, tools/prune_runs.ps1: a run directory (run_<stamp>,
+  watch_s<k>_<stamp>, bridge_<time>, s<k>_headless_<stamp>) under logs/,
+  archive/, eval_results/ and runs/ of this repo and its sibling eval
+  snapshots, and TAMPURA's runs/ in WSL, is compacted once its newest file
+  is older than a day (.log .jsonl .pkl .pddl .sas .txt gzipped in place,
+  mtimes kept; .json, .yml and images stay) and deleted once older than
+  fourteen days; a directory holding any git-tracked file is evidence and
+  is never touched (14 such today).  Dry run unless -Apply, one line per
+  applied run in logs/prune_runs.log.  Screenshots keep the seven-day rule
+  of 2026-10-28 (tools/prune_screenshots.ps1).  Scheduled tasks of the
+  logged-on user: SemanticBoxels-prune-screenshots daily 12:15 (the task
+  that script's note promised did not exist; it does now),
+  SemanticBoxels-prune-runs daily 12:20, SemanticBoxels-prune-cluster
+  Mondays 12:25.
+  (2) Cluster, tools/cluster/prune_work.sh (run by tools/cluster/
+  prune_work.ps1 from the laptop, at the end of every b8_campaign.sbatch
+  job, and from cn-04's crontab Mondays 03:25 as $W/prune_work.sh): the
+  archive of an unpacked snapshot or lib goes at once, a results directory
+  older than two days becomes one tar.gz, job logs older than two days are
+  gzipped, a snapshot no queued or running job of mine references
+  (scontrol's Command) goes after fourteen days, anything older than
+  ninety days goes; then the cap: while inbox + snapshots + results + logs
+  exceed 1 GiB the oldest unreferenced snapshot goes, then the oldest
+  results tarball, a referenced snapshot never.  push_snapshot.ps1 runs it
+  with --reserve (twice the archive) before every upload and deletes the
+  archive after the unpack.  The environment (two venvs, their trees,
+  pddlstream_lib: 12.7 GB) is reported, not counted: "data we take" read
+  as what we transfer and produce.
+  RESULT: cluster applied 14:55: 1410 MB to 860 MiB (inbox 483 MB to
+  0.2 MB, seven B1 to B3 results directories tarred, twelve job logs
+  gzipped), under the cap with both queued campaigns' snapshots referenced
+  and kept.  Laptop: the dry run lists 8343 run directories, 14 evidence,
+  186 files (23 MB) to compact and 8263 directories (3.5 GB) to delete,
+  plus 274 of TAMPURA's; the first -Apply is Hani's to run (the session's
+  auto-mode guard refuses a bulk deletion run by the assistant, by design)
+  or the daily task's at 12:20 tomorrow.
+  CLAIM EFFECT: none.  HONESTY CLASS: infrastructure (data hygiene).
+
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

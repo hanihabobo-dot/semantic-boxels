@@ -14,6 +14,11 @@ $tgz = Join-Path $env:TEMP "$name.tar.gz"
 # misreads; with it off the archive holds the commit's blobs byte for byte.
 git -c core.autocrlf=false archive --format=tar.gz -o $tgz $Commit
 Write-Host "archive $name : $([math]::Round((Get-Item $tgz).Length / 1MB, 1)) MB"
+# BF#49: make room under the 1 GiB cap first (twice the archive: the upload
+# and the unpacked tree); the archive itself is removed after the unpack.
+$prune = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot 'prune_work.sh')).Replace("`r", '')
+$prune | ssh -o BatchMode=yes cn-04 "bash -s -- --apply --reserve $(2 * (Get-Item $tgz).Length)"
+if ($LASTEXITCODE -ne 0) { throw "prune_work.sh could not make room under the cap (exit $LASTEXITCODE)" }
 scp -o BatchMode=yes $tgz "cn-04:$W/inbox/$name.tar.gz"
 if ($LASTEXITCODE -ne 0) { throw "scp failed (exit $LASTEXITCODE): nothing unpacked" }
 $unpack = @"
@@ -24,6 +29,7 @@ if [ -d $W/$name ]; then echo "$name already unpacked"; else
   chmod -R a-w $W/$name
   echo "unpacked ${name}: `$(ls $W/$name | wc -l) entries"
 fi
+rm -f $W/inbox/$name.tar.gz
 "@
 # PowerShell ends a string piped into a native command with CRLF, so bash
 # read "fi\r", never closed the if and unpacked nothing (BF#43); the remote

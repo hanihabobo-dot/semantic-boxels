@@ -5,7 +5,7 @@ capture / screenshot images under logs/, eval_results/ and runs/ of this repo
 and of its sibling eval snapshots (..\Semantic_Boxels_*).  They are kept for
 debugging until then.  Git-tracked images, archive/ and the thesis graphics
 are never touched.  Dry run unless -Apply; every applied run appends a line
-to logs/prune_screenshots.log.  A daily scheduled task runs it with -Apply.
+to logs/prune_screenshots.log.  A daily scheduled task (SemanticBoxels-prune-screenshots, 12:15) runs it with -Apply.
 
   pwsh -NoProfile -File tools\prune_screenshots.ps1              # show what would go
   pwsh -NoProfile -File tools\prune_screenshots.ps1 -Apply

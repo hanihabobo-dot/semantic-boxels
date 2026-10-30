@@ -52,4 +52,7 @@ cat $OUT/gates_after.txt
 (cd $SB && $VA/python tools/bridge_gates.py static) > $OUT/static.txt 2>&1
 tail -3 $OUT/static.txt
 echo "results in $OUT"
+# BF#49: the cluster's data hygiene after every campaign (this job's snapshot
+# is referenced while it runs, so it stays; the fresh results stay for two days).
+bash $SB/tools/cluster/prune_work.sh --apply || echo "prune_work rc $?"
 echo B8_DONE
