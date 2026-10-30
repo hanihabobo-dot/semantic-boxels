@@ -7868,6 +7868,33 @@ BF#46 [DONE]  THE PINCH SPAN READS THE REGISTRY BOX'S SIDE ALONG THE NEAREST
   appeared under it.  Pre-grasp estimates 30.0 and 28.3 mm for b and a
   against 35.3 and 35.2 in the GUI runs.  Then BF#47.
 
+BF#47 [FINDING, not analysed]  AFTER THE FIXES THE SAME EPISODE LOSES THE
+      DIE ON THE MOVE HOME, A MIS-PLACED CUP BUMPED  (2026-10-30)
+  WHAT: in the BF#45 run, plan 4 placed e_cups_ud at free_032 (pre-release
+  pose (0.636, -0.046), tilt 0.14 deg, released on the tactile checks) and
+  the post-release observation found it 12.7 mm further between its two
+  renders: drop verification failed, the held state cleared, e's pose
+  radius 36 mm, replanned (audit #79).  Plan 5 picked the die (grip
+  verified, 2.83 N, half-width 10.3 mm against an estimate of 10.1) and
+  moved home on a "direct path clear" linear trajectory, planned in the
+  twin with e at its believed pose; on arrival the integrity check found
+  e_cups_ud disturbed by 32.3 mm and the goal's finger-pad check found no
+  contact: the die lay at (0.267, -0.070), physics_mismatch.  Two
+  candidate causes, not separated: the swing home brushed the mis-placed
+  cup (the twin's motion check reads the believed pose and ignores the
+  36 mm radius) and jolted the die out, or the 0.5 mm squeeze let the die
+  slip on the swing (BF#38's probe: 3 of 96 lost).  The campaign's arm O
+  episodes will show the die-carry loss rate at 0.5 mm; a motion check
+  that inflates the twin's bodies by their pose radius, or a re-observe
+  after a failed drop verification before any motion past the body, is
+  the fix candidate.
+  EVIDENCE: the run above (run log: "Placing e_cups_ud", "[release-obs]
+  e_cups_ud ... shift 12.7 mm", "[integrity] disturbed: e_cups_ud ...
+  32.3", the final eye line; eye.jsonl).
+  CLAIM EFFECT: none yet; arm O's B8 rate after the fixes carries it.
+  HONESTY CLASS: finding.
+
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

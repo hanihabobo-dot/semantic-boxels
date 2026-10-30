@@ -1,0 +1,207 @@
+{
+ "seed": 10,
+ "scene_file": "1747173593.826745.json",
+ "switches": {
+  "m8": "on",
+  "m9": "on",
+  "m10": "on",
+  "pick_aperture_from_pose": "on",
+  "grip_squeeze_mm": "0.5"
+ },
+ "g13_runtime": {
+  "arm": "O",
+  "failures": [],
+  "their_root": "/root/tampura-work",
+  "policy_methods": [
+   "__init__",
+   "get_action"
+  ],
+  "their_modules": {
+   "in_checkout": 53,
+   "identical_copy": 0
+  },
+  "schemas_of_ours": [
+   "boxel_episode"
+  ],
+  "ok": true
+ },
+ "run_dir": "/mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/archive/tampura_bridge_plan_2026-10-25/bf/BF45_46/s10_headless_2026-10-30_14-02-25/ours/run_2026-10-30_14-03-01",
+ "scene_changed_by_settle": false,
+ "settle": {
+  "a_cups_ud": {
+   "dxy_m": 0.0,
+   "dz_m": -0.011,
+   "dyaw_deg": 0.01,
+   "tilt_deg": 0.02
+  },
+  "d_cups_ud": {
+   "dxy_m": 0.0,
+   "dz_m": -0.011,
+   "dyaw_deg": -0.01,
+   "tilt_deg": 0.02
+  },
+  "e_cups_ud": {
+   "dxy_m": 0.0001,
+   "dz_m": -0.011,
+   "dyaw_deg": -0.0,
+   "tilt_deg": 0.01
+  },
+  "dice": {
+   "dxy_m": 0.0103,
+   "dz_m": -0.0398,
+   "dyaw_deg": -13.19,
+   "tilt_deg": 49.75
+  },
+  "b_cups_ud": {
+   "dxy_m": 0.0,
+   "dz_m": -0.011,
+   "dyaw_deg": 0.01,
+   "tilt_deg": 0.0
+  }
+ },
+ "settle_max_dxy_m": 0.0103,
+ "observation": {
+  "grasp_body": null,
+  "conf": [
+   -0.08061139064884747,
+   -1.6721640311033015,
+   0.07064638224537687,
+   -2.7449177519878143,
+   0.08185843922775828,
+   1.7516623389949024,
+   0.7847510730729722
+  ]
+ },
+ "readback_identical": true,
+ "gates": {
+  "counts": {},
+  "info": {
+   "G16_update_object_positions_noop": 6,
+   "G8c_bodies_checked": 45,
+   "G8c_aabb_offset_max_um": 4307,
+   "G8c_syncs": 9,
+   "rayTestBatch_client_2": 4,
+   "G8c_held_checked": 2,
+   "executing_bodies_at_install": 15,
+   "executing_bodies_now": 15
+  },
+  "steps": {
+   "main_outside_dispatch": 50,
+   "main_in_dispatch": 6559
+  },
+  "steps_after_last_dispatch": 0,
+  "solve_calls": 5
+ },
+ "rewards": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "time_deltas": [
+  51.32085084915161,
+  51.3322548866272,
+  51.34284162521362,
+  51.353930950164795,
+  51.36555051803589,
+  51.37729787826538,
+  51.38906145095825,
+  51.399799823760986,
+  51.41068172454834,
+  51.42291975021362,
+  51.48677921295166,
+  51.4995481967926,
+  51.50999212265015,
+  51.52055048942566,
+  51.53139281272888,
+  51.5420126914978,
+  51.55251717567444,
+  51.56240749359131,
+  51.57276678085327,
+  51.582913398742676,
+  51.586731910705566
+ ],
+ "ledger_gates": [
+  [
+   "ledger",
+   "PASS",
+   "173 rows, complete"
+  ],
+  [
+   "G3",
+   "PASS",
+   "21 steps over 5 plans, all as planned; 4 labelled early ends"
+  ],
+  [
+   "G4",
+   "PASS",
+   "3 places at the planned centre"
+  ],
+  [
+   "G5",
+   "PASS",
+   "planned_sense_render=4"
+  ],
+  [
+   "G15",
+   "PASS",
+   "2 senses, each classified on its planned region"
+  ],
+  [
+   "G10r",
+   "PASS",
+   "domain_pddlstream_m8.pddl as the switches require"
+  ],
+  [
+   "G19",
+   "FAIL",
+   "seed 10: 1747173593.826745.json (pinned 1747173590)"
+  ],
+  [
+   "G18",
+   "PASS",
+   "initialize return to rollout start 0.038 s (initialize_call +0.039 s, initialize_return +7.120 s, scene_map_asserted +0.014 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.024 s, rollout_start +0.000 s)"
+  ],
+  [
+   "G19h",
+   "PASS",
+   "seed 10, both RNGs untouched, PYTHONHASHSEED 0"
+  ],
+  [
+   "G11",
+   "PASS",
+   "5 solve calls, 5 plan rows"
+  ],
+  [
+   "G21",
+   "PASS",
+   "every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 6559}"
+  ]
+ ],
+ "outcome": {
+  "status": "gate_failed",
+  "success": false,
+  "reward": 0.0,
+  "error": null,
+  "gate_failures": {
+   "G19": "seed 10: 1747173593.826745.json (pinned 1747173590)"
+  }
+ }
+}
