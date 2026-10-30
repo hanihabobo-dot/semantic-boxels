@@ -167,10 +167,37 @@ class ObserveViews:
         # configuration name, and its counters (reset by init_facts).
         self._test_renders: Dict[str, tuple] = {}
         self.test_stats: Dict[str, float] = self._fresh_test_stats()
+        # BF#53: the init cache.  A look configuration's wrist render and
+        # a fixed sense configuration's (q_home, the retract arc) eye
+        # render depend on the arm, posed for the render, and on where the
+        # twin's bodies stand; between two inits that leave every body
+        # where it was (_twin_signature) they are reused, and a body that
+        # moved empties the cache.  The current configuration's render is
+        # never cached (the arm is somewhere new at every init).  Off:
+        # every init renders everything again.
+        self.cache_enabled = True
+        self._signature: Optional[tuple] = None
+        self._look_cache: Dict[tuple, List[Tuple[int, RobotConfig]]] = {}
+        self._eye_cache: Dict[tuple, tuple] = {}
 
     @staticmethod
     def _fresh_test_stats() -> Dict[str, float]:
         return {'tests': 0, 'passes': 0, 'renders': 0, 'render_s': 0.0}
+
+    def _twin_signature(self) -> tuple:
+        """Where the twin's task bodies stand: every body but the supports
+        and the robot, position to 0.1 mm, quaternion to 1e-4."""
+        sig = []
+        for n in sorted(self.env.objects):
+            if n in _SUPPORTS or n == 'robot':
+                continue
+            t = self._twin_id(n)
+            if t is None:
+                continue
+            pos, orn = p.getBasePositionAndOrientation(t, physicsClientId=self.client)
+            sig.append((n, tuple(round(float(v), 4) for v in pos),
+                        tuple(round(float(v), 4) for v in orn)))
+        return tuple(sig)
 
     # ----- the plan twin ------------------------------------------------
 
@@ -227,6 +254,19 @@ class ObserveViews:
     def look_configs(self, boxel) -> List[Tuple[int, RobotConfig]]:
         """The passing look configurations of one object, as (k, config)."""
         lo, hi, cxy = self._look_target(boxel)
+        # BF#53: the same object, box, removed pairs and twin: the same
+        # configurations, without the renders (fresh RobotConfig objects).
+        key = None
+        if self.cache_enabled:
+            key = (boxel.id, tuple(np.round(lo, 4)), tuple(np.round(hi, 4)),
+                   tuple(np.round(cxy, 4)),
+                   tuple(sorted(k for o, k in self.removed if o == boxel.id)),
+                   self._signature)
+            hit = self._look_cache.get(key)
+            if hit is not None:
+                self.last_stats['cached_looks'] += 1
+                return [(k, RobotConfig(joint_positions=np.array(q.joint_positions),
+                                        name=q.name)) for k, q in hit]
         pts = lattice(lo, hi)
         blocking = self._blocking_ids(boxel.id)
         t_ee_cam_inv = np.linalg.inv(self._ee_to_camera())
@@ -266,6 +306,8 @@ class ObserveViews:
                 if inside and not np.any(icp & np.isin(hids, list(blocking))):
                     out.append((k, RobotConfig(joint_positions=np.asarray(q),
                                                name=look_name(boxel.id, k))))
+        if key is not None:
+            self._look_cache[key] = list(out)
         return out
 
     # ----- C1 -----------------------------------------------------------
@@ -312,13 +354,24 @@ class ObserveViews:
                     self.robot, q.joint_positions, physics_client=self.client,
                     log_collisions=False):
                 continue
-            self._set_arm(q.joint_positions)
-            t0 = time.perf_counter()
-            _, depth_m, seg = _render(self.client, view, proj, env.image_width,
-                                      env.image_height, env.near_plane,
-                                      env.far_plane)
-            self.last_stats['twin_render_s'] += time.perf_counter() - t0
-            self.last_stats['twin_renders'] += 1
+            # BF#53: a fixed candidate's render (home, the retract arc) is
+            # reused while no body moved; the current one is rendered.
+            ckey = (q.name, self._signature) if (self.cache_enabled and ci >= 1) else None
+            rend = self._eye_cache.get(ckey) if ckey is not None else None
+            if rend is None:
+                self._set_arm(q.joint_positions)
+                t0 = time.perf_counter()
+                _, depth_m, seg = _render(self.client, view, proj, env.image_width,
+                                          env.image_height, env.near_plane,
+                                          env.far_plane)
+                self.last_stats['twin_render_s'] += time.perf_counter() - t0
+                self.last_stats['twin_renders'] += 1
+                rend = (depth_m, seg)
+                if ckey is not None:
+                    self._eye_cache[ckey] = rend
+            else:
+                self.last_stats['cached_renders'] += 1
+            depth_m, seg = rend
             for s in todo:
                 if self._robot_blocked(s, depth_m, seg, view, proj) \
                         <= SENSE_MARGINAL_BLOCKED_FRACTION:
@@ -366,10 +419,18 @@ class ObserveViews:
         ``declared_configs``: configs init already declares (Config q)."""
         self.last_stats = {'twin_render_s': 0.0, 'twin_renders': 0,
                            'look_ik': 0, 'sense_view': 0, 'look_config': 0,
-                           'sense_fallback': 0}
+                           'sense_fallback': 0, 'cached_looks': 0,
+                           'cached_renders': 0}
         self.last_fallback = []
         self._test_renders = {}                 # BF#52: a new twin state
         self.test_stats = self._fresh_test_stats()
+        # BF#53: the cache holds one twin state; a body that moved since
+        # the last init empties it.
+        sig = self._twin_signature() if self.cache_enabled else None
+        if sig != self._signature or sig is None:
+            self._look_cache = {}
+            self._eye_cache = {}
+        self._signature = sig
         saved = self._arm()
         facts: List[tuple] = []
         configs = {}

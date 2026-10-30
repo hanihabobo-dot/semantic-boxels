@@ -113,6 +113,18 @@ def over_region_facts(streams, views, targets, shadows, fits):
     return facts, stats
 
 
+def search_options_from(effort_weight: str, initial_complexity: int) -> Dict[str, Any]:
+    """BF#53: pddlstream solve() keyword arguments from the two CLI
+    settings (run_logger's --search-effort-weight, a number or 'off', and
+    --search-initial-complexity); 'off' and 0 leave pddlstream's own."""
+    opts: Dict[str, Any] = {}
+    if str(effort_weight) != 'off':
+        opts['effort_weight'] = float(effort_weight)
+    if int(initial_complexity):
+        opts['initial_complexity'] = int(initial_complexity)
+    return opts
+
+
 def read_pddl_file(filename: str) -> str:
     """Read PDDL file content."""
     pddl_dir = os.path.join(os.path.dirname(__file__), 'pddl')
@@ -235,6 +247,10 @@ class PDDLStreamPlanner:
         # BF#52: the fold (over_region_facts) is offered unless main()'s
         # --sense-over-region off; it needs m8_views.
         self.sense_over_region = True
+        # BF#53: further pddlstream solve() keyword arguments from main()'s
+        # --search-effort-weight and --search-initial-complexity (see
+        # run_logger); empty is pddlstream's own default for each.
+        self.search_options: Dict[str, Any] = {}
 
         # Load PDDL files (use PDDLStream-compatible untyped domain)
         if domain_file is None:
@@ -415,7 +431,12 @@ class PDDLStreamPlanner:
         lines.append(")")
         lines.append("")
 
-        output_path = os.path.join(os.path.dirname(__file__), filepath)
+        # BF#54: an absolute filepath is written where it says; a relative
+        # one under this module's directory as before (the code tree, which
+        # is a read-only snapshot on the cluster: main() passes the run
+        # directory).
+        output_path = (filepath if os.path.isabs(filepath)
+                       else os.path.join(os.path.dirname(__file__), filepath))
         with open(output_path, 'w') as f:
             f.write('\n'.join(lines))
 
@@ -1030,7 +1051,10 @@ class PDDLStreamPlanner:
                   f"{len(_views)} view boxels, "
                   f"{self.last_m8_stats['sense_fallback']} shadows on the "
                   f"current-config fallback; {self.last_m8_stats['twin_renders']} "
-                  f"twin renders {self.last_m8_stats['twin_render_s']:.2f}s; "
+                  f"twin renders {self.last_m8_stats['twin_render_s']:.2f}s "
+                  f"({self.last_m8_stats.get('cached_looks', 0)} looks, "
+                  f"{self.last_m8_stats.get('cached_renders', 0)} renders from "
+                  f"the cache); "
                   f"{_over_stats.get('over_region_pass', 0)}/"
                   f"{_over_stats.get('over_region_pairs', 0)} over-region folds "
                   f"{_over_stats.get('over_region_s', 0.0):.2f}s; "
@@ -1301,6 +1325,14 @@ class PDDLStreamPlanner:
                 # (greedily_process + process_complexity) and cuts the
                 # spin fourfold.
                 search_sample_ratio=self.search_sample_ratio,
+                # BF#53: effort_weight makes the optimistic search pay for
+                # a stream result's effort, an unrefined (shared) object's
+                # search overhead above all, so it prefers the refined
+                # objects of the previous attempt instead of a fresh
+                # alternative (seed 10's first call: 13 attempts without
+                # it); initial_complexity skips the levels no pick can be
+                # planned at (grasp, kin, motion: three).
+                **self.search_options,
             )
         finally:
             sys.stdout = _tee._stream

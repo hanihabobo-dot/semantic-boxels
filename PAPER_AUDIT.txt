@@ -8174,6 +8174,119 @@ BF#52 [OPEN]  TIME CUT (1): THE BASELINE RECORDED; THE EYE SENSES FROM THE
   this).  HONESTY CLASS: model change (the sense action's configurations),
   disclosed.
 
+BF#53 [OPEN]  TIME CUT (2): THE FIXES AS SWITCHES AND THE PER-FIX EVAL ON
+      TWENTY-PLUS SEEDS (user, 2026-10-30)
+  WHAT: Hani: "do the fixes, and run eval to confirm time reduction ...
+  do eval per fix on a minimum of 20 working seeds per fix. you can run
+  all of these fixes together accumulatively ... like fix 1 so and so,
+  then fix 1 + 2 so and so, and only fix 2", and "it should be the tampura
+  one and in the cloud" (the eval on TAMPURA's find_dice, on the cluster).
+  THE FIXES, each a switch of run_logger (the bridge driver passes them
+  through; the domain row's switches and the run record carry them):
+  FIX 1, --sense-over-region (BF#52): the fold.
+  FIX 2, --m8-init-cache (observe_views.ObserveViews): a look
+  configuration's wrist render and a fixed sense configuration's (q_home,
+  the retract arc) eye render are reused between two inits that left
+  every twin body where it was (_twin_signature: every task body's pose
+  in the plan twin, to 0.1 mm); the current configuration's render is
+  never cached; a body that moved empties the cache (one twin state
+  held).  Counted in the [M8] init line (cached looks and renders).
+  tests/test_init_cache.py (3).  Expected small on find_dice: a replan
+  follows a pick and a place more often than not, and those move a body.
+  FIX 3, --continue-after-observe (the dispatcher's observe branch): an
+  observe that confirmed what the plan assumed (observe_ok: the target
+  seen completely, its radius within the commit margin, not lost) lets
+  the plan go on to its pick, which aims at the re-posed estimate anyway
+  (#P1 F24), instead of forcing a replan (PLAN_P4_POSE_GRASP_SAMPLERS.md's
+  C2 said every observe forces one); every other outcome replans as
+  before.  The ledger's observe_result row carries continue_.  Seed 10's
+  baseline paid two such replans, 3.5 s each.
+  FIX 4, --search-effort-weight (default 1) and
+  --search-initial-complexity (default 3), pddlstream solve() keyword
+  arguments (pddlstream_planner.search_options_from, planner.
+  search_options; tests/test_search_options.py).  WHY: the first call's
+  cost is pddlstream's attempt loop (refinement.iterative_plan_streams).
+  pddlstream weighs a stream result's effort into the optimistic search
+  only with effort_weight set (scheduling/plan_streams.add_stream_efforts
+  returns at once without it), so the search is blind to which optimistic
+  objects it already refined and every attempt may pick a fresh unrefined
+  alternative: seed 10's first call made 13 attempts, 11 s of search,
+  each a FastDownward run on a problem of 341 to 1664 results.  With the
+  weight an unrefined result costs opt_index x DEFAULT_SEARCH_OVERHEAD
+  (1e2) more than a refined one and the second attempt takes the refined
+  chain.  The starting complexity: every pick needs a grasp, a kin
+  solution and a motion, three stream levels, so levels 0 to 2 never find
+  a plan (and with the fold's real facts level 2 made five futile
+  attempts, 4.4 s).
+  MEASURED (headless, seed 10, archive/tampura_bridge_plan_2026-10-25/bf/
+  BF53_search, fixes 2 and 3 off): fold off: as is planning 34.4 s (first
+  call 12.0); effort weight 1: 20.6 (3.4); complexity 3 alone: 31.0
+  (10.6; alone it only skips the cheap levels, and changed the plan);
+  both: 18.3 (3.8), wall 57.0 -> 41.3 s.  Fold on, both: planning 52.8 ->
+  15.7 (first call 22.4 -> 4.1), wall 73.8 -> 30.8 s, 5 plans and 23
+  steps.  Seed 0: wall 10.3 -> 8.2.  Four of the five seed-10 runs ended
+  physics_mismatch at the goal check (the die's pads lost, the known B7
+  grasp loss; the as-is run too): the timings are of complete episodes.
+  DECISION (executor): defaults 1 and 3.
+  THE EVAL: tools/time_cut_eval.py (new): arms = sets of the fixes on,
+  the others off (base, 1, 2, 12, 3, 123, 4, 1234), every seed under
+  every arm, seeds outer; each episode the bridge driver headless with
+  --allow-g19-mismatch 1 (the laptop's and the cluster's scene maps
+  differ, BF#39; the scene a seed loads is the same under every arm);
+  results.jsonl (rc, wall, the bridge's outcome, episode_metrics'
+  metrics), summary.txt: per arm the success count and the means over the
+  working seeds (the ledger's success under every arm) and over the seeds
+  every arm ran to the ledger's close, per fix its effect alone against
+  base and added to the fixes before it, wall per seed; a rerun skips
+  what results.jsonl holds (extend --seeds for more working seeds).
+  tools/cluster/time_cut_eval.sbatch runs it on an exclusive node from an
+  immutable snapshot (arm O's venv A), one job per group of arms, the
+  jobs' results.jsonl files concatenated for the summary.  A laptop run
+  (seeds 0-23, started 20:14) was stopped on Hani's "in the cloud".
+  RESULT: pending (the cluster jobs).
+  CLAIM EFFECT: none yet.  HONESTY CLASS: fix 2 none (a cache of what the
+  twin would render again), fix 3 a dispatcher rule (the plan goes on
+  when its assumption held, as after a found_target sense), fix 4 a search
+  setting (pddlstream's own effort weighting; it changes which optimistic
+  plan the search takes first), all disclosed; the per-fix eval is of our
+  arm alone, not a T-vs-O comparison.
+
+BF#54 [FIXED]  FINDING: BOTH B8 CAMPAIGNS' ARM O CRASHED ON EVERY EPISODE,
+      WRITING THE DEBUG PROBLEM FILE INTO THE READ-ONLY SNAPSHOT
+      (executor, 2026-10-30 20:25)
+  WHAT: the before-fix campaign (job 4981741, sb_6e2e27d, cn-104, 17:42
+  to 19:49): arm T 14/20 and 14/20 successes, arm O 0/20 and 0/20, every
+  O episode 'crashed' after 15 to 30 s with rewards all 0.0 and their
+  rollout stepping no-op; the after-fix campaign (4982009, sb_c29209e,
+  cn-104, from 19:50) the same (O:1:2 to O:1:4 crashed in 15 s each).
+  The run log: PermissionError: [Errno 13] Permission denied:
+  '$W/sb_6e2e27d/pddl/problem_debug.pddl' at test_full_pipeline.py:1130
+  (planner.export_problem_pddl) from policy.execute_fn.
+  WHY: PDDLStreamPlanner.export_problem_pddl wrote its debug file to
+  os.path.dirname(__file__)/pddl/problem_debug.pddl, the code tree, and
+  push_snapshot.ps1 unpacks every snapshot read-only (chmod -R a-w).  The
+  smoke (BF#40) never reached that line: smoke mode stops arm O before
+  planning ("stop_before_planning: returning after the first plan-twin
+  sync", before the problem export), so the per-run gates and the smoke
+  passed on a path the full mode leaves.  GF8 moved pddlstream's temp/
+  and statistics/ and boxel_data.json out of the tree; this writer was
+  missed.
+  FIX: main() passes filepath = <run directory>/problem_debug.pddl (the
+  temp directory without a run logger); export_problem_pddl writes an
+  absolute filepath where it says and a relative one under the module as
+  before.  The artefact copy problem_initial.pddl is unchanged.
+  CONSEQUENCE: both campaigns' arm O results are void; arm T's stand
+  (14/20 per repetition, the same code in both).  The after-fix campaign
+  is still running its crashing O arm as of this entry (Hani's job; the
+  question whether to cancel it is put to him).  Both campaigns are to be
+  re-run on a snapshot with this fix, which then also carries BF#52/53's
+  defaults: the before/after pairing is to be re-declared.  REMARK: the
+  smoke mode should run arm O through its first plan on a cheap seed, so
+  a crash like this one is caught before a full run; not done.
+  CLAIM EFFECT: the B8 before/after numbers do not exist yet.  HONESTY
+  CLASS: harness bug, fixed; disclosed.
+
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

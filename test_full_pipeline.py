@@ -44,6 +44,7 @@ Architecture (post-#26 refactor, 2026-04-19; sense-handler split 2026-05-05):
 
 import sys
 import os
+import tempfile
 import random
 import time
 from typing import Any, Dict, Optional
@@ -88,7 +89,7 @@ from boxel_data import BoxelRegistry, BoxelType
 from cell_merger import merge_free_space_cells
 from perception import grid_would_hit
 from free_space import split_free_boxel  # noqa: F401  (kept for future use)
-from pddlstream_planner import PDDLStreamPlanner
+from pddlstream_planner import PDDLStreamPlanner, search_options_from
 from streams import RobotConfig
 from robot_utils import (move_robot_smooth, hold_at_config,
                          detect_execution_collisions,
@@ -551,6 +552,19 @@ def main(gui=True, run_logger=None, scene_config=None,
     # unless --sense-over-region off (the A/B).  Not a pose_belief switch:
     # those gate the pose writers as a set.
     sense_over_region = getattr(args, 'sense_over_region', 'on') == 'on'
+    # BF#53: the optimistic search's settings, pddlstream solve() keyword
+    # arguments (run_logger's --search-effort-weight and
+    # --search-initial-complexity, defaults 1 and 3; 'off' and 0 leave
+    # pddlstream's own).
+    search_effort_weight = str(getattr(args, 'search_effort_weight', '1'))
+    search_initial_complexity = int(getattr(args, 'search_initial_complexity', 3))
+    search_options = search_options_from(search_effort_weight,
+                                         search_initial_complexity)
+    # BF#53: M8's init cache (observe_views) and the observe continuation
+    # (the dispatcher), run_logger's --m8-init-cache and
+    # --continue-after-observe.
+    m8_init_cache = getattr(args, 'm8_init_cache', 'on') == 'on'
+    continue_after_observe = getattr(args, 'continue_after_observe', 'on') == 'on'
     # The two known domains must match the switch (a caller may pass
     # another file deliberately; that one is not judged here).
     _dom = os.path.abspath(domain_file) if domain_file else m8_domain.LIVE_FILE
@@ -1091,14 +1105,20 @@ def main(gui=True, run_logger=None, scene_config=None,
                                 camera_pos=env.camera_position,
                                 tray_name=tray_name,
                                 domain_file=domain_file)
+    planner.search_options = dict(search_options)          # BF#53
     # G10: which domain and stream texts the planner loaded, under which
-    # switches (BF#52 records the stream file and the fold's switch too).
+    # switches (BF#52 records the stream file and the fold's switch too,
+    # BF#53 the search's settings).
     ledger_event('domain', file=os.path.basename(domain_file or m8_domain.LIVE_FILE),
                  sha=m8_domain.sha(planner.domain_pddl),
                  stream_file=os.path.basename(m8_domain.STREAM_LIVE_FILE),
                  stream_sha=m8_domain.sha(planner.stream_pddl),
                  switches=dict(pose_belief.SWITCHES,
-                               sense_over_region=sense_over_region))
+                               sense_over_region=sense_over_region,
+                               search_effort_weight=search_effort_weight,
+                               search_initial_complexity=search_initial_complexity,
+                               m8_init_cache=m8_init_cache,
+                               continue_after_observe=continue_after_observe))
     # #P4 B3(d): the scene's reach envelope (None: streams' constants),
     # and D7 (i) to (iii): the home joints, and with a declared goal
     # configuration its init facts and the goal conjunct.
@@ -1161,10 +1181,16 @@ def main(gui=True, run_logger=None, scene_config=None,
               "plan-twin sync")
         env.close()
         return None
+    # BF#54: the debug problem file goes into the run directory (the temp
+    # directory without a run logger), never into the code tree: on the
+    # cluster the snapshot is read-only and every arm O episode of the
+    # 2026-10-30 campaigns crashed here (the smoke returns above this line).
+    _export_dir = str(run_logger.run_dir) if run_logger else tempfile.gettempdir()
     problem_path = planner.export_problem_pddl(
         target_objects=planner_target_objects,
         goal=goal,
         visible_target_locations=visible_target_locations,
+        filepath=os.path.join(_export_dir, 'problem_debug.pddl'),
     )
     print(f"  Exported initial problem to {problem_path}")
     if run_logger:
@@ -1176,6 +1202,7 @@ def main(gui=True, run_logger=None, scene_config=None,
             env, planner.streams._robot_base_xy)
         # BF#52: the fold's switch (over_region_facts needs m8_views).
         planner.sense_over_region = sense_over_region
+        planner.m8_views.cache_enabled = m8_init_cache         # BF#53
 
     boxel_centers = {b.id: b.center for b in registry.boxels.values()}
 
@@ -1979,7 +2006,12 @@ def main(gui=True, run_logger=None, scene_config=None,
             elif action_name == 'observe':
                 # OBSERVE (M8 C2): one wrist render at the look
                 # configuration re-poses the registered objects it shows
-                # completely; every observe forces a replan.
+                # completely.  An observe that confirms what the plan
+                # assumed (observe_ok: the target seen completely, its
+                # radius within the margin) lets the plan go on to its
+                # pick, which aims at the re-posed estimate anyway (#P1
+                # F24) (BF#53, --continue-after-observe); every other
+                # outcome forces a replan.
                 obj_str, look_q = str(params[0]), params[1]
                 observe_count += 1
                 status, lost = handle_observe_action(
@@ -2016,9 +2048,17 @@ def main(gui=True, run_logger=None, scene_config=None,
                           f"{'; PARKED (no look configurations)' if obj_str in planner.m8_views.parked else ''}")
                 else:
                     observe_strikes.pop(obj_str, None)
+                _observe_go_on = (continue_after_observe
+                                  and status == 'observe_ok' and not lost)
                 ledger_event('observe_result', obj=obj_str, status=status,
-                             lost=lost, config=look_q.name)
-                dispatch_end(status)
+                             lost=lost, config=look_q.name,
+                             continue_=_observe_go_on)
+                # A step that lets the plan go on ends 'ok', as a sense that
+                # found the target does (G3: any other end is the plan's
+                # last step); the observe_result row keeps the status.
+                dispatch_end('ok' if _observe_go_on else status)
+                if _observe_go_on:
+                    continue
                 break
 
             elif action_name == 'pick':
@@ -2924,6 +2964,10 @@ if __name__ == "__main__":
         "grip_squeeze_mm": getattr(args, 'grip_squeeze_mm', '0.5'),
         "save_screenshots": getattr(args, 'save_screenshots', 'off'),   # BF#50
         "sense_over_region": getattr(args, 'sense_over_region', 'on'),  # BF#52
+        "search_effort_weight": getattr(args, 'search_effort_weight', '1'),          # BF#53
+        "search_initial_complexity": getattr(args, 'search_initial_complexity', 3),  # BF#53
+        "m8_init_cache": getattr(args, 'm8_init_cache', 'on'),                       # BF#53
+        "continue_after_observe": getattr(args, 'continue_after_observe', 'on'),     # BF#53
         "search_sample_ratio": getattr(args, 'search_sample_ratio', None),
         "path_check_step": getattr(args, 'path_check_step', None),
         "path_check_diag": bool(getattr(args, 'path_check_diag', False)),

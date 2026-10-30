@@ -91,11 +91,18 @@ def main():
     # (--sense-over-region, BF#52: sense from the pick configuration over
     # the region when the arm there does not block the eye's view, then pick
     # from there; off returns to a view spot before every sense as before.)
+    # (--m8-init-cache and --continue-after-observe, BF#53: the init cache
+    # and the observe continuation, see run_logger.)
     for flag in ('--m8', '--m9', '--m10', '--pick-aperture-from-pose',
-                 '--sense-over-region'):
+                 '--sense-over-region', '--m8-init-cache',
+                 '--continue-after-observe'):
         ap.add_argument(flag, choices=('off', 'on'), default='on')
     # GF10 (BF#38): the pick close's squeeze (0.5 mm since BF#44), passed through like the switches.
     ap.add_argument('--grip-squeeze-mm', type=float, default=0.5)
+    # BF#53: the optimistic search's settings (run_logger's flags of the
+    # same names and defaults), passed through like the switches.
+    ap.add_argument('--search-effort-weight', default='1')
+    ap.add_argument('--search-initial-complexity', type=int, default=3)
     # BF#50 (user rule, 2026-10-30): the eye images are for debugging only,
     # off unless asked; passed through like the switches.
     ap.add_argument('--save-screenshots', choices=('off', 'on'), default='off')
@@ -178,6 +185,10 @@ def main():
                   'pick_aperture_from_pose': a.pick_aperture_from_pose,
                   'sense_over_region': a.sense_over_region,
                   'grip_squeeze_mm': str(a.grip_squeeze_mm),
+                  'search_effort_weight': a.search_effort_weight,
+                  'search_initial_complexity': str(a.search_initial_complexity),
+                  'm8_init_cache': a.m8_init_cache,
+                  'continue_after_observe': a.continue_after_observe,
                   'save_screenshots': a.save_screenshots})
     cfg.driver = {'events': events, 'seed': config['global_seed'],
                   'rng_untouched': rng_untouched,
