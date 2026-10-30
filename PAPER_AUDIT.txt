@@ -7669,6 +7669,16 @@ BF#40 [DONE]  B8'S HARNESS: tools/_bridge_campaign.py,
   BF40_smoke/; their RolloutHistory pickles were not pulled (colons in
   their file names, which Windows refuses; the harness had read them on
   the cluster).
+  DECISION 2026-10-30 17:20 (user): the two full campaigns, 4981741 on
+  sb_6e2e27d (BF#44's state, the arm before BF#45 and BF#46) and 4982009 on
+  sb_c29209e (after them), submitted 14:07 and 14:46 with -w cn-110 and
+  still pending at 17:00 behind another user's two-day job on that node
+  while every rleap_cpu node was partly busy, were unpinned (scontrol
+  update ReqNodeList=, queue age kept) and the second chained behind the
+  first (Dependency=afterany:4981741; both use the shared tampura-work
+  tree): they take the first fully free node of the partition, which is
+  one topology throughout (2x24x2 threads, 190 GB; cn-101 verified Xeon
+  Platinum 8160 like cn-110); each campaign.json names its host and CPU.
 
 BF#41 [DONE]  GUI RUNS: THEIR BELIEF GRID CLEARED BETWEEN STEPS; THE
       SWITCHES RECORDED PER EPISODE  (user report, 2026-10-30)
