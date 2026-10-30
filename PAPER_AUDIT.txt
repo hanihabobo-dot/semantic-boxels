@@ -4251,7 +4251,8 @@ B8  [OPEN]  THE CAMPAIGN (P4.6): both arms, seeds 0-19, two repetitions,
 
 B9  [OPEN, OPTIONAL, NOT A FALLBACK]  PLANNER-ONLY VARIANT: our planner
     driving THEIR controllers through their schemas.  Only on a user
-    decision; labelled as such.
+    decision; labelled as such.  DECIDED 2026-10-29 (user, Q17): B9 is
+    the arm O route, with our perception kept; design BF#36.
 
 CALENDAR (pre-registered).  Efforts: B0 3, B1 2-3, B2 5-7, B3 5-6, B4 1-2, B5
 3-5 (M7 included), B6 1-2, B7 3, B8 4: 27 to 35 agent-days, plus 2 if M6 is
@@ -4858,7 +4859,13 @@ Q17 One success criterion for both arms (user decision 2026-10-29, BF#35):
     body the way their environment does after our verified grasp, holding
     scored from that grasp, at-home from the joint readback; or (b) both
     physical, which changes their executor.  Plus: keep or drop our
-    both-pads grasp check (theirs has none).  OPEN.
+    both-pads grasp check (theirs has none).  ANSWERED 2026-10-29
+    (user): neither as written; our perception and planner on their
+    controllers (B9), design in BF#36.
+Q18 Finger rule scope under B9 (BF#36): our executor attaches only the
+    body between the closed pads; proposed that the shared success test
+    also checks both pads within 1 mm of the die for both arms, or no pad
+    test at evaluation.  OPEN.
 
 --------------------------------------------------------------------------------
 P4.11 CRITIQUE LOG, ROUND 1 (draft 1, 2026-10-25; four adversarial critics,
@@ -7384,6 +7391,95 @@ BF#35 [OPEN, decision]  ONE ENVIRONMENT, ONE SUCCESS CRITERION; HOW TAMPURA
   states both" is replaced by one shared criterion.  GF10 (Q14) stays the
   remedy track for our own scenes, where the carry stays physical.
   HONESTY CLASS: evaluation protocol.
+
+BF#36 [OPEN, design for review]  Q17 ANSWERED: B9, OUR PERCEPTION AND PLANNER
+      ON THEIR CONTROLLERS; ONE WORLD-STATE SUCCESS TEST  (code reading,
+      2026-10-30)
+  DECISION (user, 2026-10-29): realise BF#35 by running our perception
+  (depth camera, boxelization, M8-M10 pose estimates) and our planner on
+  TAMPURA's execute layer, their files unedited (B9, now the main arm O
+  route, no longer optional).  No oracle anywhere outside evaluation.
+  THEIR EXECUTE LAYER (panda_utils/panda_env_utils.py):
+  SceneState.apply_sequence(commands, teleport, sim_steps=0) moves the arm
+  and fingers by resetJointState through GroupTrajectory.iterate and calls
+  enforce_grasp() at every waypoint while state.grasp is set;
+  pick_execute(state, grasp, motion_plan, pre_grasp) runs the motion plan,
+  the pre grasp approach, a finger close from OPEN_GRIPPER_POS to
+  grasp.closed_position in GRIPPER_RES steps, sets state.grasp and
+  retreats; place_execute mirrors it and clears state.grasp.  A Grasp is
+  (body, grasp = the body's pose in the tool tip frame, pregrasp,
+  closed_position).  No physics step happens anywhere in it.  Their
+  find_dice pick_execute_fn (env.py:359-396) plans IK and motion in the
+  BELIEF's sim world and only executes in the executing world.
+  THE SEAM.  Our dispatcher moves the arm with move_robot_smooth along the
+  planner's waypoints (test_full_pipeline.py:1828) and ends a move home
+  with hold_at_config (:1844); execute_pick, execute_place and
+  execute_stack (execution.py:908, 1401, 1574) approach, close, verify
+  and release physically.  Under B9 a bridge module installs, for arm O
+  only, their execute layer behind those primitives:
+    (1) arm motion: the planner's waypoint path, interpolated as today,
+        runs as one GroupTrajectory through state.apply_sequence with
+        their teleport rule (teleport = not has_gui), on the SceneState
+        their rollout passes to execute_fn;
+    (2) finger close: GRIPPER_RES steps through apply_sequence until both
+        pads touch one body geometrically (getClosestPoints <= 0, their
+        close_until_collision rule moved from planning to execution);
+    (3) attach: if that body is a task body, state.grasp = Grasp(body,
+        its pose in the tool tip frame READ FROM THE EXECUTING WORLD at
+        closure, closed_position = the measured width), so the body never
+        jumps; otherwise no grasp and our verification sees an empty hand;
+    (4) open: the reverse finger trajectory and state.grasp = None;
+    (5) no physics step after D9's settle: hold_at_config, settle loops
+        and the release drop observation issue none, as in theirs;
+    (6) every force based check (pick contact floor, _verify_holding's
+        0.5 N, the drop check) becomes the geometric both pads test of
+        (2), since resetJointState fingers produce no contact force.
+  THE THREE TRAPS, RESOLVED.  (i) Motion: their plan_motion collision
+  checks the world it is given, so it is never called; our motion planner
+  plans on the plan twin from boxels as today and only its path reaches
+  apply_sequence.  A kinematic path passes through anything it was not
+  planned around, in both arms; the evaluator logs, read only, every
+  waypoint at which the robot or the held body penetrates another body in
+  the executing world (one count, both arms).  (ii) Attach: their executor
+  attaches the body the planner names even with the hand centimetres away;
+  ours attaches only the body between the closed pads (3).  (iii)
+  Identity: the attached body is the one physically pinched, never a
+  lookup from our planner's symbol to their body id.
+  THE SHARED SUCCESS TEST (both arms, the same code, read only, after the
+  rollout, on the executing world's final SceneState; their files
+  unedited): success iff state.grasp is set, state.grasp.body is the die,
+  both pads are within 1 mm of it, and the 7 joint readbacks match
+  DEFAULT_ARM_POS under their np.allclose(rtol=atol=1e-4).  Their own
+  reward is reported next to it for both arms (it reads the belief and
+  carries the home conf quirk of BF#35).  The pad test is the finger rule
+  applied to both arms at evaluation; only our executor also applies it
+  at attach, because our executor, unlike theirs, must find the body.
+  WHAT IT READS FROM THE WORLD: (3) reads the pinched body's true pose at
+  closure, the executor's own state (theirs reads the belief pose for the
+  same transform).  The planner never receives it; a new gate phase
+  'executor' scopes these reads and G2's ledger proves no planner side
+  read sees them.  Proposed, needs the G rule written before code.
+  CLAIM EFFECT: arm O tests perception plus planning on their execution
+  layer, not D1's whole pipeline with physical execution; D1's physical
+  result stays reported separately for our own scenes.  GF10 (die loss)
+  cannot occur in find_dice under B9 and stays the remedy track for our
+  scenes (Q14).  M4 stays superseded.
+  OPEN QUESTION Q18 (user): the finger rule scope, as proposed above
+  (evaluation for both arms, attach for ours only), or attach for ours
+  only and no pad test at evaluation (their reward's convention).
+  PLAN (each step ends with a BF#, serial runs only):
+    S1  audit, read only: every stepSimulation, force read and finger
+        command in one find_dice episode of arm O (call sites with
+        counts, from a probe like _probe_tampura_carry.py on our side).
+    S2  tampura_bridge/their_executor.py: (1) to (6), installed by a
+        bridge switch --executor theirs, default ours until S5 passes.
+    S3  tools/shared_success.py: the shared test and the penetration
+        count, run on both arms' final states.
+    S4  the 'executor' gate phase and its G rule; existing gates pass.
+    S5  seed 0 headless and in the GUI (watch.ps1 gains -Executor),
+        then seeds 0 to 2 on both arms locally; cluster only on approval.
+  EFFORT: 3 to 4 days.  HONESTY CLASS: evaluation protocol and claim
+  scope.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
