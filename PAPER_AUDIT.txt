@@ -7895,6 +7895,49 @@ BF#47 [FINDING, not analysed]  AFTER THE FIXES THE SAME EPISODE LOSES THE
   HONESTY CLASS: finding.
 
 
+BF#48 [DONE]  CARRY WATCH: THE HOLD DETECTOR AGAINST THE TRUTH, LIVE IN THE
+      GUI  (user request, 2026-10-30)
+  WHAT: Hani: "with squeeze 0 nothing slipped when I ran the experiment
+  with GUI. maybe your detection system is wrong. set up some experiment
+  to test this with me."  The run he means is watch_s0_2026-10-30_12-12-35
+  (seed 0; -Squeeze 0 passes no flag, so it ran the 3 mm default of that
+  hour, recorded grip_squeeze_mm 3.0): its goal check reported
+  "finger-pad contact incomplete: links none".  The eye's ground truth in
+  that run (eye.jsonl k=15 and 16): before the move home the die was in
+  the hand at (0.673, 0.218, 0.095), tilted 11.8 deg; at the check it lay
+  on the table at (0.463, 0.202, 0.012), tilted 159.5 deg, 21 cm from the
+  pick point, with the hand at home; eye_016_camera.png and
+  eye_016_gui.png show it on the table.  The detector was right there.
+  The detector itself (test_full_pipeline's goal check, execute_place's
+  entry assert, scoring's floor: both pads in contact with >= 0.5 N of
+  normal force) is now testable live: tools/_probe_carry_watch.py
+  (tools/watch_carry.ps1) pinches a find_dice body with our close at a
+  chosen squeeze in their GUI, carries it home with the pipeline's own
+  motion (velocity limits untouched; the GUI is slowed by sleeping
+  between steps), prints every tenth of a simulated second the
+  detector's verdict beside the body's true distance from the hand,
+  freezes the first step the detector says lost with a red marker at the
+  body, and at home prints both verdicts and whether they agree: a
+  disagreement is a detector bug, an agreement on "lost" is a loss one
+  can watch happen.
+  RESULT (headless self-test, the die at the 12:12 pick point, yaws 0,
+  pi/2 and pi/4, archive/tampura_bridge_plan_2026-10-25/bf/carry_watch/
+  selftest_headless_dice_sq*.json): at 3 mm 0 of 3 carries held, the die
+  53 to 62 cm from the hand at home, the detector and the truth agreeing
+  in all three; the detector's first "lost" came 0.14 to 0.79 s into the
+  swing with the die already 14 to 17 mm off its grasp position, leaving.
+  At 0.5 mm 3 of 3 held, agreeing.  One weakness seen: at 0.5 mm the
+  resting pad force is 1.6 to 7.6 N and during the swing it dips to 0.15
+  to 0.36 N in two of three carries, below the 0.5 N floor, so a check
+  taken mid-motion would read lost while the die sits 6 mm from the
+  hand.  The pipeline's checks run after a settle (the goal after the
+  home hold, the place entry after the move's settle), where the force
+  had recovered in every carry; not a defect of the checks as placed,
+  noted for any future mid-motion use.
+  CLAIM EFFECT: none; the GUI session with Hani is pending.  HONESTY
+  CLASS: diagnostic tool.
+
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
