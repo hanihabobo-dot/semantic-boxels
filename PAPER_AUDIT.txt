@@ -8287,6 +8287,39 @@ BF#54 [FIXED]  FINDING: BOTH B8 CAMPAIGNS' ARM O CRASHED ON EVERY EPISODE,
   CLASS: harness bug, fixed; disclosed.
 
 
+BF#55 [FIXED]  FINDING: THE CLUSTER'S CAP COUNTED APPARENT BYTES AND REFUSED
+      THE BF#53 SNAPSHOT AT 690 MIB ALLOCATED (executor, 2026-10-30 20:55)
+  WHAT: push_snapshot.ps1 for sb_ca1907e (the per-fix eval's snapshot)
+  stopped in prune_work.sh, "counted total 2769 MiB of 1024 MiB", exit
+  3, after the cap step had dropped every unreferenced snapshot
+  (sb_943ea9e, c31cbdd, 3850dd1, 526b358, 852b319, d8b51d4, 6e2e27d) and
+  every results tarball (b1j, b1g, b1j_aa, b3_ab, b3_rerun, b3_diag,
+  b2_852b319).  The same directories held 690 MiB allocated.
+  WHY: used() summed du -sbc, apparent bytes; the usage report next to
+  it (du -sh) and the chair's volume count allocated bytes.  TAMPURA's
+  per-episode pickle (rep/T/seed/<time>.pkl, 135 to 150 MB apparent)
+  holds 12 to 16 MB on the volume (NFS 4.2 from rleap-raid-1; sparse or
+  compressed there): the two B8 campaigns' arm T episodes were 2.9 GB
+  apparent and 0.5 GB allocated, and nothing left was droppable (the
+  results younger than two days, sb_c29209e referenced by job 4982009).
+  FIX: used() counts allocated bytes (du -sc -B1), the header says so;
+  the cron copy $W/prune_work.sh replaced with the same (dry run: 699
+  MiB counted).  sb_ca1907e pushed again with it.
+  CONSEQUENCE: the seven B1 to B3 tarballs and the seven snapshots are
+  gone from the cluster, the policy's cap step (BF#49): a snapshot is
+  re-pushable from its commit, and the laptop's archive holds what the
+  B1 to B3 entries pulled (archive/tampura_bridge_plan_2026-10-25/bf/
+  BF4_b1, BF7_b1j, BF9_b1g, BF10_b3, BF11_b1p2, BF12_b2); what a tarball
+  held beyond that is lost.  sb_ca1907e's own copy of prune_work.sh is
+  the apparent-count one: at the eval jobs' end it may drop unreferenced
+  snapshots and report the cap missed, never a results directory.  Each
+  arm T episode adds about 4 MB allocated (TAMPURA's pickle), so the
+  campaign re-runs (BF#54) fit while the older campaign is compacted;
+  whether TAMPURA's pickles need saving on the cluster at all is Hani's
+  question (their code writes them; the campaign log holds the outcome).
+  CLAIM EFFECT: none.  HONESTY CLASS: tooling; disclosed.
+
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

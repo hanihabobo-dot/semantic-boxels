@@ -1,7 +1,8 @@
 #!/bin/bash
 # Our data on the i6 cluster (user policy 2026-10-30, PAPER_AUDIT BF#49):
 # compacted after two days, deleted after ninety, and never more than 1 GiB
-# over inbox/ + sb_*/ (snapshots) + results/ + logs/ under $W.  The
+# over inbox/ + sb_*/ (snapshots) + results/ + logs/ under $W, counted in
+# allocated bytes (what the volume holds; BF#55).  The
 # environment (the venvs, tampura-work, pddlstream_lib, python, tools) is
 # reported, not counted.
 #   inbox:     the archive of an unpacked snapshot or lib goes at once; any
@@ -35,7 +36,10 @@ while [ $# -gt 0 ]; do
   shift
 done
 run() { if [ $APPLY = 1 ]; then "$@"; else echo "  would: $*"; fi; }
-used() { du -sbc $W/inbox $W/sb_* $W/results $W/logs 2>/dev/null | tail -1 | cut -f1; }
+# BF#55: allocated bytes (-B1), not apparent (-b): TAMPURA's per-episode
+# pickles hold ten times less on the volume than their apparent size, and the
+# apparent count refused a push at 690 MiB allocated.
+used() { du -sc -B1 $W/inbox $W/sb_* $W/results $W/logs 2>/dev/null | tail -1 | cut -f1; }
 newest_older_than() {   # dir days -> true when no file inside is younger than days
   [ -z "$(find "$1" -type f -mtime -"$2" -print -quit 2>/dev/null)" ]
 }
