@@ -37,7 +37,7 @@ REPO = gate_hooks.REPO
 TW = os.environ.get('TAMPURA_WORK', '/root/tampura-work')
 CONFIG = './env_configs/find_dice.yml'
 SETTLE_STEPS = 240
-SQUEEZE_INSIDE_M = 0.003       # execute_pick's target inside the surface
+SQUEEZE_INSIDE_M = 0.0005      # execute_pick's target inside the surface (robot_utils.GRIP_SQUEEZE, BF#44)
 CLOSE_FORCE_N = 60.0           # robot_utils.close_gripper's default
 ARM_HOLD_FORCE_N = 500.0
 

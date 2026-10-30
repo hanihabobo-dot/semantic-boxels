@@ -80,8 +80,8 @@ def main():
     # M8-M10 (P4.5 model tweaks), passed through to main()'s CLI flags.
     for flag in ('--m8', '--m9', '--m10', '--pick-aperture-from-pose'):
         ap.add_argument(flag, choices=('off', 'on'), default='on')
-    # GF10 (BF#38): the pick close's squeeze, passed through like the switches.
-    ap.add_argument('--grip-squeeze-mm', type=float, default=3.0)
+    # GF10 (BF#38): the pick close's squeeze (0.5 mm since BF#44), passed through like the switches.
+    ap.add_argument('--grip-squeeze-mm', type=float, default=0.5)
     a = ap.parse_args()
     arg_dict = {'config': a.config, 'global_seed': a.global_seed,
                 'vis': bool(a.vis), 'save_dir': a.save_dir}

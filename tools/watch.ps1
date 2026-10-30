@@ -3,8 +3,8 @@
 #   pwsh tools/watch.ps1 -Seed 7      another find_dice seed
 #   pwsh tools/watch.ps1 -Ours        our own holding scene, seed 0
 #   pwsh tools/watch.ps1 -Off         the same without M8-M10 (the old pipeline)
-#   pwsh tools/watch.ps1 -LightGrip   GF10's 0.5 mm pick squeeze (BF#38)
-#   pwsh tools/watch.ps1 -Squeeze 1   any pick squeeze in mm (larger = tighter; default 3)
+#   pwsh tools/watch.ps1 -Squeeze 3   the old 3 mm pick squeeze (0.5 mm is the default since BF#44)
+#   pwsh tools/watch.ps1 -Squeeze 1   any pick squeeze in mm (larger = tighter; default 0.5; -LightGrip = 0.5)
 # Never start it while another pipeline run is going (pddlstream temp/ race).
 param([int]$Seed = 0, [switch]$Ours, [switch]$Off, [switch]$LightGrip, [double]$Squeeze = 0)
 $S = '/mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels'

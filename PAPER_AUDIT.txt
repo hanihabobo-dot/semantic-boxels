@@ -7749,6 +7749,32 @@ BF#43 [DONE]  PUSH_SNAPSHOT.PS1 NEVER UNPACKED A SNAPSHOT, AND ITS ARCHIVES
   CLAIM EFFECT: none; nothing of B8 had run.  HONESTY CLASS: infrastructure.
 
 
+BF#44 [DONE]  THE PICK SQUEEZE DEFAULT IS 0.5 MM  (user decision, 2026-10-30)
+  WHAT: GF10's --grip-squeeze-mm (BF#38) had kept 3 mm as the pipeline's
+  default pending Hani's GUI comparison.  He watched find_dice seed 0 at
+  0.5 mm (archive/tampura_bridge_plan_2026-10-25/bf/gui_runs/
+  watch_s0_2026-10-30_12-09-42: success, the die carried home) and at 3 mm
+  (watch_s0_2026-10-30_12-12-35, the same seed and scene: the die picked
+  with both pads in contact, then "finger-pad contact incomplete: links
+  none" at the goal, physics_mismatch, the die lost on the move home as
+  BF#38's probe predicted) and chose the light squeeze ("command with
+  squeeze 0 seems to be doing well", read as the 0.5 mm command of the
+  pair he was given).  Now robot_utils.GRIP_SQUEEZE = 0.0005, run_logger's
+  --grip-squeeze-mm default 0.5, test_full_pipeline's fallbacks '0.5', the
+  bridge driver's default 0.5, tools/watch.ps1's help (-Squeeze 3 restores
+  the old value), test_g6_controls.SQUEEZE_INSIDE_M 0.0005; the executor's
+  comment follows.  Pipeline-wide: every pick of every scene and goal.
+  tools/_bridge_campaign.py records both defaults per campaign (BF#41).
+  EVIDENCE: BF#38's probe (the die held 93 of 96 at 0.5 mm, 18 of 96 at
+  1 mm, 1 of 96 at 3 mm); the two GUI runs above; the two 0.5 mm GUI runs
+  of seed 10 (12:33 and 13:23, BF#45 and BF#46) picked every cup they
+  tried, measured half-widths 26.0 to 28.4 mm.
+  DISCLOSURE: Q14's acceptance of the value on our own scenes (the holding
+  and stack goals, the cubes) is not run; the probe measured the die and
+  the GUI runs the cups.  CLAIM EFFECT: arm O's B8 rate is measured at
+  0.5 mm.  HONESTY CLASS: parameter change (user decision).
+
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

@@ -536,7 +536,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     # GF10 (BF#38): the pick close's squeeze, set every run so a previous
     # main() in the same process does not carry over.
     import robot_utils
-    robot_utils.GRIP_SQUEEZE = float(getattr(args, 'grip_squeeze_mm', '3')) / 1000.0
+    robot_utils.GRIP_SQUEEZE = float(getattr(args, 'grip_squeeze_mm', '0.5')) / 1000.0
     if domain_file is None and pose_belief.SWITCHES['M8']:
         domain_file = m8_domain.domain_file(True)
     # The two known domains must match the switch (a caller may pass
@@ -2885,7 +2885,7 @@ if __name__ == "__main__":
         "corridor_test": args.corridor_test,
         "m8": args.m8, "m9": args.m9, "m10": args.m10,
         "pick_aperture_from_pose": args.pick_aperture_from_pose,
-        "grip_squeeze_mm": getattr(args, 'grip_squeeze_mm', '3'),
+        "grip_squeeze_mm": getattr(args, 'grip_squeeze_mm', '0.5'),
         "search_sample_ratio": getattr(args, 'search_sample_ratio', None),
         "path_check_step": getattr(args, 'path_check_step', None),
         "path_check_diag": bool(getattr(args, 'path_check_diag', False)),

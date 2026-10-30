@@ -809,11 +809,13 @@ def parse_pipeline_args(argv=None):
         '--pick-aperture-from-pose', choices=['off', 'on'], default='on',
         help="M8's aperture rule: open the pads to the pinch half-width "
              "plus pose_radius plus 8 mm (capped at the finger limit).")
-    # GF10 (PAPER_AUDIT.txt BF#38): the pick close's squeeze, default today's.
+    # GF10 (PAPER_AUDIT.txt BF#38): the pick close's squeeze; 0.5 mm is the
+    # default since BF#44 (Hani's GUI verdict, 2026-10-30), 3 mm was before.
     parser.add_argument(
-        '--grip-squeeze-mm', type=float, default=3.0,
+        '--grip-squeeze-mm', type=float, default=0.5,
         help="How far inside the measured width the pick's close holds the "
-             "pads, in mm: 3 (today), 0.5 (GF10's remedy by Q14's rule); "
+             "pads, in mm: 0.5 (the default since BF#44, GF10's remedy by "
+             "Q14's rule), 3 (the pipeline before it); "
              "other values are for watching only, not measured.")
     parser.add_argument(
         '--planner',

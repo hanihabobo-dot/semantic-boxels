@@ -1123,12 +1123,13 @@ def close_gripper(robot_id: int, gui: bool = False,
 
 
 # The squeeze execute_pick's close holds inside the measured width, set once
-# per run by main() from --grip-squeeze-mm.  3 mm is today's pipeline; 0.5 mm
-# is GF10's remedy by Q14's rule (PAPER_AUDIT.txt BF#38): at 3 mm the
+# per run by main() from --grip-squeeze-mm.  0.5 mm since BF#44 (Hani's GUI
+# verdict, 2026-10-30); 3 mm was the pipeline before, GF10's probe by Q14's
+# rule (PAPER_AUDIT.txt BF#38) chose the value: at 3 mm the
 # position overdrive pushes the pads into a 5 g die until it is expelled on
-# the move home (1 of 96 held), at 0.5 mm 93 of 96.  Default off until its
-# acceptance.
-GRIP_SQUEEZE = 0.003
+# the move home (1 of 96 held), at 0.5 mm 93 of 96.  --grip-squeeze-mm 3
+# restores the old value; Q14's acceptance on our own scenes is not run.
+GRIP_SQUEEZE = 0.0005
 
 
 def close_gripper_until_contact(robot_id: int, gui: bool = False,
