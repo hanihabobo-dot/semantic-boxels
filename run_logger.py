@@ -817,6 +817,14 @@ def parse_pipeline_args(argv=None):
              "pads, in mm: 0.5 (the default since BF#44, GF10's remedy by "
              "Q14's rule), 3 (the pipeline before it); "
              "other values are for watching only, not measured.")
+    # BF#50 (user rule, 2026-10-30): sim screenshots are for debugging only,
+    # so world_eye's eye_<k>_camera.png and eye_<k>_gui.png are off unless a
+    # run asks for them; eye.log and eye.jsonl are written either way.
+    parser.add_argument(
+        '--save-screenshots', choices=['off', 'on'], default='off',
+        help="Save world_eye's eye_<k>_camera.png (the robot's camera) and, "
+             "under the GUI, eye_<k>_gui.png at every snapshot, in the run "
+             "directory.  Debugging only; off by default (BF#50).")
     parser.add_argument(
         '--planner',
         choices=['ff-astar1', 'ff-astar2', 'ff-astar', 'ff-wastar1',

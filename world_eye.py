@@ -59,6 +59,17 @@ _VERBATIM_PREDICATES = {
 
 _ACTIVE: "WorldEye | None" = None
 
+# BF#50 (user rule, 2026-10-30): the eye images (eye_<k>_camera.png and,
+# under the GUI, eye_<k>_gui.png) are for debugging only, so a run saves
+# them only when it asks (--save-screenshots on, which main() puts here);
+# BOXEL_EYE_IMAGES=0 (the cluster job scripts, BF#17) still vetoes them.
+SAVE_IMAGES = False
+
+
+def images_wanted() -> bool:
+    """True when this run saves the eye images: asked for, and not vetoed."""
+    return bool(SAVE_IMAGES) and os.environ.get("BOXEL_EYE_IMAGES", "1") != "0"
+
 
 def _r(v, nd: int = 4):
     return [round(float(x), nd) for x in np.asarray(v, dtype=float).ravel()]
@@ -360,11 +371,13 @@ class WorldEye:
         ``save_image=True``) and no render, one TinyRenderer pass is made
         here and its detections are recorded too.  ``save_image`` also
         writes eye_<k>_camera.png (the robot's camera) and, under the
-        GUI, eye_<k>_gui.png (the user's viewpoint).  BOXEL_EYE_IMAGES=0 turns
-        the images (and the render made only for them) off: the cluster runs
-        evals only, and screenshots are for local debugging (user, 2026-10-28)."""
+        GUI, eye_<k>_gui.png (the user's viewpoint), but only when
+        ``images_wanted()``: the run asked with --save-screenshots on and
+        BOXEL_EYE_IMAGES is not 0.  Screenshots are for local debugging
+        (user, 2026-10-28 and 2026-10-30; BF#17, BF#50): otherwise no
+        image, and no render made only for one."""
         self.count += 1
-        save_image = save_image and os.environ.get("BOXEL_EYE_IMAGES", "1") != "0"
+        save_image = save_image and images_wanted()
         seg = None
         if render is not None:
             seg = render[1]

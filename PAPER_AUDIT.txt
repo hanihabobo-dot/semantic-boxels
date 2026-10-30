@@ -7997,6 +7997,37 @@ BF#49 [DONE]  RUN DATA HYGIENE: COMPACTED AFTER A DAY, DELETED AFTER TWO
   CLAIM EFFECT: none.  HONESTY CLASS: infrastructure (data hygiene).
 
 
+BF#50 [DONE]  SIM SCREENSHOTS OFF UNLESS --save-screenshots on  (user rule,
+      2026-10-30)
+  WHAT: Hani: "when running evals on servers there is no need to save
+  screenshots; screenshots are for debug purposes only, so add a flag,
+  default false, for saving the screenshots."  Until now world_eye saved
+  eye_<k>_camera.png and eye_<k>_gui.png at every snapshot that asked for
+  them (the initial observation, every replan, every sense, the final
+  state) and only the cluster job scripts' BOXEL_EYE_IMAGES=0 (BF#17)
+  switched them off.  Now the images are off unless the run says
+  --save-screenshots on: run_logger's parser (test_full_pipeline; choices
+  off|on like the M8-M10 switches), the bridge driver (passed to main()
+  with the switches and recorded in the episode's switches) and
+  tools/watch.ps1 -Screenshots.  world_eye.SAVE_IMAGES holds the run's
+  setting (main() sets it every run) and world_eye.images_wanted() gates
+  every image: asked for, and BOXEL_EYE_IMAGES not 0, so the job scripts
+  and the campaign harness keep their veto unchanged.  eye.log and
+  eye.jsonl are written as before ("images": [] when none were saved);
+  the run record's args name the setting.
+  EVIDENCE: tests/test_eye_images.py (the gate off by default, on when
+  asked, vetoed by BOXEL_EYE_IMAGES=0; the parser's default and the
+  explicit flag), 4 passed, tests/ 43 passed, the static gates PASS, in
+  arm O's venv.  A headless stop-before-planning pair (no PNG by default,
+  PNGs with the flag) is still to run: a GUI run of Hani's was live in
+  WSL at the time (never alongside it, pddlstream's temp/).
+  BEFORE / AFTER: images at every snapshot unless the environment said no
+  / no images unless the run asks.
+  CLAIM EFFECT: none (the queued campaigns run from snapshots whose job
+  script exports BOXEL_EYE_IMAGES=0; arm O's wall-clock time on the
+  cluster is as before).  HONESTY CLASS: infrastructure (configuration).
+
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

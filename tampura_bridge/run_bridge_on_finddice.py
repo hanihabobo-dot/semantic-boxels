@@ -86,6 +86,9 @@ def main():
         ap.add_argument(flag, choices=('off', 'on'), default='on')
     # GF10 (BF#38): the pick close's squeeze (0.5 mm since BF#44), passed through like the switches.
     ap.add_argument('--grip-squeeze-mm', type=float, default=0.5)
+    # BF#50 (user rule, 2026-10-30): the eye images are for debugging only,
+    # off unless asked; passed through like the switches.
+    ap.add_argument('--save-screenshots', choices=('off', 'on'), default='off')
     a = ap.parse_args()
     arg_dict = {'config': a.config, 'global_seed': a.global_seed,
                 'vis': bool(a.vis), 'save_dir': a.save_dir}
@@ -154,7 +157,8 @@ def main():
         log_level=a.log_level, max_plan_time=a.max_plan_time,
         switches={'m8': a.m8, 'm9': a.m9, 'm10': a.m10,
                   'pick_aperture_from_pose': a.pick_aperture_from_pose,
-                  'grip_squeeze_mm': str(a.grip_squeeze_mm)})
+                  'grip_squeeze_mm': str(a.grip_squeeze_mm),
+                  'save_screenshots': a.save_screenshots})
     cfg.driver = {'events': events, 'seed': config['global_seed'],
                   'rng_untouched': rng_untouched,
                   'pythonhashseed': os.environ.get('PYTHONHASHSEED')}
