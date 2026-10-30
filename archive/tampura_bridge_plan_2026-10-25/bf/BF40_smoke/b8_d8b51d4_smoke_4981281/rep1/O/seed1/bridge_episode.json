@@ -1,0 +1,196 @@
+{
+ "seed": 1,
+ "scene_file": "1747173593.826745.json",
+ "g13_runtime": {
+  "arm": "O",
+  "failures": [],
+  "their_root": "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work",
+  "policy_methods": [
+   "__init__",
+   "get_action"
+  ],
+  "their_modules": {
+   "in_checkout": 53,
+   "identical_copy": 0
+  },
+  "schemas_of_ours": [
+   "boxel_episode"
+  ],
+  "ok": true
+ },
+ "run_dir": "/work/rleap1/hani.alassiri.alhabboub/p4/results/b8_d8b51d4_smoke_4981281/rep1/O/seed1/ours/run_2026-10-30_13-05-34",
+ "scene_changed_by_settle": false,
+ "settle": {
+  "a_cups_ud": {
+   "dxy_m": 0.0,
+   "dz_m": -0.011,
+   "dyaw_deg": 0.01,
+   "tilt_deg": 0.02
+  },
+  "d_cups_ud": {
+   "dxy_m": 0.0,
+   "dz_m": -0.011,
+   "dyaw_deg": -0.01,
+   "tilt_deg": 0.02
+  },
+  "e_cups_ud": {
+   "dxy_m": 0.0001,
+   "dz_m": -0.011,
+   "dyaw_deg": -0.0,
+   "tilt_deg": 0.01
+  },
+  "dice": {
+   "dxy_m": 0.0103,
+   "dz_m": -0.0398,
+   "dyaw_deg": -13.19,
+   "tilt_deg": 49.75
+  },
+  "b_cups_ud": {
+   "dxy_m": 0.0,
+   "dz_m": -0.011,
+   "dyaw_deg": 0.01,
+   "tilt_deg": 0.0
+  }
+ },
+ "settle_max_dxy_m": 0.0103,
+ "observation": {
+  "grasp_body": null,
+  "conf": [
+   -0.0806389116678673,
+   -1.6722655321416895,
+   0.07069076842695393,
+   -2.744941788892324,
+   0.0817931811921767,
+   1.751514446341271,
+   0.7849770239183707
+  ]
+ },
+ "readback_identical": true,
+ "gates": {
+  "counts": {},
+  "info": {
+   "G16_update_object_positions_noop": 1,
+   "G8c_bodies_checked": 10,
+   "G8c_aabb_offset_max_um": 4307,
+   "G8c_syncs": 2,
+   "rayTestBatch_client_2": 4,
+   "executing_bodies_at_install": 15,
+   "executing_bodies_now": 15
+  },
+  "steps": {
+   "main_outside_dispatch": 50
+  },
+  "steps_after_last_dispatch": 0,
+  "solve_calls": 0
+ },
+ "rewards": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "time_deltas": [
+  1.715043306350708,
+  1.7166776657104492,
+  1.7180719375610352,
+  1.7194709777832031,
+  1.720900297164917,
+  1.7222845554351807,
+  1.723628282546997,
+  1.7249670028686523,
+  1.7263154983520508,
+  1.7279980182647705,
+  1.7293519973754883,
+  1.7306959629058838,
+  1.7320244312286377,
+  1.7334275245666504,
+  1.7347636222839355,
+  1.736086368560791,
+  1.7374320030212402,
+  1.7388079166412354,
+  1.7401397228240967,
+  1.7414727210998535,
+  1.7416729927062988
+ ],
+ "ledger_gates": [
+  [
+   "ledger",
+   "PASS",
+   "19 rows, complete"
+  ],
+  [
+   "G3",
+   "PASS",
+   "0 steps over 0 plans, all as planned; 0 labelled early ends"
+  ],
+  [
+   "G4",
+   "PASS",
+   "0 places at the planned centre"
+  ],
+  [
+   "G5",
+   "PASS",
+   "no fragment change"
+  ],
+  [
+   "G15",
+   "PASS",
+   "0 senses, each classified on its planned region"
+  ],
+  [
+   "G10r",
+   "PASS",
+   "domain_pddlstream_m8.pddl as the switches require"
+  ],
+  [
+   "G19",
+   "PASS",
+   "scene file matches the pinned map"
+  ],
+  [
+   "G18",
+   "PASS",
+   "initialize return to rollout start 0.024 s (initialize_call +0.008 s, initialize_return +5.529 s, scene_map_asserted +0.011 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.013 s, rollout_start +0.000 s)"
+  ],
+  [
+   "G19h",
+   "PASS",
+   "seed 1, both RNGs untouched, PYTHONHASHSEED 0"
+  ],
+  [
+   "G11",
+   "PASS",
+   "0 solve calls, 0 plan rows"
+  ],
+  [
+   "G21",
+   "PASS",
+   "every runtime count 0; steps {'main_outside_dispatch': 50}"
+  ]
+ ],
+ "outcome": {
+  "status": "failure",
+  "success": false,
+  "reward": 0.0,
+  "error": null,
+  "gate_failures": {}
+ }
+}

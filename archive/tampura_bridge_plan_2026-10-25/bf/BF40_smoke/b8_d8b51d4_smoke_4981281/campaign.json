@@ -1,0 +1,82 @@
+{
+ "harness": {
+  "file": "/work/rleap1/hani.alassiri.alhabboub/p4/sb_d8b51d4/tools/_bridge_campaign.py",
+  "sha256": "0e011029d4227b35846ef7487bc0149c14f119e1e230029f7c240bfa79c9aceb"
+ },
+ "snapshot": {
+  "dir": "/work/rleap1/hani.alassiri.alhabboub/p4/sb_d8b51d4",
+  "sha": "d8b51d4"
+ },
+ "their_commits": {
+  "tampura": "cdddf14b45d2608fc1d3bc9c72d8ee249c4638b2",
+  "tampura_environments": "4167c35e41170beee48b108d4a6a64a69d4b555a"
+ },
+ "venvs": {
+  "arm_T": "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv",
+  "arm_O": "/work/rleap1/hani.alassiri.alhabboub/p4/armO-venvA",
+  "d12_choice": "arm O in its own venv holding arm T package set (A)"
+ },
+ "pip_freeze_sha256": {
+  "arm_T": "0cdfcf0c5ae35ee4d4d95fc74b7dc0820980c1c8e97f59c4eae61d94eccfaf80",
+  "arm_O": "0cdfcf0c5ae35ee4d4d95fc74b7dc0820980c1c8e97f59c4eae61d94eccfaf80"
+ },
+ "find_dice_yml": "task: find_dice\nglobal_seed: 0\nvis: false\nvis_graph: false\nprint_options: s,b,ab,r,a,o,sp,bp,abp,rp\nmax_steps: 20\nbatch_size: 20\nnum_skeletons: 10\nflat_sample: true\nflat_width: 5\npwa: 0.2\npwk: 3.0\nenvelope_threshold: 1\nnum_samples: 200\ngamma: 0.98\nplanner: tampura_policy\nlearning_strategy: bayes_optimistic\ndecision_strategy: prob\nsymk_selection: unordered\nsymk_direction: fw\nsymk_simple: true\nfrom_scratch: true\n",
+ "task_spec_sha256": "1a6492819f8f0ed6dd54cd1bd69f14099ce7d4432c6b4955f5ec11d02f000fd6",
+ "domain_gates": "G10      INFO  domain_pddlstream.pddl a21877fe170997c7  stream.pddl 9f767855831731a4\nG10      PASS  pddl/domain_pddlstream_m8.pddl e49e249bb03b7fdd = regenerated (live + M8 delta); an OFF run must load the live file, an ON run this one\n",
+ "machine": {
+  "host": "cn-110",
+  "cpu_model": "Intel(R) Xeon(R) Platinum 8160 CPU @ 2.10GHz",
+  "nproc": 96,
+  "kernel": "6.8.0-90-generic",
+  "slurm_job_id": "4981281",
+  "pythonhashseed": "0"
+ },
+ "protocol": {
+  "cap_s": 600.0,
+  "max_plan_time_s": 600.0,
+  "episode_deadline_keyword": "absent (D10 state at BF#14): the harness kill is the cap",
+  "order": "repetition outer; seeds ascending; T then O per seed",
+  "stall_factor": 1.5,
+  "stop_rule_count": 3,
+  "per_run_gates": [
+   "G13",
+   "G19"
+  ],
+  "success": "P4.6 G12: arm T rewards[-1] == 1.0 from their RolloutHistory; arm O the outcome field of its driver (rewards[-1], error, ledger gates); the shared success test of BF#37 item 2 is not applied (Q18 open)",
+  "mode": "smoke",
+  "seeds": [
+   0,
+   1
+  ],
+  "reps": 1,
+  "arms": [
+   "T",
+   "O"
+  ],
+  "machine_check": "stop"
+ },
+ "started": "2026-10-30T13:01:18",
+ "status": "finished",
+ "resumed": [],
+ "finished": "2026-10-30T13:05:36",
+ "stop": null,
+ "summary": {
+  "T_rep1": {
+   "n": 2,
+   "success": 0,
+   "statuses": {
+    "failure": 2
+   },
+   "censored": 0
+  },
+  "O_rep1": {
+   "n": 2,
+   "success": 0,
+   "statuses": {
+    "failure": 2
+   },
+   "censored": 0
+  }
+ },
+ "n_records": 4
+}

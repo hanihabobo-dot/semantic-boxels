@@ -1,0 +1,58 @@
+13:05:34 [INFO   ] root: Run started  : 2026-10-30_13-05-34
+13:05:34 [INFO   ] root: Log file     : /work/rleap1/hani.alassiri.alhabboub/p4/results/b8_d8b51d4_smoke_4981281/rep1/O/seed1/ours/run_2026-10-30_13-05-34/run_2026-10-30_13-05-34.log
+13:05:34 [INFO   ] root: Verbosity    : smart (console), DEBUG (file)
+13:05:34 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IHDR' 16 13
+13:05:34 [DEBUG  ] PIL.PngImagePlugin: STREAM b'pHYs' 41 9
+13:05:34 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IDAT' 62 8192
+13:05:34 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IHDR' 16 13
+13:05:34 [DEBUG  ] PIL.PngImagePlugin: STREAM b'pHYs' 41 9
+13:05:34 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IDAT' 62 8192
+13:05:34 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IHDR' 16 13
+13:05:34 [DEBUG  ] PIL.PngImagePlugin: STREAM b'pHYs' 41 9
+13:05:34 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IDAT' 62 8192
+13:05:35 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IHDR' 16 13
+13:05:35 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IDAT' 41 8192
+13:05:35 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IHDR' 16 13
+13:05:35 [DEBUG  ] PIL.PngImagePlugin: STREAM b'pHYs' 41 9
+13:05:35 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IDAT' 62 8192
+Boxel Test Environment initialized successfully!
+Camera position: [0.17861445 0.04880322 0.58831882]
+Camera target: [ 3.28582478 -0.16977984 -3.32287836]
+Adopted executing client 0; plan twin client 2
+Objects in scene: ['plane', 'table', 'robot', 'a_cups_ud', 'd_cups_ud', 'e_cups_ud', 'dice', 'b_cups_ud']
+============================================================
+FULL PIPELINE: PDDLStream + Replanning
+============================================================
+  model tweaks: {'M8': True, 'M9': True, 'M10': True, 'pick_aperture_from_pose': True}; domain domain_pddlstream_m8.pddl
+
+--- Phase 1: Environment Setup ---
+  [audit-66/67] Effective minimum boxel size: 0.087 m (largest object AABB 0.077 m + 0.01 m headroom).
+Robot ID: 0
+
+--- Phase 2: Calculating Boxels ---
+  Merge iteration 1: 35 merges, 36 boxels remaining
+  Merge iteration 2: 12 merges, 24 boxels remaining
+  Merge iteration 3: 4 merges, 20 boxels remaining
+  Merging complete: 71 -> 20 boxels
+  Calculated 28 boxels
+
+--- Phase 3: Creating BoxelRegistry ---
+Saved 28 boxels to boxel_data.json
+13:05:35 [DEBUG  ] root: Saved artefact: boxel_data.json -> /work/rleap1/hani.alassiri.alhabboub/p4/results/b8_d8b51d4_smoke_4981281/rep1/O/seed1/ours/run_2026-10-30_13-05-34/boxel_data.json
+  28 boxels, 4 shadows, 4 occluders
+
+--- Phase 4: Hidden Object Scenario ---
+  Target: dice (given; not in the first observation; the robot must search)
+  Shadow blockers (audit #78):
+    shadow_of_a_cups_ud blocked by: ['a_cups_ud']
+    shadow_of_b_cups_ud blocked by: ['b_cups_ud']
+    shadow_of_d_cups_ud blocked by: ['d_cups_ud']
+    shadow_of_e_cups_ud blocked by: ['e_cups_ud']
+  Boxel->PyBullet mapping: 4 objects
+
+--- Phase 5: Planning with Replanning ---
+    [eye #1] initial observation (phase 2-4) | held=none | unknown shadows=4 | a_cups_ud@(0.684,0.000)[bel 4mm] d_cups_ud@(0.596,0.300)[bel 4mm] e_cups_ud@(0.486,-0.159)[bel 7mm] dice@(0.476,-0.161)[NO BOXEL] b_cups_ud@(0.390,0.043)[bel 4mm]
+
+  stop_before_planning: returning after the first plan-twin sync
+13:05:36 [INFO   ] root: Run finished : 2026-10-30_13-05-36
+13:05:36 [INFO   ] root: Full log at  : /work/rleap1/hani.alassiri.alhabboub/p4/results/b8_d8b51d4_smoke_4981281/rep1/O/seed1/ours/run_2026-10-30_13-05-34/run_2026-10-30_13-05-34.log

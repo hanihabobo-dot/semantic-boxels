@@ -7595,7 +7595,7 @@ BF#39 [DONE]  GUI RUNS GO ON PAST A G19 SCENE-MAP MISMATCH, FLAGGED  (user
   ours before it).
 
 
-BF#40 [DONE, smoke pending]  B8'S HARNESS: tools/_bridge_campaign.py,
+BF#40 [DONE]  B8'S HARNESS: tools/_bridge_campaign.py,
       tools/cluster/b8_campaign.sbatch, tools/_bridge_report.py  (B8,
       2026-10-30)
   WHAT: the campaign driver P4.6 names (D10, MACHINE, B8): both arms on
@@ -7649,8 +7649,26 @@ BF#40 [DONE, smoke pending]  B8'S HARNESS: tools/_bridge_campaign.py,
   DECISION 2026-10-30 (executor): repetition-outer order (the protocol's
   "interleaved per seed" read as T k, O k within a repetition); the
   campaign runs on cn-110 (user, 2026-10-30).
-  RESULT: smoke pending.
-
+  RESULT 2026-10-30 (smoke, cn-110): job 4981281 on sb_d8b51d4, seeds 0
+  and 1, one repetition, 4 episodes, 13:01:18 to 13:05:36.  Every per-run
+  gate PASS before and after (G13 on both of their trees, the T driver,
+  G10, G7, G11, G17; tree --compare unchanged after the episodes); both
+  seeds loaded the pinned scenes (0 on 1747173591, 1 on 1747173593); all
+  four episodes status failure, as smoke mode must give (T --max-steps 1:
+  loop 33.5 s and 63.7 s; O stop_before_planning: loop 1.3 s and 1.7 s,
+  wall 95.6 s and 16.5 s); no gate-failed, crashed or killed episode,
+  nothing censored; campaign.json complete (harness sha256 0e011029...,
+  their commits cdddf14 and 4167c35, one pip-freeze hash 0cdfcf0c... for
+  both venvs, cn-110: Xeon Platinum 8160, 96 cores, kernel 6.8.0-90,
+  PYTHONHASHSEED 0, cap 600 s in smoke mode).  Before it, job 4980738
+  stopped at the per-run gates without an episode: G13 found
+  boxel_data.json untracked in their tampura_environments, left there by
+  a pre-GF8 bridge run on Oct 27 (the case bridge_run.sbatch's
+  CLEAN_STRAYS names); removed by hand, their tree clean since.  Records
+  and both job logs in archive/tampura_bridge_plan_2026-10-25/bf/
+  BF40_smoke/; their RolloutHistory pickles were not pulled (colons in
+  their file names, which Windows refuses; the harness had read them on
+  the cluster).
 
 BF#41 [DONE]  GUI RUNS: THEIR BELIEF GRID CLEARED BETWEEN STEPS; THE
       SWITCHES RECORDED PER EPISODE  (user report, 2026-10-30)

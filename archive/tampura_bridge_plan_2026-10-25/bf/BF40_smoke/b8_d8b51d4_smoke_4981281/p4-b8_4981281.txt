@@ -1,0 +1,69 @@
+--------------------- Slurm Task Prolog ------------------------
+Job ID: 4981281
+Job name: p4-b8
+Host: cn-110
+Date: Fri Oct 30 12:59:35 CET 2026
+User: hani.alassiri.alhabboub
+Slurm account: rleap
+Slurm partition: rleap_cpu
+Work dir: 
+------------------
+Node usage:
+JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
+4981281 rleap_cpu    p4-b8 hani.ala  R       0:01      1 cn-110
+------------------
+Show launch script with:
+sacct -B -j 
+------------------
+--------------------- Slurm Task Prolog ------------------------
+host cn-110  job 4981281  2026-10-30T12:59:35+01:00  snapshot /work/rleap1/hani.alassiri.alhabboub/p4/sb_d8b51d4  mode smoke  reps 1  seeds 0,1  out /work/rleap1/hani.alassiri.alhabboub/p4/results/b8_d8b51d4_smoke_4981281
+model name	: Intel(R) Xeon(R) Platinum 8160 CPU @ 2.10GHz
+graph    INFO  33 modules; roots not present yet: none
+G1       PASS  76 hits, all reviewed
+G2       PASS  46 hits, all reviewed
+G7       PASS  no scene literal
+G11(i)   PASS  pddlstream imported only by pddlstream_planner.py and streams.py
+G17      PASS  clean
+G10      INFO  domain_pddlstream.pddl a21877fe170997c7  stream.pddl 9f767855831731a4
+G10      PASS  pddl/domain_pddlstream_m8.pddl e49e249bb03b7fdd = regenerated (live + M8 delta); an OFF run must load the live file, an ON run this one
+G13      PASS  tampura: HEAD cdddf14, tree fbc0cd060ddbb4af, 0 declared change(s) (BF#3), nothing else modified or stray
+G13      PASS  tampura_environments: HEAD 4167c35, tree e339e7b865a82c1b, 1 declared change(s) (BF#3), nothing else modified or stray
+G13      INFO  arm T pip freeze 0cdfcf0c5ae35ee4
+G13      PASS  arm T's installed tampura: 2502 of 2506 tracked files byte-equal to the checkout, the rest never installed and never read, build 5f75024e7c619d4f
+G13      PASS  T driver = run_planner.py line for line, plus the one import
+[campaign] smoke: arms ['T', 'O'], seeds [0, 1], reps 1, cap 600.0 s, out /work/rleap1/hani.alassiri.alhabboub/p4/results/b8_d8b51d4_smoke_4981281; 0 episodes already done
+[campaign] 2026-10-30T13:01:18 start T:1:0
+[campaign] T:1:0 failure loop_s=33.47 wall_s=50.64 rc=0 scene=1747173591.670785.json gates=[] 
+[campaign] 2026-10-30T13:02:18 start O:1:0
+[campaign] O:1:0 failure loop_s=1.259 wall_s=95.601 rc=1 scene=1747173591.670785.json gates=[] 
+[campaign] 2026-10-30T13:03:53 start T:1:1
+[campaign] T:1:1 failure loop_s=63.696 wall_s=78.127 rc=0 scene=1747173593.826745.json gates=[] 
+[campaign] 2026-10-30T13:05:20 start O:1:1
+[campaign] O:1:1 failure loop_s=1.742 wall_s=16.473 rc=1 scene=1747173593.826745.json gates=[] 
+[campaign] finished
+[campaign] O_rep1: 0/2 success, statuses {'failure': 2}, 0 censored
+[campaign] T_rep1: 0/2 success, statuses {'failure': 2}, 0 censored
+seed scene       T r1        O r1            T s     O s
+   0 1747173591  failure     failure       33.47   1.259
+   1 1747173593  failure     failure      63.696   1.742
+(* = censored at the cap; status per P4.6: success, failure, gate_failed, crashed, killed)
+[campaign] records in /work/rleap1/hani.alassiri.alhabboub/p4/results/b8_d8b51d4_smoke_4981281/campaign.jsonl, metadata in /work/rleap1/hani.alassiri.alhabboub/p4/results/b8_d8b51d4_smoke_4981281/campaign.json
+harness rc 0 (0 finished, 2 stopped by a rule)
+G13      PASS  tampura: HEAD cdddf14, tree fbc0cd060ddbb4af, 0 declared change(s) (BF#3), nothing else modified or stray
+G13      PASS  tampura_environments: HEAD 4167c35, tree e339e7b865a82c1b, 1 declared change(s) (BF#3), nothing else modified or stray
+G13      INFO  arm T pip freeze 0cdfcf0c5ae35ee4
+G13      PASS  arm T's installed tampura: 2502 of 2506 tracked files byte-equal to the checkout, the rest never installed and never read, build 5f75024e7c619d4f
+G13      PASS  unchanged since /work/rleap1/hani.alassiri.alhabboub/p4/results/b8_d8b51d4_smoke_4981281/g13_before.json
+G7       PASS  no scene literal
+G11(i)   PASS  pddlstream imported only by pddlstream_planner.py and streams.py
+G17      PASS  clean
+results in /work/rleap1/hani.alassiri.alhabboub/p4/results/b8_d8b51d4_smoke_4981281
+B8_DONE
+--------------------- Slurm Task Epilog ------------------------
+Job ID: 4981281
+Time: Fri Oct 30 13:06:00 CET 2026
+Elapsed Time: 00:06:26
+Billing per second for TRES: billing=762,cpu=1,mem=190000M,node=1
+Show resource usage with e.g.:
+sacct -j 4981281 -o Elapsed,TotalCPU,UserCPU,SystemCPU,MaxRSS,ReqTRES%60,MaxDiskRead,MaxDiskWrite
+--------------------- Slurm Task Epilog ------------------------
