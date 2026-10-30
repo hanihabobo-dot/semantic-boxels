@@ -163,7 +163,7 @@ class ObserveViews:
         self._retract_q: Optional[List[Optional[np.ndarray]]] = None
         self.last_stats: Dict[str, float] = {}
         self.last_fallback: List[str] = []
-        # BF#52: the test stream's renders of this init, one per
+        # BF#52: sense_view_test's renders of this init, one per
         # configuration name, and its counters (reset by init_facts).
         self._test_renders: Dict[str, tuple] = {}
         self.test_stats: Dict[str, float] = self._fresh_test_stats()
@@ -329,11 +329,12 @@ class ObserveViews:
         return passing, fallback
 
     def sense_view_test(self, q, shadow) -> bool:
-        """BF#52, the test stream's rule: at ``q`` the robot hides at most
-        SENSE_MARGINAL_BLOCKED_FRACTION of every sense slice of ``shadow``
-        in the twin's EYE render (C1's rule on any configuration).  One
-        render per configuration name per init, the twin's bodies as the
-        last _build_init left them; the arm is put back after."""
+        """BF#52, the fold's rule (pddlstream_planner.over_region_facts):
+        at ``q`` the robot hides at most SENSE_MARGINAL_BLOCKED_FRACTION of
+        every sense slice of ``shadow`` in the twin's EYE render (C1's rule
+        on any configuration).  One render per configuration name per init,
+        the twin's bodies as the last _build_init left them; the arm is put
+        back after."""
         key = str(getattr(q, 'name', q))
         rend = self._test_renders.get(key)
         if rend is None:

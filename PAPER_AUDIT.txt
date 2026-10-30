@@ -8123,15 +8123,56 @@ BF#52 [OPEN]  TIME CUT (1): THE BASELINE RECORDED; THE EYE SENSES FROM THE
   view of a region, a hand parked over it in the view, the arm put back,
   the render cached per configuration), the stream gate (no tester, a
   non-shadow region).
-  EVIDENCE: tests/ 46 passed, the static gates PASS, both generated files
-  up to date (domain e49e249b, stream 2b269596).  RESULT: pending, the
-  headless pairs off/on (bridge seeds 10 and 0, our random-pairs scene
-  seed 0) are running; Hani's next GUI run of seed 10 is the comparison he
-  asked for.
-  CLAIM EFFECT: none yet (the queued B8 campaigns run from snapshots
-  before this).  HONESTY CLASS: model change (the sense action's
-  configurations), disclosed.
-
+  RESULT OF THE NARROWED STREAM (headless, seed 10, off -> on): wall 59.5
+  -> 92.8 s, planning 38.3 -> 70.2, execution 18.5 -> 18.7.  Its tests
+  failed 8, 7, 8 and 4 times per call over shadow_of_b/a/d_cups_ud (the
+  arm over them stands in the eye's view, all from straight above) and
+  passed over e only; every failure cost a search round (the F7 class),
+  8 twin renders per call.  WITHDRAWN.
+  DECISION 2 (executor, 2026-10-30 19:40): the fold as STATIC FACTS, the
+  M8 pattern (pddlstream_planner.over_region_facts).  Once per
+  _build_init, for every (target, region) pair the sense may ground on:
+  the streams' own first grasp and pick configuration over the region,
+  one twin render with the arm there (ObserveViews.sense_view_test, C1's
+  rule on that configuration), and on a pass the facts Grasp, valid_grasp,
+  Config, kin_solution, config_for_boxel and sense_view that let the plan
+  go place, move over the region, sense, pick without a move; a blocked
+  region gets nothing and the plan is as before.  No stream iterations.
+  pddl/stream_m8.pddl, m8_domain.generate_stream and
+  streams.test_sense_view are gone again; the domain row records the live
+  stream file and its sha (G10r checks it).  The switch is now
+  --sense-over-region off|on (watch.ps1 -ReturnHome).
+  tests/test_sense_over_region.py: the render test on a DIRECT world (the
+  arm at rest out of a top-down eye's view, a hand parked over the region
+  in it, the arm put back, the render cached per configuration), the
+  facts for a passing pair, none for a blocked one or a pair that does
+  not fit.  tests/ 45 passed, static gates PASS, the generated domain up
+  to date.
+  RESULT OF THE STATIC FACTS (headless pairs, archive/tampura_bridge_plan_
+  2026-10-25/bf/BF52_check2, tools/episode_metrics.py):
+  seed 10 off -> on: wall 57.0 -> 73.8 s; planning 34.4 -> 52.8 (first
+  call 12.0 -> 22.4, the other six 3.7 -> 5.1 mean); execution 20.0 ->
+  18.3; 16 moves both, the four returns home before a sense (2.3 s
+  headless, 18.1 s in Hani's GUI run) -> 0: every sense made from the
+  die's pick configuration over its region and the pick following without
+  a move; 1 of 4, 1 of 3, 1 of 2, 1 of 2 regions passed the render test
+  per call (0.3 to 1.2 s per call).  The planning cost is not the renders:
+  the real grasp and configuration facts enlarge the optimistic problem
+  (iteration 4's attempts work on 992 to 2664 results instead of 341 to
+  1664, and iteration 3 makes five futile attempts, 4.4 s, where it made
+  one), and the attempts themselves are the first call's cost: see BF#53.
+  The off run ended physics_mismatch (the die's pads lost at the goal
+  check), the on run success; both runs' G19 FAIL is the laptop's scene
+  map (BF#39), not a change.
+  seed 0 off -> on: identical (no sense in either run; wall 10.3 -> 10.4).
+  our random-pairs scene seed 0 off -> on: wall 8.4 -> 13.3 s: 2 plans
+  and 2 senses instead of 1 and 1 (the fold's plan sensed the other
+  region first, clear_but_empty, then found the target); success both.
+  Hani's GUI comparison of seed 10 is still to run; the twenty-seed
+  per-fix eval that measures this change with the others is BF#53.
+  CLAIM EFFECT: none (the queued B8 campaigns run from snapshots before
+  this).  HONESTY CLASS: model change (the sense action's configurations),
+  disclosed.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS

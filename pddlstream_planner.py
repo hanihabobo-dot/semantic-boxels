@@ -32,7 +32,7 @@ from typing import List, Tuple, Optional, Dict, Any, Union
 
 from pddlstream.algorithms.meta import solve
 from pddlstream.language.constants import PDDLProblem, print_solution
-from pddlstream.language.generator import from_gen_fn, from_fn, from_test
+from pddlstream.language.generator import from_gen_fn, from_fn
 from pddlstream.utils import read
 
 from boxel_data import BoxelRegistry, BoxelType
@@ -66,6 +66,51 @@ SEARCH_SAMPLE_RATIO = 0.25
 # handled by replanning, as before the F11 fix.  0.15 rather than the
 # exact 1/7 so a one-row hit (7/49) never flips on a float ulp.
 PLACEMENT_EGREGIOUS_BLOCKED_FRACTION = 0.15
+
+
+def over_region_facts(streams, views, targets, shadows, fits):
+    """BF#52, the fold.  For every (target, shadow region) pair the sense
+    may ground on (``fits``), the target's first pick configuration over
+    the region (sample_grasp's first grasp, compute_kin_solution's first
+    configuration: exactly what the streams would yield for the pick) and,
+    when the eye's view of the region stays clear with the arm there
+    (views.sense_view_test, the executor's own render rule in the twin),
+    the static facts that let a plan move there, sense and pick without
+    moving: (Grasp g) (valid_grasp t g) (Config q) (kin_solution t r g q)
+    (config_for_boxel q r) (sense_view q r).  A region the arm blocks
+    from there gets nothing and the plan returns to a C1 spot as before.
+    Static facts, not a test stream: a stream let the search try every IK
+    branch over a blocked region at a search round each (PAPER_AUDIT
+    BF#52, Hani's seed-10 runs of 2026-10-30)."""
+    facts: List[Tuple] = []
+    stats: Dict[str, Any] = {'over_region_pairs': 0, 'over_region_pass': 0,
+                             'over_region_renders': 0, 'over_region_s': 0.0}
+    t0 = time.perf_counter()
+    r0 = int(views.test_stats.get('renders', 0))
+    for t in targets:
+        grasp = None
+        declared = False
+        for r in shadows:
+            if r is None or not fits(t, r.id):
+                continue
+            stats['over_region_pairs'] += 1
+            if grasp is None:
+                grasp = next((g[0] for g in streams.sample_grasp(t)), None)
+                if grasp is None:
+                    break
+            q = next((c[0] for c in streams.compute_kin_solution(t, r.id, grasp)),
+                     None)
+            if q is None or not views.sense_view_test(q, r):
+                continue
+            stats['over_region_pass'] += 1
+            if not declared:
+                facts += [('Grasp', grasp), ('valid_grasp', t, grasp)]
+                declared = True
+            facts += [('Config', q), ('kin_solution', t, r.id, grasp, q),
+                      ('config_for_boxel', q, r.id), ('sense_view', q, r.id)]
+    stats['over_region_renders'] = int(views.test_stats.get('renders', 0)) - r0
+    stats['over_region_s'] = time.perf_counter() - t0
+    return facts, stats
 
 
 def read_pddl_file(filename: str) -> str:
@@ -121,8 +166,7 @@ class PDDLStreamPlanner:
                  support_body_ids: frozenset = None,
                  camera_pos: 'np.ndarray' = None,
                  tray_name: Optional[str] = None,
-                 domain_file: Optional[str] = None,
-                 stream_file: Optional[str] = None):
+                 domain_file: Optional[str] = None):
         """
         Initialize the planner.
 
@@ -188,6 +232,9 @@ class PDDLStreamPlanner:
         # main() when M8 is on), and what the last _build_init emitted.
         self.m8_views = None
         self.last_m8_stats: Dict[str, Any] = {}
+        # BF#52: the fold (over_region_facts) is offered unless main()'s
+        # --sense-over-region off; it needs m8_views.
+        self.sense_over_region = True
 
         # Load PDDL files (use PDDLStream-compatible untyped domain)
         if domain_file is None:
@@ -195,13 +242,7 @@ class PDDLStreamPlanner:
         else:
             with open(domain_file, 'r') as f:
                 self.domain_pddl = f.read()
-        # BF#52: the stream file follows the M8 switch like the domain (the
-        # generated one holds test-sense-view); None reads the live file.
-        if stream_file is None:
-            self.stream_pddl = read_pddl_file('stream.pddl')
-        else:
-            with open(stream_file, 'r') as f:
-                self.stream_pddl = f.read()
+        self.stream_pddl = read_pddl_file('stream.pddl')
 
         # Audit #73 step 1(b): cache the most recent _build_init output
         # so the run logger can dump n_init_state_facts + per-predicate
@@ -220,16 +261,12 @@ class PDDLStreamPlanner:
         Returns:
             Dict mapping stream names to generator functions
         """
-        stream_map = {
+        return {
             'sample-grasp': from_gen_fn(self.streams.sample_grasp),
             'plan-motion': from_gen_fn(self.streams.plan_motion),
             'compute-kin': from_gen_fn(self.streams.compute_kin_solution),
             'compute-stack-kin': from_gen_fn(self.streams.compute_stack_kin_solution),
         }
-        # BF#52: the sense-from-anywhere test, only in the M8 stream file.
-        if '(:stream test-sense-view' in self.stream_pddl:
-            stream_map['test-sense-view'] = from_test(self.streams.test_sense_view)
-        return stream_map
     
     def create_problem(self,
                        target_objects: List[str],
@@ -969,18 +1006,34 @@ class PDDLStreamPlanner:
                 current_config, self.home_config, _sense, _look, _declared)
             init.extend(_facts)
             self.streams.view_boxel_ids = frozenset(_views)
+            # BF#52: the fold.  For each (target, region) pair the sense may
+            # ground on, the target's first pick configuration over the
+            # region and, when the eye's view stays clear with the arm
+            # there, the static facts that let the plan move there, sense
+            # and pick without moving (over_region_facts).
+            _over_stats: Dict[str, Any] = {}
+            if self.sense_over_region:
+                _fits = {(f[1], f[2]) for f in init if f[0] == 'boxel_fits'}
+                _over_facts, _over_stats = over_region_facts(
+                    self.streams, self.m8_views, list(target_objects), _sense,
+                    lambda t, r: (t, r) in _fits)
+                init.extend(_over_facts)
             self.last_m8_stats = dict(self.m8_views.last_stats,
                                       build_s=time.perf_counter() - _t0,
                                       look_objects=[b.id for b in _look],
                                       sense_regions=len(_sense),
-                                      fallback=list(self.m8_views.last_fallback))
+                                      fallback=list(self.m8_views.last_fallback),
+                                      **_over_stats)
             print(f"  [M8] init: {self.last_m8_stats['sense_view']} sense_view, "
                   f"{self.last_m8_stats['look_config']} look_config facts "
                   f"(pose unknown: {self.last_m8_stats['look_objects']}), "
                   f"{len(_views)} view boxels, "
                   f"{self.last_m8_stats['sense_fallback']} shadows on the "
                   f"current-config fallback; {self.last_m8_stats['twin_renders']} "
-                  f"twin renders {self.last_m8_stats['twin_render_s']:.2f}s, "
+                  f"twin renders {self.last_m8_stats['twin_render_s']:.2f}s; "
+                  f"{_over_stats.get('over_region_pass', 0)}/"
+                  f"{_over_stats.get('over_region_pairs', 0)} over-region folds "
+                  f"{_over_stats.get('over_region_s', 0.0):.2f}s; "
                   f"total {self.last_m8_stats['build_s']:.2f}s")
         if held_obj is None:
             init.append(('handempty',))
@@ -1255,11 +1308,6 @@ class PDDLStreamPlanner:
         plan, cost, certificate = solution
         _plan_elapsed = time.perf_counter() - _plan_start_t
         _plan_outcome = 'plan_found' if plan is not None else 'no_plan'
-        # BF#52: the sense-from-anywhere test's work during this solve, into
-        # the call's M8 record (timing_summary.json's m8.per_plan).
-        if self.m8_views is not None and self.last_m8_stats:
-            self.last_m8_stats.update(
-                {'sense_view_' + k: v for k, v in self.m8_views.test_stats.items()})
         print(f"  [#76-diag] outcome={_plan_outcome}, "
               f"elapsed={_plan_elapsed:.3f}s, "
               f"plan_len={len(plan) if plan else 0}, cost={cost}")

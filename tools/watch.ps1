@@ -17,7 +17,7 @@ if ($Squeeze -gt 0) {
     $sw += ' --grip-squeeze-mm ' + $Squeeze.ToString([cultureinfo]::InvariantCulture)
 }
 if ($Screenshots) { $sw += ' --save-screenshots on' }
-if ($ReturnHome) { $sw += ' --sense-anywhere off' }
+if ($ReturnHome) { $sw += ' --sense-over-region off' }
 if ($Ours) {
     $cmd = "cd $S && PYTHONHASHSEED=0 /root/armO-venvA/bin/python test_full_pipeline.py " +
            "--scene random-pairs --seed $Seed --goal holding --n-occluders 2 $sw"

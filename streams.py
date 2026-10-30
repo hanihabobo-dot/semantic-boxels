@@ -287,12 +287,6 @@ class BoxelStreams:
         # BF#45: approach configs compute_kin_solution turned away because
         # the executor's contact pose below them had no IK.
         self.contact_ik_rejects = 0
-        # BF#52: the sense-from-anywhere test (test-sense-view): main() sets
-        # this to ObserveViews.sense_view_test when M8 is on; None certifies
-        # nothing.  The counters go to the run record.
-        self.sense_view_test = None
-        self.sense_view_tests = 0
-        self.sense_view_passes = 0
         # F18 (2026-09-20): the resolution of every path collision check,
         # in radians of the largest-moving joint between samples.
         # DEFAULT 0 = the fixed RRT_EDGE_CHECKS count, because that is
@@ -529,23 +523,6 @@ class BoxelStreams:
         if float(np.linalg.norm(t[:2] - self._robot_base_xy)) > self.reach_limit_m:
             return False
         return float(np.linalg.norm(t - self._reach_center)) <= self.reach_sphere_r_m
-
-    def test_sense_view(self, q, region_id) -> bool:
-        """BF#52, test-sense-view: at configuration ``q`` the arm keeps out
-        of the fixed eye's view of shadow ``region_id`` (M8 C1's render rule
-        on any configuration: ObserveViews.sense_view_test in the plan
-        twin).  False without the tester (M8 off) and for a region that is
-        not a shadow of the registry."""
-        if self.sense_view_test is None:
-            return False
-        boxel = self.registry.get_boxel(str(region_id))
-        if boxel is None or getattr(boxel.boxel_type, 'name', None) != 'SHADOW':
-            return False
-        self.sense_view_tests += 1
-        ok = bool(self.sense_view_test(q, boxel))
-        if ok:
-            self.sense_view_passes += 1
-        return ok
 
     def _ik_seeds(self):
         """Yield IK seed configurations: REST_POSES first, then perturbations."""

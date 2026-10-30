@@ -811,15 +811,15 @@ def parse_pipeline_args(argv=None):
              "plus pose_radius plus 8 mm (capped at the finger limit).")
     # BF#52 (2026-10-30): with M8 on, the fixed eye senses a region from the
     # target's pick configuration over it when the arm there keeps out of
-    # the view (the test-sense-view stream of pddl/stream_m8.pddl); off reads
-    # pddl/stream.pddl, so every sense returns the arm to a C1 spot as
-    # before (the A/B against Hani's 18:09 baseline).
+    # the view (static facts, pddlstream_planner.over_region_facts), and the
+    # pick follows without a move; off: every sense returns the arm to a C1
+    # spot as before (the A/B against Hani's 18:09 baseline).
     parser.add_argument(
-        '--sense-anywhere', choices=['off', 'on'], default='on',
+        '--sense-over-region', choices=['off', 'on'], default='on',
         help="BF#52: sense from the target's pick configuration over the "
-             "region when the arm there does not block the eye's view (on), "
-             'or return to a static view spot before every sense as before '
-             '(off).')
+             "region when the arm there does not block the eye's view, then "
+             'pick from there (on), or return to a static view spot before '
+             'every sense as before (off).')
     # GF10 (PAPER_AUDIT.txt BF#38): the pick close's squeeze; 0.5 mm is the
     # default since BF#44 (Hani's GUI verdict, 2026-10-30), 3 mm was before.
     parser.add_argument(

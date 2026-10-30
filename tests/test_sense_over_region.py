@@ -1,9 +1,10 @@
-"""BF#52: the fixed eye senses from any configuration that keeps the arm out
-of its view of the region.  The stream delta (test-sense-view in the
-generated M8 stream file), ObserveViews.sense_view_test on a DIRECT world
-with pybullet_data's Panda (the eye straight above a region: the arm at rest
-is out of the view, a hand parked over the region is in it), and
-BoxelStreams.test_sense_view's gate on the tester and the region."""
+"""BF#52, the fold.  ObserveViews.sense_view_test (the executor's render
+rule on any configuration) on a DIRECT world with pybullet_data's Panda:
+the arm at rest is out of a top-down eye's view of a region, a hand parked
+over the region is in it, the arm is put back, the render is cached per
+configuration.  pddlstream_planner.over_region_facts: the static facts for
+a (target, region) pair, the streams' own grasp and configuration, offered
+only when the view test passes."""
 from types import SimpleNamespace
 
 import numpy as np
@@ -11,29 +12,14 @@ import pybullet as p
 import pybullet_data
 import pytest
 
-import m8_domain
 import observe_views
+import pddlstream_planner
 import robot_utils
 import streams
 from boxel_data import BoxelData, BoxelRegistry, BoxelType
 
 BASE = (-0.4, 0.0)
 REGION = (0.20, 0.0)                      # the shadow's centre on the table, 0.6 m out
-
-
-def test_generated_stream_is_the_live_file_plus_the_test_stream():
-    live = m8_domain.read(m8_domain.STREAM_LIVE_FILE)
-    gen = m8_domain.generate_stream(live)
-    assert '(:stream test-sense-view' in gen and '(:stream test-sense-view' not in live
-    assert gen.startswith(m8_domain.STREAM_HEADER)
-    # only over the region itself: the target's pick configurations there
-    assert '(config_for_boxel ?q ?region)' in gen.split('(:stream test-sense-view')[1]
-    for name in ('sample-grasp', 'plan-motion', 'compute-kin', 'compute-stack-kin'):
-        assert f'(:stream {name}' in gen
-    assert m8_domain.stream_file(False) == m8_domain.STREAM_LIVE_FILE
-    assert m8_domain.read(m8_domain.stream_file(True)) == gen
-    with pytest.raises(ValueError):
-        m8_domain.generate_stream(gen)          # the delta applies once
 
 
 def _env(cid, robot, plane, eye):
@@ -93,17 +79,36 @@ def test_the_arm_at_rest_is_out_of_the_view_and_a_hand_over_the_region_is_in_it(
     assert views.test_stats['renders'] == 2
 
 
-def test_the_stream_gate_needs_the_tester_and_a_shadow_region(world):
+def test_over_region_facts_follow_the_view_test(world):
     env = _env(world.cid, world.robot, world.plane, eye=(REGION[0], REGION[1], 1.4))
+    views = observe_views.ObserveViews(env, BASE)
     reg = BoxelRegistry()
     reg.add_boxel(_shadow())
-    reg.add_boxel(BoxelData(id='free_0', boxel_type=BoxelType.FREE_SPACE,
-                            min_corner=np.array([0.1, 0.2, 0.0]),
-                            max_corner=np.array([0.2, 0.3, 0.05])))
+    shadow = reg.get_boxel('shadow_of_x')
     st = streams.BoxelStreams(reg, robot_id=world.robot, physics_client=world.cid)
-    assert st.test_sense_view(_rest(), 'shadow_of_x') is False      # M8 off: no tester
-    st.sense_view_test = observe_views.ObserveViews(env, BASE).sense_view_test
-    assert st.test_sense_view(_rest(), 'shadow_of_x') is True
-    assert st.test_sense_view(_rest(), 'free_0') is False            # not a shadow
-    assert st.test_sense_view(_rest(), 'nowhere') is False
-    assert (st.sense_view_tests, st.sense_view_passes) == (1, 1)
+    # The real rule: the hand over the region is in a top-down eye's view,
+    # so nothing is offered (one render spent).
+    facts, stats = pddlstream_planner.over_region_facts(
+        st, views, ['dice'], [shadow], lambda t, r: True)
+    assert facts == []
+    assert (stats['over_region_pairs'], stats['over_region_pass'],
+            stats['over_region_renders']) == (1, 0, 1)
+    # A clear view: the six facts, with the streams' own grasp and
+    # configuration (what compute-kin would yield first for the pick).
+    views.sense_view_test = lambda q, r: True
+    facts, stats = pddlstream_planner.over_region_facts(
+        st, views, ['dice'], [shadow], lambda t, r: True)
+    assert [f[0] for f in facts] == ['Grasp', 'valid_grasp', 'Config', 'kin_solution',
+                                     'config_for_boxel', 'sense_view']
+    g, q = facts[0][1], facts[2][1]
+    assert isinstance(g, streams.Grasp) and isinstance(q, streams.RobotConfig)
+    assert facts[1] == ('valid_grasp', 'dice', g)
+    assert facts[3] == ('kin_solution', 'dice', 'shadow_of_x', g, q)
+    assert facts[4] == ('config_for_boxel', q, 'shadow_of_x')
+    assert facts[5] == ('sense_view', q, 'shadow_of_x')
+    assert q.name.startswith('q_kin_dice_')
+    assert (stats['over_region_pairs'], stats['over_region_pass']) == (1, 1)
+    # A pair the sense cannot ground on is not a candidate.
+    facts, stats = pddlstream_planner.over_region_facts(
+        st, views, ['dice'], [shadow], lambda t, r: False)
+    assert facts == [] and stats['over_region_pairs'] == 0

@@ -173,12 +173,7 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 nearVal=task_spec.EYE_NEAR, farVal=task_spec.EYE_FAR)
             # B4 / M8: the domain the planner loads (the generated one
             # with M8 on), the same path for main() and G10's runtime pin.
-            _m8_on = cfg.switches.get('m8', 'on') == 'on'
-            domain_file = m8_domain.domain_file(_m8_on)
-            # BF#52: the stream file likewise (test-sense-view with M8 on
-            # and --sense-anywhere on, main()'s choice as well).
-            stream_file = m8_domain.stream_file(
-                _m8_on and cfg.switches.get('sense_anywhere', 'on') == 'on')
+            domain_file = m8_domain.domain_file(cfg.switches.get('m8', 'on') == 'on')
             gate_hooks.install(gate_hooks.GateConfig(
                 executing_client=c, robot_id=robot,
                 arm_joints=tuple(model.arm_joints),
@@ -188,8 +183,7 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 wrist_robots={c: robot},
                 mission_goal=('and', ('holding', target[0]),
                               ('at_config', 'q_home')),
-                target_symbol=target[0], domain_file=domain_file,
-                stream_file=stream_file))
+                target_symbol=target[0], domain_file=domain_file))
             with gate_hooks.write_only('settle_disclosure'):
                 before = _poses(world)
             d9_setup(world, model)

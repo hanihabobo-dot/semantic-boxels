@@ -541,20 +541,6 @@ def run_domain(report):
         report.add('G10', 'PASS', f'{rel(m8.GENERATED_FILE)} {m8.sha(want)[:16]} '
                                   f'= regenerated (live + M8 delta); an OFF run '
                                   f'must load the live file, an ON run this one')
-    # BF#52: the generated stream file likewise (the live stream.pddl plus
-    # the test-sense-view stream).
-    if hasattr(m8, 'generate_stream'):
-        want_s = m8.generate_stream(m8.read(m8.STREAM_LIVE_FILE))
-        have_s = (m8.read(m8.STREAM_GENERATED_FILE)
-                  if os.path.isfile(m8.STREAM_GENERATED_FILE) else None)
-        if have_s != want_s:
-            report.add('G10', 'FAIL', f'{rel(m8.STREAM_GENERATED_FILE)} is missing '
-                                      f'or not the regenerated live stream file '
-                                      f'plus M8\'s delta')
-        else:
-            report.add('G10', 'PASS', f'{rel(m8.STREAM_GENERATED_FILE)} '
-                                      f'{m8.sha(want_s)[:16]} = regenerated '
-                                      f'(live + M8 delta)')
 
 
 def ledger_domain(report, rows):
@@ -572,15 +558,13 @@ def ledger_domain(report, rows):
         if r.get('sha') != want:
             bad.append(f"M8 {'on' if on else 'off'}: loaded {r.get('file')} "
                        f"{str(r.get('sha'))[:16]} != {want[:16]}")
-        # BF#52: the stream file the run loaded, when the row records it.
-        if r.get('stream_sha') is not None and hasattr(m8, 'generate_stream'):
-            live_s = m8.read(m8.STREAM_LIVE_FILE)
-            on_s = on and bool((r.get('switches') or {}).get('sense_anywhere', True))
-            want_s = m8.sha(m8.generate_stream(live_s) if on_s else live_s)
+        # BF#52: the stream file the run loaded, when the row records it,
+        # is the live pddl/stream.pddl.
+        if r.get('stream_sha') is not None and hasattr(m8, 'STREAM_LIVE_FILE'):
+            want_s = m8.sha(m8.read(m8.STREAM_LIVE_FILE))
             if r.get('stream_sha') != want_s:
-                bad.append(f"M8 {'on' if on else 'off'}: loaded stream "
-                           f"{r.get('stream_file')} {str(r.get('stream_sha'))[:16]} "
-                           f"!= {want_s[:16]}")
+                bad.append(f"loaded stream {r.get('stream_file')} "
+                           f"{str(r.get('stream_sha'))[:16]} != {want_s[:16]}")
     report.add('G10r', 'FAIL' if bad else 'PASS',
                '; '.join(bad) or f"{doms[-1].get('file')} as the switches require")
 
