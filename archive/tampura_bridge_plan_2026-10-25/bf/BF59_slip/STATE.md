@@ -78,6 +78,31 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      slots free. Implementation reviews (phase 6): small diffs are read
      by the orchestrator (reviews/implrev_<name>.md), large ones by an
      Opus reviewer when a slot is free.
+   - pose_radius_keep DONE 19:05: commit e0e81e1 on slip/pose_radius_keep
+     (pose_belief.py: register at import 27, record_detection 297,
+     _prk_centres/_prk_prior/_prk_apply 360 to 437, _fuse returns bool;
+     11 tests). The camera is already passed by every caller ('eye' or
+     'wrist'), no new parameter. Deviations: the reference is the measured
+     detection whose own radius set the current bound (the brief's 2.05 mm
+     for one refresh; repeated refreshes do not add their shifts up),
+     counted only if the rule last wrote the radius and the box is within
+     0.5 mm of that write's position (stands in for pose_known, which
+     record_detection cannot call); the shift is the larger of the box
+     centre's and the rectangle centre's; the yaw keep needs the eye's yaw
+     within 9.68 deg of the wrist's. Checks green on and off (63 + 89
+     tests, gates PASS, seed 0 success; off shows the cup loop twice).
+     Laptop seed 6 on: held, 4 plans, no refusal, the rule never fired
+     (the cup was behind the arm at the refresh); seed 1 on: held, 12
+     plans, 1 refusal, the rule fired 30 times on three cups (d_cups_ud
+     kept 2.63 mm against the eye's 5.49 mm and the pick committed), the
+     yaw kept 5 times. Open: the wrist's centres from different look
+     configurations disagree by 2 to 3 mm while it claims 0.39 to 0.68 mm
+     (M8 calibration), so some refreshes still refuse. Report
+     reviews/impl_pose_radius_keep.md; 2.7 MB of checks in the worktree.
+   - carry_hold_check launched 19:12 in sb-slip-carry_hold_check from
+     f060429 (code identical to 05dcaf3; session agent id
+     ae3c955cf7beccf40); its loss line's exact text goes into the eval
+     harness when it reports. pad_rolling waits for the next free slot.
    - solver_iters DONE 18:40: commit 2252af5 on slip/solver_iters (5
      files, only added lines): robot_utils.SOLVER_ITERATIONS = 200;
      registered at boxel_env's import; applied in policy.py d9_setup
