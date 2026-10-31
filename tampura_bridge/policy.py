@@ -34,7 +34,7 @@ import pybullet as p
 
 import m8_domain
 import robot_utils
-import slip_fixes          # BF#59 force_hold (the campaign's switches)
+import slip_fixes
 import telemetry
 import test_full_pipeline
 import world_eye
@@ -209,9 +209,9 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 target_symbol=target[0], domain_file=domain_file))
             with gate_hooks.write_only('settle_disclosure'):
                 before = _poses(world)
-            # BF#59 force_hold: the campaign's switches are set here as well,
-            # before D9's set-up, because the finger gear must exist before
-            # the first step; main() sets the same names again.
+            # BF#59 solver_iters: main() configures the slip fixes, but D9's
+            # set-up runs before main(), so the same flag is configured here
+            # first (main() then sets the same names again).
             slip_fixes.configure(cfg.switches.get('slip_fixes', ''))
             d9_setup(world, model)
             # GF6: only D9's calls run under 'setup'; the adapter build and
