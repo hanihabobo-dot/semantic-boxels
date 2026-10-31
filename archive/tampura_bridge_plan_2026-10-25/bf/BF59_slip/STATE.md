@@ -26,16 +26,14 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    episode under `flock /root/sb_pipeline.lock`), `.gitattributes` (LF for
    .sh/.sbatch). Validated: main checkout and a throwaway worktree both
    pass (53 tests, 89 bridge tests, gates PASS, seed 0 success).
-3. PROPOSALS: grasp_geometry DONE, loss_dynamics DONE, carry_motion DONE
-   (15:40), hold_physics: its work log (items 1 to 21, the gear sweep
-   included) is complete and its last episode (laptop seed 6, coupled
-   fingers + 10 N + 200 iterations) held the die at home (16:36, reward
-   1.0); the agent's transcript was cut at that call, so it was resumed at
-   16:40 (session agent id a68d591baff7c0644) to write the proposal
-   sections above its work log and return the summary. Their probes and
-   recordings are under probes/<angle>/ (about 150 MB, ledgered; garbage
-   after the review except scripts, work logs, the .txt summaries,
-   carry.jsonl and stdout.txt).
+3. DONE proposals (16:50): grasp_geometry, loss_dynamics, carry_motion
+   (15:40), hold_physics (16:50, 44 kB: sections 1 to 4 on top, the work
+   log of 23 items as the appendix; three laptop episodes with a fix on
+   held the die at home: seed 1 at 20 N without the gear, seeds 6 and 1
+   with the full combination). Their probes and recordings are under
+   probes/<angle>/ (about 155 MB, ledgered; garbage after the review
+   except scripts, work logs, the .txt summaries, carry.jsonl and
+   stdout.txt).
 4. IN PROGRESS review (started 16:42): the shared brief is
    reviews/REVIEW_BRIEF.md (what to read, six points per fix: mechanism
    and evidence, the rules of BRIEF.md section 5 one by one, testability
@@ -45,13 +43,15 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    no commits). Three Opus reviewers run, one proposal each, writing
    reviews/<angle>.md as they go: grasp_geometry (session agent id
    a4fd95191a1d0260c), loss_dynamics (a976071984851032e), carry_motion
-   (acffd73e6c251ee62). The fourth, hold_physics, starts when its proposal
-   is written (the same brief; its orchestrator questions: rule 2 for the
-   force-limited hold and the 200 iterations, pipeline-wide for our own
-   world too; the step-time cost against the 600 s cap; the gear
-   constraint on both clients; what the grip verification, the post-lift
-   re-verify and _verify_holding read under the new hold). NEXT after the
-   four reviews: the orchestrator writes the candidate list (6 to 8
+   (acffd73e6c251ee62), hold_physics (ac67440e6b14b7732, started 16:52;
+   its orchestrator questions: rule 2 for the force-limited hold and the
+   200 iterations, pipeline-wide for our own world too; the switch and arm
+   structure since force_hold is harmful without the other two; the
+   step-time cost against the 600 s cap; the gear constraint on both
+   clients; what the grip verification, the post-lift re-verify and
+   _verify_holding read under the new hold; which other fixes become
+   redundant). The implementation brief for phase 5 is
+   reviews/IMPL_BRIEF.md (written ahead). NEXT after the four reviews: the orchestrator writes the candidate list (6 to 8
    fixes, one mechanism per switch, the dependencies and the arm plan)
    into this file.
 5. THEN implementation: one worktree and branch per fix, four Opus agents
@@ -139,8 +139,15 @@ Fix names proposed: edge_pinch, face_needs_wrist_yaw,
 pinch_band_certificate (grasp_geometry); carry_hold_check,
 carry_grip_watch, carry_accel_limit, pose_radius_keep (loss_dynamics);
 grasp_wrist_home, carry_trapezoid (= carry_accel_limit, one switch)
-(carry_motion); hold_physics names pending (the finger coupling, the
-force-limited hold, the solver iterations, the rolling friction).
+(carry_motion); finger_gear (a JOINT_GEAR constraint, gearRatio -1,
+between the finger joints on the executing client in d9_setup and on our
+own world in boxel_env: their URDF's mimic), solver_iters (200 solver
+iterations in both places, about +0.9 ms per step), force_hold (after
+both pads touch, a target 4 mm inside the measured width at a 10 N motor
+budget per finger instead of 0.5 mm at 60 N; harmful without the other
+two: 96 % lost; expected to bring the loss per carry from 21 % to near 0,
+real if under 10 %), pad_rolling (rollingFriction 0.01 on both pads,
+their create_default_env value; 4.4 % alone, the fallback) (hold_physics).
 
 ## Rules that bind every change
 
