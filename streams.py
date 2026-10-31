@@ -81,12 +81,48 @@ HOME_PSEUDO_BOXEL = 'home'
 
 from boxel_data import BoxelRegistry, BoxelData, BoxelType
 import pose_belief
+import slip_fixes
 from robot_utils import (robot_model,
                          JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH, JOINT_RANGES,
                          REST_POSES, RenderingLock, IK_ORN_TOL_DEG,
                          quat_angle_deg, PATH_CHECK_MAX_STEP_RAD,
                          is_config_collision_free, is_path_collision_free,
                          solve_ik)
+
+
+def _prefer_wrist_home(obj_id, obj_boxel, candidates, base_xy, q7_home):
+    """BF#59 grasp_wrist_home: each (grasp yaw, span) of sample_grasp's
+    candidates becomes (the member of {yaw, yaw + pi} whose joint 7 is
+    nearer ``q7_home``, span).  The pinch is the same pinch with the pads
+    swapped, so the span, the count and the order are unchanged; the kin
+    stream certifies the chosen orientation as it certifies today's.
+    Today's yaw puts the wrist half a turn from home, and the carry home
+    unwinds it by 168 to 199 deg while it holds the die (the
+    planned waypoints of every recorded die carry); the twin needs a median
+    22 deg, and in grasp_geometry's real-pick probe it held 55 of 56
+    near-face grips under today's carry against 32 (reviews/carry_motion.md).
+    The home joint 7 is read at call time, so set_home_joints (their
+    DEFAULT_ARM_POS in the bridge, REST_POSES in our scenes) is the
+    reference; the base is the planner's own robot (proprioception)."""
+    # The lines go to the run log at DEBUG like sample_grasp's own per-grasp
+    # lines (the run_*.log the eval reads), not to the console.
+    if obj_boxel is None:
+        logger.debug("grasp_wrist_home: %s has no believed box, so no bearing "
+                     "to choose from: today's yaws kept", obj_id)
+        return candidates
+    target = np.asarray(obj_boxel.center, dtype=float)[:2]
+    out = []
+    for yaw, span in candidates:
+        chosen, info = pose_belief.wrist_home_twin(yaw, target, base_xy, q7_home)
+        logger.debug("grasp_wrist_home: %s yaw %.1f deg (joint 7 %+.2f rad, "
+                     "%.0f deg from home) or twin %.1f deg (joint 7 %+.2f rad, "
+                     "%.0f deg from home): %s", obj_id,
+                     np.degrees(info['yaw']), info['q7'], np.degrees(info['d']),
+                     np.degrees(info['twin_yaw']), info['twin_q7'],
+                     np.degrees(info['twin_d']),
+                     "twin" if info['twin'] else "today's")
+        out.append((chosen, span))
+    return out
 
 
 # =============================================================================
@@ -843,6 +879,14 @@ class BoxelStreams:
             candidates = sorted([(0.0, float(ext[1])),
                                  (np.pi / 2.0, float(ext[0]))],
                                 key=lambda c: c[1])
+        # BF#59 grasp_wrist_home (default off): of each candidate yaw and
+        # its pad-swapped twin, the one whose wrist is nearer home; the
+        # same candidates, spans and order otherwise (pose_belief.
+        # wrist_home_twin has the why and the numbers).
+        if slip_fixes.on('grasp_wrist_home'):
+            candidates = _prefer_wrist_home(
+                obj_id, obj_boxel, candidates, self._robot_base_xy,
+                float(self.home_config.joint_positions[6]))
 
         # Z offsets: the validated 0.10 m and the F4 0.06 m (comments at
         # _GRASP_Z_OFFSETS), deterministic order — no shuffle.  (A third,

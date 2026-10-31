@@ -29,6 +29,15 @@ slip_fixes.register(
     'a consistent later detection keeps min(r_new, r_old + centre shift) '
     'and the wrist yaw over the eye yaw (record_detection)')
 
+# BF#59 grasp_wrist_home (proposals/carry_motion.md 2.1, reviews/
+# carry_motion.md): the switch lives here, with the twin choice below, and
+# streams.BoxelStreams.sample_grasp asks it.  Registered at import, off by
+# default.
+slip_fixes.register(
+    'grasp_wrist_home',
+    'the grasp sampler takes, of a top-down grasp yaw and its pad-swapped '
+    'twin (yaw + pi), the one whose wrist (joint 7) is nearer home')
+
 # A: one pixel of detection noise, declared a priori (not fitted).
 DETECTION_PIXEL_NOISE_PX = 1.0
 
@@ -208,6 +217,78 @@ def fitted_grasp_candidates(yaw: float, body_extents,
         cands = [(gy, max(span, 2.0 * aabb_half_along(pad_direction(gy), aabb_ext)))
                  for gy, span in cands]
     return sorted(cands, key=lambda c: c[1])
+
+
+# BF#59 grasp_wrist_home.  "Smallest wrist rotation" above (and the AABB
+# sampler's "wrist-neutral" yaw 0) is measured from the Euler yaw 0 of the
+# hand in the world, not on the arm: on the Panda, top_down(0) is half a
+# turn from the wrist at both homes (REST_POSES and their DEFAULT_ARM_POS
+# have joint 7 = 0.785).  Every recorded die carry home unwound joint 7 by
+# 168 to 199 deg (reviews/carry_motion.md 1, the planned waypoints) while
+# the pads held the die, and that unwind turns a die sitting a few degrees
+# off its face out of the pinch: in grasp_geometry's real-pick probe, the
+# pad-swapped grasp (yaw + pi, the same pinch of any box) held 55 of 56
+# near-face grips under today's carry against 32 at today's yaw (McNemar
+# p 2e-7).  Today's yaw also clips joint 7 at its limit for believed yaws
+# above about 15 deg, so those grasps land up to 10 deg off their yaw
+# (the IK's orientation tolerance) or find no IK; the twin sits inside the
+# range.
+#
+# Joint 7 of a top-down grasp follows from the grasp yaw and the target's
+# bearing from the base, with no IK: with the hand pointing down, joint 7
+# turns the hand about the vertical against joint 1, so the hand's world
+# yaw is bearing - q7 + C.  C = 5 pi / 4 for the Panda (both URDFs, base
+# yaw included in the bearing): at REST_POSES (q1 = 0, q7 = pi / 4) the
+# hand is top_down(pi).  The arm's null space (joints 3 and 5) moves the
+# real value by a few degrees (probes/grasp_wrist_home, the formula against
+# the kin stream's IK).
+PANDA_TOP_DOWN_Q7_OFFSET = 1.25 * math.pi
+# Joint 7's limit (robot_utils.JOINT_LIMITS_*, the same for both Pandas):
+# a predicted joint 7 past it is where the IK clips.
+PANDA_Q7_LIMIT = 2.8973
+# Near the split both members need about a quarter turn and the
+# prediction's few degrees decide; within this band of the split today's
+# member is kept (reviews/carry_motion.md, rule 2, asked for a tie band,
+# "say within 20 deg", against a world-frame angle that ignores the base
+# joint's turn; the bearing above removes that).  Measured on 450 grid
+# cells of both worlds (probes/grasp_wrist_home/analyse_band*.txt): 5 deg
+# never flips to the member the IK puts farther from home and picks the
+# IK-nearer one in 362 of 369 cells; 0 deg flips 4 cells to a member up to
+# 11 deg farther; 20 deg keeps today's member in 42 cells where the twin
+# is up to 39 deg nearer.
+WRIST_HOME_TIE_BAND = math.radians(5.0)
+
+
+def wrist_joint7_top_down(target_xy, base_xy, grasp_yaw: float) -> float:
+    """BF#59 grasp_wrist_home: joint 7 (rad, in [-pi, pi)) of a top-down
+    hand at ``grasp_yaw`` over ``target_xy``, the robot base at
+    ``base_xy``: bearing - yaw + PANDA_TOP_DOWN_Q7_OFFSET."""
+    t = np.asarray(target_xy, dtype=float)[:2]
+    b = np.asarray(base_xy, dtype=float)[:2]
+    bearing = math.atan2(float(t[1] - b[1]), float(t[0] - b[0]))
+    return _wrap(bearing - float(grasp_yaw) + PANDA_TOP_DOWN_Q7_OFFSET,
+                 2.0 * math.pi)
+
+
+def wrist_home_twin(grasp_yaw: float, target_xy, base_xy, q7_home: float,
+                    tie_band: float = WRIST_HOME_TIE_BAND):
+    """BF#59 grasp_wrist_home: of ``grasp_yaw`` and its pad-swapped twin
+    (yaw + pi, wrapped to [-pi, pi)), the one whose predicted joint 7 is
+    nearer ``q7_home``; today's yaw unless the twin is nearer by more than
+    twice ``tie_band`` (today's member more than tie_band past the quarter
+    turn split).  The distance is to joint 7 clipped at its limit, where
+    the IK puts it.  Returns (chosen yaw, info) with info the two yaws,
+    their joint 7 values and distances (rad) and 'twin' (bool)."""
+    twin = _wrap(float(grasp_yaw) + math.pi, 2.0 * math.pi)
+    q_a = wrist_joint7_top_down(target_xy, base_xy, grasp_yaw)
+    q_b = wrist_joint7_top_down(target_xy, base_xy, twin)
+    lim = PANDA_Q7_LIMIT
+    d_a = abs(min(max(q_a, -lim), lim) - float(q7_home))
+    d_b = abs(min(max(q_b, -lim), lim) - float(q7_home))
+    use_twin = d_a - d_b > 2.0 * tie_band
+    info = {'yaw': float(grasp_yaw), 'twin_yaw': twin, 'q7': q_a,
+            'twin_q7': q_b, 'd': d_a, 'twin_d': d_b, 'twin': use_twin}
+    return (twin if use_twin else float(grasp_yaw)), info
 
 
 def pinch_half_extent(pinch_dir_xy, yaw: float, body_extents) -> float:
