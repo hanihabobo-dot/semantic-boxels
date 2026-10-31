@@ -89,6 +89,28 @@ def d9_setup(world, model):
                          physicsClientId=c)
         p.resetJointState(world.robot.body, fj, task_spec.FINGER_OPEN,
                           physicsClientId=c)
+    # BF#59 force_hold (slip_fixes.py; finger_gear folded in): their URDF
+    # couples the fingers (panda.urdf line 356, <mimic
+    # joint="panda_finger_joint1"/>) and PyBullet ignores the tag, so a
+    # JOINT_GEAR constraint realises it on the executing client, here in
+    # phase 'setup' before any step (after set_phase('main') G14 would
+    # refuse it).  Only the executing client steps; the plan twin and the kin
+    # stream need no gear.  Constants in robot_utils (FINGER_GEAR_*).
+    if slip_fixes.on('force_hold'):
+        robot_utils.force_hold_requires_solver_iters('d9_setup')
+        f1, f2 = model.finger_joints
+        gear = p.createConstraint(world.robot.body, f1, world.robot.body, f2,
+                                  jointType=p.JOINT_GEAR, jointAxis=[1, 0, 0],
+                                  parentFramePosition=[0, 0, 0],
+                                  childFramePosition=[0, 0, 0], physicsClientId=c)
+        p.changeConstraint(gear, gearRatio=robot_utils.FINGER_GEAR_RATIO,
+                           erp=robot_utils.FINGER_GEAR_ERP,
+                           maxForce=robot_utils.FINGER_GEAR_MAX_FORCE, physicsClientId=c)
+        logging.getLogger(__name__).info(
+            "force_hold: finger gear constraint %d on client %d (joints %d, %d, "
+            "gearRatio %g, erp %g, maxForce %g N)", gear, c, f1, f2,
+            robot_utils.FINGER_GEAR_RATIO, robot_utils.FINGER_GEAR_ERP,
+            robot_utils.FINGER_GEAR_MAX_FORCE)
 
 
 def _poses(world):
