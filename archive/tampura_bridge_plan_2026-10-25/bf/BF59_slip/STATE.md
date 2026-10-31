@@ -278,7 +278,14 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    force_hold at 200 iterations through the real solver_iters switch)
    started 20:32. Still to merge: carry_hold_check (its move-action hunk
    may conflict with carry_trapezoid's call; its loss line goes into
-   tools/slip_eval.py's counting). Then the off check,
+   tools/slip_eval.py's counting). Cluster at 20:40 (sinfo -p rleap_cpu):
+   idle cn-101, 102, 103, 105, 106, 107, 108, 109, 113, 114, 115, 116;
+   mixed cn-104, 110 (another user's array), 111, 112; long pending
+   arrays of other users queued (%100), so the idle nodes may fill: pin
+   jobs A, B, C, T to four distinct idle nodes (first choice cn-101,
+   102, 103, 105) and re-check sinfo right before sbatch. $W/p4 is 14 GB
+   on disk (the environment; prune_work's cap counts results and
+   snapshots). Then the off check,
    `tools/cluster/push_snapshot.ps1 -CodeOnly` FROM THE CAMPAIGN WORKTREE
    (it archives the cwd's HEAD), then on cn-04 one `slip_eval.sbatch` per
    arm group (always `base,<fix>,<fix>`), pinned to distinct nodes
