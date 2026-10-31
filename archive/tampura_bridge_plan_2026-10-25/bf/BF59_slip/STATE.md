@@ -99,6 +99,10 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      configurations disagree by 2 to 3 mm while it claims 0.39 to 0.68 mm
      (M8 calibration), so some refreshes still refuse. Report
      reviews/impl_pose_radius_keep.md; 2.7 MB of checks in the worktree.
+     IMPLEMENTATION REVIEW 19:20 (reviews/implrev_pose_radius_keep.md,
+     the orchestrator): ACCEPTED, no change; the call order (radius
+     before the box write at both callers) and est_center = the AABB
+     centre make the validity test sound.
    - carry_hold_check launched 19:12 in sb-slip-carry_hold_check from
      f060429 (code identical to 05dcaf3; session agent id
      ae3c955cf7beccf40); its loss line's exact text goes into the eval
