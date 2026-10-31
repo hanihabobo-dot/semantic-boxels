@@ -442,6 +442,37 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    bridge tests, gates PASS). NOT in the running eval (its snapshot is
    cff9bc5). Its cluster eval needs Hani's approval of that question
    alone; the natural place is job E beside the chosen set.
+   RESULTS SO FAR (2026-11-01 00:15; the pulled records in eval/<job>/,
+   tracked; the table script eval/slip_table.py reads every job's
+   results.jsonl and T's campaign.jsonl and writes eval/TABLE.md):
+   - Job D (5006489, cn-105, 21:08 to 23:57, 120 episodes): base 42/60
+     successes, 9 timeouts (seeds 6, 17, 19 in all three reps, all on
+     scene 1747173590: the cup loop), 9 losses in 51 carries (0.18;
+     every failure a physics_mismatch, the die lost: seeds 1, 8, 14, 18
+     in rep 0, 5 and 14 in rep 1, 5, 10 and 18 in rep 2), 6 of 20 seeds
+     with disagreeing reps. The PRE-REGISTERED combined arm
+     solver_iters+force_hold+pose_radius_keep+grasp_wrist_home: 60/60
+     successes, 0 timeouts, 0 losses in 60 carries, 0 of 20 seeds mixed;
+     medians (rep 0, the 17 seeds base ran to the close) wall 24.9 to
+     16.6 s, planning 13.8 to 9.3 s, exec 8.0 to 5.5 s, plan calls 5 to
+     3; per-seed ratios wall x1.08, planning x0.99 (a little slower where
+     base is quick, much faster where base loops or loses).
+   - Job T (5006490, cn-106, 21:10 to 23:57, 60 episodes): TAMPURA
+     13/20, 14/20, 13/20 (one crash, seed 9 rep 3, rc 1 after 51 s,
+     counted censored), 40/60 in all; per scene 1747173591 19 of 21,
+     1747173593 14 of 24, 1747173590 7 of 15; loop times 47 to 415 s
+     (the medians in the table). TAMPURA runs at its own 50 solver
+     iterations (to disclose beside our solver_iters arms) and the M8
+     calibration issue stays open.
+   - A and B were at 112/180 and C at 71/180 at 00:11; the waiter wakes
+     the session when the first ends (A and B about 02:00, C about
+     05:00).
+   - Cluster cap: prune_work at T's end counted 1178 MiB of 1024 and
+     found nothing it may delete (the two B8 campaigns' T episodes
+     625 MiB cited by BF#54, the per-fix eval's 111 MiB behind the open
+     replan-loop finding, D 62 MB, T 210 MB); A, B and C add about
+     280 MB. Nothing of ours is garbage by the ledger's rules; whether
+     the B8 T episodes may go is Hani's call.
 
 ## Diagnosis so far (from the two finished proposals)
 

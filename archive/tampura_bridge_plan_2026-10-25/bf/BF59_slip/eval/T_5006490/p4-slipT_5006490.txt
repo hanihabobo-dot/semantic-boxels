@@ -1,0 +1,213 @@
+--------------------- Slurm Task Prolog ------------------------
+Job ID: 5006490
+Job name: p4-slipT
+Host: cn-106
+Date: Sat Oct 31 21:08:31 CET 2026
+User: hani.alassiri.alhabboub
+Slurm account: rleap
+Slurm partition: rleap_cpu
+Work dir: 
+------------------
+Node usage:
+JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
+5006490 rleap_cpu p4-slipT hani.ala  R       0:00      1 cn-106
+------------------
+Show launch script with:
+sacct -B -j 
+------------------
+--------------------- Slurm Task Prolog ------------------------
+host cn-106  job 5006490  2026-10-31T21:08:31+01:00  snapshot /work/rleap1/hani.alassiri.alhabboub/p4/sb_cff9bc5  arm T  reps 3  seeds 0-19  out /work/rleap1/hani.alassiri.alhabboub/p4/results/slipT_cff9bc5_5006490
+model name	: Intel(R) Xeon(R) Platinum 8160 CPU @ 2.10GHz
+graph    INFO  36 modules; roots not present yet: none
+G1       PASS  83 hits, all reviewed
+G2       PASS  46 hits, all reviewed
+G7       PASS  no scene literal
+G11(i)   PASS  pddlstream imported only by pddlstream_planner.py and streams.py
+G17      PASS  clean
+G10      INFO  domain_pddlstream.pddl a21877fe170997c7  stream.pddl 9f767855831731a4
+G10      PASS  pddl/domain_pddlstream_m8.pddl e49e249bb03b7fdd = regenerated (live + M8 delta); an OFF run must load the live file, an ON run this one
+G13      PASS  tampura: HEAD cdddf14, tree fbc0cd060ddbb4af, 0 declared change(s) (BF#3), nothing else modified or stray
+G13      PASS  tampura_environments: HEAD 4167c35, tree e339e7b865a82c1b, 1 declared change(s) (BF#3), nothing else modified or stray
+G13      INFO  arm T pip freeze 0cdfcf0c5ae35ee4
+G13      PASS  arm T's installed tampura: 2502 of 2506 tracked files byte-equal to the checkout, the rest never installed and never read, build 5f75024e7c619d4f
+G13      PASS  T driver = run_planner.py line for line, plus the one import
+[campaign] full: arms ['T'], seeds [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19], reps 3, cap 600.0 s, out /work/rleap1/hani.alassiri.alhabboub/p4/results/slipT_cff9bc5_5006490; 0 episodes already done
+[campaign] 2026-10-31T21:10:01 start T:1:0
+[campaign] T:1:0 success loop_s=47.282 wall_s=58.907 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8123990 bytes); 
+[campaign] 2026-10-31T21:11:08 start T:1:1
+[campaign] T:1:1 failure loop_s=287.374 wall_s=301.396 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (136041105 bytes); 
+[campaign] 2026-10-31T21:16:17 start T:1:2
+[campaign] T:1:2 failure loop_s=201.001 wall_s=214.802 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (149962633 bytes); 
+[campaign] 2026-10-31T21:20:00 start T:1:3
+[campaign] T:1:3 failure loop_s=169.299 wall_s=181.641 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (149724225 bytes); 
+[campaign] 2026-10-31T21:23:10 start T:1:4
+[campaign] T:1:4 success loop_s=90.345 wall_s=102.543 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (9490628 bytes); 
+[campaign] 2026-10-31T21:25:00 start T:1:5
+[campaign] T:1:5 success loop_s=94.034 wall_s=106.39 rc=0 scene=1747173590.312597.json gates=[] RolloutHistory pickle deleted after reading (9302002 bytes); 
+[campaign] 2026-10-31T21:26:55 start T:1:6
+[campaign] T:1:6 success loop_s=279.953 wall_s=292.874 rc=0 scene=1747173590.312597.json gates=[] RolloutHistory pickle deleted after reading (32749628 bytes); 
+[campaign] 2026-10-31T21:31:56 start T:1:7
+[campaign] T:1:7 success loop_s=50.45 wall_s=60.067 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8183633 bytes); 
+[campaign] 2026-10-31T21:33:04 start T:1:8
+[campaign] T:1:8 success loop_s=98.901 wall_s=111.093 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (9132554 bytes); 
+[campaign] 2026-10-31T21:35:02 start T:1:9
+[campaign] T:1:9 success loop_s=66.582 wall_s=75.651 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8234398 bytes); 
+[campaign] 2026-10-31T21:36:25 start T:1:10
+[campaign] T:1:10 failure loop_s=167.586 wall_s=179.174 rc=0 scene=1747173590.312597.json gates=[] RolloutHistory pickle deleted after reading (17315770 bytes); 
+[campaign] 2026-10-31T21:39:31 start T:1:11
+[campaign] T:1:11 success loop_s=49.688 wall_s=58.841 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8063473 bytes); 
+[campaign] 2026-10-31T21:40:36 start T:1:12
+[campaign] T:1:12 success loop_s=51.032 wall_s=59.521 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8120303 bytes); 
+[campaign] 2026-10-31T21:41:42 start T:1:13
+[campaign] T:1:13 success loop_s=50.631 wall_s=59.903 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8004355 bytes); 
+[campaign] 2026-10-31T21:42:49 start T:1:14
+[campaign] T:1:14 success loop_s=239.513 wall_s=251.859 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (24898105 bytes); 
+[campaign] 2026-10-31T21:47:08 start T:1:15
+[campaign] T:1:15 success loop_s=160.62 wall_s=172.733 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (17776291 bytes); 
+[campaign] 2026-10-31T21:50:08 start T:1:16
+[campaign] T:1:16 success loop_s=63.018 wall_s=72.344 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8127931 bytes); 
+[campaign] 2026-10-31T21:51:27 start T:1:17
+[campaign] T:1:17 failure loop_s=168.557 wall_s=181.761 rc=0 scene=1747173590.312597.json gates=[] RolloutHistory pickle deleted after reading (149357228 bytes); 
+[campaign] 2026-10-31T21:54:36 start T:1:18
+[campaign] T:1:18 failure loop_s=168.712 wall_s=180.818 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (16690226 bytes); 
+[campaign] 2026-10-31T21:57:43 start T:1:19
+[campaign] T:1:19 failure loop_s=295.996 wall_s=309.306 rc=0 scene=1747173590.312597.json gates=[] RolloutHistory pickle deleted after reading (135731310 bytes); 
+[campaign] 2026-10-31T22:03:00 start T:2:0
+[campaign] T:2:0 success loop_s=51.027 wall_s=59.8 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8086400 bytes); 
+[campaign] 2026-10-31T22:04:07 start T:2:1
+[campaign] T:2:1 success loop_s=156.909 wall_s=168.979 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (17800865 bytes); 
+[campaign] 2026-10-31T22:07:03 start T:2:2
+[campaign] T:2:2 failure loop_s=166.144 wall_s=179.804 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (149526494 bytes); 
+[campaign] 2026-10-31T22:10:10 start T:2:3
+[campaign] T:2:3 failure loop_s=254.066 wall_s=268.285 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (150449667 bytes); 
+[campaign] 2026-10-31T22:14:45 start T:2:4
+[campaign] T:2:4 failure loop_s=249.258 wall_s=262.569 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (150492903 bytes); 
+[campaign] 2026-10-31T22:19:14 start T:2:5
+[campaign] T:2:5 success loop_s=239.657 wall_s=251.437 rc=0 scene=1747173590.312597.json gates=[] RolloutHistory pickle deleted after reading (25064210 bytes); 
+[campaign] 2026-10-31T22:23:33 start T:2:6
+[campaign] T:2:6 success loop_s=100.779 wall_s=110.93 rc=0 scene=1747173590.312597.json gates=[] RolloutHistory pickle deleted after reading (9149564 bytes); 
+[campaign] 2026-10-31T22:25:30 start T:2:7
+[campaign] T:2:7 success loop_s=59.978 wall_s=70.094 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8129867 bytes); 
+[campaign] 2026-10-31T22:26:50 start T:2:8
+[campaign] T:2:8 success loop_s=324.097 wall_s=337.463 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (33016924 bytes); 
+[campaign] 2026-10-31T22:32:35 start T:2:9
+[campaign] T:2:9 success loop_s=61.108 wall_s=70.735 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8085243 bytes); 
+[campaign] 2026-10-31T22:33:53 start T:2:10
+[campaign] T:2:10 failure loop_s=193.963 wall_s=206.349 rc=0 scene=1747173590.312597.json gates=[] RolloutHistory pickle deleted after reading (16948373 bytes); 
+[campaign] 2026-10-31T22:37:26 start T:2:11
+[campaign] T:2:11 success loop_s=51.806 wall_s=61.182 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8066212 bytes); 
+[campaign] 2026-10-31T22:38:34 start T:2:12
+[campaign] T:2:12 success loop_s=51.706 wall_s=59.766 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8145808 bytes); 
+[campaign] 2026-10-31T22:39:41 start T:2:13
+[campaign] T:2:13 success loop_s=49.298 wall_s=58.595 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8033965 bytes); 
+[campaign] 2026-10-31T22:40:47 start T:2:14
+[campaign] T:2:14 success loop_s=92.96 wall_s=104.07 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (9220602 bytes); 
+[campaign] 2026-10-31T22:42:38 start T:2:15
+[campaign] T:2:15 failure loop_s=181.658 wall_s=194.839 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (149759066 bytes); 
+[campaign] 2026-10-31T22:45:59 start T:2:16
+[campaign] T:2:16 success loop_s=60.913 wall_s=70.247 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8202997 bytes); 
+[campaign] 2026-10-31T22:47:17 start T:2:17
+[campaign] T:2:17 failure loop_s=414.816 wall_s=428.004 rc=0 scene=1747173590.312597.json gates=[] RolloutHistory pickle deleted after reading (135825936 bytes); 
+[campaign] 2026-10-31T22:54:32 start T:2:18
+[campaign] T:2:18 success loop_s=92.509 wall_s=104.472 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (9186813 bytes); 
+[campaign] 2026-10-31T22:56:23 start T:2:19
+[campaign] T:2:19 success loop_s=248.829 wall_s=260.628 rc=0 scene=1747173590.312597.json gates=[] RolloutHistory pickle deleted after reading (25100854 bytes); 
+[campaign] 2026-10-31T23:00:51 start T:3:0
+[campaign] T:3:0 success loop_s=49.303 wall_s=58.603 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8090402 bytes); 
+[campaign] 2026-10-31T23:01:56 start T:3:1
+[campaign] T:3:1 success loop_s=91.417 wall_s=103.259 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (9737169 bytes); 
+[campaign] 2026-10-31T23:03:46 start T:3:2
+[campaign] T:3:2 failure loop_s=160.087 wall_s=173.274 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (149394130 bytes); 
+[campaign] 2026-10-31T23:06:47 start T:3:3
+[campaign] T:3:3 success loop_s=277.618 wall_s=289.811 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (32649228 bytes); 
+[campaign] 2026-10-31T23:11:44 start T:3:4
+[campaign] T:3:4 success loop_s=153.409 wall_s=165.311 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (17801398 bytes); 
+[campaign] 2026-10-31T23:14:36 start T:3:5
+[campaign] T:3:5 success loop_s=232.255 wall_s=244.357 rc=0 scene=1747173590.312597.json gates=[] RolloutHistory pickle deleted after reading (24919925 bytes); 
+[campaign] 2026-10-31T23:18:47 start T:3:6
+[campaign] T:3:6 success loop_s=169.349 wall_s=181.33 rc=0 scene=1747173590.312597.json gates=[] RolloutHistory pickle deleted after reading (16819065 bytes); 
+[campaign] 2026-10-31T23:21:56 start T:3:7
+[campaign] T:3:7 success loop_s=94.456 wall_s=103.633 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (15844616 bytes); 
+[campaign] 2026-10-31T23:23:46 start T:3:8
+[campaign] T:3:8 success loop_s=98.18 wall_s=110.014 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (9108373 bytes); 
+[campaign] 2026-10-31T23:25:43 start T:3:9
+[campaign] T:3:9 crashed loop_s=600.0* wall_s=51.438 rc=1 scene=1747173591.670785.json gates=[] 
+[campaign] 2026-10-31T23:26:35 start T:3:10
+[campaign] T:3:10 failure loop_s=110.215 wall_s=122.35 rc=0 scene=1747173590.312597.json gates=[] RolloutHistory pickle deleted after reading (9059730 bytes); 
+[campaign] 2026-10-31T23:28:44 start T:3:11
+[campaign] T:3:11 success loop_s=53.243 wall_s=61.866 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8114893 bytes); 
+[campaign] 2026-10-31T23:29:53 start T:3:12
+[campaign] T:3:12 success loop_s=58.977 wall_s=68.635 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (8042216 bytes); 
+[campaign] 2026-10-31T23:31:09 start T:3:13
+[campaign] T:3:13 success loop_s=106.637 wall_s=116.602 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (15659096 bytes); 
+[campaign] 2026-10-31T23:33:13 start T:3:14
+[campaign] T:3:14 failure loop_s=188.139 wall_s=202.478 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (149526791 bytes); 
+[campaign] 2026-10-31T23:36:43 start T:3:15
+[campaign] T:3:15 success loop_s=224.114 wall_s=236.245 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (24833422 bytes); 
+[campaign] 2026-10-31T23:40:46 start T:3:16
+[campaign] T:3:16 failure loop_s=120.331 wall_s=130.714 rc=0 scene=1747173591.670785.json gates=[] RolloutHistory pickle deleted after reading (148309402 bytes); 
+[campaign] 2026-10-31T23:43:04 start T:3:17
+[campaign] T:3:17 failure loop_s=231.244 wall_s=243.182 rc=0 scene=1747173590.312597.json gates=[] RolloutHistory pickle deleted after reading (150038179 bytes); 
+[campaign] 2026-10-31T23:47:14 start T:3:18
+[campaign] T:3:18 success loop_s=278.679 wall_s=290.77 rc=0 scene=1747173593.826745.json gates=[] RolloutHistory pickle deleted after reading (32619657 bytes); 
+[campaign] 2026-10-31T23:52:12 start T:3:19
+[campaign] T:3:19 failure loop_s=283.892 wall_s=296.31 rc=0 scene=1747173590.312597.json gates=[] RolloutHistory pickle deleted after reading (134854958 bytes); 
+[campaign] finished
+[campaign] T_rep1: 13/20 success, statuses {'success': 13, 'failure': 7}, 0 censored
+[campaign] T_rep2: 14/20 success, statuses {'success': 14, 'failure': 6}, 0 censored
+[campaign] T_rep3: 13/20 success, statuses {'success': 13, 'failure': 6, 'crashed': 1}, 1 censored
+seed scene       T r1        O r1            T s     O s T r2        O r2            T s     O s T r3        O r3            T s     O s
+   0 1747173591  success     -            47.282       - success     -            51.027       - success     -            49.303       -
+   1 1747173593  failure     -           287.374       - success     -           156.909       - success     -            91.417       -
+   2 1747173593  failure     -           201.001       - failure     -           166.144       - failure     -           160.087       -
+   3 1747173593  failure     -           169.299       - failure     -           254.066       - success     -           277.618       -
+   4 1747173593  success     -            90.345       - failure     -           249.258       - success     -           153.409       -
+   5 1747173590  success     -            94.034       - success     -           239.657       - success     -           232.255       -
+   6 1747173590  success     -           279.953       - success     -           100.779       - success     -           169.349       -
+   7 1747173591  success     -             50.45       - success     -            59.978       - success     -            94.456       -
+   8 1747173593  success     -            98.901       - success     -           324.097       - success     -             98.18       -
+   9 1747173591  success     -            66.582       - success     -            61.108       - crashed     -            600.0*       -
+  10 1747173590  failure     -           167.586       - failure     -           193.963       - failure     -           110.215       -
+  11 1747173591  success     -            49.688       - success     -            51.806       - success     -            53.243       -
+  12 1747173591  success     -            51.032       - success     -            51.706       - success     -            58.977       -
+  13 1747173591  success     -            50.631       - success     -            49.298       - success     -           106.637       -
+  14 1747173593  success     -           239.513       - success     -             92.96       - failure     -           188.139       -
+  15 1747173593  success     -            160.62       - failure     -           181.658       - success     -           224.114       -
+  16 1747173591  success     -            63.018       - success     -            60.913       - failure     -           120.331       -
+  17 1747173590  failure     -           168.557       - failure     -           414.816       - failure     -           231.244       -
+  18 1747173593  failure     -           168.712       - success     -            92.509       - success     -           278.679       -
+  19 1747173590  failure     -           295.996       - success     -           248.829       - failure     -           283.892       -
+(* = censored at the cap; status per P4.6: success, failure, gate_failed, crashed, killed)
+[campaign] records in /work/rleap1/hani.alassiri.alhabboub/p4/results/slipT_cff9bc5_5006490/campaign.jsonl, metadata in /work/rleap1/hani.alassiri.alhabboub/p4/results/slipT_cff9bc5_5006490/campaign.json
+harness rc 0 (0 finished, 2 stopped by a rule)
+G13      PASS  tampura: HEAD cdddf14, tree fbc0cd060ddbb4af, 0 declared change(s) (BF#3), nothing else modified or stray
+G13      PASS  tampura_environments: HEAD 4167c35, tree e339e7b865a82c1b, 1 declared change(s) (BF#3), nothing else modified or stray
+G13      INFO  arm T pip freeze 0cdfcf0c5ae35ee4
+G13      PASS  arm T's installed tampura: 2502 of 2506 tracked files byte-equal to the checkout, the rest never installed and never read, build 5f75024e7c619d4f
+G13      PASS  unchanged since /work/rleap1/hani.alassiri.alhabboub/p4/results/slipT_cff9bc5_5006490/g13_before.json
+results in /work/rleap1/hani.alassiri.alhabboub/p4/results/slipT_cff9bc5_5006490
+prune_work 2026-10-31T23:57:34+01:00 apply=1 cap=1073741824 reserve=0 used=1233325568 referenced=[sb_cff9bc5]
+--- usage (counted) ---
+512	/work/rleap1/hani.alassiri.alhabboub/p4/inbox
+4.7M	/work/rleap1/hani.alassiri.alhabboub/p4/sb_cff9bc5
+1.2G	/work/rleap1/hani.alassiri.alhabboub/p4/results
+451K	/work/rleap1/hani.alassiri.alhabboub/p4/logs
+--- environment (not counted) ---
+5.4G	/work/rleap1/hani.alassiri.alhabboub/p4/armO-venvA
+6.8G	/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work
+297M	/work/rleap1/hani.alassiri.alhabboub/p4/pddlstream_lib
+97M	/work/rleap1/hani.alassiri.alhabboub/p4/python
+110M	/work/rleap1/hani.alassiri.alhabboub/p4/tools
+37K	/work/rleap1/hani.alassiri.alhabboub/p4/uv-cache
+counted total 1235585536 bytes (1178 MiB) of 1024 MiB, reserve 0 MiB
+prune_work: STILL OVER THE CAP
+prune_work rc 3
+SLIPT_DONE
+--------------------- Slurm Task Epilog ------------------------
+Job ID: 5006490
+Time: Sat Oct 31 23:58:59 CET 2026
+Elapsed Time: 02:50:28
+Billing per second for TRES: billing=256,cpu=8,mem=24G,node=1
+Show resource usage with e.g.:
+sacct -j 5006490 -o Elapsed,TotalCPU,UserCPU,SystemCPU,MaxRSS,ReqTRES%60,MaxDiskRead,MaxDiskWrite
+--------------------- Slurm Task Epilog ------------------------
