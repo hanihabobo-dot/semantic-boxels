@@ -27,11 +27,12 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    .sh/.sbatch). Validated: main checkout and a throwaway worktree both
    pass (53 tests, 89 bridge tests, gates PASS, seed 0 success).
 3. IN PROGRESS proposals (four Opus agents, one angle each, files under
-   proposals/): grasp_geometry DONE, loss_dynamics DONE, hold_physics
-   RUNNING (relaunched after an API safeguard error; resumes its work log),
-   carry_motion RUNNING (same). Their probes and recordings are under
-   probes/<angle>/ (about 50 MB, ledgered; garbage after the review except
-   scripts, work logs, carry.jsonl, stdout.txt).
+   proposals/): grasp_geometry DONE, loss_dynamics DONE, carry_motion DONE
+   (15:40), hold_physics RUNNING (relaunched after an API safeguard error;
+   resumes its work log; waiting on its own probe runs). Their probes and
+   recordings are under probes/<angle>/ (about 170 MB, ledgered; garbage
+   after the review except scripts, work logs, the .txt summaries,
+   carry.jsonl and stdout.txt).
 4. NEXT review: four Opus reviewers, one proposal each, adversarial, all
    four proposals as context, output reviews/<angle>.md (per fix: is the
    mechanism supported by the evidence, rule compliance with BRIEF.md
@@ -81,10 +82,26 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
   finger width growth over the carry (> 0.05 mm) predicts a loss with about
   100 steps of lead.
 
+- carry_motion (15:40): every recorded carry home spins the wrist (joint 7)
+  back 211 to 242 deg because the M9 yaw wrap picks the "smallest wrist
+  rotation" in the world frame, not on the arm (joint 7 at -1.95 to -2.9
+  rad at the pick, home +0.785); the pad-swapped grasp (yaw + pi) needs a
+  median 22 deg. That spin turns a die that sits off its face out of the
+  pinch; the junction kicks are the second cause. Probe (their world, our
+  close, 92 to 96 carries per cell): today 93/92/59/16 % held at
+  0/3/10/20 deg off the face; pad-swapped grasp plus an
+  acceleration-bounded schedule 100/100/99/85 %, 98 % on an RRT-like bent
+  path. The two only work TOGETHER (each alone is worse than base at some
+  angles). The home hold is harmless; a transit inflation (BF#47) is not
+  needed for the slip. Episodes with both patched in: seeds 0 and 1 held;
+  seed 6 hit the cup pose-radius loop (the flip turns cup grasps too), so
+  the flip must be evaluated with pose_radius_keep on.
+
 Fix names proposed: edge_pinch, face_needs_wrist_yaw,
 pinch_band_certificate (grasp_geometry); carry_hold_check,
 carry_grip_watch, carry_accel_limit, pose_radius_keep (loss_dynamics);
-hold_physics and carry_motion pending.
+grasp_wrist_home, carry_trapezoid (= carry_accel_limit, one switch)
+(carry_motion); hold_physics pending.
 
 ## Rules that bind every change
 
