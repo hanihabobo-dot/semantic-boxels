@@ -71,6 +71,25 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    worktree has no solver_iters switch; the campaign branch runs both
    for real. Round 2 (carry_trapezoid, carry_hold_check, pad_rolling)
    starts as slots free, worktrees from the same base.
+   - solver_iters DONE 18:40: commit 2252af5 on slip/solver_iters (5
+     files, only added lines): robot_utils.SOLVER_ITERATIONS = 200;
+     registered at boxel_env's import; applied in policy.py d9_setup
+     after setTimeStep (74 to 80), boxel_env __init__ (568 to 578) and
+     reset() (2025 to 2035), the plan client stays at 50; 3 G1 allowlist
+     lines; one log line per place with the value read back; 6 tests.
+     Checks green (59 + 89 tests, gates PASS, seed 0 success on and off).
+     DEVIATION every physics switch needs: d9_setup runs before main()
+     configures the switches, so execute_fn now calls
+     slip_fixes.configure(cfg.switches.get('slip_fixes', '')) right
+     before d9_setup (policy.py 201 to 204); force_hold was told to copy
+     the identical lines; the merge keeps the call exactly once. Cost:
+     the check episodes are not a clean measure (different plans, the
+     laptop under load: 3.43 against 1.24 ms of exec per step); a resting
+     bench shows 0.118 against 0.133 ms; the proposal's +0.9 ms per step
+     stands until the cluster arm measures it. Open for the
+     implementation review: test_full_pipeline 2995's scene-acceptance
+     probe env runs at 50 even with the switch on (our scenes only).
+     Report reviews/impl_solver_iters.md.
 6. THEN implementation review (Opus or Sonnet per branch), fixes applied.
 7. THEN the campaign branch `slip-campaign` = tampura-bridge + every fix
    branch merged (the orchestrator merges, fills `slip_fixes.KNOWN` lines
