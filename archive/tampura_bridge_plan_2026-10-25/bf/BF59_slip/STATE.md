@@ -62,8 +62,15 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    no push), a report file reviews/impl_<name>.md; the brief is
    reviews/IMPL_BRIEF.md. Worktrees are created by the orchestrator with
    tools/slip_worktree.ps1 from the tampura-bridge commit named in the
-   round's line. Round 1 (solver_iters, force_hold, pose_radius_keep,
-   grasp_wrist_home): see the line added at launch.
+   round's line. Round 1 launched 17:45 from 05dcaf3: worktrees
+   sb-slip-solver_iters (session agent id a056657232636bbcb),
+   sb-slip-force_hold (acf1fc489c989fbef), sb-slip-pose_radius_keep
+   (a5bb44a50345f551a), sb-slip-grasp_wrist_home (ae1274432c2c61abb);
+   reports reviews/impl_<name>.md. force_hold's check runs use the
+   check-only escape SLIP_FORCE_HOLD_NO_ITERS_CHECK=1 because its
+   worktree has no solver_iters switch; the campaign branch runs both
+   for real. Round 2 (carry_trapezoid, carry_hold_check, pad_rolling)
+   starts as slots free, worktrees from the same base.
 6. THEN implementation review (Opus or Sonnet per branch), fixes applied.
 7. THEN the campaign branch `slip-campaign` = tampura-bridge + every fix
    branch merged (the orchestrator merges, fills `slip_fixes.KNOWN` lines
@@ -295,10 +302,11 @@ their create_default_env value; 4.4 % alone, the fallback) (hold_physics).
   carries still dip to 0 N), carry_hold_check, pose_radius_keep;
   carry_grip_watch's threshold fires on almost every carry under the
   force hold. The seed-6 grip miss the proposal left open: the hand
-  arrived 105 mm from the cup (its own log), not the gear. Garbage now:
-  the three episodes' save/ folders under probes/hold_physics/runs
-  (about 3.4 MB) except s6_gear_f10_i200's console_debug.log, which the
-  review quotes.
+  arrived 105 mm from the cup (its own log), not the gear. The three
+  episodes' save/ folders under probes/hold_physics/runs were deleted
+  at 17:50 (3.3 MB, ledgered); the console_debug.log the review quotes
+  went with them by the orchestrator's path mistake, so the quoted line
+  (review lines 90 to 92) is the only record of it.
 
 ## Candidate list (phase 5), decided 17:35 from the four reviews
 
