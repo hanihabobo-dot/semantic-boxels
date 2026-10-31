@@ -153,6 +153,12 @@ def main():
     pinned = gates.SCENE_MAP.get(a.global_seed)
     mismatch = (scene.name_seen is None or pinned is None
                 or pinned not in scene.name_seen)
+    # The console's start-up note names their scene file the way their
+    # logger does, before the G19 check, so a console reader finds
+    # "Loading scene from" in every captured console as before.
+    if scene.name_seen is not None:
+        console_ui.startup(f"Loading scene from {scene.name_seen}"
+                           + ('' if mismatch else " (the campaign's pinned scene for this seed)"))
     if mismatch and not a.vis and not a.allow_g19_mismatch:
         raise SystemExit(f"G19: seed {a.global_seed} loaded {scene.name_seen}, "
                          f"pinned {pinned}")
@@ -160,12 +166,6 @@ def main():
         # BF#39: a GUI run is for watching only and is never scored (P4.6
         # MODE).  Their problems/ listing order differs between the laptop
         # and the cluster (BF#8), so most seeds load another scene here than
-    # The console's start-up note names their scene file the way their
-    # logger does, before the G19 check, so a console reader finds
-    # "Loading scene from" in every captured console as before.
-    if scene.name_seen is not None:
-        console_ui.startup(f"Loading scene from {scene.name_seen}"
-                           + ('' if mismatch else " (the campaign's pinned scene for this seed)"))
         # the campaign map pins; the run goes on with the scene this machine
         # gave the seed, and the ledger's G19 gate records the mismatch (the
         # outcome field then says gate_failed).  Headless runs still stop.
