@@ -112,6 +112,8 @@ from execution import (audit_robot_held_state,
                        held_cargo_config, detection_complete,
                        record_initial_detections, handle_observe_action,
                        pick_contact_floor)
+# BF#59 carry_hold_check: the move's hold postcondition (execution.py).
+from execution import carry_hold_begin, carry_hold_end
 import pose_belief
 import m8_domain
 import observe_views
@@ -1881,6 +1883,11 @@ def main(gui=True, run_logger=None, scene_config=None,
                             dispatch_end('motion_resolve_failed')
                             break
 
+                # BF#59 carry_hold_check: the finger and wrist readback at
+                # the start of a move made while holding (None when the
+                # switch is off or the hand is empty).
+                _carry0 = carry_hold_begin(robot_id, held_body_id)
+
                 # Stream intermediate waypoints; settle ONLY the final
                 # one (#P1 endpoint hold).  The last waypoint is the
                 # approach pose that seeds the subsequent contact IK
@@ -1971,6 +1978,58 @@ def main(gui=True, run_logger=None, scene_config=None,
                           f"left TAMPURA's at-home test false; ending the "
                           f"episode (home_not_reached, D7 (vi)).")
                     dispatch_end('home_not_reached')
+                    break
+                # BF#59 carry_hold_check (proposals/loss_dynamics.md 2.1):
+                # the move's postcondition while holding, checked after the
+                # home hold and the at-home test.  Without it nothing reads
+                # the pads after the pick, a die lost on the swing home
+                # leaves held_body_id set and the goal check is the first
+                # to notice (physics_mismatch).  A loss takes the empty-hand
+                # path of the place entry assert, unchanged: the transit
+                # strike, the held state cleared, the pose unknown, the
+                # lost-region refresh, then a replan.  In 3 of 3 recorded
+                # losses the die ended outside W, so that replan mostly
+                # ends as target_lost (reviews/loss_dynamics.md).
+                _carry = carry_hold_end(
+                    robot_id, held_body_id, _carry0,
+                    body_id_to_name.get(held_body_id), dest_boxel_id, gui)
+                if _carry is not None and not _carry.held:
+                    _lost_obj = body_id_to_name.get(held_body_id,
+                                                    str(held_body_id))
+                    transit_loss_counts[_lost_obj] = \
+                        transit_loss_counts.get(_lost_obj, 0) + 1
+                    print(f"    transit loss {transit_loss_counts[_lost_obj]}"
+                          f"/3 for {_lost_obj} (review-fix strike counter)")
+                    if (transit_loss_counts[_lost_obj] >= 3
+                            and _lost_obj not in pick_giveup_objects):
+                        print(f"    ERROR: {_lost_obj} lost in transit "
+                              f"{transit_loss_counts[_lost_obj]} times, "
+                              f"giving up on grasping it (#P1 F2 giveup, "
+                              f"transit edition).")
+                        pick_giveup_objects.add(_lost_obj)
+                        planner.streams.ungraspable_objects.add(_lost_obj)
+                        pick_giveup_marked_at[_lost_obj] = plan_count
+                    held_body_id = None
+                    held_object_boxel_id = None
+                    # The readback just taken carried the lost body as
+                    # cargo; the same readback without it (the hand is
+                    # empty now) starts the next plan.
+                    current_config = _readback_config(
+                        current_config.joint_positions, current_config.name)
+                    audit_robot_held_state(
+                        env, robot_id, expected_held_body_id=None,
+                        tag=f"post-carry-loss:{_lost_obj}")
+                    env.update_object_positions()
+                    # M8 A: lost in transit, its pose is unknown.
+                    pose_belief.mark_pose_unknown(registry.get_boxel(_lost_obj))
+                    _lost = refresh_object_aabbs(env, registry, viz=viz,
+                                                 check_lost=True)
+                    if _lost:
+                        retire_lost_objects(
+                            _lost, registry, viz, shadows,
+                            shadow_occluder_map, boxel_centers,
+                            occluders, belief, env=env)
+                    dispatch_end('empty_hand')
                     break
                 # #P2 (a): a transit is the action that most often
                 # disturbs bystanders (F18, F10) and nothing re-read the
