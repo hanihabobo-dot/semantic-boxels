@@ -167,6 +167,42 @@ their create_default_env value; 4.4 % alone, the fallback) (hold_physics).
   5/16 against 37/55 and 29/44, the close's stopping step, which supports
   force_hold. Re-probe edge_pinch at 35 to 55 deg under force_hold only if
   that arm's losses depend on the logged yaw class.
+- carry_motion (reviews/carry_motion.md, 17:12): grasp_wrist_home
+  IMPLEMENT, its own arm with pose_radius_keep on. The reviewer re-ran
+  grasp_geometry's real-pick probe (the die picked off the table, then
+  the pipeline's per-pair carry) with the flip alone: 55 of 56 near-face
+  grips held against 32 at hand yaw 0 (McNemar p 2e-7); "the two only
+  work together" holds only in carry_motion's own probe, where the die is
+  placed in the hand in mid-air. The wrap choice lives in
+  pose_belief._wrap 131 and fitted_grasp_candidates 177 to 197,
+  streams.sample_grasp 825 to 845 (orientation at 869); it was written
+  for planning cost from Euler yaw 0, half a turn from the wrist at both
+  homes; a sampler preference (model side) for every body; the kin stream
+  certifies the flipped pose more easily (joint 7 between -0.35 and
+  1.81 rad). A second mechanism the proposal missed: grasps at believed
+  yaws above about 15 deg are clipped at the joint-7 limit and land up to
+  10 deg off their yaw or find no IK (the flip's whole gain at 0 deg).
+  Corrections: the recorded wrist travel is 168 to 199 deg, not 211 to
+  242; every recorded die carry was the direct linear path, so the probe's
+  straight line IS the pipeline's carry. The seed-6 cup loop is a real
+  dependency (under the flip all four bodies are seen, the cup is re-posed
+  at 5.71 mm and the pick refused; that scene is the cluster's scene of
+  seeds 1, 2, 3, 4, 8, 14, 15, 18; rate unmeasured). carry_trapezoid:
+  MERGE with carry_accel_limit as one switch, the tested rest-at-a-bend
+  rule on the dispatcher's moves only (1877 to 1896), no single-hop
+  extension, never alone (it harms the 3 deg pinch, 36 against 44 of 48,
+  p 0.008); on top of the flip at most about 3 points are left, below
+  what 60 carries can show; about 2 s per episode; add it only after a
+  real-pick check (port trap_schedule into grasp_geometry's probe, about
+  an hour). Power: against base's 21 % with 60 carries per arm an
+  observed loss of about 8 % or less is significant, and 80 % power needs
+  a true rate of about 3 %. If the hold set lands, the flip buys no extra
+  hold, only the clip fix, reach and a shorter carry: the two compete for
+  the same loss and the flip is far cheaper. The speed results disagree
+  across probes (hold_physics' half speed worse, p 0.0008; carry_motion's
+  slow run no effect, p 0.48). Recommended arms: pose_radius_keep alone;
+  the hold set; grasp_wrist_home alone; every arm except base with
+  pose_radius_keep on.
 
 ## Eval design notes
 
