@@ -425,6 +425,23 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    medians of wall and planning, replication disagreement), the best set,
    a combined arm (`a+b+c`) evaluated the same way with TAMPURA beside it,
    the BF#59 audit entry, DATA_LEDGER rows, garbage deleted.
+   A SEVENTH CANDIDATE from the follow-up session (card "Cup release
+   jam", done 21:52): `release_retreat` on branch slip/release_retreat
+   (worktree sb-slip-release_retreat, from tampura-bridge cac0137; 6e225e7 the switch, dc2c5e2 nine tests,
+   4516614 the probe, 9168b58 the BF#61 audit entry with ledger rows and
+   reviews/impl_release_retreat.md; merge preview onto tampura-bridge
+   clean; nothing pushed): inside `_release_and_verify_drop`, after the
+   open and before the settle and the verify, the hand retreats 15 mm
+   along the approach axis at every place and stack of every body (the
+   emergency release at a replan break unchanged). Its probe (96 paired
+   carries, today's hold): today's release jams 18 of 96, with the
+   retreat 8 of 96 (freed 10, made 0, McNemar p 0.002); 30 and 50 mm buy
+   nothing; the jams left are a cup riding up on one pad after the
+   position hold pressed it 1.1 mm in, so release_retreat+force_hold is
+   the arm to measure. Checks on and off green (seed 0, 72 tests, 89
+   bridge tests, gates PASS). NOT in the running eval (its snapshot is
+   cff9bc5). Its cluster eval needs Hani's approval of that question
+   alone; the natural place is job E beside the chosen set.
 
 ## Diagnosis so far (from the two finished proposals)
 
