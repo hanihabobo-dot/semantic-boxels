@@ -13,7 +13,7 @@
 #   run tampura -Screenshots   also save the eye PNGs at every snapshot (debugging only; off since BF#50)
 #   run tampura -Music         8-bit music and effects that follow the run (Windows plays them);
 #                              -Sfx   the effects only;  -Voice   Windows' voice reads the narration too
-#   run boxels -Args '--n-targets 2 --n-hidden 1'   more pipeline flags, one quoted string, as is
+#   run boxels -Args '--n-extra-distractors 1'   more pipeline flags, one quoted string, as is
 #   run ps                     the pipeline processes alive in WSL;  run kill   ends every one of them
 #   run help                   this text;  -DryRun prints the command instead of running it
 # Never two pipeline runs at once (pddlstream temp/ race): it refuses while one is going.

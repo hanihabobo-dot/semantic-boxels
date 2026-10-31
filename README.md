@@ -1,35 +1,165 @@
 # Semantic Boxels for Task and Motion Planning
 
-A PyBullet-based system for generating **semantic boxels** -- task-relevant 3D regions used for belief representation in Task and Motion Planning (TAMP) under partial observability. A Franka Panda robot searches for hidden objects by relocating occluders, sensing shadow regions, and retrieving targets, all planned via PDDLStream.
+A PyBullet-based system for generating **semantic boxels**: task-relevant 3D regions used for belief representation in Task and Motion Planning (TAMP) under partial observability. A Franka Panda robot searches for hidden objects by relocating occluders, sensing shadow regions, and retrieving targets, all planned via PDDLStream.
+
+The pipeline runs on its own scenes (`test_full_pipeline.py`) and inside TAMPURA's `find_dice` environment (`tampura_bridge/`).
 
 ## Quick Start
 
+### Linux and WSL
+
 ```bash
 pip install pybullet numpy matplotlib
+git clone https://github.com/caelan/pddlstream.git ../pddlstream_lib
 python3 -u test_full_pipeline.py
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--no-gui` | Headless mode (no PyBullet window) |
-| `--no-boxel-viz` / `--show-free` | Skip boxel overlay / include free-space cells in overlay |
-| `--log-level smart\|normal\|quiet\|verbose` | Console verbosity (default: `smart`) |
-| `--scene default\|mixed\|scalability\|stack\|random-pairs` | Scene preset |
-| `--goal holding\|stack\|find-and-tray-stack` | Goal mode |
-| `--n-occluders N` / `--n-targets N` / `--n-hidden N` | Scalability/random-pairs scene size (counts) |
-| `--n-extra-distractors N` | Visible distractor targets added on top of the hidden targets (`random-pairs` scene) |
-| `--n-objects N` / `--stack-height N` | Stack scene size / tower height |
-| `--seed N` | RNG seed (scalability/mixed/stack/random-pairs scenes) |
-| `--seed-retry` | Let the placement-retry layer re-roll an explicit `--seed` on infeasible geometry (default: strict pinning) |
-| `--baseline semantic\|uniform` | Free-space discretization (semantic = octree+merge, uniform = static grid) |
-| `--uniform-cell-size F` | Uniform cell edge length in metres (default 0.05; floored at largest-object AABB + 1 cm so `place` can fit) |
-| `--min-boxel-size F` | Minimum free-space octree leaf size for the semantic baseline (default: audit-#67 auto-cell floor; explicit value enables the anytime resolution sweep) |
-| `--max-plan-time F` | Per-call PDDLStream budget in seconds (default 1800) |
-| `--unit-costs` | Override domain action costs (stack=2, others=1) with all-cost-1 |
+The pipeline needs numpy, pybullet and PDDLStream. PDDLStream bundles FastDownward, which runs on Linux (WSL on Windows). The pipeline looks for PDDLStream at `../pddlstream_lib`; `PDDLSTREAM_PATH` points it elsewhere. matplotlib is for the plotting tools such as `eval_plotter.py`, and Pillow for the debug screenshots (`--save-screenshots on`). For the GUI under WSL, `export DISPLAY=:0 LIBGL_ALWAYS_SOFTWARE=1`.
+
+This opens the PyBullet GUI on the default scene; `--no-gui` runs headless. A headless run of the scene that `boxels` starts on Windows (below):
+
+```bash
+python3 -u test_full_pipeline.py --no-gui --scene random-pairs --seed 0 --goal holding --n-occluders 2
+```
+
+### Windows
+
+`run.ps1` starts the pipeline inside WSL in one word, from PowerShell 7 (`pwsh`). Two short pointer scripts, `run.ps1` and `boxels.ps1`, kept outside the repository in a folder on the PATH, call the repository's script, so `run` and `boxels` work from anywhere; without them, `.\run.ps1` and `.\run.ps1 boxels` from the repository root do the same. The paths at the top of `run.ps1` (the checkout as WSL sees it, the Python interpreter) and the TAMPURA workspace path in its `tampura` command are those of the development machine; set them for another one.
+
+```powershell
+run                          # the bridge episode on TAMPURA's find_dice, seed 0, in the GUI
+run tampura -Seed 7          # another seed
+run tampura -Headless        # no GUI, the console only; a diagnostic run, never scored
+boxels                       # our own random-pairs scene, seed 0, in the GUI (same as: run boxels)
+run boxels -Seed 3 -Headless
+run boxels -Scene stack -Goal stack -Occluders 0
+run boxels -Args '--n-extra-distractors 1'   # more pipeline flags, one quoted string, as is
+run ps                       # the pipeline processes alive in WSL
+run kill                     # end every one of them
+run help                     # the usage header of run.ps1
+```
+
+`boxels` runs `test_full_pipeline.py --scene random-pairs --seed 0 --goal holding --n-occluders 2`; `-Scene`, `-Seed`, `-Goal` and `-Occluders` change those values, and a run's files land in `logs/run_<timestamp>/`. `run tampura` runs the bridge driver (below), with its files under `archive/tampura_bridge_plan_2026-10-25/bf/gui_runs/`.
+
+| Switch | Effect |
+|--------|--------|
+| `-Off` | Without the model tweaks M8 to M10 and the aperture rule |
+| `-Squeeze MM` | The pick squeeze in mm (`--grip-squeeze-mm`) |
+| `-Screenshots` | Also save the eye PNGs (`--save-screenshots on`) |
+| `-Music` / `-Sfx` / `-Voice` | Sound that follows the run: music and effects, the effects only, and Windows' voice reading the narration as well |
+| `-DryRun` | Print the command instead of running it |
+
+The sound (quiet retro synth music and effects) is opt-in through the environment variables `SB_AUDIO` (`on`, `sfx`, `music`) and `SB_VOICE` (`on`). The pipeline synthesizes it and Windows plays it through WSL's interop (`tools/console_speaker.ps1`).
+
+`run` refuses to start while another pipeline run is alive, because two runs would race on PDDLStream's `temp/` directory. Closing the GUI window or pressing Ctrl-C ends the run. A closed PyBullet window would leave the process spinning at full CPU, so the launcher watches the window and ends what is left (`tools/run_procs.sh`), and the console makes Ctrl-C end the process at once. `run ps` flags a ghost run (its window closed) and `run kill` ends every pipeline process.
+
+`tools/boxels.ico`, drawn by `tools/make_icon.py`, is the icon for a desktop shortcut to `pwsh -NoExit -File run.ps1 tampura`.
+
+### The console and the run directory
+
+`--log-level smart`, the default, shows a curated console: a banner, then the robot narrating its episode in the first person (what it is starting, what it sees, what it is thinking about before each plan and what the plan intends), one line per step with how the step went, the notable observations under it, warnings, and a closing verdict with one stats line. While the robot is busy, a colour pictogram of the action animates beside the status line and is erased when the activity ends. A terminal of at least 48 columns and 12 rows gets the pictogram, a smaller one gets a one-line status, and a captured console (a file or a pipe) gets plain text without colour or animation. `NO_COLOR` and `FORCE_COLOR` set the colour; `SB_CONSOLE_ASCII=1` swaps the glyphs for ASCII. The pictograms are data in `console_art.py`, generated by `tools/sprite_tool.py` from `tools/sprites/*.txt`.
+
+The console reads events from the run logger and the narration; nothing in it feeds a decision. The raw stdout and stderr of the whole process (PyBullet, PDDLStream, FastDownward) go to `<run_dir>/console_debug.log`. `normal`, `quiet` and `verbose` leave the terminal raw. A script that reads the pipeline's stdout (`SUCCESS!`, the planning times) passes `--log-level normal`; under `smart` those lines are in the run's files.
+
+Each run writes `logs/run_<timestamp>/`, which holds, among others:
+
+| File | Content |
+|------|---------|
+| `run_<timestamp>.log` | Everything the run logged |
+| `console_debug.log` | The raw stdout and stderr (`--log-level smart`) |
+| `ledger.jsonl` | The event stream: plan results, dispatched steps with how they ended, belief changes of shadow fragments |
+| `timing_summary.json` | Outcome, exit reason, plan count, planning times and the run's configuration |
+| `eye.log`, `eye.jsonl` | Textual snapshots of the world, the belief and the camera view, queried with `tools/eye.py` |
+| `telemetry.log`, `telemetry.jsonl` | Frame-level poses, velocities, contacts and physical events |
+| `boxel_data.json`, `problem_initial.pddl` | The boxel registry and the exported PDDL problem |
+
+The eye PNGs (`eye_<k>_camera.png`, and `eye_<k>_gui.png` under the GUI) are written only with `--save-screenshots on`. `tools/prune_runs.ps1` compacts run data after 1 day and deletes run directories that hold no git-tracked file after 14 days; `tools/prune_screenshots.ps1` deletes eye PNGs after 7 days. Both only report what they would do unless run with `-Apply`.
+
+### Flags
+
+`parse_pipeline_args` in `run_logger.py` defines the flags; the defaults below are the values in effect when a flag is absent.
+
+**Scene and goal**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--scene default\|mixed\|scalability\|stack\|random-pairs` | `default` | Scene preset: the hand-placed scene (3 occluders, 4 targets, all boxes); diverse shapes; random placement with the counts below; N identical cubes without occluders; a fixed occluder count with a hidden-target count drawn per seed from 1 to `--n-occluders` |
+| `--goal holding\|stack\|find-and-tray-stack` | `holding` | Hold the target, hidden or visible; build a tower of `--stack-height` cubes; a two-cube tower on a tray (a visible cube on the tray, a hidden cube found by sensing on top of it) |
+| `--n-occluders N` | `3` | Occluders (scalability and random-pairs scenes) |
+| `--n-targets N` | `4` | Targets (scalability scene) |
+| `--n-hidden N` | `0` | Targets that must be hidden from the camera at spawn (scalability scene with `--goal holding` or `find-and-tray-stack`; needs `--n-occluders >= 1`; capped at `--n-targets`; 0 leaves it to the RNG) |
+| `--n-extra-distractors N` | `0` | Visible distractor targets added to the hidden ones (random-pairs scene; `find-and-tray-stack` raises 0 to 1) |
+| `--n-objects N` / `--stack-height N` | `3` / `2` | Cubes in the stack scene (at least the tower height) / tower height in cubes (at least 2; `--goal stack`) |
+| `--seed N` | `0` | RNG seed for scene placement and for the global `random` and `numpy.random` generators. The random-pairs scene draws a fresh seed, and prints it, when the flag is absent. Seeds are pinned: a seed whose scene cannot be built fails the pre-flight (`[pre-flight] seed N rejected`) before the GUI opens |
+| `--allow-unwinnable` | off | Inspection only: the pre-flight's rejection of a `find-and-tray-stack` scene without a visible or without a hidden target becomes a warning. A scene that cannot be built aborts regardless. Never for sweeps |
+
+With `--goal holding`, an explicit `--n-occluders` or `--n-targets`, or a positive `--n-hidden`, selects the scalability scene when `--scene` is left at `default`; `--goal stack` selects the stack scene. The random-pairs scene takes `--goal holding` or `find-and-tray-stack`, at least one occluder, and neither `--n-hidden` nor `--n-targets`.
+
+**Planning**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--planner ff-astar2\|ff-astar1\|ff-astar\|ff-wastar1\|ff-wastar2\|dijkstra` | `ff-astar2` | The FastDownward search PDDLStream runs for every action-plan search. `ff-astar2` is PDDLStream's own (eager weighted A* with the FF heuristic doubled, f = g + 2h); `ff-astar1` has f = g + h; `ff-astar` is plain A* with FF and no preferred operators; `dijkstra` is blind and cost-optimal. Plans execute as the planner returns them |
+| `--max-plan-time F` | `1800` | Per-call PDDLStream budget in seconds |
+| `--unit-costs` | off | Give every action cost 1 instead of the domain's costs (`place_hiding` 2, `stack` 3, all others 1) |
+| `--search-sample-ratio F` | `0.25` | Sampling-to-search budget ratio of PDDLStream's adaptive loop (the library's own is 1.0) |
+| `--search-effort-weight W\|off` | `1` | Weigh the effort of a stream result against action cost in the optimistic search, so the search prefers results already refined; `off` is PDDLStream's own, no weighting |
+| `--search-initial-complexity N` | `3` | Stream complexity level the adaptive loop starts at; 0 is PDDLStream's own |
+| `--sense-gate off\|strict` | `off` | What `(boxel_fits ?o ?shadow)` means for the sense action: `off`, every view-clear fragment is sensable; `strict`, only fragments in which a target-class box can rest fully occluded |
+| `--corridor-test cell+object\|object` | `cell+object` | How placement-blocking corridor facts are tested: against the free cell's own bounding box and per-object virtual boxes, or against the per-object virtual boxes only |
+| `--path-check-step F` | `0` | Resolution of every motion-plan collision check, in radians of the largest-moving joint between samples; 0 is a fixed 8 samples per edge, 0.0286 is what an RRT edge already gets |
+| `--path-check-diag` | off | Report, for every trajectory the motion stream yields, how many interior segments pass only with the gripper relaxed |
+
+**Discretization**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--baseline semantic\|uniform` | `semantic` | Free-space discretization: octree with cell merging, or a static uniform 3D grid (`uniform_grid.py`) whose lattice stays fixed across replans while only the cell labels change |
+| `--uniform-cell-size F` | `0.05` | Uniform-grid cell edge in metres; raised to the largest object extent plus 1 cm so `place` can fit |
+| `--min-boxel-size F` | auto | Smallest free-space octree leaf for the semantic baseline, in metres. Auto is the largest object extent plus 1 cm; an explicit value is used as given, also below that, for the anytime resolution sweep. Object and shadow boxels are unaffected |
+
+**Model tweaks**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--m8 off\|on` | `on` | M8: pose-gated pick, view-clear sense configurations and the wrist-camera observe action (loads the generated domain `pddl/domain_pddlstream_m8.pddl`) |
+| `--m9 off\|on` | `on` | M9: object-fitted grasps (yaw and extents of the top-face rectangle) instead of the bounding-box grasp candidates |
+| `--m10 off\|on` | `on` | M10: a failed pick that touched the target makes its pose unknown, with no in-action retry |
+| `--pick-aperture-from-pose off\|on` | `on` | M8's aperture rule: open the pads to the pinch half-width plus the pose radius plus 8 mm, capped at the finger limit |
+| `--sense-over-region off\|on` | `on` | With M8: sense a region from the target's pick configuration over it when the arm there keeps out of the eye's view, then pick from there; `off` returns the arm to a static view spot before every sense |
+| `--m8-init-cache off\|on` | `on` | Reuse M8's look and fixed-sense renders between planner inits while no object moved |
+| `--continue-after-observe off\|on` | `on` | An observe that confirmed the target's pose within the commit margin lets the plan go on to its pick; `off` replans after every observe |
+| `--grip-squeeze-mm F` | `0.5` | How far inside the measured width the pick's close holds the pads, in mm |
+
+**Output and logging**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--no-gui` | off | Headless: no PyBullet window |
+| `--no-boxel-viz` | off | Keep the GUI but skip drawing the boxel boxes and labels |
+| `--show-free` | off | Include free-space boxels in the overlay |
+| `--log-level smart\|normal\|quiet\|verbose` | `smart` | Console style (see above). `normal`, `quiet` and `verbose` leave stdout raw and set the console log level to INFO, WARNING and DEBUG. The run log always captures everything |
+| `--save-screenshots off\|on` | `off` | Save the robot camera's `eye_<k>_camera.png` and, under the GUI, `eye_<k>_gui.png` at the initial observation, after each sense, place and stack, and at the end of the run; debugging only. `BOXEL_EYE_IMAGES=0` vetoes them |
+| `--telemetry` / `--no-telemetry` | on headless, off under the GUI | The world telemetry recorder: every body pose, velocity, tilt and contact at frame resolution, plus physical events (fling, grip loss, topple, off-support, joint jump). Nothing it writes reaches the console |
+| `--telemetry-period F` | `0.05` | Telemetry frame cadence in simulated seconds |
+| `--telemetry-heartbeat F` | `0.5` | Cadence in simulated seconds of the where-is-everything dump in the run log |
+
+### TAMPURA bridge
+
+`tampura_bridge/` runs this pipeline inside TAMPURA's `find_dice` environment, seed for seed. TAMPURA's rollout, environment and reward run untouched: the bridge's policy returns one action, `boxel_episode`, whose execution runs a whole episode of this pipeline in TAMPURA's executing world, and the terminal observation comes from physical readback. The driver runs from TAMPURA's `tampura_environments` directory:
+
+```bash
+PYTHONPATH=<repo>:<pddlstream_lib>:<their tampura>:<their envs> \
+  <python> <repo>/tampura_bridge/run_bridge_on_finddice.py --global-seed 0 --vis 0
+```
+
+`--global-seed` is required, `--vis 1` opens the GUI, `--save-dir` names the episode directory (`bridge_episode.json`, with the pipeline's run directory under `ours/`) and `--max-plan-time` defaults to 900. The flags `--m8`, `--m9`, `--m10`, `--pick-aperture-from-pose`, `--sense-over-region`, `--m8-init-cache`, `--continue-after-observe`, `--grip-squeeze-mm`, `--search-effort-weight`, `--search-initial-complexity` and `--save-screenshots` are passed through under the same names and defaults. A headless run stops when TAMPURA loads a scene other than the one pinned for the seed (G19) unless `--allow-g19-mismatch 1` is given; a GUI run goes on and is never scored. The exit code is 0 exactly when the outcome field is success; the field combines TAMPURA's last reward, any error and the ledger gates.
+
+`tools/bridge_gates.py` checks the runs against the gates that keep the comparison honest (no welds, no teleports, no ground-truth reads feeding a decision), and `tampura_bridge/gate_hooks.py` holds the runtime gates. `tools/_bridge_campaign.py` and `tools/_bridge_report.py` run and report a campaign of both arms, TAMPURA and ours, on seeds 0 to 19; `tools/cluster/` holds the Slurm scripts. The plan, the records and the evidence are in `PAPER_AUDIT.txt` and `archive/tampura_bridge_plan_2026-10-25/`.
 
 ## Documentation
 
-**[Project wiki (home)](https://git.rwth-aachen.de/hani.alassiri.alhabboub/pybullet/-/wikis/home)** — or open the **Wiki** tab in the repository.
+**[Project wiki (home)](https://git.rwth-aachen.de/hani.alassiri.alhabboub/pybullet/-/wikis/home)**, or open the **Wiki** tab in the repository.
 
 Detailed documentation lives there, including:
 
@@ -40,10 +170,10 @@ Detailed documentation lives there, including:
 | Spatial Reasoning | Shadow calculation, free-space octree, cell merging, uniform-grid baseline |
 | Planning System | PDDLStream integration, problem construction, replanning |
 | Robot Control and Streams | IK, RRT-Connect motion planning, grasp sampling |
-| Execution Pipeline | End-to-end walkthrough, action handlers, concrete scenario |
+| Execution Pipeline | End-to-end walkthrough, goal modes, action handlers, the full CLI reference, logging and reporting, a concrete scenario |
 | Core Data Structures | All types, dataclasses, and enums |
 | PDDL Domain Reference | Predicates, actions, streams, PDDL/Python alignment |
-| Evaluation Framework | `eval_runner.py` matrix sweeps, `eval_plotter.py` PNG output, reproducing Results plots |
+| Evaluation Framework | `eval_runner.py` matrix sweeps, `eval_plotter.py` figures and tables, the pre-vetted seed corpus, baselines, A/B evaluation between code states, the TAMPURA bridge campaigns, run data retention, a typical workflow |
 | Design Decisions | Rationale for key choices and proposal deviations |
 | Known Issues and Roadmap | Audit status, open issues, future work |
 
