@@ -313,19 +313,52 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    33.22 mm, pads 14.2/17.1 N at the hand-over) and on the die (10.00 mm,
    6.9/6.9 N) (checks/2026-10-31_20-30-05_s0_solver_iters,force_hold,
    pose_radius_keep,grasp_wrist_home,carry_trapezoid). The off check of
-   the five-merged branch started 20:37. Before the snapshot: merge
-   tampura-bridge into slip/campaign again (tools/slip_eval.py's loss
-   line for carry_hold_check lives on tampura-bridge), then the final
-   on and off checks. Still to merge: carry_hold_check (its move-action hunk
-   may conflict with carry_trapezoid's call; its loss line goes into
-   tools/slip_eval.py's counting). Cluster at 20:40 (sinfo -p rleap_cpu):
+   the five-merged branch started 20:37 and came back 20:42: 99 unit
+   tests, gates PASS, seed 0 success off in 26 s; the bridge suite had
+   ONE failure, test_gf9_gated_episode::test_gated_goal_at_home_episode,
+   the laptop-load flake family (it passed in the two checks before on
+   the same merged code; the final checks re-run it). carry_hold_check
+   merged 20:48 as 1f8faea (the one conflict, the move action's begin
+   hook against carry_trapezoid's streaming call, resolved by hand: the
+   hook first, then the call; the end block merged clean); its source
+   test looked for the old waypoint loop and now accepts the call
+   (f3d8cd1 on slip/campaign); the merged unit suite is 109 with that
+   one fixed. tampura-bridge (74cffac: the harness fix, the records)
+   merged 20:57 as 7563551: slip/campaign = tampura-bridge + the six
+   fix branches, code diff 8 files +868 -35 against fd36342. FINAL
+   CHECKS started 20:58 (scratchpad final_checks.sh: slip_check with all
+   six on, slip_check off, then one seed-0 episode through
+   reviews/impl_carry_hold_check/ep_loss_inject.py with all six on and
+   one injected carry loss of the die; outputs in the worktree's
+   checks/). Cluster at 20:40 (sinfo -p rleap_cpu):
    idle cn-101, 102, 103, 105, 106, 107, 108, 109, 113, 114, 115, 116;
    mixed cn-104, 110 (another user's array), 111, 112; long pending
    arrays of other users queued (%100), so the idle nodes may fill: pin
    jobs A, B, C, T to four distinct idle nodes (first choice cn-101,
    102, 103, 105) and re-check sinfo right before sbatch. $W/p4 is 14 GB
    on disk (the environment; prune_work's cap counts results and
-   snapshots). Then the off check,
+   snapshots). SUBMISSION PLAN (drafted 21:00, before any result; the
+   snapshot name sb_<sha> is slip/campaign's HEAD after the final checks
+   pass, pushed with `Set-Location sb-slip-campaign; pwsh
+   <main>/tools/cluster/push_snapshot.ps1 -CodeOnly`): on cn-04, with
+   W=/work/rleap1/hani.alassiri.alhabboub/p4 and OUT=$W/results/slip_<sha>
+   shared by the jobs (each writes OUT/<job id>):
+     A: sbatch -w cn-101 $W/sb_<sha>/tools/cluster/slip_eval.sbatch sb_<sha> base,solver_iters,solver_iters+force_hold 0-19 3 0-19 $OUT
+     B: sbatch -w cn-102 ... base,pose_radius_keep,pose_radius_keep+grasp_wrist_home 0-19 3 0-19 $OUT
+     C: sbatch -w cn-103 ... base,pose_radius_keep+grasp_wrist_home+carry_trapezoid,carry_hold_check 0-19 3 0-19 $OUT
+     D: sbatch -w cn-105 ... base,solver_iters+force_hold+pose_radius_keep+grasp_wrist_home 0-19 3 0-19 $OUT
+     T: sbatch -w cn-106 $W/sb_<sha>/tools/cluster/slip_t.sbatch sb_<sha> 3 0-19
+   Job D is a PRE-REGISTERED prediction, stated before any eval result:
+   from the probes, the best set should be solver_iters+force_hold (the
+   hold) with pose_radius_keep (the cup loop) and grasp_wrist_home (the
+   wrist spin); carry_trapezoid (no gain on top of the flip in the
+   real-pick probe) and carry_hold_check (an honest ending, not a
+   safer carry) are judged by jobs B and C. Job E after the analysis
+   tests the set the results pick if it differs from D, or adds reps.
+   Expected wall per job: 180 episodes (A, B, C) at a median near 2 min
+   plus the cup-loop caps (600 s) of base and the arms without
+   pose_radius_keep, 7 to 9 h; D 120 episodes, about 5 h; T about 2 h.
+   Then the off check,
    `tools/cluster/push_snapshot.ps1 -CodeOnly` FROM THE CAMPAIGN WORKTREE
    (it archives the cwd's HEAD), then on cn-04 one `slip_eval.sbatch` per
    arm group (always `base,<fix>,<fix>`), pinned to distinct nodes
