@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 import robot_utils
+import slip_fixes
 import telemetry          # #P1 F17 world telemetry (no-op unless armed)
 from boxel_types import ObjectInfo, CameraObservation
 from boxel_data import BoxelData, BoxelType
@@ -23,6 +24,13 @@ from uniform_grid import UniformGridGenerator
 from visualization import (BoxelVisualizer,
                            conceal_overlay_for_observation,
                            restore_overlay_after_observation)
+
+# BF#59 solver_iters: the switch of the executing world's solver iterations
+# (robot_utils.SOLVER_ITERATIONS), read here for our own world and in
+# tampura_bridge/policy.py d9_setup for theirs.
+slip_fixes.register('solver_iters',
+                    '200 contact-solver iterations per step on the executing '
+                    'world (d9_setup and boxel_env, re-applied after reset)')
 
 
 # ---------------------------------------------------------------------------
@@ -557,6 +565,17 @@ class BoxelTestEnv:
             p.setRealTimeSimulation(0, physicsClientId=self.client_id)
             p.setAdditionalSearchPath(pybullet_data.getDataPath(),
                                       physicsClientId=self.client_id)
+        # BF#59 solver_iters: our own world's solver iterations, the same
+        # value as the bridge's executing world (an adopted world is set
+        # by d9_setup).  The plan client never steps and keeps the default.
+        if not self._adopted and slip_fixes.on('solver_iters'):
+            p.setPhysicsEngineParameter(
+                numSolverIterations=robot_utils.SOLVER_ITERATIONS,
+                physicsClientId=self.client_id)
+            _n = p.getPhysicsEngineParameters(
+                physicsClientId=self.client_id)['numSolverIterations']
+            print(f"  solver_iters: numSolverIterations {_n} on our world "
+                  f"(client {self.client_id})")
 
         # Plan client (audit #46): a separate DIRECT-mode PyBullet world that
         # mirrors the live scene.  All planning-time work — IK, RRT-Connect,
@@ -2003,6 +2022,17 @@ class BoxelTestEnv:
             p.setRealTimeSimulation(0, physicsClientId=cid)
             p.setAdditionalSearchPath(pybullet_data.getDataPath(),
                                       physicsClientId=cid)
+        # BF#59 solver_iters: resetSimulation sets the iterations back to
+        # PyBullet's 50 (measured by the hold_physics review), so the switch
+        # re-applies them on our physics client after every reset.
+        if slip_fixes.on('solver_iters'):
+            p.setPhysicsEngineParameter(
+                numSolverIterations=robot_utils.SOLVER_ITERATIONS,
+                physicsClientId=self.client_id)
+            _n = p.getPhysicsEngineParameters(
+                physicsClientId=self.client_id)['numSolverIterations']
+            print(f"  solver_iters: numSolverIterations {_n} on our world "
+                  f"after reset (client {self.client_id})")
         self._gui_to_plan.clear()
         self.plan_robot_id = None
         self.objects.clear()

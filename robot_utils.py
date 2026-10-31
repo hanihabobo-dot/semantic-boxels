@@ -167,6 +167,15 @@ JOINT_VELOCITY_LIMITS = np.array([
 # step count against it.
 SIM_TIMESTEP = 1.0 / 240.0
 
+# BF#59 solver_iters: the contact solver's iterations per step on the
+# executing world when the switch is on (tampura_bridge/policy.py d9_setup
+# and boxel_env.py, both from this one constant; PyBullet's default is 50).
+# At 50 a 5.2 g die squeezed between two 0.1 kg fingers does not converge
+# and any grip firmer than a few newtons expels it; at 200 the hold_physics
+# probe lost 0 of 113 dice under the 10 N force hold, at about 1.9 ms per
+# step against 1.0 ms at 50 (proposals/hold_physics.md 2.2).
+SOLVER_ITERATIONS = 200
+
 # Hard ceiling on the interpolation schedule (#P1 F14).  A pathological
 # waypoint pair should slow the arm down, not stall the episode: 1200
 # steps is 5 s of simulated motion, far beyond any legitimate transit.
