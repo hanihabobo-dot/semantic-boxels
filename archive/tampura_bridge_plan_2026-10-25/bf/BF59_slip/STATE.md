@@ -106,7 +106,8 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    - carry_hold_check launched 19:12 in sb-slip-carry_hold_check from
      f060429 (code identical to 05dcaf3; session agent id
      ae3c955cf7beccf40); its loss line's exact text goes into the eval
-     harness when it reports. pad_rolling waits for the next free slot.
+     harness when it reports. pad_rolling waited for a free slot and was
+     DROPPED at 20:25 (force_hold passed its jam probe; see its bullet).
    - force_hold IMPLEMENTED 19:25, NOT READY: commits b2cacd6, b7d08f5,
      d3a0411 on slip/force_hold (robot_utils 1135 to 1201: the block
      with FORCE_HOLD_REACH 0.004, FORCE_HOLD_BUDGET_N 10, the gear
@@ -147,7 +148,31 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      its ep_iters.py and ep.sh tracked, runs/ untracked (ledger). Kept for
      the review: the 60-step position hold stays as the tested start; the
      per-carry fields (|q1 - q2|, the sink) are not logged.
-   - carry_trapezoid DONE 20:05: commit b1e2455 on slip/carry_trapezoid
+     JAM PROBE 20:20 (impl_force_hold.md "Jam probe", probes/force_hold/):
+     the jam is NOT the switch's. jam_probe.py (pick, lift, carry, place
+     descent, release as _release_and_verify_drop; 7 levers, 2 places, 8
+     trials): base jams 8 of 32 releases (25 %), every force_hold variant
+     9 of 64, force_hold as implemented 2 of 16 (Fisher p 0.26, 0.46);
+     17 of 18 jams light (a pad still touching the cup after the open, up
+     to 0.9 mm, 7.7 N: the cup leans on a finger and the hand does not
+     move between the three retries), the one deep jam base's. Base's own
+     episode s14_base_r1 has it. Under the force hold the cup turns less
+     in the carry (1.0 to 1.6 deg median against base's 3.2 to 7.4) and
+     the pads sit shallower in the descent (-0.26 to -0.30 mm against
+     -0.91 to -1.08). The open clears an upright centred cup by 5.8 mm
+     (wall 32 to 33 mm, lip 37.8 mm, finger faces at 38.9 mm); the gear's
+     50 N cannot hold a finger against the 200 N open. The episode's deep
+     jam (10.6 mm) did not recur in 64 releases: open, not attributable.
+     IMPLEMENTATION REVIEW 20:25 (reviews/implrev_force_hold.md, the
+     orchestrator): ACCEPTED, no change; arm `solver_iters+force_hold`
+     only; the release jam is an OPEN FINDING for the audit (candidate
+     fix outside this campaign: a retreat along the approach axis after
+     the open before the contact verify, in execution.
+     _release_and_verify_drop / execute_place / execute_stack, the
+     physical justification execute_place's comment asks for before
+     restoring audit #85's pre-release lift). pad_rolling DROPPED: the
+     fallback condition (force_hold failing) never came.
+   - carry_trapezoid DONE 19:57: commit b1e2455 on slip/carry_trapezoid
      (test_full_pipeline.py: register at import 124 to 152,
      carry_trapezoid_schedule 170 to 223 ported from carry_motion's
      trap_schedule, _stream_carry_trapezoid 240 to 299,
@@ -167,7 +192,7 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      does remove the zero-force junction steps (minimum summed pad force
      median 0.04 N to 2.02 N) and shortens straight carries (406 to 382
      steps). Seed 1 on: held, but 865 s and 118 plan calls (the cup
-     radius loop). IMPLEMENTATION REVIEW 20:15
+     radius loop). IMPLEMENTATION REVIEW 20:00
      (reviews/implrev_carry_trapezoid.md, the orchestrator): ACCEPTED,
      no change; no refusal without grasp_wrist_home (the arm specs pair
      them); the lift handover stays; whether job C keeps its arm is a
@@ -199,7 +224,7 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      as well). Seed 1 on: held, reward 1.0, the twin, joint 2 the
      largest mover home; seed 6 on: the cup loop (43 refusals, 89 plans,
      stopped at 900 s), needs pose_radius_keep (job B pairs them).
-     IMPLEMENTATION REVIEW 20:30 (reviews/implrev_grasp_wrist_home.md,
+     IMPLEMENTATION REVIEW 20:08 (reviews/implrev_grasp_wrist_home.md,
      the orchestrator): ACCEPTED, no change; the 5 deg band stands on
      its measurement; the analytic rule is enough (the IK alternative
      costs two solves per candidate); the pre-sense grasps keep today's
@@ -231,7 +256,7 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      exist once after the merge; every switch's module must be imported
      before execute_fn runs (all seven are).
 6. THEN implementation review (Opus or Sonnet per branch), fixes applied.
-7. IN PROGRESS (from 20:45): the campaign branch is `slip/campaign` in
+7. IN PROGRESS (from 20:12): the campaign branch is `slip/campaign` in
    the worktree `C:\Users\HaniAlassiriAlhabbou\git\sb-slip-campaign`
    (tools/slip_worktree.ps1 -Name campaign, from tampura-bridge fd36342).
    Merged with `git -c core.autocrlf=false merge --no-edit`:
@@ -241,7 +266,7 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    registers), slip/carry_trapezoid 7f30fd2; the configure call is in
    policy.py exactly once. The check with the four on (slip_check.sh,
    seed 0, fixes solver_iters,pose_radius_keep,grasp_wrist_home,
-   carry_trapezoid; outputs in the worktree's checks/) started 20:47 on
+   carry_trapezoid; outputs in the worktree's checks/) started 20:15 on
    the loaded laptop (bridge-test flakes possible). Still to merge:
    force_hold (after its jam probe, and its configure hunk is identical
    to solver_iters', so it should merge as one), carry_hold_check (its

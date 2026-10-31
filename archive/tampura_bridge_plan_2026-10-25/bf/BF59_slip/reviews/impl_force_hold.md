@@ -20,6 +20,8 @@ report and its folder `reviews/impl_force_hold/`.
       one success
 - [x] orchestrator's note (19:05): the configure call before d9_setup and
       the `import slip_fixes` copied verbatim from slip/solver_iters (d3a0411)
+- [x] jam probe (19:35 to 20:25): the release jam is not caused by the
+      switch (section "Jam probe"); no code change, no new episodes
 
 ## Branch and commits
 
@@ -210,6 +212,132 @@ listed places and stacks with a pressed body as untested. Suggested first
 measurement: the hp_probe carry with a cup placed and released (pad
 penetration per step during the place descent and the open), gear + 200
 iterations + 10 N.
+
+## Jam probe (the orchestrator's request of 19:30; 19:35 to 20:25)
+
+Harness: `probes/force_hold/jam_probe.py` (main checkout, run through
+`run.sh`, physics only, no lock). Their empty table; the seed-0 cup
+d_cups_ud from their create_ycb (concave, 28 VHACD hulls) at the scene's
+pose (1747173591.670785.json), D9's values and the gear through the
+branch's own `policy.d9_setup`; the branch's close, hold and open
+(`robot_utils`), iterations set after D9 as ep_iters.py does. The pick is
+at the episode's grasp (top down, yaw 0, contact z 64.1 mm); then the 10 cm
+lift, the straight joint line home (9 pairs, settle, the home hold), the
+line to the place's approach configuration, the place descent to the same
+contact z (execute_place's rule), and the release as
+`_release_and_verify_drop` does it (open, 30 steps, verify fingers >=
+0.038 and no robot contact, up to 3 attempts). Places: free_003 (the base
+and rep2 spot) by IK, and `ep000`, the s0_i200 episode's own configurations
+from its eye.jsonl records 18 and 19 (the hand over free_000 at z 351 mm,
+the contact at z 65.5 mm, a joint-space descent of 0.76 rad on joint 1
+and 0.86 rad on joint 3, the log's "stretching 60 -> 95 steps"). Each
+step records the hand's z (commanded and actual), the cup's pose in the
+hand frame, q1 and q2, per pad the normal force and the deepest distance
+of its contacts with the cup, the other robot links' contacts, the
+cup-table force and the cup's tilt. 8 trials per cell; the cup's position
+jittered by up to 2 mm per trial (the episodes' pick arrival errors are 1
+to 3 mm). Summary by `analyse.py` (out/b1_*.json):
+
+| lever (200 it. unless named) | free_003 jams | ep000 jams | carry turn med (deg) | pad d in the descent, med (mm) |
+|---|---|---|---|---|
+| base (60 N position hold) | 3/8 (1 deep) | 2/8 | 3.2 / 7.4 | -0.91 / -1.08 |
+| base, 50 it. | 3/8 | 0/8 | 4.1 / 3.3 | -1.22 / -1.11 |
+| force_hold as implemented | 1/8 | 1/8 | 1.0 / 1.6 | -0.26 / -0.30 |
+| force_hold, 50 it. | 2/8 | 1/8 | 4.6 / 3.1 | -0.31 / -0.53 |
+| 10 N, 1 mm reach | 1/8 | 0/8 | 3.1 / 3.3 | -0.22 / -0.34 |
+| 20 N | 1/8 | 0/8 | 2.5 / 1.5 | -0.34 / -0.40 |
+| gear removed | 2/8 | 1/8 | 2.3 / 1.7 | -0.31 / -0.27 |
+
+The jam happens under every hold law, base included: base 8 of 32 releases
+(25 %), every force_hold variant 9 of 64 (14 %), force_hold as implemented
+2 of 16. Fewer under force_hold, but not significantly (Fisher two-sided
+p 0.26 for 8/32 against 9/64, p 0.46 for 8/32 against 2/16). 17 of the 18 jams are light (after the last open one pad still
+touches the cup at d -0.01 to -0.91 mm and 0.02 to 7.7 N; the cup leans on
+a finger), the kind of the 50-iteration on-check episode (d -0.10 mm,
+0.58 N). One is deep, under base (free_003 trial 1: the cup slipped 8 to
+11 mm and turned 15 deg in the hand during the carry; after the open a pad
+sat 7.3 mm inside it at 143 N). The episode's deep jam under force_hold
+(d -10.57 mm, 113 N) did not recur in the 64 force_hold trials, its own
+place configurations included. The jammed trials turned more in the hand
+during the carry than the released ones (median 4.3 deg, n 18, against
+2.8 deg, n 94).
+
+The same light jam is in base's own episodes: loss_dynamics' s14_base_r1
+(no fix, 50 iterations) failed the release of e_cups_ud three times with
+link13 at d -0.01 mm, 0.16 N, the cup tilted 10.6 deg. The episode tally:
+base 1 jam in 19 places (loss_dynamics' six base runs, 17 places, plus my
+two base seed-0 checks); force_hold 2 in 10 places (my six episodes).
+Fisher's test cannot separate those (two-sided p about 0.27).
+
+The hypotheses:
+- (a) The cup moving in the hand under the 10 N hold: no. The cup is
+  0.019 kg (CLASS_MASS_KG), so at 97 m/s^2 its inertial load is 1.8 N
+  against a friction capacity of 2 x 1.2 x 10 = 24 N. Measured under
+  force_hold: carry slip along the hand's z 0.09 to 0.15 mm median (max
+  0.25), turn 1.0 to 1.6 deg median (max 4.2). Base's 60 N position hold
+  lets it move more (turn 3.2 to 7.4 deg median, max 47; at 200
+  iterations base dropped or nearly dropped the cup in 3 of 16 carries,
+  slip up to 287 mm).
+- (b) The place descent driving the pads in: no under force_hold. The
+  deepest pad contact during the descent is -0.26 to -0.30 mm median
+  (min -0.56) against base's -0.91 to -1.08 mm (min -7.27, the deep jam).
+  The penetration does not grow during the descent beyond the contact
+  softness; the episode's deep penetration has no counterpart in the
+  harness.
+- (c) The open cannot clear the cup: the geometry allows it when the cup
+  is upright and centred. The ray profile (`cup_profile.py`,
+  out/cup_profile.txt; heights above the cup's bottom): a lip of radius
+  37.4 to 37.8 mm in the bottom 8 mm, the wall 32.3 to 33.1 mm from 12 to
+  64 mm, 28.5 mm above 68 mm. The AABB's 49 mm half-width is a hull
+  bounding box, not the surface (no ray reached past 37.8 mm). The pads
+  grasp at the hand's z of 64.1 mm, where the wall is 32.4 mm (measured
+  half-width 33.2 mm). At the full open the finger links' inner faces sit
+  about 38.9 mm from the hand's axis (the finger gap 2q - 2.2 mm), 5.8 mm
+  outside the wall, and the fingertips stay far above the lip. A pad
+  touches after the open only if the cup's axis is 5.8 mm or more off the
+  hand's axis, or the cup leans: 4 deg of lean over the 60 mm from the
+  table contact to the pads moves the wall about 4 mm. In the episode the
+  pads did not end lower on the cup than where they grasped it (the hand
+  at 65.4 mm at the pick, 65.5 mm after the open). The cup's bottom was
+  2.3 mm into the table and it leaned 2.8 deg. A pad 10.6 mm deep is
+  inside the wall's hull, which the cup's geometry cannot produce from
+  outside: the pad had passed into the hull during the place descent. The
+  harness did not reproduce that.
+- (d) The gear at the open: no. Its maxForce is 50 N against the open's
+  200 N per finger, so it cannot hold a finger back. The episode's 1.1 mm
+  asymmetry (39.1 and 38.0 mm) is the contact blocking finger 12 at 113 N.
+  The gear-off lever jams as often (3/16 against 2/16).
+
+Verdict: the cause is not in the switch. The jam is the release's: the
+fingers open in place and `_release_and_verify_drop` reads any robot
+contact as a failed drop. A cup that leans on a finger after the open stays
+there through the three retries, because the hand does not move between
+them. Base has it in the harness (25 %) and in its own episodes (s14). The
+force hold reduces the lean and the penetration that feed it. No change
+on slip/force_hold. What else must change is outside this fix's files:
+the release (`execution._release_and_verify_drop`, `execute_place`,
+`execute_stack`). One candidate: a retreat along the approach axis after
+the open, before the contact verify. It is the physical inverse of the
+pick's descent; audit #85's 15 mm pre-release lift was removed in #P1
+for another reason, which execute_place's comment says to restore "with a
+physical justification" if drop verification regresses. That would be
+its own switch, and it is a model-side executor change. The episodes'
+deep jam (1 in 10 force_hold places, 0 in 64 force_hold harness releases,
+1 in 32 base harness releases) stays open. To catch it, run the
+harness with the episode's exact pick state (the look and re-pose before
+the pick, the grasp at the eye's estimate 1.4 mm off) and 30 or more
+trials at ep000 under both holds.
+
+No fix, so no new episodes (the orchestrator's three seed-0 runs were for
+after a fix).
+
+Data (main checkout, `probes/force_hold/`, untracked, 5,531,120 B in 34
+files): jam_probe.py 15,602 B, run.sh 627 B, batch1.sh 679 B, analyse.py
+1,804 B, cup_profile.py 2,338 B; out/ 5,510,070 B in 29 files (14
+b1_*.json with trial 0's per-step trace each, 14 b1_*.txt per-trial
+lines, cup_profile.txt). Deleted: out/smoke.json, smoke_fh.json and
+smoke_base.json (11,839 B, the harness's first runs, superseded by
+batch 1).
 
 ## Deviations
 
