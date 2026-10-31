@@ -330,7 +330,45 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    six on, slip_check off, then one seed-0 episode through
    reviews/impl_carry_hold_check/ep_loss_inject.py with all six on and
    one injected carry loss of the die; outputs in the worktree's
-   checks/). Cluster at 20:40 (sinfo -p rleap_cpu):
+   checks/). FINAL CHECKS GREEN 20:53: all six on 116 unit tests, 89
+   bridge tests, gates PASS, seed 0 success in 23 s; all off the same
+   counts, success in 31 s (the gf9 flake passed both times); the
+   injected loss ran the whole path (the LOST carry line, the loss line,
+   "transit loss 1/3", the die retired as lost, the replan found no
+   shadows, the goal check "no held object (gripper is empty)", outcome
+   failure, no traceback; checks/2026-10-31_20-52-22_s0_inject). HARNESS
+   BUG, round two (found by counting that episode: 3 losses for 1):
+   console_debug.log echoes every ERROR and action print as a
+   "[console]" line, and the goal check's "gripper is empty" matched the
+   goal-loss regex. Fixed 21:05 (562db41 on tampura-bridge, merged into
+   slip/campaign as cff9bc5): the pipeline's lines are read from
+   run_*.log (each once; fallbacks console_debug.log without its
+   "[console]" lines, then stdout.txt), the verified pick from
+   stdout.txt (or the console log's curated lines), and the goal loss
+   matches only the two physical reasons (finger-pad contact
+   incomplete, a graze); 10 tests. Verified on four real episodes: the
+   injected loss 1 carry 1 loss 1 try, the off success 1/0/1, the
+   50-iteration goal-check loss 1/1/1, the seed-1 cup loop 0/0/0 (no die
+   pick). SNAPSHOT: slip/campaign cff9bc5 = tampura-bridge 562db41 + the
+   six branches, `sb_cff9bc5` (push_snapshot.ps1 -CodeOnly from the
+   campaign worktree; the first upload timed out at the gateway, retried
+   and unpacked 21:08, 46 entries). SUBMITTED 21:12 from cn-04, the five
+   nodes idle at submission, all five jobs pending on priority at first:
+     A 5006486 cn-101  base,solver_iters,solver_iters+force_hold
+     B 5006487 cn-102  base,pose_radius_keep,pose_radius_keep+grasp_wrist_home
+     C 5006488 cn-103  base,pose_radius_keep+grasp_wrist_home+carry_trapezoid,carry_hold_check
+     D 5006489 cn-105  base,solver_iters+force_hold+pose_radius_keep+grasp_wrist_home
+     T 5006490 cn-106  TAMPURA, slip_t.sbatch, 3 reps, seeds 0-19
+   (slip_eval.sbatch sb_cff9bc5 <arms> 0-19 3 0-19: 3 reps of every seed;
+   results in $W/results/slip_cff9bc5/<job id>/ and
+   $W/results/slipT_cff9bc5_5006490/; logs $W/logs/p4-slip_<id>.txt and
+   p4-slipT_5006490.txt). To read them together: cat the four jobs'
+   results.jsonl into one directory and run `tools/slip_eval.py --out
+   <dir> --summary` with --arms listing every arm; per-scene tables by
+   scene_file (the three-scene map in "Eval design notes"). Watch for:
+   check_arms failing at a job's start (an unregistered name), the gates
+   FAIL line, the 600 s caps on the cup-loop seeds, and the 12 h limit.
+   Cluster at 20:40 (sinfo -p rleap_cpu):
    idle cn-101, 102, 103, 105, 106, 107, 108, 109, 113, 114, 115, 116;
    mixed cn-104, 110 (another user's array), 111, 112; long pending
    arrays of other users queued (%100), so the idle nodes may fill: pin
