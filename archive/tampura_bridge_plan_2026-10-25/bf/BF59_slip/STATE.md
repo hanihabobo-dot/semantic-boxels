@@ -71,6 +71,13 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    worktree has no solver_iters switch; the campaign branch runs both
    for real. Round 2 (carry_trapezoid, carry_hold_check, pad_rolling)
    starts as slots free, worktrees from the same base.
+   - carry_trapezoid launched 18:45 in sb-slip-carry_trapezoid from
+     ae62b33 (code identical to 05dcaf3; session agent id
+     a1d5d4304abbc1b78); its check includes the real-pick probe cells the
+     review required. pad_rolling and carry_hold_check get agents as
+     slots free. Implementation reviews (phase 6): small diffs are read
+     by the orchestrator (reviews/implrev_<name>.md), large ones by an
+     Opus reviewer when a slot is free.
    - solver_iters DONE 18:40: commit 2252af5 on slip/solver_iters (5
      files, only added lines): robot_utils.SOLVER_ITERATIONS = 200;
      registered at boxel_env's import; applied in policy.py d9_setup
@@ -89,7 +96,12 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      stands until the cluster arm measures it. Open for the
      implementation review: test_full_pipeline 2995's scene-acceptance
      probe env runs at 50 even with the switch on (our scenes only).
-     Report reviews/impl_solver_iters.md.
+     Report reviews/impl_solver_iters.md. IMPLEMENTATION REVIEW 18:55
+     (reviews/implrev_solver_iters.md, the orchestrator): ACCEPTED, no
+     change; the allowlist is matched by (file, function, source text),
+     so the merge cannot stale its line numbers; the configure call must
+     exist once after the merge; every switch's module must be imported
+     before execute_fn runs (all seven are).
 6. THEN implementation review (Opus or Sonnet per branch), fixes applied.
 7. THEN the campaign branch `slip-campaign` = tampura-bridge + every fix
    branch merged (the orchestrator merges, fills `slip_fixes.KNOWN` lines
