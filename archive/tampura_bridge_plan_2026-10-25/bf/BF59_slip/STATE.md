@@ -352,8 +352,10 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    pick). SNAPSHOT: slip/campaign cff9bc5 = tampura-bridge 562db41 + the
    six branches, `sb_cff9bc5` (push_snapshot.ps1 -CodeOnly from the
    campaign worktree; the first upload timed out at the gateway, retried
-   and unpacked 21:08, 46 entries). SUBMITTED 21:12 from cn-04, the five
-   nodes idle at submission, all five jobs pending on priority at first:
+   and unpacked 21:08, 46 entries). SUBMITTED 21:08 from cn-04 (every
+   job's Slurm prolog stamps its start 21:08:31; an earlier "21:12" here
+   ran ahead of the clock), the five nodes idle at submission, all five
+   jobs pending on priority at first:
      A 5006486 cn-101  base,solver_iters,solver_iters+force_hold
      B 5006487 cn-102  base,pose_radius_keep,pose_radius_keep+grasp_wrist_home
      C 5006488 cn-103  base,pose_radius_keep+grasp_wrist_home+carry_trapezoid,carry_hold_check
@@ -368,6 +370,19 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    scene_file (the three-scene map in "Eval design notes"). Watch for:
    check_arms failing at a job's start (an unregistered name), the gates
    FAIL line, the 600 s caps on the cup-loop seeds, and the 12 h limit.
+   STARTED 21:08:31, all five (checked at 21:16 by a delayed squeue and
+   each log's first lines): gates G7, G11(i), G17 PASS in A, B, C and D;
+   check_arms printed every arm's fixes (A: [] / ['solver_iters'] /
+   ['force_hold', 'solver_iters']; B: [] / ['pose_radius_keep'] /
+   ['grasp_wrist_home', 'pose_radius_keep']; C: [] / ['carry_trapezoid',
+   'grasp_wrist_home', 'pose_radius_keep'] / ['carry_hold_check']; D: []
+   / the four); 180 episodes to run in A, B and C, 120 in D; D's first
+   episode (base, seed 0, rep 0) a success, wall 27.4 s, 1 carry, 0
+   losses; T's log was still at its Slurm prolog. A background waiter on
+   the laptop (a fresh ssh to cn-04 every 20 min, squeue) wakes the
+   session when the first of the five ends; its summary is pulled then
+   (phase 8 begins with T and D; the full table when A, B and C end,
+   expected 04:00 to 06:00).
    Cluster at 20:40 (sinfo -p rleap_cpu):
    idle cn-101, 102, 103, 105, 106, 107, 108, 109, 113, 114, 115, 116;
    mixed cn-104, 110 (another user's array), 111, 112; long pending
