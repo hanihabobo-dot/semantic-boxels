@@ -52,10 +52,24 @@ from perception import (DETECTION_MIN_PIXELS, DETECTION_SUPPORT_SNAP,
 from reboxelize import reboxelize_free_space
 from streams import NOMINAL_HIDDEN_EXTENTS, RobotConfig
 import pose_belief
+import slip_fixes
 from robot_utils import (robot_model, solve_ik,
                          move_robot_smooth, open_gripper, close_gripper,
                          close_gripper_until_contact, pinch_axis,
                          pinch_direction)
+
+# BF#59 carry_hold_check (proposals/loss_dynamics.md 2.1 and 2.5, as
+# changed by reviews/loss_dynamics.md): after every move made while
+# holding, the dispatcher's move action checks the hold with the same
+# tactile rule as the post-lift re-verify (both pads in contact with the
+# held body, no force floor) and a loss fails the move like an empty hand
+# at place entry; every such move also logs the finger width growth over
+# the carry.  OFF: nothing reads the pads after a move (the goal check
+# _verify_holding is the first to look, as at 92d1e06).
+slip_fixes.register(
+    'carry_hold_check',
+    'after every move made while holding, both pads must touch the held '
+    'body or the move fails as empty_hand; logs the finger width growth')
 
 # execute_pick's result (M10, PLAN_P4_POSE_GRASP_SAMPLERS.md E): the held
 # body and the final config on success; on a failure both None and the
@@ -548,6 +562,95 @@ def _assert_held_contact(robot_id, held_body_id, obj_name, gui, action):
         open_gripper(robot_id, gui)
         raise EmptyHandError(
             f"{action} {obj_name}: no held-object pad contact at entry")
+
+
+def held_pad_contacts(robot_id, body_id):
+    """The robot's tactile sense of one body (BF#59 carry_hold_check, the
+    shared helper): the finger pad links in contact with it, their summed
+    normal force (N) and the number of contact points on the pads.  It
+    applies no rule: the post-lift re-verify and the carry check both ask
+    for presence on both pads and nothing more (reviews/loss_dynamics.md:
+    the post-lift check has no 0.5 N floor and must not get one); the
+    force is a logged number only."""
+    contacts = p.getContactPoints(bodyA=robot_id, bodyB=body_id)
+    fingers = robot_model().finger_joints
+    pad = [c for c in contacts if c[3] in fingers]
+    return (frozenset(c[3] for c in pad), float(sum(c[9] for c in pad)),
+            len(pad))
+
+
+# BF#59 carry_hold_check: the proprioception at a holding move's start
+# (finger joints and joint 7, the readback), and the check's verdict.
+CarryStart = namedtuple('CarryStart', 'fingers wrist')
+CarryHold = namedtuple('CarryHold', 'held pads force points growth_mm')
+
+
+def _finger_readback(robot_id):
+    return tuple(float(p.getJointState(robot_id, fj)[0])
+                 for fj in robot_model().finger_joints)
+
+
+def _wrist_readback(robot_id):
+    return float(p.getJointState(robot_id, robot_model().arm_joints[-1])[0])
+
+
+def carry_hold_begin(robot_id, held_body_id) -> Optional[CarryStart]:
+    """BF#59 carry_hold_check, the start of a move: the finger and wrist
+    readback while holding, None when the switch is off or the hand is
+    empty (then carry_hold_end does nothing)."""
+    if held_body_id is None or not slip_fixes.on('carry_hold_check'):
+        return None
+    return CarryStart(_finger_readback(robot_id), _wrist_readback(robot_id))
+
+
+def carry_hold_end(robot_id, held_body_id, start: Optional[CarryStart],
+                   obj_name, dest, gui=False) -> Optional[CarryHold]:
+    """BF#59 carry_hold_check, the end of a move made while holding: an
+    executor postcondition like the post-lift re-verify.  Logs one line
+    per carry (the loss predictor of proposals/loss_dynamics.md 2.5: the
+    finger readback at the move's start and end, the width growth, the
+    pads at the end), held or not, and on a loss (not both pads on the
+    held body) prints the loss, opens the gripper (the fingers are closed
+    on nothing, as at the place entry assert) and returns held=False; the
+    dispatcher then takes its empty-hand path.  Returns None when
+    ``start`` is None (switch off or empty hand at the move's start).
+
+    The width growth is a metric, never a trigger: on the episodes it
+    separated 3 of 3 losses from 0 of 3 holds at 0.05 mm, but on the
+    113-grip probe it catches 8 of 17 losses and flags 9 of 96 holds
+    (reviews/loss_dynamics.md).  And a loss it reports rarely becomes a
+    re-pick: in 3 of 3 recorded losses the die ended 0.08 to 0.23 m from
+    the base, outside W and out of the eye's image, so the replan ends as
+    target_lost; the check makes the ending honest, not the carry safer.
+    """
+    if start is None:
+        return None
+    fingers_end = _finger_readback(robot_id)
+    wrist_end = _wrist_readback(robot_id)
+    pads, nf, npts = held_pad_contacts(robot_id, held_body_id)
+    _fingers = robot_model().finger_joints
+    held = pads == set(_fingers)
+    growth_mm = (sum(fingers_end) - sum(start.fingers)) * 1000.0
+    # Which hold pressed the pads: under force_hold a widening is a body
+    # turned to a wider support, not a loss signal (reviews/loss_dynamics.md
+    # on the predictor).
+    hold = 'force_hold' if slip_fixes.on('force_hold') else 'position'
+    print(f"    carry_hold_check: move to {dest} holding {obj_name}: fingers "
+          + '/'.join(f"{f * 1000:.3f}" for f in start.fingers)
+          + " mm at the start, "
+          + '/'.join(f"{f * 1000:.3f}" for f in fingers_end)
+          + f" mm at the end, width growth {growth_mm:+.3f} mm, wrist "
+          f"travel {np.degrees(abs(wrist_end - start.wrist)):.1f} deg, pads at "
+          f"the end {sorted(pads) or 'none'} ({npts} points, {nf:.2f} N), "
+          f"{hold} hold: {'held' if held else 'LOST'}")
+    if not held:
+        print(f"    ERROR: grip lost in the carry for {obj_name}: pad "
+              f"contacts={sorted(pads) or 'none'} (need both "
+              f"{list(_fingers)}), pad_normal_force={nf:.2f}N after the move "
+              f"to {dest}. Opening gripper and replanning (BF#59 "
+              f"carry_hold_check).")
+        open_gripper(robot_id, gui)
+    return CarryHold(held, pads, nf, npts, growth_mm)
 
 
 def _release_and_verify_drop(
@@ -1328,12 +1431,11 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     # eject, or a slip-on-lift all separate here — the object stays
     # behind while the EE rises.  Re-check both pads against obj_id and
     # abort into the dispatcher's replan path on loss.
-    lift_contacts = p.getContactPoints(bodyA=robot_id, bodyB=obj_id)
+    # BF#59 carry_hold_check: the shared tactile helper, contact presence
+    # only (no force floor here, as before the helper).
     _fingers = robot_model().finger_joints
-    lift_pads = {c[3] for c in lift_contacts if c[3] in _fingers}
+    lift_pads, lift_nf, _ = held_pad_contacts(robot_id, obj_id)
     if lift_pads != set(_fingers):
-        lift_nf = sum(c[9] for c in lift_contacts
-                      if c[3] in _fingers)
         obj_z_now = p.getBasePositionAndOrientation(obj_id)[0][2]
         print(f"    ERROR: grip lost after post-pick lift for {obj_name} — "
               f"pad contacts={sorted(lift_pads) or 'none'} (need both "
