@@ -8497,6 +8497,65 @@ BF#58 [DONE]  RULE: THE DATA-CLEANER MENTALITY: A LEDGER OF WHAT EVERY
   is tracked now as BF#53's evidence.
   CLAIM EFFECT: none.  HONESTY CLASS: process; disclosed.
 
+BF#60 [OPEN, FOR LATER]  ENTROPY SEARCH FOR THE SEARCH ORDER: NOT FOR THIS
+      PAPER  (user decision, 2026-10-31 13:02)
+  WHAT: Hani asked where entropy search could apply in this project.  The
+  answer: the choice of which shadow fragment to search next, which
+  nothing makes today.  Every sense costs 1 and optimistically asserts
+  the target, so the plan goes to the fragment cheapest to reach (the
+  sense comment in pddl/domain_pddlstream.pddl: the planner "cannot
+  reason about search ORDER"), and every empty sense costs a full
+  replan.  The shadow belief holds no probabilities, and nothing in the
+  code computes an entropy or an information gain.
+  SKETCH: (1) BeliefState (belief.py) keeps a probability p_i per
+  fragment instead of a status, with a declared prior: uniform over the
+  spots where a target-class body rests fully hidden.  streams.py's
+  test_target_can_hide_in_shadow already samples those spots on a 1 cm
+  grid and only reports whether one exists; counting them gives the
+  weight (for the cups, task_spec.HOLLOW_CAVITY).  TAMPURA's belief, a
+  grid of candidate voxels, is the nearest match to that prior.  A sense
+  that sees a fraction v_i of a fragment and finds nothing leaves
+  p_i (1 - v_i) / (1 - p_i v_i).  (2) The value of a sense enters as a
+  cost inside the model, never as a reordering of a plan: PDDLStream
+  takes per-grounding cost functions, (increase (total-cost) (SenseCost
+  ?region)) with a :function stream (pddlstream_lib
+  examples/advanced/multi_cost.py); the exchange rate between actions
+  and probability is the one new constant, declared, not tuned.  (3) The
+  3-strike park, #P9's unsound bounded give-up, becomes a residual-mass
+  rule: the episode ends when the mass left is below a declared epsilon,
+  which is then the stated risk of giving up on a target that is there;
+  an unresolved fragment keeps its mass, and re-sensing it from the same
+  view has zero expected gain.
+  ENTROPY OR PROBABILITY: with a perfect sensor and no costs, entropy
+  search and most-likely-first pick the same fragment.  With costs, bits
+  per action is the wrong score for find-and-hold: of a 50 % fragment at
+  4 actions and a 5 % one at 1, bits per action picks the 5 % one (0.29
+  against 0.25), the optimal order for searching boxes with fixed costs
+  (highest p/c first) the 50 % one.  So rank by p/c; entropy counts where
+  a look sees only part of a fragment.  Two cases are on record: F12's
+  withdrawn sense_partial (the belief could not record a partial look,
+  so the planner repeated one that could teach it nothing until three
+  strikes parked every fragment, seed 13) and TAMPURA's own loop (P4.2:
+  "a look that reveals nothing is re-selected to step 20").
+  LOWER VALUE: ranking ObserveViews' candidates by information gain (the
+  wrist camera's yaw noise is already 0.2 deg); Entropy Search as
+  Bayesian optimisation of the search settings (it reopens BF#57, could
+  tune only on our own scenes, never on TAMPURA's 20 seeds, and competes
+  with the B8 re-runs for the cluster).
+  WHY LATER: find_dice cannot show it.  Its 20 seeds load three saved
+  scenes (P4.2's map): one with a single cup, two with four cups and the
+  die where the scene file puts it, so the order would change in two
+  scenes only (the cavities do differ, 40 to 57 mm).  The test would be
+  random-pairs, where the hidden target moves with the seed (empty senses
+  and replans per episode).  It also changes the system under test while
+  the B8 re-runs and CB#113 are pending, five weeks before the
+  2026-12-04 deadline.
+  DECISION 2026-10-31 (user): "log it but state that we concluded it is
+  not for now, well look at it later, but not for this paper".  Not in
+  the ICAPS 2027 paper; when it is picked up, a default-off switch like
+  M8 to M10, on its own branch.
+  CLAIM EFFECT: none for this paper.  HONESTY CLASS: to be decided then
+  (a model tweak if built).
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
