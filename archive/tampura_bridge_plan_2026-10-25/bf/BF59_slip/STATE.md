@@ -34,7 +34,8 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    probes/<angle>/ (about 155 MB, ledgered; garbage after the review
    except scripts, work logs, the .txt summaries, carry.jsonl and
    stdout.txt).
-4. IN PROGRESS review (started 16:42): the shared brief is
+4. DONE review (16:42 to 17:30; the verdicts under "Review results"
+   below, the outcome under "Candidate list"): the shared brief is
    reviews/REVIEW_BRIEF.md (what to read, six points per fix: mechanism
    and evidence, the rules of BRIEF.md section 5 one by one, testability
    and the eval's power, risk, effort, verdict implement / merge with X /
@@ -54,10 +55,15 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    reviews/IMPL_BRIEF.md (written ahead). NEXT after the four reviews: the orchestrator writes the candidate list (6 to 8
    fixes, one mechanism per switch, the dependencies and the arm plan)
    into this file.
-5. THEN implementation: one worktree and branch per fix, four Opus agents
-   at a time (the house cap), each: the switch, unit tests, `tools/
-   slip_check.sh` green, a commit on its slip/<name> branch only (one-line
-   subject, no trailer, no push), a report file reviews/impl_<name>.md.
+5. IN PROGRESS implementation (from 17:40): one worktree and branch per
+   fix of the candidate list below, four Opus agents at a time (the house
+   cap), each: the switch, unit tests, `tools/slip_check.sh` green, a
+   commit on its slip/<name> branch only (one-line subject, no trailer,
+   no push), a report file reviews/impl_<name>.md; the brief is
+   reviews/IMPL_BRIEF.md. Worktrees are created by the orchestrator with
+   tools/slip_worktree.ps1 from the tampura-bridge commit named in the
+   round's line. Round 1 (solver_iters, force_hold, pose_radius_keep,
+   grasp_wrist_home): see the line added at launch.
 6. THEN implementation review (Opus or Sonnet per branch), fixes applied.
 7. THEN the campaign branch `slip-campaign` = tampura-bridge + every fix
    branch merged (the orchestrator merges, fills `slip_fixes.KNOWN` lines
@@ -244,6 +250,162 @@ their create_default_env value; 4.4 % alone, the fallback) (hold_physics).
   on base+r: the flip (with the trapezoid), the hold set, edge_pinch with
   the trapezoid; carry_hold_check and the predictor line in every arm;
   the combined set last with TAMPURA beside it.
+- hold_physics (reviews/hold_physics.md, 17:30): finger_gear MERGE into
+  force_hold: it changes no loss rate alone or in the combination (die
+  15/113 against 20/113, p 0.46; 0/113 with or without it under the hold)
+  and the "96 % lost without the gear" is the solver's doing (103/113
+  lost with the gear at 50 iterations); what it does is keep a
+  force-limited pair centred (4.0 mm median off centre without it, 0.00
+  with it), and execute_stack places the hand, not the body, so that
+  offset would move every place and stack by up to 4 mm; only the
+  executing client steps, so neither the planner's twin nor the kin
+  stream needs it; created in d9_setup's setup phase (passes G14); four
+  allowlist lines. solver_iters IMPLEMENT, own switch, own arm: the
+  expulsion at 50 iterations is cured equally by 100 to 500 iterations,
+  the die's mass x10 or its inertia x10, and a sharp box is expelled the
+  same way; alone it is null on the loss (21/113); nothing else sets the
+  iterations, the twin and the kin stream never step; GAP: boxel_env's
+  reset() calls resetSimulation, which resets the iterations to 50
+  (measured), so the switch must re-apply after every reset; cost at
+  most about 0.9 x exec_s: on BF#53's 192 episodes +13 s at the median
+  (+24 % of wall), +76 s at p90, +77 to +184 s of the 600 s budget in the
+  18 capped episodes; a 60-episode arm about 2.3 h against 2.0 h.
+  force_hold IMPLEMENT with the gear folded in and solver_iters required
+  (refuse to run without it; the arm spec names both; no hidden
+  implication and no base with the gear and the iterations on): die
+  0/113 [0, 3.3] against 20/113, cubes 0/57 against 33/57 and 26/57,
+  cups 0/57; rule 2 passes because the smallest force that carries our
+  heaviest 0.5 kg class sets 10 N (5 N loses 13 to 27 of 57; the die
+  alone would take 5 N); 20 N sits at the solver's edge (102/113 lost at
+  100 iterations); for our boxes the summed pad force falls from 39.9 to
+  20.9 N; the grip verification, the width plausibility (read at the
+  touch), the post-lift re-verify, _verify_holding (19.8 N at home) and
+  the place release all still work (checked in the code); the eval
+  detects it at 4 or fewer losses in 60 carries. The unexplained reading
+  is an unresolved contact (the pads 3.4 mm per side into the die during
+  the lift at 20 N), not the measured-width logic. Untested: our tall
+  0.5 kg occluders, the hold started at the touch instead of after the
+  60-step position hold, the edge pinch, dice more than 10 deg off face.
+  pad_rolling: fallback only (4.4 % against 17.7 % on the light hold,
+  p 0.002; nothing once force_hold is on; no help for cubes; only the
+  0.01 value is theirs, set on their table, not the pads). If force_hold
+  lands, redundant: edge_pinch, face_needs_wrist_yaw,
+  pinch_band_certificate, pad_rolling; grasp_wrist_home becomes a time
+  gain, not a loss fix; complementary: carry_trapezoid (48 of 113 held
+  carries still dip to 0 N), carry_hold_check, pose_radius_keep;
+  carry_grip_watch's threshold fires on almost every carry under the
+  force hold. The seed-6 grip miss the proposal left open: the hand
+  arrived 105 mm from the cup (its own log), not the gear. Garbage now:
+  the three episodes' save/ folders under probes/hold_physics/runs
+  (about 3.4 MB) except s6_gear_f10_i200's console_debug.log, which the
+  review quotes.
+
+## Candidate list (phase 5), decided 17:35 from the four reviews
+
+Seven switches. Dropped: edge_pinch, face_needs_wrist_yaw,
+pinch_band_certificate (grasp_geometry: no measurable gain at the eval's
+power, the size scope fails rule 2), carry_grip_watch (false alarms on
+held cubes and cups, a goal swap). Merged: finger_gear into force_hold,
+carry_accel_limit into carry_trapezoid. Every switch: default off,
+`slip_fixes.register` at its module's import, `slip_fixes.on('<name>')`
+at the point of difference, one branch `slip/<name>`, one worktree,
+reviews/IMPL_BRIEF.md is the implementer's brief. Base commit of every
+worktree: the tampura-bridge commit that carries this list (see the
+phase 5 line).
+
+1. `solver_iters` (hold_physics): numSolverIterations 200 on the bridge's
+   executing client in `tampura_bridge/policy.py` d9_setup (after
+   setTimeStep) and on our own world in `boxel_env.py` (after setGravity,
+   AND again after every reset() because resetSimulation resets it to
+   50); setPhysicsEngineParameter is a gated write (allowlist line with
+   the reason). Logs the value once per world. Reports the step-time
+   cost (wall and steps of the check episode against the base run).
+   Review's requirement: the reset gap. Files: policy.py, boxel_env.py,
+   tools/bridge_gates_allowlist.txt, tests/test_slip_solver_iters.py.
+2. `force_hold` (hold_physics, finger_gear folded in): in
+   `robot_utils.close_gripper_until_contact` (1135), once both pads
+   touch, the fingers hold a target 4 mm inside the measured width at a
+   10 N motor budget per finger instead of 0.5 mm inside at 60 N (the
+   measured width, the grip verification and the width plausibility are
+   read at the touch as today; the post-lift re-verify, _verify_holding
+   and the place release unchanged); the JOINT_GEAR constraint
+   (gearRatio -1, erp 0.1, maxForce 50) between the finger joints on the
+   executing client, created in d9_setup's setup phase and in boxel_env
+   at robot load (and after reset), allowlisted (four lines). The switch
+   refuses to run without solver_iters on (a clear error at configure or
+   at the first hold). Logs per hold: the measured width, the target, the
+   budget, the force at the end of the hold. Files: robot_utils.py,
+   policy.py, boxel_env.py, the allowlist, tests/test_slip_force_hold.py.
+3. `pose_radius_keep` (loss_dynamics, rule changed by its review): in
+   `pose_belief.record_detection`, a later detection of a body whose pose
+   is already known does not loosen the radius beyond the old radius plus
+   the centre shift: r = min(r_new, r_old + |c_new - c_old|), and the
+   wrist observe's yaw is kept when the later detection comes from the
+   overhead camera (the overhead refresh re-fuses "yaw = latest" today);
+   pipeline-wide, every body. Logs each kept radius and yaw with both
+   values. Files: pose_belief.py, tests/test_slip_pose_radius_keep.py.
+4. `grasp_wrist_home` (carry_motion): the sampler prefers, between a
+   grasp yaw and its pad-swapped twin (yaw + pi), the one whose wrist
+   (joint 7) is nearer home, instead of the world-frame wrap measured
+   from Euler yaw 0 (`pose_belief._wrap` 131, `fitted_grasp_candidates`
+   177 to 197, `streams.sample_grasp` 825 to 845, orientation at 869);
+   this also removes the joint-7 clip of grasps at believed yaws above
+   about 15 deg (the review's second mechanism). Every body. The kin
+   stream certifies as today. Logs per grasp: both candidates' joint-7
+   distances and the choice. Files: pose_belief.py, streams.py,
+   tests/test_slip_grasp_wrist_home.py.
+5. `carry_trapezoid` (carry_motion, carry_accel_limit merged): one
+   acceleration-bounded schedule per dispatcher move while holding
+   (`test_full_pipeline.py` main's move action, 1877 to 1896): collinear
+   waypoint pairs merged, a rest at every direction change (the tested
+   rest-at-a-bend rule, no single-hop extension, no keep-speed-under-30-
+   deg rule), move_robot_smooth's settle and the velocity limits kept;
+   the primitive untouched. Never evaluated alone (its arm pairs with
+   grasp_wrist_home). The implementer's check includes the real-pick
+   probe (port its schedule into probes/grasp_geometry's real-pick probe,
+   about an hour) and the step counts against base. Logs per move: the
+   pairs merged, the rests inserted, the steps. Files:
+   test_full_pipeline.py (the move action only), tests/test_slip_carry_
+   trapezoid.py.
+6. `carry_hold_check` (loss_dynamics): after every move made while
+   holding, the executor verifies the hold with the shared helper (both
+   pads in contact; the post-lift check stays contact-only, no 0.5 N
+   floor there) and reports the loss as the action's failure so the
+   dispatcher replans, instead of carrying an empty hand to the goal
+   check; plus the per-carry log line of the finger-width growth over
+   the carry (a metric, never a trigger). Model side (an executor
+   postcondition, like the post-lift re-verify). Expected to move wall and
+   the failure label, not the loss per carry. Files: execution.py or the
+   dispatcher's move action (the implementer decides and says why),
+   tests/test_slip_carry_hold_check.py.
+7. `pad_rolling` (hold_physics, fallback): rollingFriction 0.01 on both
+   finger pads in d9_setup and boxel_env (their create_default_env value;
+   allowlisted if changeDynamics is gated). Implemented in round 2, its
+   arm runs only if force_hold fails. Files: policy.py, boxel_env.py,
+   tests/test_slip_pad_rolling.py.
+
+Implementation rounds (four Opus at a time): round 1 solver_iters,
+force_hold, pose_radius_keep, grasp_wrist_home; round 2 carry_trapezoid,
+carry_hold_check, pad_rolling as slots free. Branches that touch the
+same functions (d9_setup, boxel_env's setup, the allowlist): each adds
+a self-contained block with its switch name in the comment, after the
+existing code, no reordering or reformatting, so the campaign merge is
+clean.
+
+## Arm plan (phase 7), one job per node, base in every job, 3 reps x seeds 0 to 19
+
+- job A: base, solver_iters, solver_iters+force_hold
+- job B: base, pose_radius_keep, pose_radius_keep+grasp_wrist_home
+- job C: base, pose_radius_keep+grasp_wrist_home+carry_trapezoid,
+  carry_hold_check
+- job T: TAMPURA, slip_t.sbatch, 3 reps, seeds 0 to 19
+- after the analysis, job E: base and the combined arm (pose_radius_keep
+  + solver_iters + force_hold + grasp_wrist_home, plus carry_trapezoid
+  and carry_hold_check if their arms did not hurt), 5 reps on the 13
+  seeds of scenes 93 and 90 if the budget allows; pad_rolling (and only
+  then edge_pinch) if force_hold failed.
+- Each job about 6.6 h serial (three arms of 60 episodes); base's four
+  copies measure the node and time variance.
 
 ## Eval design notes
 
