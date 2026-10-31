@@ -1,6 +1,6 @@
 # BF#59 implementation review: grasp_wrist_home (slip/grasp_wrist_home c659e64, b6a0b90)
 
-Reviewed 2026-10-31 20:30 by the orchestrating session from the diff
+Reviewed 2026-10-31 20:08 by the orchestrating session from the diff
 against 05dcaf3 (pose_belief.py +83, streams.py +44, tests +195, the
 probe's scripts and summaries) and the implementer's report
 reviews/impl_grasp_wrist_home.md.
