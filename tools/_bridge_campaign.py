@@ -326,6 +326,16 @@ def episode_t(a, rep, seed, order, scene_map, others, stall_rerun=False):
         rec['n_macro_actions'] = rec['n_actions']   # their actions are macro
         rec['n_dispatched'] = rec['n_actions']
     finish_times(rec, rewards, time_deltas, a.cap)
+    if getattr(a, 'drop_t_history', False) and hist.get('history') and hist.get('pkl'):
+        # BF#59: the record above holds everything the campaign reads from
+        # the pickle; the pickle itself goes (data hygiene, by path).
+        try:
+            size = os.path.getsize(hist['pkl'])
+            os.remove(hist['pkl'])
+            rec['history_dropped'] = {'pkl': hist['pkl'], 'bytes': size}
+            rec['note'] += f"RolloutHistory pickle deleted after reading ({size} bytes); "
+        except OSError as e:
+            rec['note'] += f"RolloutHistory pickle not deleted: {e}; "
     if timed_out:
         rec['status'] = 'killed'
         rec['note'] += f'killed at the {a.cap} s cap; '
@@ -603,6 +613,12 @@ def main():
     ap.add_argument('--arms', default='T,O')
     ap.add_argument('--machine-check', choices=('stop', 'log'), default='stop')
     ap.add_argument('--pythonhashseed', default='0')
+    # BF#59: their per-episode RolloutHistory pickle (12 to 16 MB allocated
+    # each on the cluster) is deleted once its rewards, times and actions are
+    # in the episode's record, so a campaign of 60 T episodes stays under
+    # the cluster's 1 GiB cap (BF#49); the deletion is noted in the record.
+    ap.add_argument('--drop-t-history', action='store_true',
+                    help="delete arm T's RolloutHistory pickle after reading it")
     a = ap.parse_args()
     a.snapshot = os.path.abspath(a.snapshot)
     a.tampura_work = os.path.abspath(a.tampura_work)
