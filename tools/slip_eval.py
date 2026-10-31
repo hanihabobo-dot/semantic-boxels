@@ -57,7 +57,12 @@ MEDIANS = ('wall_s', 'planning_s', 'planning_first_s', 'exec_s', 'plan_calls',
 CARRY_RE = re.compile(r"firm grip on dice")
 LIFT_LOSS_RE = re.compile(r"grip lost after post-pick lift for dice")
 CARRY_LOSS_RE = re.compile(r"grip lost in the carry for dice")
-GOAL_LOSS_RE = re.compile(r"PHYSICAL_FAILURE \(goal\): \(holding dice\)")
+# The goal check's loss is the die believed held and physically not (the
+# two reasons _verify_holding gives for that); its other reasons ("no held
+# object (gripper is empty)" after an acknowledged loss or no pick, a wrong
+# body, an unknown target) are not a lost carry.
+GOAL_LOSS_RE = re.compile(r"PHYSICAL_FAILURE \(goal\): \(holding dice\).{0,4}"
+                          r"(finger-pad contact incomplete|pads touch but squeeze force)")
 PICK_TRY_RE = re.compile(r"Picking dice")
 
 
@@ -139,27 +144,38 @@ def _read_text(path):
         return ''
 
 
-def count_carries(save_dir):
-    """(carries, losses, pick tries) of the die from the run's logs.
+def _glob_text(save_dir, name):
+    return '\n'.join(_read_text(p) for p in
+                     sorted(glob.glob(os.path.join(save_dir, 'ours', 'run_*', name))))
 
-    Each line is counted in ONE file (checked on the campaign's check
-    episodes, 2026-10-31): the driver's stdout.txt holds the curated
-    console (the verified pick "firm grip", the goal check) and the
-    pipeline's console_debug.log holds every pipeline print once (the
-    pick tries and the executor's loss lines); run_*.log repeats the
-    pipeline's prints and lacks the curated lines, so joining the logs
-    counted every loss and pick try twice.  Fallbacks: run_*.log when
-    there is no console_debug.log, then stdout.txt."""
+
+def count_carries(save_dir):
+    """(carries, losses, pick tries) of the die from the run's files, each
+    event counted once (checked on the campaign's check episodes,
+    2026-10-31, tests/test_slip_eval.py):
+
+    - the pipeline's prints (the pick tries, the executor's loss lines, the
+      goal check's line) are read from run_*.log, which holds each once;
+      console_debug.log holds them too but adds a "[console]" echo of every
+      ERROR and action line, so it is the fallback with those lines
+      dropped; the driver's stdout.txt (the curated console, the echoes
+      included, each once) is the last fallback;
+    - the verified pick "firm grip" is a curated line: stdout.txt, or the
+      console log's "[console]" lines without it.
+    Joining the logs, as before 2026-10-31, counted every loss and pick
+    try twice."""
     stdout = _read_text(os.path.join(save_dir, 'stdout.txt'))
-    runs = os.path.join(save_dir, 'ours', 'run_*')
-    pipe = '\n'.join(_read_text(p) for p in sorted(glob.glob(os.path.join(runs, 'console_debug.log'))))
+    console = _glob_text(save_dir, 'console_debug.log')
+    pipe = _glob_text(save_dir, 'run_*.log')
     if not pipe.strip():
-        pipe = '\n'.join(_read_text(p) for p in sorted(glob.glob(os.path.join(runs, 'run_*.log'))))
+        pipe = '\n'.join(l for l in console.splitlines() if '[console]' not in l)
     if not pipe.strip():
         pipe = stdout
-    carries = len(CARRY_RE.findall(stdout if stdout.strip() else pipe))
+    curated = stdout if stdout.strip() else '\n'.join(
+        l for l in console.splitlines() if '[console]' in l)
+    carries = len(CARRY_RE.findall(curated))
     losses = (len(LIFT_LOSS_RE.findall(pipe)) + len(CARRY_LOSS_RE.findall(pipe))
-              + min(1, len(GOAL_LOSS_RE.findall(stdout if stdout.strip() else pipe))))
+              + min(1, len(GOAL_LOSS_RE.findall(pipe))))
     tries = len(PICK_TRY_RE.findall(pipe))
     return carries, losses, tries
 
