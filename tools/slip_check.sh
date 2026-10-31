@@ -19,7 +19,11 @@ export PYTHONPATH=$S:$LIB:$TW/tampura:$TW/tampura_environments
 PY=/root/armO-venvA/bin/python
 OUT=$S/archive/tampura_bridge_plan_2026-10-25/bf/BF59_slip/checks/$(date +%Y-%m-%d_%H-%M-%S)_s${SEED}${FIXES:+_$FIXES}
 mkdir -p $OUT
-echo "== checkout $S  branch $(git -C $S rev-parse --abbrev-ref HEAD) $(git -C $S rev-parse --short HEAD)"
+# The branch from the checkout's HEAD file (WSL git cannot follow a
+# worktree's Windows gitdir; Windows git is the one that manages them).
+GITDIR=$(sed -n 's/^gitdir: //p' $S/.git 2>/dev/null | sed 's#^\([A-Za-z]\):#/mnt/\L\1#')
+[ -z "$GITDIR" ] && GITDIR=$S/.git
+echo "== checkout $S  branch $(sed -n 's#^ref: refs/heads/##p' $GITDIR/HEAD 2>/dev/null)"
 echo "== tests"
 (cd $S && flock $LOCK $PY -m pytest tests -q 2>&1 | tail -4) | tee $OUT/tests.txt
 echo "== bridge tests"
