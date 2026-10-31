@@ -560,6 +560,11 @@ def main(gui=True, run_logger=None, scene_config=None,
     search_initial_complexity = int(getattr(args, 'search_initial_complexity', 3))
     search_options = search_options_from(search_effort_weight,
                                          search_initial_complexity)
+    # BF#59: the die-slip campaign's switches (run_logger's --slip-fixes),
+    # set every run; every fix registered itself at its module's import,
+    # so an unknown name is refused here, before anything runs.
+    import slip_fixes
+    slip_fixes.configure(getattr(args, 'slip_fixes', ''))
     # The two known domains must match the switch (a caller may pass
     # another file deliberately; that one is not judged here).
     _dom = os.path.abspath(domain_file) if domain_file else m8_domain.LIVE_FILE
@@ -569,6 +574,20 @@ def main(gui=True, run_logger=None, scene_config=None,
                          f"M8 {'on' if pose_belief.SWITCHES['M8'] else 'off'}")
     print(f"  model tweaks: {pose_belief.SWITCHES}; domain "
           f"{os.path.basename(domain_file or m8_domain.LIVE_FILE)}")
+    # The curated console's header (a no-op without console_ui installed).
+    _switch_text = ', '.join(f"{k} {'on' if v else 'off'}"
+                             for k, v in pose_belief.SWITCHES.items())
+    console_ui.header(
+        scene=(f"{run_config.get('scene')} seed {run_config.get('seed')}, "
+               f"{run_config.get('n_occluders')} occluders, "
+               f"{run_config.get('n_targets')} targets, "
+               f"{run_config.get('n_hidden')} hidden" if run_config else None),
+        goal=(goal_kind + (f" {target_name}" if target_name else "")
+              + (" at home" if goal_at_home else "")),
+        switches=(f"{_switch_text}, grip squeeze "
+                  f"{robot_utils.GRIP_SQUEEZE * 1000:g} mm, planner "
+                  f"{getattr(args, 'planner', '?')}"
+                  + (f", slip fixes {slip_fixes.spec()}" if slip_fixes.spec() else "")))
 
     # =========================================================
     # PHASE 1: Setup Environment
@@ -1111,7 +1130,8 @@ def main(gui=True, run_logger=None, scene_config=None,
                  switches=dict(pose_belief.SWITCHES,
                                sense_over_region=sense_over_region,
                                search_effort_weight=search_effort_weight,
-                               search_initial_complexity=search_initial_complexity))
+                               search_initial_complexity=search_initial_complexity,
+                               slip_fixes=slip_fixes.spec()))                 # BF#59
     # #P4 B3(d): the scene's reach envelope (None: streams' constants),
     # and D7 (i) to (iii): the home joints, and with a declared goal
     # configuration its init facts and the goal conjunct.
@@ -2932,6 +2952,7 @@ if __name__ == "__main__":
         "n_extra_distractors": args.n_extra_distractors,
         "n_objects":    args.n_objects,
         "seed":         args.seed,
+        "slip_fixes": getattr(args, 'slip_fixes', ''),                               # BF#59
         "goal":         args.goal,
         "stack_height": args.stack_height,
         "unit_costs":   args.unit_costs,

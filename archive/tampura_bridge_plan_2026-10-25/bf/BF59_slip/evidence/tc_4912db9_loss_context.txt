@@ -1,0 +1,1201 @@
+
+===== seed 1 arm base wall 46.7 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   20: ● Going home … done  (0.5 s)
+   23:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   26:   ⎿ I have a firm grip on a_cups_ud: its half-width is 25.5 mm, I expected 28.3 mm
+   30: ● Going home … done  (0.5 s)
+   33:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   37:   ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   40:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.7 mm, I expected 36.8 mm
+   47: ● Going home … done  (0.4 s)
+   50:   ⎿ I will pick up dice, then come home
+   53:   ⎿ I have a firm grip on dice: its half-width is 10.6 mm, I expected 8.8 mm
+   55: ● Going home … done  (0.4 s)
+   56: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   58: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   72: seed 1: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/base/seed01
+  --- tail ---
+         ledger   PASS  182 rows, complete
+         G3       PASS  23 steps over 5 plans, all as planned; 4 labelled early ends
+         G4       PASS  3 places at the planned centre
+         G5       PASS  planned_sense_render=6
+         G15      PASS  3 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.027 s (initialize_call +0.002 s, initialize_return +5.956 s, scene_map_asserted +0.013 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.013 s, rol
+         G19h     PASS  seed 1, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  5 solve calls, 5 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 7252}
+       seed 1: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/base/seed01
+
+===== seed 2 arm 1 wall 79.2 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   18: ● Going home … done  (0.5 s)
+   21:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   24:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   30: ● Going home … done  (0.4 s)
+   33:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   37:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   40:   ⎿ I have a firm grip on d_cups_ud: its half-width is 33.2 mm, I expected 34.9 mm
+   46: ● Going home … done  (0.4 s)
+   49:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   53:   ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   56:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.4 mm, I expected 36.8 mm
+   63: ● Moving to the space behind e_cups_ud … done  (0.3 s)
+   66:   ⎿ I will pick up dice, then come home
+   69:   ⎿ I have a firm grip on dice: its half-width is 10.0 mm, I expected 8.7 mm
+   71: ● Going home … done  (0.4 s)
+   72: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   74: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   88: seed 2: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/1/seed02
+  --- tail ---
+         ledger   PASS  248 rows, complete
+         G3       PASS  31 steps over 7 plans, all as planned; 6 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=8
+         G15      PASS  4 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.026 s (initialize_call +0.002 s, initialize_return +5.874 s, scene_map_asserted +0.012 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.013 s, rol
+         G19h     PASS  seed 2, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  7 solve calls, 7 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 9015}
+       seed 2: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/1/seed02
+
+===== seed 2 arm 2 wall 65.4 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   20: ● Going home … done  (0.4 s)
+   23:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   26:   ⎿ I have a firm grip on a_cups_ud: its half-width is 25.5 mm, I expected 28.3 mm
+   32: ● Going home … done  (0.4 s)
+   35:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   39:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   42:   ⎿ I have a firm grip on d_cups_ud: its half-width is 33.1 mm, I expected 34.8 mm
+   46: ● Going home … done  (0.4 s)
+   49:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   53:   ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   56:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.4 mm, I expected 36.8 mm
+   63: ● Going home … done  (0.4 s)
+   66:   ⎿ I will pick up dice, then come home
+   69:   ⎿ I have a firm grip on dice: its half-width is 10.1 mm, I expected 8.3 mm
+   71: ● Going home … done  (0.4 s)
+   72: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   74: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   88: seed 2: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/2/seed02
+  --- tail ---
+         ledger   PASS  237 rows, complete
+         G3       PASS  31 steps over 7 plans, all as planned; 6 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=8
+         G15      PASS  4 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.027 s (initialize_call +0.002 s, initialize_return +6.000 s, scene_map_asserted +0.013 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.013 s, rol
+         G19h     PASS  seed 2, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  7 solve calls, 7 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 9419}
+       seed 2: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/2/seed02
+
+===== seed 2 arm 12 wall 82.8 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   18: ● Going home … done  (0.5 s)
+   21:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   24:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   30: ● Going home … done  (0.5 s)
+   33:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   37:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   40:   ⎿ I have a firm grip on d_cups_ud: its half-width is 33.2 mm, I expected 34.9 mm
+   46: ● Going home … done  (0.4 s)
+   49:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   53:   ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   56:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.4 mm, I expected 36.8 mm
+   61: ● Going home … done  (0.4 s)
+   64:   ⎿ I will pick up dice, then come home
+   67:   ⎿ I have a firm grip on dice: its half-width is 10.0 mm, I expected 8.7 mm
+   69: ● Going home … done  (0.4 s)
+   70: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   72: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   86: seed 2: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/12/seed02
+  --- tail ---
+         ledger   PASS  249 rows, complete
+         G3       PASS  31 steps over 7 plans, all as planned; 6 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=8
+         G15      PASS  4 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.027 s (initialize_call +0.002 s, initialize_return +5.950 s, scene_map_asserted +0.013 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.014 s, rol
+         G19h     PASS  seed 2, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  7 solve calls, 7 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 9241}
+       seed 2: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/12/seed02
+
+===== seed 3 arm base wall 64.7 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   20: ● Going home … done  (0.5 s)
+   23:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   26:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   32: ● Going home … done  (0.6 s)
+   35:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   39:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   42:   ⎿ I have a firm grip on d_cups_ud: its half-width is 33.1 mm, I expected 34.9 mm
+   48: ● Going home … done  (0.6 s)
+   51:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   55:   ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   58:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.7 mm, I expected 36.8 mm
+   63: ● Going home … done  (0.4 s)
+   66:   ⎿ I will pick up dice, then come home
+   69:   ⎿ I have a firm grip on dice: its half-width is 10.5 mm, I expected 8.8 mm
+   71: ● Going home … done  (0.4 s)
+   72: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   74: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   88: seed 3: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/base/seed03
+  --- tail ---
+         ledger   PASS  233 rows, complete
+         G3       PASS  31 steps over 7 plans, all as planned; 6 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=8
+         G15      PASS  4 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.027 s (initialize_call +0.002 s, initialize_return +5.897 s, scene_map_asserted +0.013 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.013 s, rol
+         G19h     PASS  seed 3, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  7 solve calls, 7 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 9303}
+       seed 3: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/base/seed03
+
+===== seed 3 arm 2 wall 64.8 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   20: ● Going home … done  (0.5 s)
+   23:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   26:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   32: ● Going home … done  (0.6 s)
+   35:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   39:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   42:   ⎿ I have a firm grip on d_cups_ud: its half-width is 33.1 mm, I expected 34.9 mm
+   48: ● Going home … done  (0.6 s)
+   51:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   55:   ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   58:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.7 mm, I expected 36.8 mm
+   64: ⚠ ERROR: drop verification failed for e_cups_ud after place — the observation disagrees; aborting (#P1 WP2b)
+   67:   ⎿ I will pick up dice, then come home
+   70:   ⎿ I have a firm grip on dice: its half-width is 10.6 mm, I expected 8.8 mm
+   72: ● Going home …
+   75: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   77: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   91: seed 3: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/2/seed03
+  --- tail ---
+         ledger   PASS  223 rows, complete
+         G3       PASS  29 steps over 7 plans, all as planned; 6 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=6
+         G15      PASS  3 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.027 s (initialize_call +0.002 s, initialize_return +5.956 s, scene_map_asserted +0.013 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.014 s, rol
+         G19h     PASS  seed 3, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  7 solve calls, 7 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 8695}
+       seed 3: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/2/seed03
+
+===== seed 4 arm 12 wall 72.9 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   18: ● Going home … done  (0.5 s)
+   21:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   24:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   28: ● Going home … done  (0.4 s)
+   31:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   35:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   38:   ⎿ I have a firm grip on d_cups_ud: its half-width is 32.8 mm, I expected 34.9 mm
+   42: ● Going home … done  (0.5 s)
+   45:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   49:   ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   52:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.3 mm, I expected 36.8 mm
+   57: ● Going home … done  (0.3 s)
+   60:   ⎿ I will pick up dice, then come home
+   63:   ⎿ I have a firm grip on dice: its half-width is 10.3 mm, I expected 9.6 mm
+   65: ● Going home … done  (0.4 s)
+   66: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   68: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   82: seed 4: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/12/seed04
+  --- tail ---
+         ledger   PASS  250 rows, complete
+         G3       PASS  31 steps over 7 plans, all as planned; 6 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=8
+         G15      PASS  4 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.026 s (initialize_call +0.002 s, initialize_return +5.872 s, scene_map_asserted +0.012 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.013 s, rol
+         G19h     PASS  seed 4, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  7 solve calls, 7 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 9072}
+       seed 4: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/12/seed04
+
+===== seed 5 arm 1 wall 139.7 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will look behind a_cups_ud for dice, pick up dice, then come home
+   14:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   17:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.5 mm, I expected 28.3 mm
+   21: ● Moving to the space behind a_cups_ud … done  (0.4 s)
+   24:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   27:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.3 mm
+   31: ● Going home … done  (0.4 s)
+   34:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   38:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   42:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   46:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   50:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   54:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   58:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   62:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   66:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   70:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   74:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   78:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   82:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   86:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   90:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   94:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   98:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  102:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  106:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  110:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  113:   ⎿ I have a firm grip on d_cups_ud: its half-width is 33.2 mm, I expected 34.6 mm
+  120: ● Going home … done  (0.3 s)
+  123:   ⎿ I will pick up dice, then come home
+  126:   ⎿ I have a firm grip on dice: its half-width is 10.3 mm, I expected 9.6 mm
+  128: ● Going home … done  (0.4 s)
+  129: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+  131: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+  145: seed 5: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/1/seed05
+  --- tail ---
+         ledger   PASS  524 rows, complete
+         G3       PASS  60 steps over 24 plans, all as planned; 23 labelled early ends
+         G4       PASS  3 places at the planned centre
+         G5       PASS  planned_sense_render=8
+         G15      PASS  4 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.026 s (initialize_call +0.002 s, initialize_return +5.934 s, scene_map_asserted +0.013 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.013 s, rol
+         G19h     PASS  seed 5, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  24 solve calls, 24 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 12262}
+       seed 5: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/1/seed05
+
+===== seed 5 arm 2 wall 41.0 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will look behind a_cups_ud for dice, pick up dice, then come home
+   14:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   17:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.5 mm, I expected 28.3 mm
+   21: ● Going home … done  (0.4 s)
+   24:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   27:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.3 mm
+   33: ● Going home … done  (0.4 s)
+   36:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   40:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   43:   ⎿ I have a firm grip on d_cups_ud: its half-width is 32.7 mm, I expected 34.7 mm
+   48: ● Going home …
+   52:   ⎿ I will pick up dice, then come home
+   55:   ⎿ I have a firm grip on dice: its half-width is 10.6 mm, I expected 9.4 mm
+   57: ● Going home … done  (0.4 s)
+   58: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   60: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   74: seed 5: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/2/seed05
+  --- tail ---
+         ledger   PASS  182 rows, complete
+         G3       PASS  23 steps over 6 plans, all as planned; 5 labelled early ends
+         G4       PASS  3 places at the planned centre
+         G5       PASS  planned_sense_render=6
+         G15      PASS  3 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.026 s (initialize_call +0.002 s, initialize_return +5.939 s, scene_map_asserted +0.012 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.013 s, rol
+         G19h     PASS  seed 5, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  6 solve calls, 6 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 7598}
+       seed 5: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/2/seed05
+
+===== seed 10 arm base wall 130.3 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will look behind a_cups_ud for dice, pick up dice, then come home
+   14:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   17:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.5 mm, I expected 28.3 mm
+   23: ● Going home … done  (0.4 s)
+   26:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   29:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.3 mm
+   33: ● Going home … done  (0.4 s)
+   36:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   40:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   44:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   48:   ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   51:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.7 mm, I expected 37.2 mm
+   55: ⚠ ERROR: drop verification failed for e_cups_ud after place — aborting (audit #75/#80)
+   58:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   63:   ⎿ I will look behind e_cups_ud for dice, pick up dice, then come home
+   66:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   70:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   74:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   78:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   82:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   86:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   90:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   94:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   98:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  102:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  106:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  110:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  114:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  118:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  122:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  126:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  130:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  134:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  138:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  142:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  146:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  150:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  154:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  158:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  161:   ⎿ I have a firm grip on d_cups_ud: its half-width is 32.7 mm, I expected 34.6 mm
+  168: ● Going home … done  (0.4 s)
+  171:   ⎿ I will pick up dice, then come home
+  174:   ⎿ I have a firm grip on dice: its half-width is 10.2 mm, I expected 9.9 mm
+  176: ● Going home … done  (0.4 s)
+  177: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+  179: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+  193: seed 10: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/base/seed10
+  --- tail ---
+         ledger   PASS  656 rows, complete
+         G3       PASS  80 steps over 34 plans, all as planned; 33 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=10
+         G15      PASS  5 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.026 s (initialize_call +0.002 s, initialize_return +5.969 s, scene_map_asserted +0.012 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.013 s, rol
+         G19h     PASS  seed 10, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  34 solve calls, 34 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 17858}
+       seed 10: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/base/seed10
+
+===== seed 14 arm base wall 46.1 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   18: ● Going home … done  (0.5 s)
+   21:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   24:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   28: ● Going home … done  (0.5 s)
+   31:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   35:   ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   38:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.7 mm, I expected 36.8 mm
+   45: ● Going home … done  (0.4 s)
+   48:   ⎿ I will pick up dice, then come home
+   51:   ⎿ I have a firm grip on dice: its half-width is 10.4 mm, I expected 9.1 mm
+   53: ● Going home … done  (0.4 s)
+   54: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   56: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   70: seed 14: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/base/seed14
+  --- tail ---
+         ledger   PASS  182 rows, complete
+         G3       PASS  23 steps over 5 plans, all as planned; 4 labelled early ends
+         G4       PASS  3 places at the planned centre
+         G5       PASS  planned_sense_render=6
+         G15      PASS  3 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.028 s (initialize_call +0.002 s, initialize_return +6.245 s, scene_map_asserted +0.014 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.014 s, rol
+         G19h     PASS  seed 14, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  5 solve calls, 5 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 7058}
+       seed 14: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/base/seed14
+
+===== seed 14 arm 2 wall 65.1 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   20: ● Going home … done  (0.4 s)
+   23:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   26:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   30: ● Going home … done  (0.5 s)
+   33:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   37:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   40:   ⎿ I have a firm grip on d_cups_ud: its half-width is 33.2 mm, I expected 34.9 mm
+   46: ● Going home … done  (0.5 s)
+   49:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   53:   ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   56:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.4 mm, I expected 36.8 mm
+   64: ● Going home … done  (0.4 s)
+   67:   ⎿ I will pick up dice, then come home
+   70:   ⎿ I have a firm grip on dice: its half-width is 10.6 mm, I expected 9.7 mm
+   72: ● Going home … done  (0.6 s)
+   73: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   75: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   89: seed 14: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/2/seed14
+  --- tail ---
+         ledger   PASS  237 rows, complete
+         G3       PASS  31 steps over 7 plans, all as planned; 6 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=8
+         G15      PASS  4 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.027 s (initialize_call +0.002 s, initialize_return +5.883 s, scene_map_asserted +0.013 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.014 s, rol
+         G19h     PASS  seed 14, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  7 solve calls, 7 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 9846}
+       seed 14: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/2/seed14
+
+===== seed 15 arm 1 wall 82.6 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   20: ● Going home … done  (0.4 s)
+   23:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   26:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   30: ● Going home … done  (0.4 s)
+   33:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   37:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   40:   ⎿ I have a firm grip on d_cups_ud: its half-width is 32.8 mm, I expected 34.9 mm
+   44: ● Going home … done  (0.4 s)
+   47:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   51:   ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   54:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.4 mm, I expected 36.8 mm
+   59: ● Moving to the space behind e_cups_ud … done  (0.3 s)
+   62:   ⎿ I will pick up dice, then come home
+   65:   ⎿ I have a firm grip on dice: its half-width is 10.1 mm, I expected 8.8 mm
+   67: ● Going home … done  (0.5 s)
+   68: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — pads touch but squeeze force 0.42 N < 0.5 N — a graze, not a grasp
+   70: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   84: seed 15: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/1/seed15
+  --- tail ---
+         ledger   PASS  249 rows, complete
+         G3       PASS  31 steps over 7 plans, all as planned; 6 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=8
+         G15      PASS  4 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.027 s (initialize_call +0.002 s, initialize_return +5.897 s, scene_map_asserted +0.013 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.013 s, rol
+         G19h     PASS  seed 15, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  7 solve calls, 7 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 9141}
+       seed 15: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/1/seed15
+
+===== seed 15 arm 12 wall 88.4 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   20: ● Going home … done  (0.4 s)
+   23:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   26:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   32: ● Going home … done  (0.5 s)
+   35:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   39:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   42:   ⎿ I have a firm grip on d_cups_ud: its half-width is 33.1 mm, I expected 34.9 mm
+   48: ● Going home … done  (0.5 s)
+   51:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   55:   ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   58:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.4 mm, I expected 36.8 mm
+   63: ● Going home … done  (0.4 s)
+   66:   ⎿ I will pick up dice, then come home
+   69:   ⎿ I have a firm grip on dice: its half-width is 10.1 mm, I expected 9.3 mm
+   71: ● Going home … done  (0.4 s)
+   72: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   74: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   88: seed 15: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/12/seed15
+  --- tail ---
+         ledger   PASS  250 rows, complete
+         G3       PASS  31 steps over 7 plans, all as planned; 6 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=8
+         G15      PASS  4 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.027 s (initialize_call +0.002 s, initialize_return +5.928 s, scene_map_asserted +0.013 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.013 s, rol
+         G19h     PASS  seed 15, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  7 solve calls, 7 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 8913}
+       seed 15: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/12/seed15
+
+===== seed 17 arm 2 wall 102.5 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will look behind a_cups_ud for dice, pick up dice, then come home
+   14:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   17:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.5 mm, I expected 28.3 mm
+   23: ● Going home … done  (0.4 s)
+   26:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   29:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.3 mm
+   35: ● Going home … done  (0.4 s)
+   38:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   42:   ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   45:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.7 mm, I expected 36.8 mm
+   49: ● Going home … done  (0.4 s)
+   52:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   56:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   60:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   64:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   68:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   72:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   76:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   80:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   84:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   88:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   92:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   96:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  100:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  104:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  108:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  112:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  116:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  120:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  124:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  128:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  131:   ⎿ I have a firm grip on d_cups_ud: its half-width is 33.1 mm, I expected 34.6 mm
+  139: ● Going home … done  (0.3 s)
+  142:   ⎿ I will pick up dice, then come home
+  145:   ⎿ I have a firm grip on dice: its half-width is 10.2 mm, I expected 9.4 mm
+  147: ● Going home … done  (0.4 s)
+  148: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+  150: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+  164: seed 17: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/2/seed17
+  --- tail ---
+         ledger   PASS  535 rows, complete
+         G3       PASS  68 steps over 26 plans, all as planned; 25 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=10
+         G15      PASS  5 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.028 s (initialize_call +0.002 s, initialize_return +6.551 s, scene_map_asserted +0.013 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.014 s, rol
+         G19h     PASS  seed 17, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  26 solve calls, 26 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 15584}
+       seed 17: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/2/seed17
+
+===== seed 17 arm 12 wall 333.0 outcome failure (physics_mismatch) =====
+  140:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  144:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  148:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  152:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  156:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  160:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  164:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  168:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  172:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  176:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  180:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  184:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  188:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  192:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  196:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  200:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  204:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  208:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  212:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  216:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  220:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  224:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  228:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  232:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  236:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  240:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  244:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  248:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  252:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  256:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  260:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  264:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  268:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  272:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  276:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  280:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  284:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  288:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  292:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  296:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  300:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  304:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  308:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  312:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  316:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  320:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  324:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  328:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  332:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  336:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  340:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  344:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  347:   ⎿ I have a firm grip on d_cups_ud: its half-width is 33.2 mm, I expected 34.6 mm
+  353: ⚠ ERROR: drop verification failed for d_cups_ud after place — the observation disagrees; aborting (#P1 WP2b)
+  356:   ⎿ I will pick up dice, then come home
+  359:   ⎿ I have a firm grip on dice: its half-width is 10.1 mm, I expected 10.0 mm
+  361: ● Going home …
+  364: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+  366: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+  380: seed 17: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/12/seed17
+  --- tail ---
+         ledger   PASS  1473 rows, complete
+         G3       PASS  174 steps over 80 plans, all as planned; 79 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=8
+         G15      PASS  4 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.029 s (initialize_call +0.002 s, initialize_return +6.407 s, scene_map_asserted +0.015 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.013 s, rol
+         G19h     PASS  seed 17, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  80 solve calls, 80 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 30691}
+       seed 17: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/12/seed17
+
+===== seed 18 arm 12 wall 84.8 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   20: ● Going home … done  (0.4 s)
+   23:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   26:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   32: ● Going home … done  (0.4 s)
+   35:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   39:   ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   42:   ⎿ I have a firm grip on d_cups_ud: its half-width is 33.1 mm, I expected 34.9 mm
+   48: ● Going home … done  (0.5 s)
+   51:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   55:   ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   58:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.4 mm, I expected 36.8 mm
+   63: ● Going home … done  (0.4 s)
+   66:   ⎿ I will pick up dice, then come home
+   69:   ⎿ I have a firm grip on dice: its half-width is 10.5 mm, I expected 9.7 mm
+   71: ● Going home … done  (0.4 s)
+   72: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   74: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   88: seed 18: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/12/seed18
+  --- tail ---
+         ledger   PASS  249 rows, complete
+         G3       PASS  31 steps over 7 plans, all as planned; 6 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=8
+         G15      PASS  4 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.031 s (initialize_call +0.002 s, initialize_return +6.624 s, scene_map_asserted +0.013 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.018 s, rol
+         G19h     PASS  seed 18, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  7 solve calls, 7 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 9126}
+       seed 18: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990957/12/seed18
+
+===== seed 1 arm 3 wall 52.3 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   20: ● Going home … done  (0.5 s)
+   23:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   26:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   32: ● Going home … done  (0.6 s)
+   35:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   40:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.4 mm, I expected 36.8 mm
+   47: ● Going home … done  (0.4 s)
+   50:   ⎿ I will pick up dice, then come home
+   53:   ⎿ I have a firm grip on dice: its half-width is 10.1 mm, I expected 9.3 mm
+   55: ● Going home … done  (0.4 s)
+   56: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   58: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   72: seed 1: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/3/seed01
+  --- tail ---
+         ledger   PASS  174 rows, complete
+         G3       PASS  23 steps over 4 plans, all as planned; 3 labelled early ends
+         G4       PASS  3 places at the planned centre
+         G5       PASS  planned_sense_render=6
+         G15      PASS  3 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.029 s (initialize_call +0.002 s, initialize_return +6.636 s, scene_map_asserted +0.014 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.015 s, rol
+         G19h     PASS  seed 1, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  4 solve calls, 4 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 6847}
+       seed 1: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/3/seed01
+
+===== seed 3 arm 3 wall 77.7 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   20: ● Going home … done  (0.4 s)
+   23:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   26:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   31: ⚠ ERROR: drop verification failed for b_cups_ud after place — the observation disagrees; aborting (#P1 WP2b)
+   34:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   39:   ⎿ I will look behind b_cups_ud for dice, pick up dice, then come home
+   42:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   46:   ⎿ I have a firm grip on d_cups_ud: its half-width is 29.3 mm, I expected 34.9 mm
+   50: ⚠ ERROR: drop verification failed for d_cups_ud after place — aborting (audit #75/#80)
+   53:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   58:   ⎿ I will look behind d_cups_ud for dice, pick up dice, then come home
+   61:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   66:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.4 mm, I expected 36.8 mm
+   73: ● Going home … done  (0.4 s)
+   76:   ⎿ I will pick up dice, then come home
+   79:   ⎿ I have a firm grip on dice: its half-width is 10.2 mm, I expected 9.9 mm
+   81: ● Going home … done  (0.4 s)
+   82: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   84: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   98: seed 3: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/3/seed03
+  --- tail ---
+         ledger   PASS  263 rows, complete
+         G3       PASS  30 steps over 9 plans, all as planned; 8 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=8
+         G15      PASS  4 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.029 s (initialize_call +0.002 s, initialize_return +6.389 s, scene_map_asserted +0.014 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.015 s, rol
+         G19h     PASS  seed 3, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  9 solve calls, 9 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 8886}
+       seed 3: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/3/seed03
+
+===== seed 4 arm 1234 wall 42.3 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   20: ● Going home … done  (0.5 s)
+   23:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   26:   ⎿ I have a firm grip on b_cups_ud: its half-width is 27.9 mm, I expected 30.0 mm
+   30: ● Going home … done  (0.5 s)
+   33:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   38:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.4 mm, I expected 36.8 mm
+   45: ● Moving to the space behind e_cups_ud … done  (0.4 s)
+   48:   ⎿ I will pick up dice, then come home
+   51:   ⎿ I have a firm grip on dice: its half-width is 10.1 mm, I expected 9.9 mm
+   53: ● Going home … done  (0.4 s)
+   54: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   56: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   70: seed 4: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/1234/seed04
+  --- tail ---
+         ledger   PASS  184 rows, complete
+         G3       PASS  23 steps over 4 plans, all as planned; 3 labelled early ends
+         G4       PASS  3 places at the planned centre
+         G5       PASS  planned_sense_render=6
+         G15      PASS  3 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.030 s (initialize_call +0.002 s, initialize_return +6.402 s, scene_map_asserted +0.015 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.015 s, rol
+         G19h     PASS  seed 4, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  4 solve calls, 4 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 6972}
+       seed 4: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/1234/seed04
+
+===== seed 5 arm 4 wall 80.4 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will look behind a_cups_ud for dice, pick up dice, then come home
+   14:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   17:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.5 mm, I expected 28.3 mm
+   23: ● Going home … done  (0.4 s)
+   26:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   29:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.3 mm
+   33: ● Going home … done  (0.4 s)
+   36:   ⎿ I will look closer at d_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   40:   ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   43:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.4 mm, I expected 37.2 mm
+   49: ● Going home … done  (0.4 s)
+   52:   ⎿ I will look closer at d_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   56:   ⎿ I will pick up d_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   60:   ⎿ I will look closer at d_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   64:   ⎿ I will pick up d_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   68:   ⎿ I will look closer at d_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   72:   ⎿ I will pick up d_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   76:   ⎿ I will look closer at d_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   80:   ⎿ I will pick up d_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   84:   ⎿ I will look closer at d_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   88:   ⎿ I will pick up d_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   92:   ⎿ I will look closer at d_cups_ud, go to the space behind d_cups_ud, come home, pick it up, come home, set it down on a free spot, look behind it for dice, then and 2 more steps
+   96:   ⎿ I will pick up d_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   99:   ⎿ I have a firm grip on d_cups_ud: its half-width is 32.7 mm, I expected 34.6 mm
+  102: ● Going home … done  (0.6 s)
+  106:   ⎿ failed: my hand was empty at the place, I lost it on the way, loss 1 of 3, replanning  (0.3 s)
+  108:   ⎿ I will pick up dice, then come home
+  111:   ⎿ I have a firm grip on dice: its half-width is 10.3 mm, I expected 9.5 mm
+  113: ● Going home … done  (0.5 s)
+  114: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+  116: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+  130: seed 5: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/4/seed05
+  --- tail ---
+         ledger   PASS  406 rows, complete
+         G3       PASS  51 steps over 18 plans, all as planned; 17 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=8
+         G15      PASS  4 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.030 s (initialize_call +0.002 s, initialize_return +6.821 s, scene_map_asserted +0.015 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.015 s, rol
+         G19h     PASS  seed 5, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  18 solve calls, 18 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 12759}
+       seed 5: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/4/seed05
+
+===== seed 8 arm 3 wall 54.1 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   20: ● Going home … done  (0.5 s)
+   23:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   26:   ⎿ I have a firm grip on a_cups_ud: its half-width is 25.5 mm, I expected 28.3 mm
+   30: ● Going home … done  (0.5 s)
+   33:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   38:   ⎿ I have a firm grip on d_cups_ud: its half-width is 33.1 mm, I expected 34.9 mm
+   44: ● Going home … done  (0.5 s)
+   47:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   52:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.7 mm, I expected 36.8 mm
+   59: ● Going home … done  (0.4 s)
+   62:   ⎿ I will pick up dice, then come home
+   65:   ⎿ I have a firm grip on dice: its half-width is 9.9 mm, I expected 8.6 mm
+   67: ● Going home … done  (0.4 s)
+   68: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   70: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   84: seed 8: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/3/seed08
+  --- tail ---
+         ledger   PASS  221 rows, complete
+         G3       PASS  31 steps over 5 plans, all as planned; 4 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=8
+         G15      PASS  4 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.028 s (initialize_call +0.002 s, initialize_return +6.235 s, scene_map_asserted +0.014 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.014 s, rol
+         G19h     PASS  seed 8, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  5 solve calls, 5 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 9309}
+       seed 8: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/3/seed08
+
+===== seed 8 arm 4 wall 33.4 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up b_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   16: ● Going home … done  (0.5 s)
+   20:   ⎿ failed: my hand was empty at the place, I lost it on the way, loss 1 of 3, replanning  (0.3 s)
+   22:   ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   26:   ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   29:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.7 mm, I expected 36.8 mm
+   32: ● Going home … done  (0.6 s)
+   35: ⚠ ERROR: drop verification failed for e_cups_ud after place — aborting (audit #75/#80)
+   38:   ⎿ I will pick up dice, then come home
+   41:   ⎿ I have a firm grip on dice: its half-width is 10.1 mm, I expected 9.3 mm
+   43: ● Going home …
+   46: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   48: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   62: seed 8: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/4/seed08
+  --- tail ---
+         ledger   PASS  124 rows, complete
+         G3       PASS  15 steps over 4 plans, all as planned; 3 labelled early ends
+         G4       PASS  2 places at the planned centre
+         G5       PASS  no fragment change
+         G15      PASS  0 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.029 s (initialize_call +0.002 s, initialize_return +6.354 s, scene_map_asserted +0.014 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.015 s, rol
+         G19h     PASS  seed 8, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  4 solve calls, 4 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 5560}
+       seed 8: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/4/seed08
+
+===== seed 8 arm 1234 wall 42.1 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   20: ● Going home … done  (0.5 s)
+   23:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   26:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   30: ● Going home … done  (0.5 s)
+   33:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   38:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.4 mm, I expected 36.8 mm
+   43: ● Moving to the space behind e_cups_ud … done  (0.4 s)
+   46:   ⎿ I will pick up dice, then come home
+   49:   ⎿ I have a firm grip on dice: its half-width is 10.4 mm, I expected 9.6 mm
+   51: ● Going home … done  (0.5 s)
+   52: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   54: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   68: seed 8: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/1234/seed08
+  --- tail ---
+         ledger   PASS  184 rows, complete
+         G3       PASS  23 steps over 4 plans, all as planned; 3 labelled early ends
+         G4       PASS  3 places at the planned centre
+         G5       PASS  planned_sense_render=6
+         G15      PASS  3 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.029 s (initialize_call +0.002 s, initialize_return +6.319 s, scene_map_asserted +0.014 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.015 s, rol
+         G19h     PASS  seed 8, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  4 solve calls, 4 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 6817}
+       seed 8: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/1234/seed08
+
+===== seed 10 arm 1234 wall 106.1 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will look behind a_cups_ud for dice, pick up dice, then come home
+   14:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   17:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.5 mm, I expected 28.3 mm
+   21: ● Moving to the space behind a_cups_ud … done  (0.4 s)
+   24:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   27:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.3 mm
+   33: ● Moving to the space behind b_cups_ud … done  (0.4 s)
+   36:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   41:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.7 mm, I expected 36.8 mm
+   47: ● Moving to the space behind e_cups_ud … done  (0.6 s)
+   50:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   56:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   62:   ⎿ I will look closer at d_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   68:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   74:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   80:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   86:   ⎿ I will look closer at d_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   92:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   98:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  104:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  110:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  116:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  122:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  128:   ⎿ I will look closer at d_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  134:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  139:   ⎿ I have a firm grip on d_cups_ud: its half-width is 33.2 mm, I expected 35.0 mm
+  145: ⚠ ERROR: drop verification failed for d_cups_ud after place — the observation disagrees; aborting (#P1 WP2b)
+  148:   ⎿ I will pick up dice, then come home
+  151:   ⎿ I have a firm grip on dice: its half-width is 10.2 mm, I expected 9.9 mm
+  153: ● Going home … done  (0.5 s)
+  154: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+  156: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+  170: seed 10: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/1234/seed10
+  --- tail ---
+         ledger   PASS  536 rows, complete
+         G3       PASS  86 steps over 20 plans, all as planned; 19 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=8
+         G15      PASS  4 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.031 s (initialize_call +0.002 s, initialize_return +6.736 s, scene_map_asserted +0.015 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.015 s, rol
+         G19h     PASS  seed 10, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  20 solve calls, 20 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 16959}
+       seed 10: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/1234/seed10
+
+===== seed 13 arm 1234 wall 17.1 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will look closer at d_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   16:   ⎿ I have a firm grip on d_cups_ud: its half-width is 33.1 mm, I expected 35.0 mm
+   18: ● Going home …
+   23: ⚠ ERROR: drop verification failed for d_cups_ud after place — aborting (audit #75/#80)
+   26:   ⎿ I will pick up dice, then come home
+   29:   ⎿ I have a firm grip on dice: its half-width is 10.0 mm, I expected 8.0 mm
+   31: ● Going home …
+   34: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   36: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   50: seed 13: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/1234/seed13
+  --- tail ---
+         ledger   PASS  78 rows, complete
+         G3       PASS  10 steps over 2 plans, all as planned; 1 labelled early ends
+         G4       PASS  1 places at the planned centre
+         G5       PASS  no fragment change
+         G15      PASS  0 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.030 s (initialize_call +0.002 s, initialize_return +3.639 s, scene_map_asserted +0.014 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.015 s, rol
+         G19h     PASS  seed 13, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  2 solve calls, 2 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 3668}
+       seed 13: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/1234/seed13
+
+===== seed 14 arm 1234 wall 42.8 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   18: ● Going home … done  (0.5 s)
+   21:   ⎿ I will pick up b_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   24:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   26: ● Going home … done  (0.6 s)
+   31: ● Going home … done  (0.6 s)
+   34:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   39:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.7 mm, I expected 36.8 mm
+   46: ● Moving to the space behind e_cups_ud … done  (0.4 s)
+   49:   ⎿ I will pick up dice, then come home
+   52:   ⎿ I have a firm grip on dice: its half-width is 10.3 mm, I expected 9.0 mm
+   54: ● Going home … done  (0.5 s)
+   55: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   57: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   71: seed 14: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/1234/seed14
+  --- tail ---
+         ledger   PASS  189 rows, complete
+         G3       PASS  24 steps over 4 plans, all as planned; 3 labelled early ends
+         G4       PASS  3 places at the planned centre
+         G5       PASS  planned_sense_render=6
+         G15      PASS  3 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.029 s (initialize_call +0.003 s, initialize_return +6.303 s, scene_map_asserted +0.014 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.015 s, rol
+         G19h     PASS  seed 14, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  4 solve calls, 4 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 7302}
+       seed 14: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/1234/seed14
+
+===== seed 15 arm 3 wall 61.1 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   20: ● Going home … done  (0.5 s)
+   23:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   26:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   30: ● Going home … done  (0.5 s)
+   33:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   38:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.7 mm, I expected 36.8 mm
+   45: ● Going home … done  (0.4 s)
+   48:   ⎿ I will pick up dice, then come home
+   51:   ⎿ I have a firm grip on dice: its half-width is 10.4 mm, I expected 8.7 mm
+   53: ● Going home … done  (0.4 s)
+   54: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   56: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   70: seed 15: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/3/seed15
+  --- tail ---
+         ledger   PASS  173 rows, complete
+         G3       PASS  23 steps over 4 plans, all as planned; 3 labelled early ends
+         G4       PASS  3 places at the planned centre
+         G5       PASS  planned_sense_render=6
+         G15      PASS  3 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.028 s (initialize_call +0.002 s, initialize_return +6.326 s, scene_map_asserted +0.013 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.015 s, rol
+         G19h     PASS  seed 15, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  4 solve calls, 4 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 7060}
+       seed 15: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/3/seed15
+
+===== seed 15 arm 1234 wall 38.3 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 30.0 mm
+   20: ● Going home … done  (0.4 s)
+   23:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   26:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   30: ● Going home … done  (0.4 s)
+   33:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   38:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.4 mm, I expected 36.8 mm
+   43: ● Moving to the space behind e_cups_ud … done  (0.3 s)
+   46:   ⎿ I will pick up dice, then come home
+   49:   ⎿ I have a firm grip on dice: its half-width is 10.4 mm, I expected 9.6 mm
+   51: ● Going home … done  (0.4 s)
+   52: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   54: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   68: seed 15: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/1234/seed15
+  --- tail ---
+         ledger   PASS  184 rows, complete
+         G3       PASS  23 steps over 4 plans, all as planned; 3 labelled early ends
+         G4       PASS  3 places at the planned centre
+         G5       PASS  planned_sense_render=6
+         G15      PASS  3 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.027 s (initialize_call +0.002 s, initialize_return +6.150 s, scene_map_asserted +0.013 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.014 s, rol
+         G19h     PASS  seed 15, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  4 solve calls, 4 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 6824}
+       seed 15: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/1234/seed15
+
+===== seed 18 arm 3 wall 98.1 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   14:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.0 mm, I expected 28.3 mm
+   18: ● Going home … done  (0.5 s)
+   21:   ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   24:   ⎿ I have a firm grip on b_cups_ud: its half-width is 26.5 mm, I expected 30.0 mm
+   25: ⚠ ERROR: grip lost after post-pick lift for b_cups_ud — pad contacts=none (need both [12, 13]), pad_normal_force=0.00N, obj_z=0.0349. Opening gripper and replanning (#P1 F1).
+   29:   ⎿ I will look closer at b_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   34:   ⎿ I have a firm grip on b_cups_ud: its half-width is 27.8 mm, I expected 30.3 mm
+   35: ⚠ ERROR: grip lost after post-pick lift for b_cups_ud — pad contacts=none (need both [12, 13]), pad_normal_force=0.00N, obj_z=0.0349. Opening gripper and replanning (#P1 F1).
+   39:   ⎿ I will look closer at b_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   44:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.1 mm, I expected 30.3 mm
+   48: ● Going home … done  (0.4 s)
+   51:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   56:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.4 mm, I expected 36.8 mm
+   63: ● Going home … done  (0.4 s)
+   66:   ⎿ I will pick up dice, then come home
+   69:   ⎿ I have a firm grip on dice: its half-width is 10.2 mm, I expected 8.9 mm
+   71: ● Going home … done  (0.5 s)
+   72: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+   74: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+   88: seed 18: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/3/seed18
+  --- tail ---
+         ledger   PASS  234 rows, complete
+         G3       PASS  31 steps over 6 plans, all as planned; 5 labelled early ends
+         G4       PASS  3 places at the planned centre
+         G5       PASS  planned_sense_render=6
+         G15      PASS  3 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.030 s (initialize_call +0.002 s, initialize_return +6.011 s, scene_map_asserted +0.013 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.017 s, rol
+         G19h     PASS  seed 18, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  6 solve calls, 6 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 9300}
+       seed 18: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/3/seed18
+
+===== seed 19 arm 1234 wall 105.0 outcome failure (physics_mismatch) =====
+    6: ● Mission: get hold of dice and bring it home.
+   11:   ⎿ I will look behind a_cups_ud for dice, pick up dice, then come home
+   14:   ⎿ I will look closer at b_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   19:   ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 31.0 mm
+   23: ● Moving to the space behind b_cups_ud … done  (0.4 s)
+   26:   ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   29:   ⎿ I have a firm grip on a_cups_ud: its half-width is 26.5 mm, I expected 28.3 mm
+   35: ● Moving to the space behind a_cups_ud … done  (0.4 s)
+   38:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, look closer at e_cups_ud, pick up dice, go to the space behind e_cups_ud, then come home
+   44:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   50:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, go to a look at d_cups_ud, pick up dice, then come home
+   56:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   62:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   68:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, go to a look at d_cups_ud, pick up dice, then come home
+   74:   ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   79:   ⎿ I have a firm grip on e_cups_ud: its half-width is 35.7 mm, I expected 36.9 mm
+   85: ● Moving to the space behind e_cups_ud … done  (0.5 s)
+   88:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+   94:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  100:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  106:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  112:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  118:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  124:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  130:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  136:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  142:   ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+  147:   ⎿ I have a firm grip on d_cups_ud: its half-width is 33.1 mm, I expected 34.8 mm
+  154: ● Going home … done  (0.3 s)
+  157:   ⎿ I will pick up dice, then come home
+  160:   ⎿ I have a firm grip on dice: its half-width is 10.2 mm, I expected 9.9 mm
+  162: ● Going home … done  (0.4 s)
+  163: ⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+  165: ✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+  179: seed 19: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/1234/seed19
+  --- tail ---
+         ledger   PASS  564 rows, complete
+         G3       PASS  94 steps over 21 plans, all as planned; 20 labelled early ends
+         G4       PASS  4 places at the planned centre
+         G5       PASS  planned_sense_render=10
+         G15      PASS  5 senses, each classified on its planned region
+         G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+         G19      PASS  scene file matches the pinned map
+         G18      PASS  initialize return to rollout start 0.026 s (initialize_call +0.002 s, initialize_return +5.931 s, scene_map_asserted +0.012 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.013 s, rol
+         G19h     PASS  seed 19, both RNGs untouched, PYTHONHASHSEED 0
+         G11      PASS  21 solve calls, 21 plan rows
+         G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 18525}
+       seed 19: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/tc_4912db9/4990958/1234/seed19
