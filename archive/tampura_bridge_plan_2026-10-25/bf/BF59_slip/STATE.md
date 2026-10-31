@@ -147,6 +147,32 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      its ep_iters.py and ep.sh tracked, runs/ untracked (ledger). Kept for
      the review: the 60-step position hold stays as the tested start; the
      per-carry fields (|q1 - q2|, the sink) are not logged.
+   - carry_trapezoid DONE 20:05: commit b1e2455 on slip/carry_trapezoid
+     (test_full_pipeline.py: register at import 124 to 152,
+     carry_trapezoid_schedule 170 to 223 ported from carry_motion's
+     trap_schedule, _stream_carry_trapezoid 240 to 299,
+     stream_move_waypoints 302 to 338 with today's per-pair loop moved in
+     verbatim, main's move action one call 2104 to 2110; robot_utils
+     untouched; 14 tests). On and holding: one acceleration-bounded
+     schedule per move (collinear pairs merged, a rest at every bend,
+     one move_robot_smooth call of one step per scheduled step with
+     velocity_bounded=False, the settle and the home hold as today), one
+     "carry_trapezoid:" log line per move. Checks green on and off (67 +
+     89 tests, gates PASS, seed 0 success). Real-pick probe
+     (reviews/carry_trapezoid_probe/, tracked): at the flip (hand yaw
+     180) 62 of 64 held with today's stream and 62 of 64 with the
+     trapezoid, the same two lost, McNemar p 1, so NO GAIN on top of the
+     flip; alone (hand yaw 0) 21 against 32 of 56 (p 0.019), 1 against
+     10 of 14 at 3 deg (p 0.004): HARM ALONE confirmed in a real pick. It
+     does remove the zero-force junction steps (minimum summed pad force
+     median 0.04 N to 2.02 N) and shortens straight carries (406 to 382
+     steps). Seed 1 on: held, but 865 s and 118 plan calls (the cup
+     radius loop). IMPLEMENTATION REVIEW 20:15
+     (reviews/implrev_carry_trapezoid.md, the orchestrator): ACCEPTED,
+     no change; no refusal without grasp_wrist_home (the arm specs pair
+     them); the lift handover stays; whether job C keeps its arm is a
+     phase-7 decision with grasp_wrist_home's report in hand. Merge note:
+     carry_hold_check also edits the move action.
    - solver_iters DONE 18:40: commit 2252af5 on slip/solver_iters (5
      files, only added lines): robot_utils.SOLVER_ITERATIONS = 200;
      registered at boxel_env's import; applied in policy.py d9_setup
