@@ -231,10 +231,24 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      exist once after the merge; every switch's module must be imported
      before execute_fn runs (all seven are).
 6. THEN implementation review (Opus or Sonnet per branch), fixes applied.
-7. THEN the campaign branch `slip-campaign` = tampura-bridge + every fix
-   branch merged (the orchestrator merges, fills `slip_fixes.KNOWN` lines
-   if a branch forgot its register call), smoke, `tools/cluster/
-   push_snapshot.ps1 -CodeOnly`, then on cn-04 one `slip_eval.sbatch` per
+7. IN PROGRESS (from 20:45): the campaign branch is `slip/campaign` in
+   the worktree `C:\Users\HaniAlassiriAlhabbou\git\sb-slip-campaign`
+   (tools/slip_worktree.ps1 -Name campaign, from tampura-bridge fd36342).
+   Merged with `git -c core.autocrlf=false merge --no-edit`:
+   slip/solver_iters 5b09e6b, slip/pose_radius_keep 0f0ac8f,
+   slip/grasp_wrist_home 506c369 (the one conflict, pose_belief.py's
+   import block, resolved by hand: one `import slip_fixes`, both
+   registers), slip/carry_trapezoid 7f30fd2; the configure call is in
+   policy.py exactly once. The check with the four on (slip_check.sh,
+   seed 0, fixes solver_iters,pose_radius_keep,grasp_wrist_home,
+   carry_trapezoid; outputs in the worktree's checks/) started 20:47 on
+   the loaded laptop (bridge-test flakes possible). Still to merge:
+   force_hold (after its jam probe, and its configure hunk is identical
+   to solver_iters', so it should merge as one), carry_hold_check (its
+   move-action hunk may conflict with carry_trapezoid's call; its loss
+   line goes into tools/slip_eval.py's counting). Then the off check,
+   `tools/cluster/push_snapshot.ps1 -CodeOnly` FROM THE CAMPAIGN WORKTREE
+   (it archives the cwd's HEAD), then on cn-04 one `slip_eval.sbatch` per
    arm group (always `base,<fix>,<fix>`), pinned to distinct nodes
    (`sinfo -p rleap_cpu`; never two of our pipelines on one node), 3 reps
    on ALL 20 seeds (the per-carry outcome is a near coin flip and
