@@ -266,12 +266,19 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    registers), slip/carry_trapezoid 7f30fd2; the configure call is in
    policy.py exactly once. The check with the four on (slip_check.sh,
    seed 0, fixes solver_iters,pose_radius_keep,grasp_wrist_home,
-   carry_trapezoid; outputs in the worktree's checks/) started 20:15 on
-   the loaded laptop (bridge-test flakes possible). Still to merge:
-   force_hold (after its jam probe, and its configure hunk is identical
-   to solver_iters', so it should merge as one), carry_hold_check (its
-   move-action hunk may conflict with carry_trapezoid's call; its loss
-   line goes into tools/slip_eval.py's counting). Then the off check,
+   carry_trapezoid; outputs in the worktree's checks/) started 20:15 and
+   came back GREEN 20:29: 90 unit tests, 89 bridge tests (3 skipped),
+   gates PASS, seed 0 success in 85 s with the four on, 1 die carry
+   (checks/2026-10-31_20-13-23_s0_solver_iters,pose_radius_keep,
+   grasp_wrist_home,carry_trapezoid). force_hold merged 20:31 as
+   dbaaba2, clean (its configure hunk and import folded into
+   solver_iters' identical ones: one call, one import; five switches
+   registered: boxel_env, pose_belief twice, robot_utils,
+   test_full_pipeline). The check with all five on (the first run of
+   force_hold at 200 iterations through the real solver_iters switch)
+   started 20:32. Still to merge: carry_hold_check (its move-action hunk
+   may conflict with carry_trapezoid's call; its loss line goes into
+   tools/slip_eval.py's counting). Then the off check,
    `tools/cluster/push_snapshot.ps1 -CodeOnly` FROM THE CAMPAIGN WORKTREE
    (it archives the cwd's HEAD), then on cn-04 one `slip_eval.sbatch` per
    arm group (always `base,<fix>,<fix>`), pinned to distinct nodes
