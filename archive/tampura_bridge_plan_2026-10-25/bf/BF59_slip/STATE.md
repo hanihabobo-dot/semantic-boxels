@@ -203,6 +203,47 @@ their create_default_env value; 4.4 % alone, the fallback) (hold_physics).
   slow run no effect, p 0.48). Recommended arms: pose_radius_keep alone;
   the hold set; grasp_wrist_home alone; every arm except base with
   pose_radius_keep on.
+- loss_dynamics (reviews/loss_dynamics.md, 17:20; no probe run, every
+  number re-read from the recordings): carry_hold_check IMPLEMENT, low
+  priority, no solo arm: a model-side postcondition check like the
+  post-lift re-verify, but in 3 of 3 recorded losses the die ends 0.08 to
+  0.23 m from the base, outside W, 0 px in the eye and still rolling at
+  the goal check, so a replan ends as target_lost, not a re-pick (the
+  claimed 80 % recovery measured at 0 of 3); the shared helper must keep
+  the post-lift check contact-only (no 0.5 N floor there today); TAMPURA's
+  kinematic carry cannot lose, so the comparison must report loss per
+  carry. carry_grip_watch DROP: on hold_physics' 113 base grips the
+  0.05 mm widening line catches 8 of 17 losses and flags 9 of 96 holds,
+  14 to 16 of about 55 held cup carries and 21 to 27 of 24 to 31 held cube
+  carries; the set-down needs the dispatcher to swap the goal (rule 1);
+  the stop is a bigger kick than the junctions; under the force-limited
+  hold nothing is left to catch. carry_accel_limit MERGE into
+  carry_trapezoid with carry_motion's implementation (one schedule per
+  move, collinear pairs merged, rest at every direction change, settle
+  and the F14 velocity limits kept; loss_dynamics' keep-speed-under-30-deg
+  rule brings the kick back); alone it costs dice under today's wrist
+  spin (70 and 48 % held against 92 and 59 % at 3 and 10 deg), so its arm
+  pairs with grasp_wrist_home; on straight carries it uses fewer steps
+  (336 and 356 against about 454). pose_radius_keep IMPLEMENT with the
+  rule changed: the mechanism is confirmed (all 18 caps of the 192 BF#53
+  episodes are the observe-then-refuse cup loop, none had picked the die),
+  but min(old, new) keeps a 0.39 mm radius around the eye's re-posed
+  centre measured 1.66 mm off; the rule is min(r_new, r_old + centre
+  shift) (1.95 mm here, under the cup's commit margin of about 3 mm) and
+  the wrist's yaw is kept too (without the yaw keep a yaw-needing grasp
+  loops the same way); G15 unaffected. The loss predictor: a per-carry
+  log line only, never a trigger (3 of 3 against 0 of 3 in the episodes
+  becomes 8 of 17 against 9 of 96 at scale). Non-determinism: the
+  planner's wall clock (pddlstream's adaptive solve allots sampling time
+  by measured search time, so the seed-1 runs bind different plans; seed
+  0 diverges too, pick force 5.00 against 3.28 N); the carry amplifies
+  micrometre differences. Power: at 60 against 60 carries a fix must
+  show 4 or fewer losses (6.7 %) against base's 13; a true 10 % has power
+  0.29; only the near-zero claims are testable. Recommended arm order:
+  pose_radius_keep first with a "base+r" arm beside the plain base; then
+  on base+r: the flip (with the trapezoid), the hold set, edge_pinch with
+  the trapezoid; carry_hold_check and the predictor line in every arm;
+  the combined set last with TAMPURA beside it.
 
 ## Eval design notes
 
