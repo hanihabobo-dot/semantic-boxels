@@ -190,7 +190,12 @@ def test_the_dispatcher_takes_the_empty_hand_path_on_a_loss():
     m = src.index("if action_name == 'move':")
     move = src[m:src.index("elif action_name == 'sense':", m)]
     begin = move.index('_carry0 = carry_hold_begin(robot_id, held_body_id)')
-    assert begin < move.index('for wi, wp in enumerate(traj.waypoints[1:]')
+    # The waypoint stream: today's per-pair loop, or carry_trapezoid's one
+    # call once that fix is merged beside this one (slip/campaign).
+    stream = [i for i in (move.find('for wi, wp in enumerate(traj.waypoints[1:]'),
+                          move.find('stream_move_waypoints(robot_id, traj.waypoints'))
+              if i >= 0]
+    assert stream and begin < min(stream)
     end = move.index('_carry = carry_hold_end(')
     assert move.index("dispatch_end('home_not_reached')") < end
     assert end < move.index('if _integrity_after(')
