@@ -1,0 +1,83 @@
+arms base, 1, 2, 12, 3, 123, 4, 1234; seeds 24: 0-23
+working seeds (the ledger's success under every arm): 7: 0, 7, 9, 11, 12, 16, 23
+
+arm      episodes  success timeouts bridge success
+base           24       18        2             14
+1              24       18        3             15
+2              24       17        2             14
+12             24       15        3             12
+3              24       16        3             12
+123            24       21        2             18
+4              24       19        1             17
+1234           24       14        2             11
+
+means over the 7 working seeds (last column: the last arm against base)
+metric                  base         1         2        12         3       123         4      1234  last vs base
+wall_s                   7.9       8.5       7.9       8.5       7.5       8.0       8.2       8.7          +10%
+planning_s               2.7       3.3       2.7       3.3       2.1       2.4       2.6       2.6           -4%
+planning_first_s         1.1       1.3       1.1       1.3       1.2       1.4       1.0       1.3          +12%
+m8_build_s               1.3       1.9       1.3       1.9       1.0       1.4       1.4       1.6          +18%
+exec_s                   3.8       3.8       3.8       3.8       4.0       4.0       4.1       4.6          +23%
+plan_calls               3.0       3.0       3.0       3.0       2.0       2.0       3.0       2.3          -24%
+steps                   10.3      10.3      10.6      10.4      10.3      10.4      10.7      12.7          +24%
+moves                    6.0       6.0       6.0       6.0       6.0       6.0       6.3       7.6          +26%
+senses                   0.3       0.3       0.6       0.4       0.3       0.4       0.4       0.6         +100%
+observes                 1.0       1.0       1.0       1.0       1.0       1.0       1.0       1.3          +29%
+home_for_sense           0.0       0.1       0.1       0.0       0.1       0.3       0.3       0.4              
+move_s                   1.7       1.7       1.7       1.7       1.8       1.8       2.0       2.4          +40%
+
+means over the 18 seeds every arm ran to the ledger's close (any outcome) (last column: the last arm against base)
+metric                  base         1         2        12         3       123         4      1234  last vs base
+wall_s                  28.8      40.0      28.7      40.2      31.0      37.0      23.0      19.9          -31%
+planning_s              16.5      27.4      16.5      27.8      18.5      23.4      10.2       8.3          -50%
+planning_first_s         8.3      12.4       7.8      12.6       7.8      12.1       2.1       2.8          -66%
+m8_build_s               3.8       5.8       3.8       5.5       3.7       4.7       4.3       4.3          +15%
+exec_s                  10.4      10.7      10.4      10.5      10.7      11.6      10.8       9.7           -7%
+plan_calls               4.7       5.0       4.7       4.8       3.7       3.6       5.0       3.2          -31%
+steps                   19.6      20.4      19.6      19.6      19.6      20.8      20.1      18.3           -7%
+moves                   10.4      10.8      10.4      10.4      10.4      11.0      11.0      10.0           -4%
+senses                   2.1       2.1       2.1       2.2       2.0       2.2       1.8       1.8          -11%
+observes                 1.3       1.4       1.3       1.3       1.4       1.4       1.6       1.1          -13%
+home_for_sense           0.6       1.3       0.6       1.3       0.6       1.6       0.7       0.9          +55%
+move_s                   4.4       4.5       4.4       4.3       4.5       4.8       4.9       4.2           -4%
+
+per fix: alone against base, and added to the fixes before it (over the seeds both arms ran to the close; success counts in brackets)
+fix 1: the fold: sense from the target's pick configuration over the region, pick from there (BF#52)
+  alone     base -> 1 (20 seeds, success 17 -> 18): wall_s 54.9 -> 40.9 -25%; planning_s 38.2 -> 27.8 -27%; exec_s 14.7 -> 11.2 -24%; plan_calls 12.5 -> 5.2 -58%; moves 18.4 -> 11.1 -40%
+  added     base -> 1 (20 seeds, success 17 -> 18): wall_s 54.9 -> 40.9 -25%; planning_s 38.2 -> 27.8 -27%; exec_s 14.7 -> 11.2 -24%; plan_calls 12.5 -> 5.2 -58%; moves 18.4 -> 11.1 -40%
+fix 2: M8's init cache: look and fixed sense renders reused while no twin body moved
+  alone     base -> 2 (20 seeds, success 16 -> 17): wall_s 33.4 -> 56.8 +70%; planning_s 20.0 -> 39.2 +95%; exec_s 11.4 -> 15.7 +37%; plan_calls 6.2 -> 15.4 +148%; moves 12.0 -> 21.4 +78%
+  added     1 -> 12 (19 seeds, success 17 -> 14): wall_s 40.4 -> 40.8 +1%; planning_s 27.5 -> 28.1 +2%; exec_s 10.9 -> 10.8 -1%; plan_calls 5.1 -> 5.0 -2%; moves 10.9 -> 10.5 -3%
+fix 3: the observe continuation: an observe that confirmed the pose does not force a replan
+  alone     base -> 3 (21 seeds, success 17 -> 16): wall_s 65.2 -> 44.7 -31%; planning_s 46.4 -> 28.0 -40%; exec_s 16.7 -> 14.7 -12%; plan_calls 15.7 -> 7.1 -55%; moves 21.7 -> 17.4 -20%
+  added     12 -> 123 (21 seeds, success 15 -> 20): wall_s 57.8 -> 50.3 -13%; planning_s 42.4 -> 32.8 -23%; exec_s 13.3 -> 15.5 +17%; plan_calls 9.4 -> 7.1 -24%; moves 15.1 -> 17.9 +19%
+fix 4: the search's effort weighting and starting complexity (pddlstream effort_weight 1, initial_complexity 3)
+  alone     base -> 4 (21 seeds, success 18 -> 18): wall_s 61.1 -> 44.6 -27%; planning_s 43.1 -> 26.8 -38%; exec_s 15.9 -> 15.7 -1%; plan_calls 14.4 -> 11.7 -19%; moves 20.4 -> 20.9 +2%
+  added     123 -> 1234 (20 seeds, success 19 -> 13): wall_s 41.7 -> 24.2 -42%; planning_s 26.4 -> 11.2 -58%; exec_s 13.4 -> 11.1 -17%; plan_calls 5.0 -> 4.2 -16%; moves 13.7 -> 12.1 -12%
+
+wall_s per seed (x: not run, F: no success)
+seed       base        1        2       12        3      123        4     1234
+0           8.1      8.6      7.7      8.6      8.0      8.9      8.6      8.5
+1             F     56.3     44.6     56.1        F     64.7     48.0     31.2
+2          37.8        F        F        F     57.1     52.1     33.7     29.5
+3             F     67.1        F     48.5        F     57.0     40.0     30.1
+4          42.3     46.8     41.2        F     42.5     56.9     38.5        F
+5             F        F        F        F        F        F        F    122.8
+6          31.5     51.6    550.7        F        F    143.3     91.9        F
+7           7.7      8.4      7.6      8.0      7.6      7.9      8.9      7.7
+8          43.7     61.4     42.8     59.5        F     66.5        F        F
+9           7.9      8.4      7.8      8.6      7.6      8.0      7.8      8.0
+10            F        F     68.9        F    235.8        F        F        F
+11          7.8      8.1      7.6      8.5      7.8      8.2      8.1     11.0
+12          7.4      8.0      7.4      8.3      7.9      8.0      8.7      8.1
+13          7.4      8.2      7.6      8.1      7.8      7.8      8.3        F
+14            F     59.7        F     65.1     41.9     65.8     29.9        F
+15         51.9        F     40.4        F        F     64.9     38.9        F
+16          7.9      8.7      8.3      8.6      6.6      7.4      7.4      7.1
+17            F        F        F        F        F    221.5     29.2        F
+18         53.0     73.5     41.9        F        F     55.1     35.9     27.4
+19        547.3     47.5        F     51.8     85.9     66.7    328.8        F
+20        184.9        F        F    118.0     58.4        F        F     34.7
+21         47.9     89.7     45.9        F     40.7     58.3     26.1        F
+22         57.9     58.9     40.0     62.2     38.0     60.4        F     26.7
+23          8.5      9.1      8.6      9.0      7.1      7.3      7.6     10.4

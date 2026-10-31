@@ -8464,6 +8464,40 @@ BF#57 [DONE]  DECISION: FIX 4 ALONE STAYS; THE FOLD, THE INIT CACHE AND THE
   a switch (BF#52, BACK ON) for Hani's own test; the cache and the
   continuation stay on time-cuts-reference.
 
+BF#58 [DONE]  RULE: THE DATA-CLEANER MENTALITY: A LEDGER OF WHAT EVERY
+      SESSION GENERATED, GARBAGE DEFINED AND DELETED (user, 2026-10-31 11:50)
+  WHAT: Hani: "delete all of that garbage data, add a rule or a skill or
+  whatever that you always call in this project, that you have a data
+  cleaner mentality, you always know what you generated where and always
+  keep a record of that, that any AI starting in that project would have
+  access to; you have to always clean garbage.  Make a good sensible
+  definition of garbage.  Mine: stuff we don't need."
+  DONE: CLAUDE.md at the repository root, loaded by every Claude Code
+  session in this checkout before it starts: the data-hygiene rule with
+  the definition of garbage, the ledger duty, the never-delete list and
+  the retention tools; DATA_LEDGER.md (tracked): what exists, where, kept
+  for which entry, garbage when, and the log of deletions.  GARBAGE =
+  stuff we don't need: (a) the output of a run that failed for a cause
+  the audit already records (crash records, void arms, cancelled or
+  partial runs); (b) a copy made for a transfer or a check (exports,
+  chunks, hash lists, smoke outputs) once its step is done and recorded;
+  (c) a duplicate (the cluster's copy of results pulled into archive/
+  when the archive copy is the one cited); (d) a snapshot no job
+  references; (e) run data past the retention windows.  NOT garbage: data
+  an entry cites, the raw data behind an open finding, the user's own
+  runs, another session's data, the environment, tracked files.
+  DELETED today (the ledger has the list): cluster 771 -> 735 MiB (the
+  void eval directories, both campaigns' crashed arm O trees, the two
+  smokes, the unreferenced snapshot, the inbox leftovers); laptop 470 MB
+  (the night's transfer leftovers in the scratchpad, the stopped laptop
+  eval, the pre-eval smoke, two untracked pickles).  KEPT, with the
+  reason in the ledger: the campaigns' TAMPURA trees (625 MiB, until the
+  re-run), the eval's episode directories (111 MiB, the replan-loop
+  finding).  BF53_eval_cluster (the eval's summaries and tc_analyse.py)
+  is tracked now as BF#53's evidence.
+  CLAIM EFFECT: none.  HONESTY CLASS: process; disclosed.
+
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
