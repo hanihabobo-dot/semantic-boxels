@@ -107,6 +107,46 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      f060429 (code identical to 05dcaf3; session agent id
      ae3c955cf7beccf40); its loss line's exact text goes into the eval
      harness when it reports. pad_rolling waits for the next free slot.
+   - force_hold IMPLEMENTED 19:25, NOT READY: commits b2cacd6, b7d08f5,
+     d3a0411 on slip/force_hold (robot_utils 1135 to 1201: the block
+     with FORCE_HOLD_REACH 0.004, FORCE_HOLD_BUDGET_N 10, the gear
+     constants, force_hold_requires_solver_iters and the check-only
+     escape; close_gripper_until_contact 1260 to 1289: the hold after the
+     60-step position hold, target width - 4 mm at 10 N per finger, one
+     "force_hold:" line per hold; policy.py d9_setup 81 to 101: the gear
+     (JOINT_GEAR, ratio -1, erp 0.1, maxForce 50) on the executing
+     client, make_execute_fn 212 to 215: the configure call byte-identical
+     to solver_iters'; boxel_env._setup_scene 936 to 961: the gear on our
+     physics client, rebuilt by reset(); 4 G1 allowlist lines; 9 tests).
+     Checks: off green (62 + 89 tests, gates PASS, seed 0 success); on
+     with the escape red by design (50 iterations: the die lost in the
+     carry; one bridge test flaked under load, passed alone). Episodes at
+     200 iterations through reviews/impl_force_hold/ep_iters.py (a
+     wrapper standing in for solver_iters): seed 1 held (129 s), seed 6
+     held (77 s), seed 0 held once (16.8 s) and FAILED once with
+     pick_giveup: after the place of d_cups_ud at free_000 the open left
+     the pads inside the cup (link12 d -10.57 mm at 113 N, link13
+     d -0.82 mm at 109 N, fingers 39.1/38.0 mm), three retries, the cup
+     stayed on the hand, the later die picks closed on nothing. Base
+     released that cup cleanly in both of its runs; the on-check at 50
+     iterations failed the same release lightly (d -0.10 mm, 0.58 N).
+     Mechanism not measured. Orchestrator's code read 19:45: the
+     structure accepted (merge-clean hunks, the refusal on every world,
+     the off path unchanged); the behaviour not. The agent
+     (acf1fc489c989fbef) resumed 19:50 on the jam probe: a direct harness
+     (pick, carry, place, open of d_cups_ud in scene 0; per step the hand
+     z, the cup's pose in the hand, q1/q2, the pad contacts) over the
+     arms base, 10 N/4 mm, 10 N/1 mm, 20 N, gear off, 50 iterations; the
+     hypotheses: the cup moves in the hand under 10 N (24 N of friction
+     capacity against the junction kicks), the descent drives the pads
+     into the cup, the open cannot clear the cup's collision shape at the
+     pads' final height (a radius of about 44 mm there, the cup's axis
+     5.4 mm off the hand's), the gear at the open. A fix goes on the
+     branch if it lives in the fix's files, then seed 0 three times.
+     Report reviews/impl_force_hold.md (a "Jam probe" section to come);
+     its ep_iters.py and ep.sh tracked, runs/ untracked (ledger). Kept for
+     the review: the 60-step position hold stays as the tested start; the
+     per-carry fields (|q1 - q2|, the sink) are not logged.
    - solver_iters DONE 18:40: commit 2252af5 on slip/solver_iters (5
      files, only added lines): robot_utils.SOLVER_ITERATIONS = 200;
      registered at boxel_env's import; applied in policy.py d9_setup
