@@ -8055,7 +8055,7 @@ BF#51 [OPEN]  FINDING: CLOSING THE GUI WINDOW MID-EPISODE LEAVES THE BRIDGE
   infrastructure (tooling).
 
 
-BF#52 [WITHDRAWN]  TIME CUT (1): THE BASELINE RECORDED; THE EYE SENSES FROM THE
+BF#52 [OPEN]  TIME CUT (1): THE BASELINE RECORDED; THE EYE SENSES FROM THE
       TARGET'S PICK CONFIGURATION OVER THE REGION INSTEAD OF RETURNING HOME
       (user, 2026-10-30)
   WHAT: Hani: "we need to cut time. look at the past run i have just done,
@@ -8178,6 +8178,15 @@ BF#52 [WITHDRAWN]  TIME CUT (1): THE BASELINE RECORDED; THE EYE SENSES FROM THE
   cuts, lost successes; Hani keeps fix 4 alone.  The fold lives on the
   branch time-cuts-reference; the eye returns to a view spot before every
   sense again.
+  BACK ON 2026-10-31 (Hani, 11:40: "bring fold back on, i wanna test it"):
+  the fold is on tampura-bridge again as --sense-over-region (default on;
+  watch.ps1 -ReturnHome turns it off), with its test and the [M8] init
+  line's fold counters; the cache and the observe continuation stay on
+  time-cuts-reference.  Verified: 47 tests, static gates PASS, seed 0
+  headless on/off both success (27 s / 23 s process time, 0/1 folds on
+  seed 0: the region's configuration blocks the view there).  Under
+  fix 4 the eval put the fold at 1.4 s of planning per episode (medians
+  11.9 against 10.5 s); the GUI A/B of seed 10 is Hani's.
 
 BF#53 [DONE]  TIME CUT (2): THE FIXES AS SWITCHES AND THE PER-FIX EVAL ON
       TWENTY-PLUS SEEDS (user, 2026-10-30)
@@ -8451,7 +8460,9 @@ BF#57 [DONE]  DECISION: FIX 4 ALONE STAYS; THE FOLD, THE INIT CACHE AND THE
   CLAIM EFFECT: the pipeline's time cut is the search settings alone; the
   eye returns to a view spot before every sense as before BF#52.
   HONESTY CLASS: user decision; disclosed.
-
+  AMENDED 2026-10-31 11:40: the fold is back on the branch the same day as
+  a switch (BF#52, BACK ON) for Hani's own test; the cache and the
+  continuation stay on time-cuts-reference.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS

@@ -833,6 +833,18 @@ def parse_pipeline_args(argv=None):
         '--pick-aperture-from-pose', choices=['off', 'on'], default='on',
         help="M8's aperture rule: open the pads to the pinch half-width "
              "plus pose_radius plus 8 mm (capped at the finger limit).")
+    # BF#52 (2026-10-30): with M8 on, the fixed eye senses a region from the
+    # target's pick configuration over it when the arm there keeps out of
+    # the view (static facts, pddlstream_planner.over_region_facts), and the
+    # pick follows without a move; off: every sense returns the arm to a C1
+    # spot as before (the A/B against Hani's 18:09 baseline).  Back on the
+    # branch after BF#57 for Hani's own test.
+    parser.add_argument(
+        '--sense-over-region', choices=['off', 'on'], default='on',
+        help="BF#52: sense from the target's pick configuration over the "
+             "region when the arm there does not block the eye's view, then "
+             'pick from there (on), or return to a static view spot before '
+             'every sense as before (off).')
     # BF#53 (2026-10-30), the optimistic search's settings.  pddlstream
     # weighs a stream result's effort into the search's costs only with
     # effort_weight set; without it every attempt of the adaptive loop may

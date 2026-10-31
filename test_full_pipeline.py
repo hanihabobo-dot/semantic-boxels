@@ -548,6 +548,10 @@ def main(gui=True, run_logger=None, scene_config=None,
     world_eye.SAVE_IMAGES = getattr(args, 'save_screenshots', 'off') == 'on'
     if domain_file is None and pose_belief.SWITCHES['M8']:
         domain_file = m8_domain.domain_file(True)
+    # BF#52: the fold (pddlstream_planner.over_region_facts) is offered
+    # unless --sense-over-region off (the A/B).  Not a pose_belief switch:
+    # those gate the pose writers as a set.
+    sense_over_region = getattr(args, 'sense_over_region', 'on') == 'on'
     # BF#53: the optimistic search's settings, pddlstream solve() keyword
     # arguments (run_logger's --search-effort-weight and
     # --search-initial-complexity, defaults 1 and 3; 'off' and 0 leave
@@ -1098,13 +1102,14 @@ def main(gui=True, run_logger=None, scene_config=None,
                                 domain_file=domain_file)
     planner.search_options = dict(search_options)          # BF#53
     # G10: which domain and stream texts the planner loaded, under which
-    # switches (the stream file's sha since BF#52, the search's settings
-    # since BF#53).
+    # switches (the stream file's sha and the fold's switch since BF#52,
+    # the search's settings since BF#53).
     ledger_event('domain', file=os.path.basename(domain_file or m8_domain.LIVE_FILE),
                  sha=m8_domain.sha(planner.domain_pddl),
                  stream_file=os.path.basename(m8_domain.STREAM_LIVE_FILE),
                  stream_sha=m8_domain.sha(planner.stream_pddl),
                  switches=dict(pose_belief.SWITCHES,
+                               sense_over_region=sense_over_region,
                                search_effort_weight=search_effort_weight,
                                search_initial_complexity=search_initial_complexity))
     # #P4 B3(d): the scene's reach envelope (None: streams' constants),
@@ -1188,6 +1193,8 @@ def main(gui=True, run_logger=None, scene_config=None,
     if pose_belief.SWITCHES['M8']:
         planner.m8_views = observe_views.ObserveViews(
             env, planner.streams._robot_base_xy)
+        # BF#52: the fold's switch (over_region_facts needs m8_views).
+        planner.sense_over_region = sense_over_region
 
     boxel_centers = {b.id: b.center for b in registry.boxels.values()}
 
@@ -2935,6 +2942,7 @@ if __name__ == "__main__":
         "pick_aperture_from_pose": args.pick_aperture_from_pose,
         "grip_squeeze_mm": getattr(args, 'grip_squeeze_mm', '0.5'),
         "save_screenshots": getattr(args, 'save_screenshots', 'off'),   # BF#50
+        "sense_over_region": getattr(args, 'sense_over_region', 'on'),  # BF#52
         "search_effort_weight": getattr(args, 'search_effort_weight', '1'),          # BF#53
         "search_initial_complexity": getattr(args, 'search_initial_complexity', 3),  # BF#53
         "search_sample_ratio": getattr(args, 'search_sample_ratio', None),

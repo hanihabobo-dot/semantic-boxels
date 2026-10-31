@@ -68,6 +68,52 @@ SEARCH_SAMPLE_RATIO = 0.25
 PLACEMENT_EGREGIOUS_BLOCKED_FRACTION = 0.15
 
 
+def over_region_facts(streams, views, targets, shadows, fits):
+    """BF#52, the fold.  For every (target, shadow region) pair the sense
+    may ground on (``fits``), the target's first pick configuration over
+    the region (sample_grasp's first grasp, compute_kin_solution's first
+    configuration: exactly what the streams would yield for the pick) and,
+    when the eye's view of the region stays clear with the arm there
+    (views.sense_view_test, the executor's own render rule in the twin),
+    the static facts that let a plan move there, sense and pick without
+    moving: (Grasp g) (valid_grasp t g) (Config q) (kin_solution t r g q)
+    (config_for_boxel q r) (sense_view q r).  A region the arm blocks
+    from there gets nothing and the plan returns to a C1 spot as before.
+    Static facts, not a test stream: a stream let the search try every IK
+    branch over a blocked region at a search round each (PAPER_AUDIT
+    BF#52, Hani's seed-10 runs of 2026-10-30).  Back on the branch after
+    BF#57 for Hani's own test (--sense-over-region off turns it off)."""
+    facts: List[Tuple] = []
+    stats: Dict[str, Any] = {'over_region_pairs': 0, 'over_region_pass': 0,
+                             'over_region_renders': 0, 'over_region_s': 0.0}
+    t0 = time.perf_counter()
+    r0 = int(views.test_stats.get('renders', 0))
+    for t in targets:
+        grasp = None
+        declared = False
+        for r in shadows:
+            if r is None or not fits(t, r.id):
+                continue
+            stats['over_region_pairs'] += 1
+            if grasp is None:
+                grasp = next((g[0] for g in streams.sample_grasp(t)), None)
+                if grasp is None:
+                    break
+            q = next((c[0] for c in streams.compute_kin_solution(t, r.id, grasp)),
+                     None)
+            if q is None or not views.sense_view_test(q, r):
+                continue
+            stats['over_region_pass'] += 1
+            if not declared:
+                facts += [('Grasp', grasp), ('valid_grasp', t, grasp)]
+                declared = True
+            facts += [('Config', q), ('kin_solution', t, r.id, grasp, q),
+                      ('config_for_boxel', q, r.id), ('sense_view', q, r.id)]
+    stats['over_region_renders'] = int(views.test_stats.get('renders', 0)) - r0
+    stats['over_region_s'] = time.perf_counter() - t0
+    return facts, stats
+
+
 def search_options_from(effort_weight: str, initial_complexity: int) -> Dict[str, Any]:
     """BF#53: pddlstream solve() keyword arguments from the two CLI
     settings (run_logger's --search-effort-weight, a number or 'off', and
@@ -199,6 +245,9 @@ class PDDLStreamPlanner:
         # main() when M8 is on), and what the last _build_init emitted.
         self.m8_views = None
         self.last_m8_stats: Dict[str, Any] = {}
+        # BF#52: the fold (over_region_facts) is offered unless main()'s
+        # --sense-over-region off; it needs m8_views.
+        self.sense_over_region = True
         # BF#53: further pddlstream solve() keyword arguments from main()'s
         # --search-effort-weight and --search-initial-complexity (see
         # run_logger); empty is pddlstream's own default for each.
@@ -979,18 +1028,34 @@ class PDDLStreamPlanner:
                 current_config, self.home_config, _sense, _look, _declared)
             init.extend(_facts)
             self.streams.view_boxel_ids = frozenset(_views)
+            # BF#52: the fold.  For each (target, region) pair the sense may
+            # ground on, the target's first pick configuration over the
+            # region and, when the eye's view stays clear with the arm
+            # there, the static facts that let the plan move there, sense
+            # and pick without moving (over_region_facts).
+            _over_stats: Dict[str, Any] = {}
+            if self.sense_over_region:
+                _fits = {(f[1], f[2]) for f in init if f[0] == 'boxel_fits'}
+                _over_facts, _over_stats = over_region_facts(
+                    self.streams, self.m8_views, list(target_objects), _sense,
+                    lambda t, r: (t, r) in _fits)
+                init.extend(_over_facts)
             self.last_m8_stats = dict(self.m8_views.last_stats,
                                       build_s=time.perf_counter() - _t0,
                                       look_objects=[b.id for b in _look],
                                       sense_regions=len(_sense),
-                                      fallback=list(self.m8_views.last_fallback))
+                                      fallback=list(self.m8_views.last_fallback),
+                                      **_over_stats)
             print(f"  [M8] init: {self.last_m8_stats['sense_view']} sense_view, "
                   f"{self.last_m8_stats['look_config']} look_config facts "
                   f"(pose unknown: {self.last_m8_stats['look_objects']}), "
                   f"{len(_views)} view boxels, "
                   f"{self.last_m8_stats['sense_fallback']} shadows on the "
                   f"current-config fallback; {self.last_m8_stats['twin_renders']} "
-                  f"twin renders {self.last_m8_stats['twin_render_s']:.2f}s, "
+                  f"twin renders {self.last_m8_stats['twin_render_s']:.2f}s; "
+                  f"{_over_stats.get('over_region_pass', 0)}/"
+                  f"{_over_stats.get('over_region_pairs', 0)} over-region folds "
+                  f"{_over_stats.get('over_region_s', 0.0):.2f}s; "
                   f"total {self.last_m8_stats['build_s']:.2f}s")
         if held_obj is None:
             init.append(('handempty',))

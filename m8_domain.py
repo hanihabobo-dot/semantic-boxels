@@ -21,9 +21,9 @@ The delta:
 
 The stream file has no delta: BF#52's test-sense-view stream was tried and
 withdrawn the same evening (every IK branch over a blocked region cost a
-search round), the static-fact fold that replaced it went to the branch
-time-cuts-reference after the per-fix eval (BF#57), and every run reads
-STREAM_LIVE_FILE.
+search round); the fold it was for is static init facts
+(pddlstream_planner.over_region_facts, --sense-over-region), and every run
+reads STREAM_LIVE_FILE.
 """
 
 import hashlib
