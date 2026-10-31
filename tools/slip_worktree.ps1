@@ -23,11 +23,13 @@ if ($Remove) {
     exit 0
 }
 if (Test-Path $path) { throw "$path exists" }
+# autocrlf off for the checkout: LF files as the cluster snapshots have them
+# (bash scripts break on CRLF; Python and PowerShell read both).
 $exists = git -C $repo branch --list $branch
 if ($exists) {
-    git -C $repo worktree add $path $branch
+    git -C $repo -c core.autocrlf=false worktree add $path $branch
 } else {
-    git -C $repo worktree add -b $branch $path $Base
+    git -C $repo -c core.autocrlf=false worktree add -b $branch $path $Base
 }
 if ($LASTEXITCODE -ne 0) { throw "worktree add failed" }
 Write-Host "worktree $path on branch $branch (from $Base)"
