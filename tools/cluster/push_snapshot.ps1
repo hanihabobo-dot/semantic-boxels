@@ -2,8 +2,12 @@
 # snapshot (git archive, the CB#113 pattern: tracked files only, so nothing
 # untracked such as 'emails and pdfs/' leaves the laptop), unpacked
 # read-only at $W/sb_<sha>.  It submits nothing; it prints the sbatch line.
-# Usage: pwsh tools/cluster/push_snapshot.ps1 [-Commit HEAD]
-param([string]$Commit = 'HEAD')
+# Usage: pwsh tools/cluster/push_snapshot.ps1 [-Commit HEAD] [-CodeOnly]
+#   -CodeOnly leaves out thesis/, eval_results/, archive/, notes/ and the PDFs,
+#   which no cluster run reads: 6 MB instead of 115 MB (BF#56: the gateway
+#   dropped three full uploads in one night).  Every file kept is the
+#   commit's blob, byte for byte, so the tree is still the commit's.
+param([string]$Commit = 'HEAD', [switch]$CodeOnly)
 $ErrorActionPreference = 'Stop'
 $W = '/work/rleap1/hani.alassiri.alhabboub/p4'
 $sha = (git rev-parse --short=7 $Commit).Trim()
@@ -12,8 +16,13 @@ $tgz = Join-Path $env:TEMP "$name.tar.gz"
 # core.autocrlf=true (this laptop) makes git archive write CRLF text files,
 # which Slurm refuses ("Batch script contains DOS line breaks") and bash
 # misreads; with it off the archive holds the commit's blobs byte for byte.
-git -c core.autocrlf=false archive --format=tar.gz -o $tgz $Commit
-Write-Host "archive $name : $([math]::Round((Get-Item $tgz).Length / 1MB, 1)) MB"
+if ($CodeOnly) {
+    $paths = @(git ls-tree --name-only $Commit | Where-Object { $_ -notin @('thesis', 'eval_results', 'archive', 'notes') -and $_ -notmatch '\.pdf$' })
+    git -c core.autocrlf=false archive --format=tar.gz -o $tgz $Commit -- @paths
+} else {
+    git -c core.autocrlf=false archive --format=tar.gz -o $tgz $Commit
+}
+Write-Host "archive $name : $([math]::Round((Get-Item $tgz).Length / 1MB, 1)) MB$(if ($CodeOnly) { ' (code only)' })"
 # BF#49: make room under the 1 GiB cap first (twice the archive: the upload
 # and the unpacked tree); the archive itself is removed after the unpack.
 $prune = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot 'prune_work.sh')).Replace("`r", '')

@@ -8320,6 +8320,39 @@ BF#55 [FIXED]  FINDING: THE CLUSTER'S CAP COUNTED APPARENT BYTES AND REFUSED
   CLAIM EFFECT: none.  HONESTY CLASS: tooling; disclosed.
 
 
+BF#56 [FIXED]  FINDING: THE GATEWAY DROPPED THREE FULL SNAPSHOT UPLOADS IN ONE
+      NIGHT; SNAPSHOTS ARE CODE ONLY NOW (executor, 2026-10-31 04:25)
+  WHAT: between 20:56 and 04:18 the i6 gateway reset or timed out on
+  every long transfer.  The 115 MB upload of sb_ca1907e landed, but its
+  unpack ssh was reset after hours (unpacked by hand at 02:44, 6889 of
+  6889 files).  The upload of sb_4912db9 (the repaired commit, BF#53's
+  entry) was reset at 03:03; in 12 MB chunks (ten parts at 55 kB/s, two
+  of them twice) it landed by 03:55, then the reassembly's ssh was reset
+  after the remote side had finished, and the retry's "cat parts/* >
+  archive" truncated the finished archive to zero bytes before cat
+  failed on the empty glob (two stale sftp-servers of the reset scps
+  still held two parts; ended).  Meanwhile the 03:03 push's own prune
+  (allocated count, BF#55: 845 MiB used plus the 230 MiB reserve) had
+  dropped sb_ca1907e, the last snapshot on the cluster, as the cap step
+  says it may once no job references it.
+  WHY the size: the archive was the whole commit, 110 MB of thesis/ and
+  53 MB of eval_results/ (6055 files) that no cluster run reads; the
+  code (the root modules, pddl/, tools/, tampura_bridge/, tests/) is 183
+  files, 1.1 MB compressed.
+  FIX: push_snapshot.ps1 -CodeOnly archives the commit without thesis/,
+  eval_results/, archive/, notes/ and the PDFs (git archive with that
+  pathspec, so every file kept is the commit's blob).  sb_4912db9 went
+  up so at 04:19 in one scp and was verified: the md5 of each of its
+  183 files equals the local git-archive export's.  LESSON for the
+  scripts: a reassembly must test its glob before redirecting into the
+  target, and must be idempotent (an archive with the right checksum is
+  done).
+  CONSEQUENCE: none for the data, every snapshot is re-pushable from its
+  commit; the void job directories tc_ca1907e/4989077 and /4989078
+  (BF#53's entry) stay until the hygiene removes them.
+  CLAIM EFFECT: none.  HONESTY CLASS: tooling; disclosed.
+
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
