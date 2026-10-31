@@ -833,17 +833,6 @@ def parse_pipeline_args(argv=None):
         '--pick-aperture-from-pose', choices=['off', 'on'], default='on',
         help="M8's aperture rule: open the pads to the pinch half-width "
              "plus pose_radius plus 8 mm (capped at the finger limit).")
-    # BF#52 (2026-10-30): with M8 on, the fixed eye senses a region from the
-    # target's pick configuration over it when the arm there keeps out of
-    # the view (static facts, pddlstream_planner.over_region_facts), and the
-    # pick follows without a move; off: every sense returns the arm to a C1
-    # spot as before (the A/B against Hani's 18:09 baseline).
-    parser.add_argument(
-        '--sense-over-region', choices=['off', 'on'], default='on',
-        help="BF#52: sense from the target's pick configuration over the "
-             "region when the arm there does not block the eye's view, then "
-             'pick from there (on), or return to a static view spot before '
-             'every sense as before (off).')
     # BF#53 (2026-10-30), the optimistic search's settings.  pddlstream
     # weighs a stream result's effort into the search's costs only with
     # effort_weight set; without it every attempt of the adaptive loop may
@@ -863,21 +852,6 @@ def parse_pipeline_args(argv=None):
         help="pddlstream solve(initial_complexity=...): the stream "
              "complexity level the adaptive loop starts at (BF#53, default "
              "3); 0 is pddlstream's default.")
-    # BF#53: M8's init cache (a look configuration's wrist render and a
-    # fixed sense configuration's eye render reused between two inits that
-    # left every twin body where it was) and the observe continuation (an
-    # observe that confirmed the pose lets the plan go on to its pick
-    # instead of forcing a replan).
-    parser.add_argument(
-        '--m8-init-cache', choices=['off', 'on'], default='on',
-        help="BF#53: reuse M8's look and fixed sense renders between inits "
-             "while no twin body moved (on), or render them at every init "
-             "as before (off).")
-    parser.add_argument(
-        '--continue-after-observe', choices=['off', 'on'], default='on',
-        help="BF#53: after an observe that confirmed the target's pose "
-             "within the commit margin, go on with the plan (on), or "
-             "replan after every observe as before (off).")
     # GF10 (PAPER_AUDIT.txt BF#38): the pick close's squeeze; 0.5 mm is the
     # default since BF#44 (Hani's GUI verdict, 2026-10-30), 3 mm was before.
     parser.add_argument(

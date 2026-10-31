@@ -548,10 +548,6 @@ def main(gui=True, run_logger=None, scene_config=None,
     world_eye.SAVE_IMAGES = getattr(args, 'save_screenshots', 'off') == 'on'
     if domain_file is None and pose_belief.SWITCHES['M8']:
         domain_file = m8_domain.domain_file(True)
-    # BF#52: the fold (pddlstream_planner.over_region_facts) is offered
-    # unless --sense-over-region off (the A/B).  Not a pose_belief switch:
-    # those gate the pose writers as a set.
-    sense_over_region = getattr(args, 'sense_over_region', 'on') == 'on'
     # BF#53: the optimistic search's settings, pddlstream solve() keyword
     # arguments (run_logger's --search-effort-weight and
     # --search-initial-complexity, defaults 1 and 3; 'off' and 0 leave
@@ -560,11 +556,6 @@ def main(gui=True, run_logger=None, scene_config=None,
     search_initial_complexity = int(getattr(args, 'search_initial_complexity', 3))
     search_options = search_options_from(search_effort_weight,
                                          search_initial_complexity)
-    # BF#53: M8's init cache (observe_views) and the observe continuation
-    # (the dispatcher), run_logger's --m8-init-cache and
-    # --continue-after-observe.
-    m8_init_cache = getattr(args, 'm8_init_cache', 'on') == 'on'
-    continue_after_observe = getattr(args, 'continue_after_observe', 'on') == 'on'
     # The two known domains must match the switch (a caller may pass
     # another file deliberately; that one is not judged here).
     _dom = os.path.abspath(domain_file) if domain_file else m8_domain.LIVE_FILE
@@ -1107,18 +1098,15 @@ def main(gui=True, run_logger=None, scene_config=None,
                                 domain_file=domain_file)
     planner.search_options = dict(search_options)          # BF#53
     # G10: which domain and stream texts the planner loaded, under which
-    # switches (BF#52 records the stream file and the fold's switch too,
-    # BF#53 the search's settings).
+    # switches (the stream file's sha since BF#52, the search's settings
+    # since BF#53).
     ledger_event('domain', file=os.path.basename(domain_file or m8_domain.LIVE_FILE),
                  sha=m8_domain.sha(planner.domain_pddl),
                  stream_file=os.path.basename(m8_domain.STREAM_LIVE_FILE),
                  stream_sha=m8_domain.sha(planner.stream_pddl),
                  switches=dict(pose_belief.SWITCHES,
-                               sense_over_region=sense_over_region,
                                search_effort_weight=search_effort_weight,
-                               search_initial_complexity=search_initial_complexity,
-                               m8_init_cache=m8_init_cache,
-                               continue_after_observe=continue_after_observe))
+                               search_initial_complexity=search_initial_complexity))
     # #P4 B3(d): the scene's reach envelope (None: streams' constants),
     # and D7 (i) to (iii): the home joints, and with a declared goal
     # configuration its init facts and the goal conjunct.
@@ -1200,9 +1188,6 @@ def main(gui=True, run_logger=None, scene_config=None,
     if pose_belief.SWITCHES['M8']:
         planner.m8_views = observe_views.ObserveViews(
             env, planner.streams._robot_base_xy)
-        # BF#52: the fold's switch (over_region_facts needs m8_views).
-        planner.sense_over_region = sense_over_region
-        planner.m8_views.cache_enabled = m8_init_cache         # BF#53
 
     boxel_centers = {b.id: b.center for b in registry.boxels.values()}
 
@@ -2006,12 +1991,7 @@ def main(gui=True, run_logger=None, scene_config=None,
             elif action_name == 'observe':
                 # OBSERVE (M8 C2): one wrist render at the look
                 # configuration re-poses the registered objects it shows
-                # completely.  An observe that confirms what the plan
-                # assumed (observe_ok: the target seen completely, its
-                # radius within the margin) lets the plan go on to its
-                # pick, which aims at the re-posed estimate anyway (#P1
-                # F24) (BF#53, --continue-after-observe); every other
-                # outcome forces a replan.
+                # completely; every observe forces a replan.
                 obj_str, look_q = str(params[0]), params[1]
                 observe_count += 1
                 status, lost = handle_observe_action(
@@ -2048,17 +2028,9 @@ def main(gui=True, run_logger=None, scene_config=None,
                           f"{'; PARKED (no look configurations)' if obj_str in planner.m8_views.parked else ''}")
                 else:
                     observe_strikes.pop(obj_str, None)
-                _observe_go_on = (continue_after_observe
-                                  and status == 'observe_ok' and not lost)
                 ledger_event('observe_result', obj=obj_str, status=status,
-                             lost=lost, config=look_q.name,
-                             continue_=_observe_go_on)
-                # A step that lets the plan go on ends 'ok', as a sense that
-                # found the target does (G3: any other end is the plan's
-                # last step); the observe_result row keeps the status.
-                dispatch_end('ok' if _observe_go_on else status)
-                if _observe_go_on:
-                    continue
+                             lost=lost, config=look_q.name)
+                dispatch_end(status)
                 break
 
             elif action_name == 'pick':
@@ -2963,11 +2935,8 @@ if __name__ == "__main__":
         "pick_aperture_from_pose": args.pick_aperture_from_pose,
         "grip_squeeze_mm": getattr(args, 'grip_squeeze_mm', '0.5'),
         "save_screenshots": getattr(args, 'save_screenshots', 'off'),   # BF#50
-        "sense_over_region": getattr(args, 'sense_over_region', 'on'),  # BF#52
         "search_effort_weight": getattr(args, 'search_effort_weight', '1'),          # BF#53
         "search_initial_complexity": getattr(args, 'search_initial_complexity', 3),  # BF#53
-        "m8_init_cache": getattr(args, 'm8_init_cache', 'on'),                       # BF#53
-        "continue_after_observe": getattr(args, 'continue_after_observe', 'on'),     # BF#53
         "search_sample_ratio": getattr(args, 'search_sample_ratio', None),
         "path_check_step": getattr(args, 'path_check_step', None),
         "path_check_diag": bool(getattr(args, 'path_check_diag', False)),

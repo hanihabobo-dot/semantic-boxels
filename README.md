@@ -126,9 +126,6 @@ With `--goal holding`, an explicit `--n-occluders` or `--n-targets`, or a positi
 | `--m9 off\|on` | `on` | M9: object-fitted grasps (yaw and extents of the top-face rectangle) instead of the bounding-box grasp candidates |
 | `--m10 off\|on` | `on` | M10: a failed pick that touched the target makes its pose unknown, with no in-action retry |
 | `--pick-aperture-from-pose off\|on` | `on` | M8's aperture rule: open the pads to the pinch half-width plus the pose radius plus 8 mm, capped at the finger limit |
-| `--sense-over-region off\|on` | `on` | With M8: sense a region from the target's pick configuration over it when the arm there keeps out of the eye's view, then pick from there; `off` returns the arm to a static view spot before every sense |
-| `--m8-init-cache off\|on` | `on` | Reuse M8's look and fixed-sense renders between planner inits while no object moved |
-| `--continue-after-observe off\|on` | `on` | An observe that confirmed the target's pose within the commit margin lets the plan go on to its pick; `off` replans after every observe |
 | `--grip-squeeze-mm F` | `0.5` | How far inside the measured width the pick's close holds the pads, in mm |
 
 **Output and logging**
@@ -153,7 +150,7 @@ PYTHONPATH=<repo>:<pddlstream_lib>:<their tampura>:<their envs> \
   <python> <repo>/tampura_bridge/run_bridge_on_finddice.py --global-seed 0 --vis 0
 ```
 
-`--global-seed` is required, `--vis 1` opens the GUI, `--save-dir` names the episode directory (`bridge_episode.json`, with the pipeline's run directory under `ours/`) and `--max-plan-time` defaults to 900. The flags `--m8`, `--m9`, `--m10`, `--pick-aperture-from-pose`, `--sense-over-region`, `--m8-init-cache`, `--continue-after-observe`, `--grip-squeeze-mm`, `--search-effort-weight`, `--search-initial-complexity` and `--save-screenshots` are passed through under the same names and defaults. A headless run stops when TAMPURA loads a scene other than the one pinned for the seed (G19) unless `--allow-g19-mismatch 1` is given; a GUI run goes on and is never scored. The exit code is 0 exactly when the outcome field is success; the field combines TAMPURA's last reward, any error and the ledger gates.
+`--global-seed` is required, `--vis 1` opens the GUI, `--save-dir` names the episode directory (`bridge_episode.json`, with the pipeline's run directory under `ours/`) and `--max-plan-time` defaults to 900. The flags `--m8`, `--m9`, `--m10`, `--pick-aperture-from-pose`, `--grip-squeeze-mm`, `--search-effort-weight`, `--search-initial-complexity` and `--save-screenshots` are passed through under the same names and defaults. A headless run stops when TAMPURA loads a scene other than the one pinned for the seed (G19) unless `--allow-g19-mismatch 1` is given; a GUI run goes on and is never scored. The exit code is 0 exactly when the outcome field is success; the field combines TAMPURA's last reward, any error and the ledger gates.
 
 `tools/bridge_gates.py` checks the runs against the gates that keep the comparison honest (no welds, no teleports, no ground-truth reads feeding a decision), and `tampura_bridge/gate_hooks.py` holds the runtime gates. `tools/_bridge_campaign.py` and `tools/_bridge_report.py` run and report a campaign of both arms, TAMPURA and ours, on seeds 0 to 19; `tools/cluster/` holds the Slurm scripts. The plan, the records and the evidence are in `PAPER_AUDIT.txt` and `archive/tampura_bridge_plan_2026-10-25/`.
 

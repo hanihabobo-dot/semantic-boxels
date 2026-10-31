@@ -8055,7 +8055,7 @@ BF#51 [OPEN]  FINDING: CLOSING THE GUI WINDOW MID-EPISODE LEAVES THE BRIDGE
   infrastructure (tooling).
 
 
-BF#52 [OPEN]  TIME CUT (1): THE BASELINE RECORDED; THE EYE SENSES FROM THE
+BF#52 [WITHDRAWN]  TIME CUT (1): THE BASELINE RECORDED; THE EYE SENSES FROM THE
       TARGET'S PICK CONFIGURATION OVER THE REGION INSTEAD OF RETURNING HOME
       (user, 2026-10-30)
   WHAT: Hani: "we need to cut time. look at the past run i have just done,
@@ -8173,8 +8173,13 @@ BF#52 [OPEN]  TIME CUT (1): THE BASELINE RECORDED; THE EYE SENSES FROM THE
   CLAIM EFFECT: none (the queued B8 campaigns run from snapshots before
   this).  HONESTY CLASS: model change (the sense action's configurations),
   disclosed.
+  WITHDRAWN 2026-10-31 (BF#57): in BF#53's per-fix eval the fold slowed
+  planning on 12 of 20 seeds (median wall ratio 1.11) and, with the other
+  cuts, lost successes; Hani keeps fix 4 alone.  The fold lives on the
+  branch time-cuts-reference; the eye returns to a view spot before every
+  sense again.
 
-BF#53 [OPEN]  TIME CUT (2): THE FIXES AS SWITCHES AND THE PER-FIX EVAL ON
+BF#53 [DONE]  TIME CUT (2): THE FIXES AS SWITCHES AND THE PER-FIX EVAL ON
       TWENTY-PLUS SEEDS (user, 2026-10-30)
   WHAT: Hani: "do the fixes, and run eval to confirm time reduction ...
   do eval per fix on a minimum of 20 working seeds per fix. you can run
@@ -8243,8 +8248,65 @@ BF#53 [OPEN]  TIME CUT (2): THE FIXES AS SWITCHES AND THE PER-FIX EVAL ON
   immutable snapshot (arm O's venv A), one job per group of arms, the
   jobs' results.jsonl files concatenated for the summary.  A laptop run
   (seeds 0-23, started 20:14) was stopped on Hani's "in the cloud".
-  RESULT: pending (the cluster jobs).
-  CLAIM EFFECT: none yet.  HONESTY CLASS: fix 2 none (a cache of what the
+  THE RUN (2026-10-31): the first snapshot, sb_ca1907e, was unusable:
+  every episode of job 4989077 (cn-102, 02:50) died in 0.1 s with
+  IndentationError in tampura_bridge/run_bridge_on_finddice.py line 159,
+  and the static gates could not parse the import graph.  The console
+  session's commit a66d95e holds its start-up note block inside the "if
+  mismatch:" body at the wrong indentation; its fix, the block moved
+  before the G19 check, was the hunk it had left uncommitted, so the
+  laptop smokes of the working tree passed while every commit from
+  a66d95e to 0cf619f is unrunnable from a snapshot (a66d95e is on the
+  GitHub remote).  4912db9 commits that hunk alone; a git-archive export
+  of it parses (99 files), passes the static gates and runs seed 0
+  headless to success (16.2 s wall).  The eval's snapshot is sb_4912db9,
+  code only (BF#56), each file verified against the commit.  Jobs
+  4989016/17/78 (the exclusive pair and the chained one) were cancelled.
+  NODE: every rleap_cpu node had other users' 8-CPU jobs with 8+ h left,
+  so an exclusive job would not have started before 13:44; the eval ran
+  on a SHARED node from a copy of the sbatch without --exclusive/--mem=0
+  ($W/tools/time_cut_eval_shared.sbatch: 8 CPUs of 96, 24 GB; the two
+  jobs chained afterany, so two of our pipelines never share a node):
+  job 4990957 (base, 1, 2, 12) on cn-102 from 04:22 beside three other
+  jobs (24 CPUs), job 4990958 (3, 123, 4, 1234) after it.  The arms
+  interleave per seed, so each seed's arms ran back to back under the
+  same neighbours: the per-fix comparison holds, the absolute times
+  carry the shared node.
+  RESULT (jobs 4990957 and 4990958, cn-102, 04:22 to 10:21; archive/
+  tampura_bridge_plan_2026-10-25/bf/BF53_eval_cluster/{4990957,4990958,
+  merged}: results.jsonl, summary.txt, the per-seed tables): 24 seeds x
+  8 arms, 192 episodes.  Successes of 24: base 18, 1: 18, 2: 17, 12: 15,
+  3: 16, 123: 21, 4: 19, 1234: 14; every other outcome a lost die
+  (physics_mismatch, the B7 grasp loss) or the 600 s cap, no
+  planner_failed.  Working seeds under all eight arms: 7 (0, 7, 9, 11,
+  12, 16, 23), the trivial 8 s episodes where the die is visible at once
+  and no fix matters; the pairwise sets with success under both arms
+  hold 11 to 15 seeds, short of the 20 asked, and the means are ruled by
+  a few pathological episodes (seed 19 base 547 s, seed 6 arm 2 551 s,
+  seed 20 base 185 s), so the medians decide.  Medians over the 18 seeds
+  every arm ran to the close, wall / planning s: base 34.6 / 19.4; 1:
+  51.6 / 36.3; 2: 40.2 / 23.2; 12: 52.3 / 36.6; 3: 38.5 / 20.0; 123:
+  53.6 / 34.8; 4: 23.2 / 10.5; 1234: 26.6 / 11.9.  Per fix, the median
+  of the per-seed wall ratio over the seeds both arms closed: fix 1
+  alone 1.11 (slower on 12 of 20 seeds, faster on 1: the fold's real
+  grasp and configuration facts enlarge the optimistic problem, as the
+  seed-10 pair showed); fix 2 alone 0.99, added to 1: 1.00 (a replan
+  follows a pick or a place almost always, so the cache has nothing to
+  reuse); fix 3 alone 0.99, added to 12: 0.96; fix 4 alone 0.89 (faster
+  on 11, slower on 5; planning 20.4 -> 13.0, success 18 -> 19); fix 4
+  added to 123: 0.55 (planning 35.5 -> 12.1, success 21 -> 14 on 20
+  seeds); all four against base 0.78 (success 18 -> 14).  Fix 4 is the
+  time cut; the fold costs planning time and, with the others,
+  successes; the cache and the continuation do nothing measurable.  THE
+  TAIL: the slow episodes are replan loops of observe -> replan ->
+  observe (seed 6 arm 2: 208 plan calls, 102 observes; seed 19 base: 160
+  calls, 78 observes), a finding of its own that none of the four cuts;
+  not analysed.  The node was shared (above); on the 8 s episodes the
+  fold's static facts cost 9 % of the wall.
+  DECISION (Hani, 2026-10-31 10:35): "okay, i want only fix four
+  applied; the other fixes stay on some branch for reference": BF#57.
+  CLAIM EFFECT: the search settings' before/after is the eval's base
+  against arm 4, on a shared node.  HONESTY CLASS: fix 2 none (a cache of what the
   twin would render again), fix 3 a dispatcher rule (the plan goes on
   when its assumption held, as after a found_target sense), fix 4 a search
   setting (pddlstream's own effort weighting; it changes which optimistic
@@ -8351,6 +8413,44 @@ BF#56 [FIXED]  FINDING: THE GATEWAY DROPPED THREE FULL SNAPSHOT UPLOADS IN ONE
   commit; the void job directories tc_ca1907e/4989077 and /4989078
   (BF#53's entry) stay until the hygiene removes them.
   CLAIM EFFECT: none.  HONESTY CLASS: tooling; disclosed.
+
+
+BF#57 [DONE]  DECISION: FIX 4 ALONE STAYS; THE FOLD, THE INIT CACHE AND THE
+      OBSERVE CONTINUATION GO TO THE BRANCH time-cuts-reference (user,
+      2026-10-31 10:35)
+  WHAT: Hani on BF#53's tables: "okay, i want only fix four applied; the
+  other fixes stay on some branch for reference".
+  DONE: the branch time-cuts-reference at fbf18c1 holds every fix with
+  the harness and its tests.  On tampura-bridge: observe_views.py is
+  00cb50d's again (sense_view_test, the init cache and _twin_signature
+  gone); pddlstream_planner.over_region_facts, planner.sense_over_region,
+  the fold's init block and the counters in the [M8] init line gone;
+  test_full_pipeline without the three switches, the fold's and the
+  cache's wiring and the observe continuation (an observe forces a replan
+  again, the observe_result row without continue_); run_logger and the
+  bridge driver without --sense-over-region, --m8-init-cache and
+  --continue-after-observe (the switches dict and the run record too);
+  tests/test_init_cache.py, tests/test_sense_over_region.py,
+  tools/time_cut_eval.py and tools/cluster/time_cut_eval.sbatch removed;
+  the G2 allowlist line of _twin_signature removed; watch.ps1 -ReturnHome
+  gone and -Before = the search settings off; m8_domain's docstring, the
+  README's flag rows and the driver's pass-through sentence updated.
+  KEPT: fix 4 (--search-effort-weight 1, --search-initial-complexity 3,
+  pddlstream_planner.search_options_from, tests/test_search_options.py),
+  the ledger's stream_file and stream_sha with G10r's check,
+  tools/episode_metrics.py.  The wiki (console session, 6eab3b9) still
+  lists the three flags.
+  VERIFIED: 136 files parse, no reference to the removed names outside
+  the archive and this file, tests 45 passed, static gates PASS (G2 46
+  hits all reviewed), seed 0 headless from the working tree: success,
+  wall 13.2 s, planning 5.4 s, the [M8] init line in its old form.
+  CLUSTER: the extension jobs 4998315 and 4998316 (seeds 24-47, all
+  arms, submitted 10:40 for the 20 working seeds per pair) were cancelled
+  at 10:46 after the decision; their partial directories
+  tc_4912db9/4998315 and /4998316 are void.
+  CLAIM EFFECT: the pipeline's time cut is the search settings alone; the
+  eye returns to a view spot before every sense as before BF#52.
+  HONESTY CLASS: user decision; disclosed.
 
 
 ================================================================================
