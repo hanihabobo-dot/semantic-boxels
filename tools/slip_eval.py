@@ -50,9 +50,13 @@ import episode_metrics  # noqa: E402
 MEDIANS = ('wall_s', 'planning_s', 'planning_first_s', 'exec_s', 'plan_calls',
            'steps', 'picks', 'moves', 'senses', 'observes')
 # The console's verified pick of the die (one per carry), the executor's
-# loss after the lift, and the goal check's loss (test_full_pipeline).
+# loss after the lift, carry_hold_check's loss after a move made while
+# holding (BF#59, slip_fixes 'carry_hold_check'; without the switch that
+# loss surfaces at the goal check), and the goal check's loss
+# (test_full_pipeline).
 CARRY_RE = re.compile(r"firm grip on dice")
 LIFT_LOSS_RE = re.compile(r"grip lost after post-pick lift for dice")
+CARRY_LOSS_RE = re.compile(r"grip lost in the carry for dice")
 GOAL_LOSS_RE = re.compile(r"PHYSICAL_FAILURE \(goal\): \(holding dice\)")
 PICK_TRY_RE = re.compile(r"Picking dice")
 
@@ -127,23 +131,36 @@ def check_arms(a, arms):
         print(f"arm {arm}: fixes {r.stdout.strip().splitlines()[-1]}", flush=True)
 
 
+def _read_text(path):
+    try:
+        with open(path, 'r', encoding='utf-8', errors='replace') as f:
+            return f.read()
+    except OSError:
+        return ''
+
+
 def count_carries(save_dir):
-    """(carries, losses, pick tries) of the die from the run's logs."""
-    carries = losses = tries = 0
-    stdout = os.path.join(save_dir, 'stdout.txt')
-    logs = glob.glob(os.path.join(save_dir, 'ours', 'run_*', '*.log'))
-    texts = []
-    for path in [stdout] + logs:
-        try:
-            with open(path, 'r', encoding='utf-8', errors='replace') as f:
-                texts.append(f.read())
-        except OSError:
-            pass
-    if texts:
-        carries = len(CARRY_RE.findall(texts[0]))
-        rest = '\n'.join(texts[1:]) or texts[0]
-        losses = len(LIFT_LOSS_RE.findall(rest)) + min(1, len(GOAL_LOSS_RE.findall(texts[0])))
-        tries = len(PICK_TRY_RE.findall(rest))
+    """(carries, losses, pick tries) of the die from the run's logs.
+
+    Each line is counted in ONE file (checked on the campaign's check
+    episodes, 2026-10-31): the driver's stdout.txt holds the curated
+    console (the verified pick "firm grip", the goal check) and the
+    pipeline's console_debug.log holds every pipeline print once (the
+    pick tries and the executor's loss lines); run_*.log repeats the
+    pipeline's prints and lacks the curated lines, so joining the logs
+    counted every loss and pick try twice.  Fallbacks: run_*.log when
+    there is no console_debug.log, then stdout.txt."""
+    stdout = _read_text(os.path.join(save_dir, 'stdout.txt'))
+    runs = os.path.join(save_dir, 'ours', 'run_*')
+    pipe = '\n'.join(_read_text(p) for p in sorted(glob.glob(os.path.join(runs, 'console_debug.log'))))
+    if not pipe.strip():
+        pipe = '\n'.join(_read_text(p) for p in sorted(glob.glob(os.path.join(runs, 'run_*.log'))))
+    if not pipe.strip():
+        pipe = stdout
+    carries = len(CARRY_RE.findall(stdout if stdout.strip() else pipe))
+    losses = (len(LIFT_LOSS_RE.findall(pipe)) + len(CARRY_LOSS_RE.findall(pipe))
+              + min(1, len(GOAL_LOSS_RE.findall(stdout if stdout.strip() else pipe))))
+    tries = len(PICK_TRY_RE.findall(pipe))
     return carries, losses, tries
 
 

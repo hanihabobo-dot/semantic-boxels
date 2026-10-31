@@ -108,6 +108,36 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      ae3c955cf7beccf40); its loss line's exact text goes into the eval
      harness when it reports. pad_rolling waited for a free slot and was
      DROPPED at 20:25 (force_hold passed its jam probe; see its bullet).
+     carry_hold_check DONE 20:35: commit 85618e2 on slip/carry_hold_check
+     (execution.py: register at import 61 to 72, held_pad_contacts 567
+     the shared tactile helper, carry_hold_begin 597 and carry_hold_end
+     606 the postcondition with the per-carry line and the loss line,
+     the post-lift re-verify 1434 to 1438 now calls the helper with the
+     same rule; test_full_pipeline.py: the begin hook before the
+     waypoint stream 1886 to 1889, the end check and the copied
+     empty-hand path 1982 to 2033 with current_config rebuilt without
+     the lost cargo; 10 tests). Rule: both pads on the held body, no
+     force floor; a loss opens the gripper and ends the move as
+     empty_hand (the transit strike, the pose unknown, the lost-region
+     refresh, a replan). LOSS LINE for the eval: "grip lost in the carry
+     for dice" (added to tools/slip_eval.py as CARRY_LOSS_RE). Checks
+     green on and off (63 + 89, gates PASS, seed 0 success). Six laptop
+     episodes on (seed 1: the cup loop, killed at 900 s; seed 6 four
+     times: held, reward 1.0, two bit-identical pairs of carries): no
+     loss occurred, so the loss path ran only in the unit tests.
+     IMPLEMENTATION REVIEW 20:50 (reviews/implrev_carry_hold_check.md,
+     the orchestrator): ACCEPTED, no change; the loss path gets one
+     injected run on the campaign branch before the snapshot
+     (reviews/impl_carry_hold_check/ep_loss_inject.py: the helper reports
+     no pads once when carry_hold_end asks about the die). HARNESS BUG
+     found and fixed meanwhile (tools/slip_eval.py count_carries,
+     tests/test_slip_eval.py, 7 tests): the pipeline's prints are in
+     both console_debug.log and run_*.log, so the joined logs counted
+     every lift loss and pick try twice; now each line is read in one
+     file (stdout.txt for "firm grip" and the goal check,
+     console_debug.log for the pipeline's prints, fallbacks run_*.log
+     then stdout). Worktree data 9.6 MB (two checks, five episodes),
+     ledgered.
    - force_hold IMPLEMENTED 19:25, NOT READY: commits b2cacd6, b7d08f5,
      d3a0411 on slip/force_hold (robot_utils 1135 to 1201: the block
      with FORCE_HOLD_REACH 0.004, FORCE_HOLD_BUDGET_N 10, the gear
@@ -276,7 +306,17 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    registered: boxel_env, pose_belief twice, robot_utils,
    test_full_pipeline). The check with all five on (the first run of
    force_hold at 200 iterations through the real solver_iters switch)
-   started 20:32. Still to merge: carry_hold_check (its move-action hunk
+   started 20:32 and came back GREEN 20:35: 99 unit tests, 89 bridge
+   tests, gates PASS, seed 0 success in 29 s, 1 die carry; the episode's
+   log has "numSolverIterations 200 on the executing world", the gear
+   constraint on client 0, and the force hold on the cup (half-width
+   33.22 mm, pads 14.2/17.1 N at the hand-over) and on the die (10.00 mm,
+   6.9/6.9 N) (checks/2026-10-31_20-30-05_s0_solver_iters,force_hold,
+   pose_radius_keep,grasp_wrist_home,carry_trapezoid). The off check of
+   the five-merged branch started 20:37. Before the snapshot: merge
+   tampura-bridge into slip/campaign again (tools/slip_eval.py's loss
+   line for carry_hold_check lives on tampura-bridge), then the final
+   on and off checks. Still to merge: carry_hold_check (its move-action hunk
    may conflict with carry_trapezoid's call; its loss line goes into
    tools/slip_eval.py's counting). Cluster at 20:40 (sinfo -p rleap_cpu):
    idle cn-101, 102, 103, 105, 106, 107, 108, 109, 113, 114, 115, 116;
