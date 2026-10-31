@@ -34,6 +34,7 @@ import pybullet as p
 
 import m8_domain
 import robot_utils
+import slip_fixes
 import telemetry
 import test_full_pipeline
 import world_eye
@@ -66,6 +67,17 @@ def d9_setup(world, model):
     c = world.client._client
     p.setGravity(0, 0, task_spec.GRAVITY_Z, physicsClientId=c)
     p.setTimeStep(task_spec.TIMESTEP, physicsClientId=c)
+    # BF#59 solver_iters: our solver iterations beside our gravity and
+    # timestep (robot_utils.SOLVER_ITERATIONS, the value boxel_env sets on
+    # our own world); their tree sets none, so their world runs PyBullet's
+    # 50, which arm T keeps.
+    if slip_fixes.on('solver_iters'):
+        p.setPhysicsEngineParameter(
+            numSolverIterations=robot_utils.SOLVER_ITERATIONS,
+            physicsClientId=c)
+        _n = p.getPhysicsEngineParameters(physicsClientId=c)['numSolverIterations']
+        print(f"  solver_iters: numSolverIterations {_n} on the executing "
+              f"world (client {c}, D9 set-up)")
     for body, cat in zip(world.objects, world.categories):
         p.changeDynamics(body, -1, mass=task_spec.CLASS_MASS_KG[cat],
                          localInertiaDiagonal=list(task_spec.CLASS_INERTIA_DIAG[cat]),
@@ -186,6 +198,10 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 target_symbol=target[0], domain_file=domain_file))
             with gate_hooks.write_only('settle_disclosure'):
                 before = _poses(world)
+            # BF#59 solver_iters: main() configures the slip fixes, but D9's
+            # set-up runs before main(), so the same flag is configured here
+            # first (main() then sets the same names again).
+            slip_fixes.configure(cfg.switches.get('slip_fixes', ''))
             d9_setup(world, model)
             # GF6: only D9's calls run under 'setup'; the adapter build and
             # main() are checked by G3, G6 and G14.
