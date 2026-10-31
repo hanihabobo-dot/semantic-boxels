@@ -933,6 +933,32 @@ class BoxelTestEnv:
                               physicsClientId=self.client_id)
             p.resetJointState(self.plan_robot_id, fj, 0.04,
                               physicsClientId=self.plan_client_id)
+        # BF#59 force_hold (slip_fixes.py; finger_gear folded in): the same
+        # JOINT_GEAR constraint d9_setup creates on the bridge's executing
+        # client, here on our physics client at robot load; reset() runs
+        # resetSimulation (which removes constraints) and then this method
+        # again, so a reset world gets it back.  pybullet_data's URDF declares
+        # the coupling too (panda.urdf line 323, <mimic>), which PyBullet
+        # ignores.  The DIRECT plan client never steps and gets none.
+        import slip_fixes
+        if slip_fixes.on('force_hold'):
+            robot_utils.force_hold_requires_solver_iters('boxel_env._setup_scene')
+            f1, f2 = fingers
+            gear = p.createConstraint(robot_id, f1, robot_id, f2,
+                                      jointType=p.JOINT_GEAR, jointAxis=[1, 0, 0],
+                                      parentFramePosition=[0, 0, 0],
+                                      childFramePosition=[0, 0, 0],
+                                      physicsClientId=self.client_id)
+            p.changeConstraint(gear, gearRatio=robot_utils.FINGER_GEAR_RATIO,
+                               erp=robot_utils.FINGER_GEAR_ERP,
+                               maxForce=robot_utils.FINGER_GEAR_MAX_FORCE,
+                               physicsClientId=self.client_id)
+            import logging
+            logging.getLogger(__name__).info(
+                "force_hold: finger gear constraint %d on client %d (joints %d, "
+                "%d, gearRatio %g, erp %g, maxForce %g N)", gear, self.client_id,
+                f1, f2, robot_utils.FINGER_GEAR_RATIO, robot_utils.FINGER_GEAR_ERP,
+                robot_utils.FINGER_GEAR_MAX_FORCE)
         self.objects["robot"] = ObjectInfo(
             object_id=robot_id, name="robot",
             position=np.array(robot_pos), orientation=np.array([0, 0, 0, 1]),

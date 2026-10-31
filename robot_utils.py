@@ -1132,6 +1132,75 @@ def close_gripper(robot_id: int, gui: bool = False,
 GRIP_SQUEEZE = 0.0005
 
 
+# BF#59 force_hold (the die-slip campaign, slip_fixes.py; the proposal's
+# finger_gear folded in, reviews/hold_physics.md): after the tactile close
+# and its 60-step position hold, the fingers hold a target FORCE_HOLD_REACH
+# inside the measured width at a motor budget of FORCE_HOLD_BUDGET_N per
+# finger, and a JOINT_GEAR constraint couples the two finger joints on the
+# executing client (tampura_bridge/policy.py d9_setup, boxel_env.py
+# _setup_scene).  The block's imports sit here, with the block, so the
+# campaign's other branches can add theirs at the top of the file without a
+# merge conflict.
+import os as _os                                    # noqa: E402
+import slip_fixes                                   # noqa: E402
+
+slip_fixes.register(
+    'force_hold', 'force-limited hold (4 mm inside the measured width at 10 N '
+                  'per finger) after the close, fingers coupled by a JOINT_GEAR '
+                  'constraint; needs solver_iters')
+
+# The 0.5 mm position hold's force is set by where inside the close's 0.5 mm
+# contact tolerance the fingers stopped, and it collapses to 0 N whenever the
+# body shifts a few hundredths of a millimetre (proposals/hold_physics.md 1.1
+# item 2).  A target 4 mm inside the measured width keeps the motors
+# saturated, so each pad presses with the budget whatever the body's width
+# does and the fingers follow the body back in after a junction kick.
+FORCE_HOLD_REACH = 0.004
+# 10 N per finger, one pipeline-wide value: with the gear and 200 solver
+# iterations the die lost 0 of 113 carries and our 40 mm cubes (0.5 kg and
+# 0.1 kg) and cup a 0 of 57 each (hold_physics item 21); 5 N loses 13 to 27
+# of 57 of the 0.5 kg cube (items 19, 21), which sets the lower side; 20 N
+# sits at the solver's edge (102 of 113 dice lost at 100 iterations, held
+# dice turned 18 to 19 deg at 200; item 19 and the review).  Under the
+# Franka hand's 70 N continuous.
+FORCE_HOLD_BUDGET_N = 10.0
+# PyBullet ignores the URDF's <mimic joint="panda_finger_joint1"/> on
+# panda_finger_joint2 (their panda.urdf line 356, pybullet_data's line 323),
+# so force-limited fingers drift 3.7 to 4.3 mm off centre and slosh during
+# the swing (item 19); a JOINT_GEAR constraint with gearRatio -1 keeps
+# q2 = q1 within 0.01 mm (gear_test.py, item 20).  maxForce 50 N is five
+# times the hold budget, so the gear wins every imbalance of the hold.
+FINGER_GEAR_RATIO = -1.0
+FINGER_GEAR_ERP = 0.1
+FINGER_GEAR_MAX_FORCE = 50.0
+# The campaign's check-only escape: the check runs (tools/slip_check.sh) of
+# the slip/force_hold branch alone have no solver_iters switch to name, so
+# this variable set to 1 lets force_hold run without it.  Never set in an
+# eval: the merged campaign branch runs the arm solver_iters+force_hold.
+FORCE_HOLD_NO_ITERS_ENV = 'SLIP_FORCE_HOLD_NO_ITERS_CHECK'
+
+
+def force_hold_requires_solver_iters(where: str) -> None:
+    """force_hold refuses to run without solver_iters: a 10 N hold at
+    PyBullet's default 50 solver iterations expels the die (108 of 113
+    lost, the review), so a forgotten switch would waste an arm.  Called
+    where the gear or the hold is first applied.  The check-only escape
+    (FORCE_HOLD_NO_ITERS_ENV=1) is logged loudly every time it is used."""
+    if slip_fixes.on('solver_iters'):
+        return
+    if _os.environ.get(FORCE_HOLD_NO_ITERS_ENV) == '1':
+        msg = (f"force_hold: WARNING {FORCE_HOLD_NO_ITERS_ENV}=1 at {where}: "
+               f"running WITHOUT solver_iters (the campaign's check-only "
+               f"escape; never an eval arm)")
+        logger.warning(msg)
+        print(f"    {msg}", flush=True)
+        return
+    raise RuntimeError(
+        f"slip fix 'force_hold' needs 'solver_iters' on as well ({where}): "
+        f"run --slip-fixes solver_iters,force_hold (a 10 N hold at 50 solver "
+        f"iterations expels the die, BF#59 reviews/hold_physics.md)")
+
+
 def close_gripper_until_contact(robot_id: int, gui: bool = False,
                                 force: float = 60.0, squeeze: Optional[float] = None,
                                 ignore_body_ids=frozenset(),
@@ -1188,6 +1257,36 @@ def close_gripper_until_contact(robot_id: int, gui: bool = False,
                 telemetry.tick()
                 if gui:
                     time.sleep(1 / 120)
+            # BF#59 force_hold: after the 60-step position hold above (the
+            # start the probe and the three episodes tested; the hold from
+            # the touch is untested), the motors take a target
+            # FORCE_HOLD_REACH inside the measured width at
+            # FORCE_HOLD_BUDGET_N per finger.  The motor target persists
+            # across steps, so the hold lasts through the lift and the carry
+            # until open_gripper commands 0.04 m at 200 N.  The measured
+            # width returned below is the touch's, as without the switch.
+            if slip_fixes.on('force_hold'):
+                force_hold_requires_solver_iters('close_gripper_until_contact')
+                f_target = max(0.0, width - FORCE_HOLD_REACH)
+                for fj in fingers:
+                    p.setJointMotorControl2(robot_id, fj, p.POSITION_CONTROL,
+                                            targetPosition=f_target,
+                                            force=FORCE_HOLD_BUDGET_N)
+                # The pad forces at the end of the position hold, where the
+                # force hold takes over (tactile, the close's own read).
+                pad_nf = {fj: 0.0 for fj in fingers}
+                for c in p.getContactPoints(bodyA=robot_id):
+                    if (c[3] in fingers and c[2] != robot_id
+                            and c[2] not in ignore_body_ids):
+                        pad_nf[c[3]] += c[9]
+                q_now = [p.getJointState(robot_id, fj)[0] for fj in fingers]
+                logger.info(
+                    "force_hold: measured half-width %.2f mm, target %.2f mm, "
+                    "budget %.0f N per finger, pad forces %s N at the end of "
+                    "the position hold, fingers %s mm",
+                    1e3 * width, 1e3 * f_target, FORCE_HOLD_BUDGET_N,
+                    '/'.join(f"{pad_nf[fj]:.2f}" for fj in fingers),
+                    '/'.join(f"{1e3 * q:.2f}" for q in q_now))
             return width
         if target <= 0.0 and max(finger_pos) <= 0.0015:
             break
