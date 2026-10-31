@@ -173,6 +173,39 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      them); the lift handover stays; whether job C keeps its arm is a
      phase-7 decision with grasp_wrist_home's report in hand. Merge note:
      carry_hold_check also edits the move action.
+   - grasp_wrist_home DONE 19:40: commits c659e64 (pose_belief.py:
+     register at import 19 to 28, PANDA_TOP_DOWN_Q7_OFFSET 5 pi / 4,
+     PANDA_Q7_LIMIT, WRIST_HOME_TIE_BAND 5 deg, wrist_joint7_top_down
+     and wrist_home_twin 251 to 285; streams.py: _prefer_wrist_home 93
+     to 129, sample_grasp 882 to 889 maps every candidate of both paths
+     through it with the robot base and home's joint 7 read at call
+     time; 7 tests) and b6a0b90 (probes/grasp_wrist_home/ scripts and
+     summaries, tracked on the branch) on slip/grasp_wrist_home. The rule:
+     joint 7 of a top-down grasp is wrap(bearing - yaw + 5 pi / 4), the
+     member of {yaw, yaw + pi} nearer home's joint 7 (clipped at the
+     limit) is taken unless within the 5 deg band; no IK, no FK, no
+     allowlist line. Validated: against the kin stream's IK on 450 cells
+     of both worlds the chosen member is the IK-nearer one in 362 of 369
+     and never the farther (prediction error median 3.5 deg, p95 11 to
+     17); the joint-7 clip disappears (26 and 10 limit cells today, 0);
+     median wrist distance to home 132/123 deg to 45/44; on the five
+     recorded base carries the twin is taken (predicted travel within 4
+     to 19 deg of the recorded 167 to 199) and the flip episodes' yaw is
+     kept. Checks: gates PASS, seed 0 success on and off (the twin taken
+     for the die and the cup on); the bridge suite had 1 and 2 failures
+     of the goal-at-home episode tests under load (gf9, b3 adopted
+     goal), which pass alone and fail with the switch off too: the
+     laptop-load flake family, pre-existing (force_hold's check hit it
+     as well). Seed 1 on: held, reward 1.0, the twin, joint 2 the
+     largest mover home; seed 6 on: the cup loop (43 refusals, 89 plans,
+     stopped at 900 s), needs pose_radius_keep (job B pairs them).
+     IMPLEMENTATION REVIEW 20:30 (reviews/implrev_grasp_wrist_home.md,
+     the orchestrator): ACCEPTED, no change; the 5 deg band stands on
+     its measurement; the analytic rule is enough (the IK alternative
+     costs two solves per candidate); the pre-sense grasps keep today's
+     yaw until the body is registered. Merge note: pose_belief.py's
+     import block gets `import slip_fixes` from both pose_radius_keep
+     and this branch (keep one, both registers).
    - solver_iters DONE 18:40: commit 2252af5 on slip/solver_iters (5
      files, only added lines): robot_utils.SOLVER_ITERATIONS = 200;
      registered at boxel_env's import; applied in policy.py d9_setup
