@@ -149,6 +149,45 @@ two: 96 % lost; expected to bring the loss per carry from 21 % to near 0,
 real if under 10 %), pad_rolling (rollingFriction 0.01 on both pads,
 their create_default_env value; 4.4 % alone, the fallback) (hold_physics).
 
+## Review results (phase 4)
+
+- grasp_geometry (reviews/grasp_geometry.md, 16:58): DROP all three.
+  edge_pinch: at best about 13 % loss per carry on the eval's carries
+  while the eval can only tell a fix from base at 4 to 5 losses in 60; it
+  re-grasps the dice that hold today (the cup-placed die sits at yaw 0);
+  the edge band is lopsided under the pipeline carry (35 deg 28/48, 55 deg
+  44/48); the 25 mm scope is "the die" in disguise (rule 2) and without
+  it our 40 mm cubes fall from 14/14 to 3/7. face_needs_wrist_yaw: the
+  exact face pinch holds 79 % in its own probe, base's rate; the overhead
+  refresh re-fuses the eye's yaw after the observe, so the commit check
+  can refuse the die until the cap (the cup loop moved onto the die).
+  pinch_band_certificate: the right form for rule 2 but its bands describe
+  the 0.5 mm position hold that force_hold removes; 10 to 14 h. Missed by
+  the proposal: within 1 to 4 deg the narrow width readings held 0/17 and
+  5/16 against 37/55 and 29/44, the close's stopping step, which supports
+  force_hold. Re-probe edge_pinch at 35 to 55 deg under force_hold only if
+  that arm's losses depend on the logged yaw class.
+
+## Eval design notes
+
+- The 20 campaign seeds load THREE scenes on the cluster (BF#39's pinned
+  map, confirmed from BF53_eval_cluster/merged/results.jsonl, 16:58):
+  1747173591 for seeds 0, 7, 9, 11, 12, 13, 16 (the die held in 55 of 56
+  episodes of the per-fix eval: the always-held pick), 1747173593 for
+  seeds 1, 2, 3, 4, 8, 14, 15, 18 (success 4 to 6 of 8 per seed, the
+  losses), 1747173590 for seeds 5, 6, 10, 17, 19 (success 1 to 6 of 8, the
+  cup loop and the losses). A seed is a planner RNG draw on its scene,
+  not a scene. So per arm at 3 repetitions about 39 carries (the 13 seeds
+  of scenes 93 and 90) carry the information, base's loss on them about
+  32 % (31/96 in the per-fix eval), and a fix must bring that to about
+  12 % or less to be told from base at 95 %; the 7 seeds of scene 91 are
+  the regression guard. The analysis reports per scene group; the
+  replication has two levels (the same seed three times: the timing
+  non-determinism; the seeds of one scene: the planner's sampling
+  variance). If the budget allows, the final combined arm and base get 5
+  repetitions on the 13 seeds. TAMPURA's comparison stays on seeds 0 to
+  19.
+
 ## Rules that bind every change
 
 BRIEF.md section 5 (model side, pipeline-wide or TAMPURA-matched, no
