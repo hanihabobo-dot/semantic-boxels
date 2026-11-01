@@ -1,0 +1,286 @@
+--------------------- Slurm Task Prolog ------------------------
+Job ID: 5006487
+Job name: p4-slip
+Host: cn-102
+Date: Sat Oct 31 21:08:31 CET 2026
+User: hani.alassiri.alhabboub
+Slurm account: rleap
+Slurm partition: rleap_cpu
+Work dir: 
+------------------
+Node usage:
+JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
+5006487 rleap_cpu  p4-slip hani.ala  R       0:00      1 cn-102
+------------------
+Show launch script with:
+sacct -B -j 
+------------------
+--------------------- Slurm Task Prolog ------------------------
+host cn-102  job 5006487  2026-10-31T21:08:31+01:00  snapshot /work/rleap1/hani.alassiri.alhabboub/p4/sb_cff9bc5  arms base,pose_radius_keep,pose_radius_keep+grasp_wrist_home  seeds 0-19  reps 3 on 0-19  out /work/rleap1/hani.alassiri.alhabboub/p4/results/slip_cff9bc5/5006487
+model name	: Intel(R) Xeon(R) Platinum 8160 CPU @ 2.10GHz
+G7       PASS  no scene literal
+G11(i)   PASS  pddlstream imported only by pddlstream_planner.py and streams.py
+G17      PASS  clean
+arm base: fixes []
+arm pose_radius_keep: fixes ['pose_radius_keep']
+arm pose_radius_keep+grasp_wrist_home: fixes ['grasp_wrist_home', 'pose_radius_keep']
+[eval] 0 episodes done, 180 to run: arms ['base', 'pose_radius_keep', 'pose_radius_keep+grasp_wrist_home'], seeds 0-19, reps 3 on [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+[eval] 1/180 arm base seed 0 rep 0 ... success wall 18.6 s carries 1 losses 0
+[eval] 2/180 arm pose_radius_keep seed 0 rep 0 ... success wall 17.0 s carries 1 losses 0
+[eval] 3/180 arm pose_radius_keep+grasp_wrist_home seed 0 rep 0 ... success wall 17.7 s carries 1 losses 0
+[eval] 4/180 arm base seed 1 rep 0 ... failure (physics_mismatch) wall 39.4 s carries 1 losses 1
+[eval] 5/180 arm pose_radius_keep seed 1 rep 0 ... success wall 40.1 s carries 1 losses 0
+[eval] 6/180 arm pose_radius_keep+grasp_wrist_home seed 1 rep 0 ... no outcome wall 600.2 s carries 0 losses 0 TIMEOUT
+[eval] 7/180 arm base seed 2 rep 0 ... success wall 39.0 s carries 1 losses 0
+[eval] 8/180 arm pose_radius_keep seed 2 rep 0 ... failure (physics_mismatch) wall 39.3 s carries 1 losses 1
+[eval] 9/180 arm pose_radius_keep+grasp_wrist_home seed 2 rep 0 ... success wall 162.1 s carries 1 losses 0
+[eval] 10/180 arm base seed 3 rep 0 ... success wall 40.3 s carries 1 losses 0
+[eval] 11/180 arm pose_radius_keep seed 3 rep 0 ... success wall 38.9 s carries 1 losses 0
+[eval] 12/180 arm pose_radius_keep+grasp_wrist_home seed 3 rep 0 ... no outcome wall 600.2 s carries 0 losses 0 TIMEOUT
+[eval] 13/180 arm base seed 4 rep 0 ... success wall 47.4 s carries 1 losses 0
+[eval] 14/180 arm pose_radius_keep seed 4 rep 0 ... failure (physics_mismatch) wall 43.0 s carries 1 losses 1
+[eval] 15/180 arm pose_radius_keep+grasp_wrist_home seed 4 rep 0 ... no outcome wall 600.2 s carries 0 losses 0 TIMEOUT
+[eval] 16/180 arm base seed 5 rep 0 ... success wall 98.6 s carries 1 losses 0
+[eval] 17/180 arm pose_radius_keep seed 5 rep 0 ... success wall 53.8 s carries 1 losses 0
+[eval] 18/180 arm pose_radius_keep+grasp_wrist_home seed 5 rep 0 ... success wall 51.9 s carries 1 losses 0
+[eval] 19/180 arm base seed 6 rep 0 ... no outcome wall 600.2 s carries 0 losses 0 TIMEOUT
+[eval] 20/180 arm pose_radius_keep seed 6 rep 0 ... success wall 62.7 s carries 1 losses 0
+[eval] 21/180 arm pose_radius_keep+grasp_wrist_home seed 6 rep 0 ... success wall 54.4 s carries 1 losses 0
+[eval] 22/180 arm base seed 7 rep 0 ... success wall 17.1 s carries 1 losses 0
+[eval] 23/180 arm pose_radius_keep seed 7 rep 0 ... success wall 16.8 s carries 1 losses 0
+[eval] 24/180 arm pose_radius_keep+grasp_wrist_home seed 7 rep 0 ... success wall 15.1 s carries 1 losses 0
+[eval] 25/180 arm base seed 8 rep 0 ... success wall 41.2 s carries 1 losses 0
+[eval] 26/180 arm pose_radius_keep seed 8 rep 0 ... failure (physics_mismatch) wall 41.8 s carries 1 losses 1
+[eval] 27/180 arm pose_radius_keep+grasp_wrist_home seed 8 rep 0 ... success wall 93.0 s carries 1 losses 0
+[eval] 28/180 arm base seed 9 rep 0 ... success wall 17.7 s carries 1 losses 0
+[eval] 29/180 arm pose_radius_keep seed 9 rep 0 ... success wall 16.9 s carries 1 losses 0
+[eval] 30/180 arm pose_radius_keep+grasp_wrist_home seed 9 rep 0 ... success wall 16.7 s carries 1 losses 0
+[eval] 31/180 arm base seed 10 rep 0 ... success wall 44.2 s carries 1 losses 0
+[eval] 32/180 arm pose_radius_keep seed 10 rep 0 ... success wall 44.7 s carries 1 losses 0
+[eval] 33/180 arm pose_radius_keep+grasp_wrist_home seed 10 rep 0 ... success wall 44.1 s carries 1 losses 0
+[eval] 34/180 arm base seed 11 rep 0 ... failure (physics_mismatch) wall 24.5 s carries 1 losses 1
+[eval] 35/180 arm pose_radius_keep seed 11 rep 0 ... success wall 16.8 s carries 1 losses 0
+[eval] 36/180 arm pose_radius_keep+grasp_wrist_home seed 11 rep 0 ... success wall 17.1 s carries 1 losses 0
+[eval] 37/180 arm base seed 12 rep 0 ... success wall 17.0 s carries 1 losses 0
+[eval] 38/180 arm pose_radius_keep seed 12 rep 0 ... success wall 17.3 s carries 1 losses 0
+[eval] 39/180 arm pose_radius_keep+grasp_wrist_home seed 12 rep 0 ... success wall 17.0 s carries 1 losses 0
+[eval] 40/180 arm base seed 13 rep 0 ... success wall 16.6 s carries 1 losses 0
+[eval] 41/180 arm pose_radius_keep seed 13 rep 0 ... failure (physics_mismatch) wall 16.7 s carries 1 losses 1
+[eval] 42/180 arm pose_radius_keep+grasp_wrist_home seed 13 rep 0 ... success wall 17.2 s carries 1 losses 0
+[eval] 43/180 arm base seed 14 rep 0 ... failure (physics_mismatch) wall 41.8 s carries 1 losses 1
+[eval] 44/180 arm pose_radius_keep seed 14 rep 0 ... failure (physics_mismatch) wall 42.1 s carries 1 losses 1
+[eval] 45/180 arm pose_radius_keep+grasp_wrist_home seed 14 rep 0 ... no outcome wall 600.3 s carries 0 losses 0 TIMEOUT
+[eval] 46/180 arm base seed 15 rep 0 ... failure (physics_mismatch) wall 47.8 s carries 1 losses 1
+[eval] 47/180 arm pose_radius_keep seed 15 rep 0 ... success wall 41.0 s carries 1 losses 0
+[eval] 48/180 arm pose_radius_keep+grasp_wrist_home seed 15 rep 0 ... no outcome wall 600.4 s carries 0 losses 0 TIMEOUT
+[eval] 49/180 arm base seed 16 rep 0 ... success wall 19.3 s carries 1 losses 0
+[eval] 50/180 arm pose_radius_keep seed 16 rep 0 ... success wall 17.6 s carries 1 losses 0
+[eval] 51/180 arm pose_radius_keep+grasp_wrist_home seed 16 rep 0 ... success wall 18.2 s carries 1 losses 0
+[eval] 52/180 arm base seed 17 rep 0 ... no outcome wall 600.2 s carries 0 losses 0 TIMEOUT
+[eval] 53/180 arm pose_radius_keep seed 17 rep 0 ... failure (physics_mismatch) wall 55.5 s carries 1 losses 1
+[eval] 54/180 arm pose_radius_keep+grasp_wrist_home seed 17 rep 0 ... success wall 52.2 s carries 1 losses 0
+[eval] 55/180 arm base seed 18 rep 0 ... success wall 41.6 s carries 1 losses 0
+[eval] 56/180 arm pose_radius_keep seed 18 rep 0 ... failure (physics_mismatch) wall 60.1 s carries 1 losses 1
+[eval] 57/180 arm pose_radius_keep+grasp_wrist_home seed 18 rep 0 ... success wall 56.8 s carries 1 losses 0
+[eval] 58/180 arm base seed 19 rep 0 ... success wall 53.4 s carries 1 losses 0
+[eval] 59/180 arm pose_radius_keep seed 19 rep 0 ... success wall 61.1 s carries 1 losses 0
+[eval] 60/180 arm pose_radius_keep+grasp_wrist_home seed 19 rep 0 ... success wall 48.6 s carries 1 losses 0
+[eval] 61/180 arm base seed 0 rep 1 ... success wall 17.1 s carries 1 losses 0
+[eval] 62/180 arm pose_radius_keep seed 0 rep 1 ... success wall 18.0 s carries 1 losses 0
+[eval] 63/180 arm pose_radius_keep+grasp_wrist_home seed 0 rep 1 ... success wall 16.7 s carries 1 losses 0
+[eval] 64/180 arm base seed 1 rep 1 ... failure (physics_mismatch) wall 40.5 s carries 1 losses 1
+[eval] 65/180 arm pose_radius_keep seed 1 rep 1 ... failure (physics_mismatch) wall 41.7 s carries 1 losses 1
+[eval] 66/180 arm pose_radius_keep+grasp_wrist_home seed 1 rep 1 ... no outcome wall 600.2 s carries 0 losses 0 TIMEOUT
+[eval] 67/180 arm base seed 2 rep 1 ... success wall 29.6 s carries 1 losses 0
+[eval] 68/180 arm pose_radius_keep seed 2 rep 1 ... failure (physics_mismatch) wall 40.8 s carries 1 losses 1
+[eval] 69/180 arm pose_radius_keep+grasp_wrist_home seed 2 rep 1 ... success wall 178.4 s carries 1 losses 0
+[eval] 70/180 arm base seed 3 rep 1 ... success wall 29.3 s carries 1 losses 0
+[eval] 71/180 arm pose_radius_keep seed 3 rep 1 ... success wall 34.8 s carries 1 losses 0
+[eval] 72/180 arm pose_radius_keep+grasp_wrist_home seed 3 rep 1 ... success wall 310.0 s carries 1 losses 0
+[eval] 73/180 arm base seed 4 rep 1 ... success wall 42.1 s carries 1 losses 0
+[eval] 74/180 arm pose_radius_keep seed 4 rep 1 ... success wall 63.7 s carries 1 losses 0
+[eval] 75/180 arm pose_radius_keep+grasp_wrist_home seed 4 rep 1 ... success wall 411.5 s carries 1 losses 0
+[eval] 76/180 arm base seed 5 rep 1 ... failure (physics_mismatch) wall 274.5 s carries 1 losses 1
+[eval] 77/180 arm pose_radius_keep seed 5 rep 1 ... success wall 71.2 s carries 1 losses 0
+[eval] 78/180 arm pose_radius_keep+grasp_wrist_home seed 5 rep 1 ... success wall 64.0 s carries 1 losses 0
+[eval] 79/180 arm base seed 6 rep 1 ... no outcome wall 600.3 s carries 0 losses 0 TIMEOUT
+[eval] 80/180 arm pose_radius_keep seed 6 rep 1 ... success wall 55.2 s carries 1 losses 0
+[eval] 81/180 arm pose_radius_keep+grasp_wrist_home seed 6 rep 1 ... success wall 53.6 s carries 1 losses 0
+[eval] 82/180 arm base seed 7 rep 1 ... success wall 17.1 s carries 1 losses 0
+[eval] 83/180 arm pose_radius_keep seed 7 rep 1 ... success wall 16.3 s carries 1 losses 0
+[eval] 84/180 arm pose_radius_keep+grasp_wrist_home seed 7 rep 1 ... success wall 16.0 s carries 1 losses 0
+[eval] 85/180 arm base seed 8 rep 1 ... failure (physics_mismatch) wall 39.1 s carries 1 losses 1
+[eval] 86/180 arm pose_radius_keep seed 8 rep 1 ... failure (physics_mismatch) wall 39.7 s carries 1 losses 1
+[eval] 87/180 arm pose_radius_keep+grasp_wrist_home seed 8 rep 1 ... success wall 94.9 s carries 1 losses 0
+[eval] 88/180 arm base seed 9 rep 1 ... success wall 17.2 s carries 1 losses 0
+[eval] 89/180 arm pose_radius_keep seed 9 rep 1 ... success wall 16.3 s carries 1 losses 0
+[eval] 90/180 arm pose_radius_keep+grasp_wrist_home seed 9 rep 1 ... success wall 16.0 s carries 1 losses 0
+[eval] 91/180 arm base seed 10 rep 1 ... success wall 41.5 s carries 1 losses 0
+[eval] 92/180 arm pose_radius_keep seed 10 rep 1 ... success wall 42.9 s carries 1 losses 0
+[eval] 93/180 arm pose_radius_keep+grasp_wrist_home seed 10 rep 1 ... success wall 47.8 s carries 1 losses 0
+[eval] 94/180 arm base seed 11 rep 1 ... success wall 17.3 s carries 1 losses 0
+[eval] 95/180 arm pose_radius_keep seed 11 rep 1 ... success wall 16.5 s carries 1 losses 0
+[eval] 96/180 arm pose_radius_keep+grasp_wrist_home seed 11 rep 1 ... success wall 16.1 s carries 1 losses 0
+[eval] 97/180 arm base seed 12 rep 1 ... success wall 19.0 s carries 1 losses 0
+[eval] 98/180 arm pose_radius_keep seed 12 rep 1 ... failure (physics_mismatch) wall 171.3 s carries 1 losses 1
+[eval] 99/180 arm pose_radius_keep+grasp_wrist_home seed 12 rep 1 ... success wall 17.0 s carries 1 losses 0
+[eval] 100/180 arm base seed 13 rep 1 ... success wall 16.1 s carries 1 losses 0
+[eval] 101/180 arm pose_radius_keep seed 13 rep 1 ... success wall 16.1 s carries 1 losses 0
+[eval] 102/180 arm pose_radius_keep+grasp_wrist_home seed 13 rep 1 ... success wall 15.8 s carries 1 losses 0
+[eval] 103/180 arm base seed 14 rep 1 ... failure (physics_mismatch) wall 41.1 s carries 1 losses 1
+[eval] 104/180 arm pose_radius_keep seed 14 rep 1 ... failure (physics_mismatch) wall 40.2 s carries 1 losses 1
+[eval] 105/180 arm pose_radius_keep+grasp_wrist_home seed 14 rep 1 ... success wall 77.0 s carries 1 losses 0
+[eval] 106/180 arm base seed 15 rep 1 ... success wall 40.1 s carries 1 losses 0
+[eval] 107/180 arm pose_radius_keep seed 15 rep 1 ... failure (physics_mismatch) wall 38.9 s carries 1 losses 1
+[eval] 108/180 arm pose_radius_keep+grasp_wrist_home seed 15 rep 1 ... success wall 378.6 s carries 1 losses 0
+[eval] 109/180 arm base seed 16 rep 1 ... success wall 17.4 s carries 1 losses 0
+[eval] 110/180 arm pose_radius_keep seed 16 rep 1 ... success wall 16.2 s carries 1 losses 0
+[eval] 111/180 arm pose_radius_keep+grasp_wrist_home seed 16 rep 1 ... success wall 16.6 s carries 1 losses 0
+[eval] 112/180 arm base seed 17 rep 1 ... no outcome wall 600.2 s carries 0 losses 0 TIMEOUT
+[eval] 113/180 arm pose_radius_keep seed 17 rep 1 ... success wall 51.5 s carries 1 losses 0
+[eval] 114/180 arm pose_radius_keep+grasp_wrist_home seed 17 rep 1 ... success wall 50.8 s carries 1 losses 0
+[eval] 115/180 arm base seed 18 rep 1 ... failure (physics_mismatch) wall 39.0 s carries 1 losses 1
+[eval] 116/180 arm pose_radius_keep seed 18 rep 1 ... failure (physics_mismatch) wall 56.4 s carries 1 losses 1
+[eval] 117/180 arm pose_radius_keep+grasp_wrist_home seed 18 rep 1 ... failure (physics_mismatch) wall 435.1 s carries 1 losses 1
+[eval] 118/180 arm base seed 19 rep 1 ... no outcome wall 600.2 s carries 0 losses 0 TIMEOUT
+[eval] 119/180 arm pose_radius_keep seed 19 rep 1 ... success wall 54.5 s carries 1 losses 0
+[eval] 120/180 arm pose_radius_keep+grasp_wrist_home seed 19 rep 1 ... success wall 45.0 s carries 1 losses 0
+[eval] 121/180 arm base seed 0 rep 2 ... success wall 20.9 s carries 1 losses 0
+[eval] 122/180 arm pose_radius_keep seed 0 rep 2 ... success wall 17.2 s carries 1 losses 0
+[eval] 123/180 arm pose_radius_keep+grasp_wrist_home seed 0 rep 2 ... success wall 17.0 s carries 1 losses 0
+[eval] 124/180 arm base seed 1 rep 2 ... success wall 39.3 s carries 1 losses 0
+[eval] 125/180 arm pose_radius_keep seed 1 rep 2 ... success wall 28.6 s carries 1 losses 0
+[eval] 126/180 arm pose_radius_keep+grasp_wrist_home seed 1 rep 2 ... no outcome wall 600.2 s carries 0 losses 0 TIMEOUT
+[eval] 127/180 arm base seed 2 rep 2 ... success wall 38.9 s carries 1 losses 0
+[eval] 128/180 arm pose_radius_keep seed 2 rep 2 ... failure (physics_mismatch) wall 38.5 s carries 1 losses 1
+[eval] 129/180 arm pose_radius_keep+grasp_wrist_home seed 2 rep 2 ... success wall 256.8 s carries 1 losses 0
+[eval] 130/180 arm base seed 3 rep 2 ... success wall 40.0 s carries 1 losses 0
+[eval] 131/180 arm pose_radius_keep seed 3 rep 2 ... success wall 38.5 s carries 1 losses 0
+[eval] 132/180 arm pose_radius_keep+grasp_wrist_home seed 3 rep 2 ... success wall 261.2 s carries 1 losses 0
+[eval] 133/180 arm base seed 4 rep 2 ... success wall 40.7 s carries 1 losses 0
+[eval] 134/180 arm pose_radius_keep seed 4 rep 2 ... success wall 32.6 s carries 1 losses 0
+[eval] 135/180 arm pose_radius_keep+grasp_wrist_home seed 4 rep 2 ... no outcome wall 600.2 s carries 0 losses 0 TIMEOUT
+[eval] 136/180 arm base seed 5 rep 2 ... no outcome wall 600.2 s carries 0 losses 0 TIMEOUT
+[eval] 137/180 arm pose_radius_keep seed 5 rep 2 ... failure (physics_mismatch) wall 179.0 s carries 1 losses 1
+[eval] 138/180 arm pose_radius_keep+grasp_wrist_home seed 5 rep 2 ... success wall 50.3 s carries 1 losses 0
+[eval] 139/180 arm base seed 6 rep 2 ... no outcome wall 600.2 s carries 0 losses 0 TIMEOUT
+[eval] 140/180 arm pose_radius_keep seed 6 rep 2 ... success wall 55.0 s carries 1 losses 0
+[eval] 141/180 arm pose_radius_keep+grasp_wrist_home seed 6 rep 2 ... success wall 45.2 s carries 1 losses 0
+[eval] 142/180 arm base seed 7 rep 2 ... success wall 17.8 s carries 1 losses 0
+[eval] 143/180 arm pose_radius_keep seed 7 rep 2 ... success wall 16.6 s carries 1 losses 0
+[eval] 144/180 arm pose_radius_keep+grasp_wrist_home seed 7 rep 2 ... success wall 16.6 s carries 1 losses 0
+[eval] 145/180 arm base seed 8 rep 2 ... success wall 38.7 s carries 1 losses 0
+[eval] 146/180 arm pose_radius_keep seed 8 rep 2 ... success wall 34.1 s carries 1 losses 0
+[eval] 147/180 arm pose_radius_keep+grasp_wrist_home seed 8 rep 2 ... success wall 90.9 s carries 1 losses 0
+[eval] 148/180 arm base seed 9 rep 2 ... success wall 18.4 s carries 1 losses 0
+[eval] 149/180 arm pose_radius_keep seed 9 rep 2 ... success wall 17.0 s carries 1 losses 0
+[eval] 150/180 arm pose_radius_keep+grasp_wrist_home seed 9 rep 2 ... success wall 15.8 s carries 1 losses 0
+[eval] 151/180 arm base seed 10 rep 2 ... success wall 43.1 s carries 1 losses 0
+[eval] 152/180 arm pose_radius_keep seed 10 rep 2 ... failure (physics_mismatch) wall 228.5 s carries 1 losses 1
+[eval] 153/180 arm pose_radius_keep+grasp_wrist_home seed 10 rep 2 ... success wall 42.1 s carries 1 losses 0
+[eval] 154/180 arm base seed 11 rep 2 ... success wall 22.5 s carries 1 losses 0
+[eval] 155/180 arm pose_radius_keep seed 11 rep 2 ... no outcome wall 600.2 s carries 0 losses 0 TIMEOUT
+[eval] 156/180 arm pose_radius_keep+grasp_wrist_home seed 11 rep 2 ... success wall 24.2 s carries 1 losses 0
+[eval] 157/180 arm base seed 12 rep 2 ... success wall 16.8 s carries 1 losses 0
+[eval] 158/180 arm pose_radius_keep seed 12 rep 2 ... success wall 16.6 s carries 1 losses 0
+[eval] 159/180 arm pose_radius_keep+grasp_wrist_home seed 12 rep 2 ... success wall 16.5 s carries 1 losses 0
+[eval] 160/180 arm base seed 13 rep 2 ... success wall 17.9 s carries 1 losses 0
+[eval] 161/180 arm pose_radius_keep seed 13 rep 2 ... success wall 17.0 s carries 1 losses 0
+[eval] 162/180 arm pose_radius_keep+grasp_wrist_home seed 13 rep 2 ... success wall 16.8 s carries 1 losses 0
+[eval] 163/180 arm base seed 14 rep 2 ... failure (physics_mismatch) wall 38.9 s carries 1 losses 1
+[eval] 164/180 arm pose_radius_keep seed 14 rep 2 ... failure (physics_mismatch) wall 40.7 s carries 1 losses 1
+[eval] 165/180 arm pose_radius_keep+grasp_wrist_home seed 14 rep 2 ... no outcome wall 600.2 s carries 0 losses 0 TIMEOUT
+[eval] 166/180 arm base seed 15 rep 2 ... failure (physics_mismatch) wall 39.8 s carries 1 losses 1
+[eval] 167/180 arm pose_radius_keep seed 15 rep 2 ... success wall 39.5 s carries 1 losses 0
+[eval] 168/180 arm pose_radius_keep+grasp_wrist_home seed 15 rep 2 ... success wall 297.5 s carries 1 losses 0
+[eval] 169/180 arm base seed 16 rep 2 ... success wall 42.5 s carries 1 losses 0
+[eval] 170/180 arm pose_radius_keep seed 16 rep 2 ... success wall 16.9 s carries 1 losses 0
+[eval] 171/180 arm pose_radius_keep+grasp_wrist_home seed 16 rep 2 ... success wall 17.4 s carries 1 losses 0
+[eval] 172/180 arm base seed 17 rep 2 ... no outcome wall 600.2 s carries 0 losses 0 TIMEOUT
+[eval] 173/180 arm pose_radius_keep seed 17 rep 2 ... failure (physics_mismatch) wall 52.6 s carries 1 losses 1
+[eval] 174/180 arm pose_radius_keep+grasp_wrist_home seed 17 rep 2 ... success wall 48.9 s carries 1 losses 0
+[eval] 175/180 arm base seed 18 rep 2 ... failure (planner_failed) wall 32.6 s carries 0 losses 0
+[eval] 176/180 arm pose_radius_keep seed 18 rep 2 ... failure (physics_mismatch) wall 38.0 s carries 1 losses 1
+[eval] 177/180 arm pose_radius_keep+grasp_wrist_home seed 18 rep 2 ... no outcome wall 600.2 s carries 0 losses 0 TIMEOUT
+[eval] 178/180 arm base seed 19 rep 2 ... success wall 111.0 s carries 1 losses 0
+[eval] 179/180 arm pose_radius_keep seed 19 rep 2 ... success wall 46.7 s carries 1 losses 0
+[eval] 180/180 arm pose_radius_keep+grasp_wrist_home seed 19 rep 2 ... success wall 44.1 s carries 1 losses 0
+arms base, pose_radius_keep, pose_radius_keep+grasp_wrist_home; seeds 20: 0-19
+rows 180 (repetition 0: 60)
+
+arm            episodes  success timeouts  carries  losses loss/carry pick tries
+base                 60       40        8       51      11       0.22         51
+pose_radius_keep       60       39        1       59      20       0.34         59
+pose_radius_keep+grasp_wrist_home       60       49       10       50       1       0.02         50
+
+medians over the 13 seeds every arm ran to the ledger's close (repetition 0, any outcome)
+metric                    basepose_radius_keeppose_radius_keep+grasp_wrist_home
+wall_s                    14.5         8.5         9.0
+planning_s                 6.9         3.3         3.1
+planning_first_s           1.3         1.2         1.2
+exec_s                     6.2         4.0         4.9
+plan_calls                 5.0         3.0         3.0
+steps                     17.0        11.0        14.0
+picks                      4.0         3.0         2.0
+moves                      9.0         6.0         9.0
+senses                     1.0         1.0         1.0
+observes                   1.0         1.0         1.0
+
+each arm against base on the seeds both ran to the close (repetition 0): success, losses per carry, and the median per-seed ratio of wall and planning
+  pose_radius_keep (18 seeds): success 14 -> 12; losses/carries 4/18 -> 6/18; wall_s x0.99, planning_s x1.02, exec_s x1.00
+  pose_radius_keep+grasp_wrist_home (13 seeds): success 12 -> 13; losses/carries 1/13 -> 0/13; wall_s x1.01, planning_s x1.03, exec_s x0.98
+
+replication (the same arm and seed run more than once): outcomes per run, and the wall times; "mixed" marks a seed whose runs disagree
+  base         mixed 7/20: seed 0: SSS [19, 17, 21]; seed 1: FFS [39, 40, 39] mixed; seed 2: SSS [39, 30, 39]; seed 3: SSS [40, 29, 40]; seed 4: SSS [47, 42, 41]; seed 5: SFT [99, 274, 600] mixed; seed 6: TTT [600, 600, 600]; seed 7: SSS [17, 17, 18]; seed 8: SFS [41, 39, 39] mixed; seed 9: SSS [18, 17, 18]; seed 10: SSS [44, 42, 43]; seed 11: FSS [24, 17, 22] mixed; seed 12: SSS [17, 19, 17]; seed 13: SSS [17, 16, 18]; seed 14: FFF [42, 41, 39]; seed 15: FSF [48, 40, 40] mixed; seed 16: SSS [19, 17, 42]; seed 17: TTT [600, 600, 600]; seed 18: SFF [42, 39, 33] mixed; seed 19: STS [53, 600, 111] mixed
+  pose_radius_keep mixed 10/20: seed 0: SSS [17, 18, 17]; seed 1: SFS [40, 42, 29] mixed; seed 2: FFF [39, 41, 38]; seed 3: SSS [39, 35, 38]; seed 4: FSS [43, 64, 33] mixed; seed 5: SSF [54, 71, 179] mixed; seed 6: SSS [63, 55, 55]; seed 7: SSS [17, 16, 17]; seed 8: FFS [42, 40, 34] mixed; seed 9: SSS [17, 16, 17]; seed 10: SSF [45, 43, 228] mixed; seed 11: SST [17, 16, 600] mixed; seed 12: SFS [17, 171, 17] mixed; seed 13: FSS [17, 16, 17] mixed; seed 14: FFF [42, 40, 41]; seed 15: SFS [41, 39, 40] mixed; seed 16: SSS [18, 16, 17]; seed 17: FSF [56, 52, 53] mixed; seed 18: FFF [60, 56, 38]; seed 19: SSS [61, 54, 47]
+  pose_radius_keep+grasp_wrist_home mixed 5/20: seed 0: SSS [18, 17, 17]; seed 1: TTT [600, 600, 600]; seed 2: SSS [162, 178, 257]; seed 3: TSS [600, 310, 261] mixed; seed 4: TST [600, 412, 600] mixed; seed 5: SSS [52, 64, 50]; seed 6: SSS [54, 54, 45]; seed 7: SSS [15, 16, 17]; seed 8: SSS [93, 95, 91]; seed 9: SSS [17, 16, 16]; seed 10: SSS [44, 48, 42]; seed 11: SSS [17, 16, 24]; seed 12: SSS [17, 17, 16]; seed 13: SSS [17, 16, 17]; seed 14: TST [600, 77, 600] mixed; seed 15: TSS [600, 379, 298] mixed; seed 16: SSS [18, 17, 17]; seed 17: SSS [52, 51, 49]; seed 18: SFT [57, 435, 600] mixed; seed 19: SSS [49, 45, 44]
+
+outcome and wall_s per seed, repetition 0 (x: not run, T: timeout, F: no success)
+seed          basepose_radius_keeppose_radius_keep+grasp_wrist_home
+0              7.8         7.7         8.3
+1             F 39        27.3           T
+2             26.0        F 39       149.3
+3             27.2        27.0           T
+4             35.3        F 43           T
+5             86.5        40.6        40.6
+6                T        45.3        42.9
+7              8.0         8.0         7.9
+8             29.8        F 42        81.9
+9              8.0         8.3         8.1
+10            33.1        32.7        33.1
+11            F 24         8.2         8.6
+12             8.2         7.8         8.2
+13             7.9        F 17         8.0
+14            F 42        F 42           T
+15            F 48        30.0           T
+16             8.9         8.5         9.0
+17               T        F 56        40.8
+18            29.4        F 60        44.5
+19            42.1        48.9        36.3
+harness rc 0
+results in /work/rleap1/hani.alassiri.alhabboub/p4/results/slip_cff9bc5/5006487
+prune_work 2026-11-01T02:45:51+01:00 apply=1 cap=1073741824 reserve=0 used=1399215616 referenced=[sb_cff9bc5]
+--- usage (counted) ---
+512	/work/rleap1/hani.alassiri.alhabboub/p4/inbox
+4.7M	/work/rleap1/hani.alassiri.alhabboub/p4/sb_cff9bc5
+1.3G	/work/rleap1/hani.alassiri.alhabboub/p4/results
+473K	/work/rleap1/hani.alassiri.alhabboub/p4/logs
+--- environment (not counted) ---
+5.4G	/work/rleap1/hani.alassiri.alhabboub/p4/armO-venvA
+6.8G	/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work
+297M	/work/rleap1/hani.alassiri.alhabboub/p4/pddlstream_lib
+97M	/work/rleap1/hani.alassiri.alhabboub/p4/python
+110M	/work/rleap1/hani.alassiri.alhabboub/p4/tools
+37K	/work/rleap1/hani.alassiri.alhabboub/p4/uv-cache
+counted total 1399703552 bytes (1334 MiB) of 1024 MiB, reserve 0 MiB
+prune_work: STILL OVER THE CAP
+prune_work rc 3
+SLIP_DONE
+--------------------- Slurm Task Epilog ------------------------
+Job ID: 5006487
+Time: Sun Nov  1 02:48:15 CET 2026
+Elapsed Time: 05:39:44
+Billing per second for TRES: billing=256,cpu=8,mem=24G,node=1
+Show resource usage with e.g.:
+sacct -j 5006487 -o Elapsed,TotalCPU,UserCPU,SystemCPU,MaxRSS,ReqTRES%60,MaxDiskRead,MaxDiskWrite
+--------------------- Slurm Task Epilog ------------------------

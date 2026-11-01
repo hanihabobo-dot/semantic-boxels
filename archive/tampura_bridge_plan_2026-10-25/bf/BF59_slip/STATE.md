@@ -442,9 +442,11 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    bridge tests, gates PASS). NOT in the running eval (its snapshot is
    cff9bc5). Its cluster eval needs Hani's approval of that question
    alone; the natural place is job E beside the chosen set.
-   RESULTS SO FAR (2026-11-01 00:15; the pulled records in eval/<job>/,
-   tracked; the table script eval/slip_table.py reads every job's
-   results.jsonl and T's campaign.jsonl and writes eval/TABLE.md):
+   RESULTS (all five jobs in by 04:10 on 2026-11-01; the pulled records
+   in eval/<job>/, tracked; the table script eval/slip_table.py reads
+   every job's results.jsonl and T's campaign.jsonl and writes
+   eval/TABLE.md, the full table; a Sonnet agent recomputed the numbers
+   independently, see "second opinion" below):
    - Job D (5006489, cn-105, 21:08 to 23:57, 120 episodes): base 42/60
      successes, 9 timeouts (seeds 6, 17, 19 in all three reps, all on
      scene 1747173590: the cup loop), 9 losses in 51 carries (0.18;
@@ -482,11 +484,61 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      (8 of 24 carries in A, 6 of 24 in D) and 1747173590 (3 of 6 in D);
      scene 1747173591 never loses in base (0 of 42 carries over A and
      D).
-   - B was at 178/180 and C at 146/180 at 02:43; the waiter
-     (b17r72a2y) wakes the session when both have ended (C about
-     04:00). B's arm pose_radius_keep+grasp_wrist_home timed out on
-     seed 18 rep 2 (scene 1747173593, not the cup-loop scene): to be
-     read in B's records.
+   - Job B (5006487, cn-102, 21:08 to 02:48, 5 h 40 min, 180 episodes;
+     pulled 04:10): base 40/60, 8 timeouts, 11 losses in 51 carries
+     (0.22), 7 of 20 seeds mixed. pose_radius_keep ALONE 39/60, 1
+     timeout (the cup loop of scene 1747173590 cured: 11/15 there
+     against base's 6/15), but 20 losses in 59 carries (0.34; p 0.20
+     against its base, 0.02 against the pooled base): the seeds that
+     used to loop now reach the carry and lose it there (4 of 15 on
+     1747173590), and 1747173593 loses more too (14 of 24 against 9 of
+     23), so the kept radius may also change the die's own pick (open,
+     not significant alone). pose_radius_keep+grasp_wrist_home 49/60,
+     1 loss in 50 carries (0.02; p 0.004 against its base), the
+     cup-loop scene 15/15, BUT 10 timeouts, all on scene 1747173593
+     (seed 1 three times, 4 twice, 14 twice, 3, 15, 18 once): a NEW
+     LOOP, read in seed 1 rep 0's log: the plan wants e_cups_ud; the
+     closer look gives the wrist detection's radius 0.49 mm; the
+     overhead refresh after the next move gives the eye's 5.71 mm with
+     a centre 2.56 mm from the wrist's, so pose_radius_keep's rule keeps
+     min(5.71, 0.49 + 2.56) = 3.04 mm, "outside its commit margin", the
+     pick is skipped ("pose is too uncertain, I should look first"),
+     the plan is remade and the closer look repeats: 69 refusals, 93
+     plans, 600 s. The same seed in base and in D's arm has no refusal
+     (base never wants that cup; D's arm reaches it without the
+     disagreement; WHY is OPEN, a hypothesis: the hold pair changes
+     the cups' settled poses or the plan). The rule's centre-shift term
+     is the mechanism: a cup whose eye and wrist centres disagree by
+     more than the margin minus the wrist radius loops for ever under
+     pose_radius_keep.
+   - Job C (5006488, cn-103, 21:08 to 03:46, 6 h 38 min, 180 episodes;
+     pulled 04:10): base 42/60, 6 timeouts, 12 losses in 54 carries
+     (0.22), 5 of 20 seeds mixed. carry_hold_check 42/60, 10 timeouts,
+     9 losses in 51 carries (0.18; p 0.63): no safer carry, as
+     expected; the replans after a detected loss push four more
+     cup-loop episodes past the cap (seeds 1, 5, 19); exec x1.05. An
+     honest ending, not a fix: not in the final set (the switch stays
+     for diagnosis). pose_radius_keep+grasp_wrist_home+carry_trapezoid
+     54/60, 0 losses in 54 carries (p 0.0002 against its base), 5
+     timeouts and six more episodes of 160 to 540 s, all on scene
+     1747173593 (the same cup loop as B's arm), paired exec x1.22 and
+     wall x1.07 (the trapezoid schedule is slower); against B's arm
+     without it (1 loss in 50) no measurable gain. Not in the final
+     set, as pre-registered.
+   DECISION (the orchestrator's suggestion, 04:30): the final set is
+   the pre-registered D set, solver_iters+force_hold+pose_radius_keep+
+   grasp_wrist_home: 60/60, 0 losses in 60 carries, 0 timeouts, 0
+   mixed seeds, the only arm free of both loops. The hold needs the
+   pair (solver_iters alone 0.54 losses per carry; force_hold requires
+   it), the cup loop needs pose_radius_keep, grasp_wrist_home brings
+   the hold from 0 of 54 to 0 of 60 and the new loop of
+   pose_radius_keep is avoided only in this combination (OPEN why).
+   carry_trapezoid and carry_hold_check out. Job E: the chosen set
+   equals D, so E is only needed for more reps or for release_retreat
+   beside it (needs Hani's approval: base, the D set, the D set +
+   release_retreat, 3 reps of seeds 0-19 on one node, about 6 h).
+   Hani's decisions: merge slip/campaign into tampura-bridge (switch
+   code, default off) and whether the four go on by default.
    - Cluster cap: prune_work at T's end counted 1178 MiB of 1024 and
      found nothing it may delete (the two B8 campaigns' T episodes
      625 MiB cited by BF#54, the per-fix eval's 111 MiB behind the open
