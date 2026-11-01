@@ -1,0 +1,107 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ▣  S E M A N T I C   B O X E L S
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+● Starting up…
+  ⎿ Loading scene from 1747173590.312597.json
+G19: seed 1 loaded 1747173590.312597.json, the campaign pins 1747173593: a watching or diagnostic run, never scored (the ledger's G19 gate records the mismatch)
+  ⎿ ready  (12.9 s)
+● Mission: get hold of dice and bring it home.
+  ⎿ run_2026-10-31_13-15-55 · find_dice seed 1 · M8 on, M9 on, M10 on, pick aperture from pose on, grip squeeze 0.5 mm, planner ff-astar2
+● I see 4 objects on the table and 5 spaces hidden behind them.
+● I am after dice. It is not in view, so I will have to search.
+✻ Thinking… how to get hold of dice … 4 steps in 4.8 s
+  ⎿ I will look behind a_cups_ud for dice, pick up dice, then come home
+● Looking into the space behind a_cups_ud for dice … nothing there, replanning  (0.4 s)
+✻ Thinking… how to get hold of dice … 8 steps in 6.2 s
+  ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over a_cups_ud … done  (0.5 s)
+● Picking up a_cups_ud …
+  ⎿ I have a firm grip on a_cups_ud: its half-width is 26.4 mm, I expected 28.3 mm
+  ⎿ done  (0.9 s)
+● Moving over a free spot … done  (0.6 s)
+● Setting a_cups_ud down on a free spot … done  (1.9 s)
+● Moving to the space behind a_cups_ud … done  (0.5 s)
+● Looking into the space behind a_cups_ud for dice … nothing there, replanning  (0.4 s)
+✻ Thinking… how to get hold of dice … 10 steps in 6.1 s
+  ⎿ I will look closer at b_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at b_cups_ud … done  (0.8 s)
+● Taking a closer look at b_cups_ud … seen  (0.3 s)
+✻ Thinking… how to get hold of dice … 8 steps in 5.1 s
+  ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.4 s)
+● Picking up e_cups_ud …
+  ⎿ I have a firm grip on e_cups_ud: its half-width is 35.4 mm, I expected 36.8 mm
+  ⎿ done  (1.4 s)
+● Moving over a free spot … done  (0.6 s)
+● Setting e_cups_ud down on a free spot …
+  ⎿ e_cups_ud is where I put it (3702 px)
+  ⎿ done  (1.5 s)
+● Moving to the space behind e_cups_ud … done  (0.4 s)
+● Looking into the space behind e_cups_ud for dice … nothing there, replanning  (0.3 s)
+✻ Thinking… how to get hold of dice … 8 steps in 3.1 s
+  ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over b_cups_ud … done  (0.4 s)
+● Picking up b_cups_ud …
+  ⎿ I have a firm grip on b_cups_ud: its half-width is 27.9 mm, I expected 30.3 mm
+  ⎿ done  (0.9 s)
+● Moving over a free spot … done  (0.7 s)
+● Setting b_cups_ud down on a free spot … done  (2.1 s)
+● Moving to the space behind b_cups_ud … done  (0.5 s)
+● Looking into the space behind b_cups_ud for dice … nothing there, replanning  (0.4 s)
+✻ Thinking… how to get hold of dice … 11 steps in 3.5 s
+  ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at d_cups_ud … done  (0.4 s)
+● Taking a closer look at d_cups_ud … seen  (0.3 s)
+✻ Thinking… how to get hold of dice … 9 steps in 2.7 s
+  ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over d_cups_ud … done  (0.4 s)
+● Picking up d_cups_ud … skipped: d_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 11 steps in 3.4 s
+  ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at d_cups_ud … done  (0.4 s)
+● Taking a closer look at d_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 9 steps in 2.4 s
+  ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over d_cups_ud … done  (0.3 s)
+● Picking up d_cups_ud … skipped: d_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 11 steps in 3.4 s
+  ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at d_cups_ud … done  (0.5 s)
+● Taking a closer look at d_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 9 steps in 3.1 s
+  ⎿ I will pick up d_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over d_cups_ud … done  (0.5 s)
+● Picking up d_cups_ud …
+  ⎿ I have a firm grip on d_cups_ud: its half-width is 33.1 mm, I expected 34.6 mm
+  ⎿ I can see dice now (191 px): it is the target and I can pick it directly
+  ⎿ done  (1.6 s)
+● Moving over a free spot … done  (0.6 s)
+● Setting d_cups_ud down on a free spot …
+  ⎿ d_cups_ud is where I put it (3553 px)
+  ⎿ done  (1.9 s)
+● Going home … done  (0.5 s)
+● Looking into the space behind d_cups_ud for dice … nothing there, replanning  (0.6 s)
+✻ Thinking… how to get hold of dice … 3 steps in 3.0 s
+  ⎿ I will pick up dice, then come home
+● Moving over dice … done  (0.7 s)
+● Picking up dice …
+  ⎿ I have a firm grip on dice: its half-width is 12.3 mm, I expected 11.1 mm
+  ⎿ done  (0.9 s)
+● Going home … done  (1.0 s)
+⚠ PHYSICAL_FAILURE (goal): (holding dice) — finger-pad contact incomplete: links none (need both [12, 13])
+────────────────────────────────────────────
+✘ Failed. Belief said target was found but physics check disagreed (see PHYSICAL_FAILURE above) — audit S-18  (physics_mismatch)
+  ⎿ 12 plans · 40 steps, 38 done, 2 failed · planning 46.6 s · 90.0 s in all
+  ⎿ log and raw stream in archive/tampura_bridge_plan_2026-10-25/bf/BF59_slip/probes/grasp_geometry/ep_seed1/ours/run_2026-10-31_13-15-55
+  ledger   PASS  349 rows, complete
+  G3       PASS  40 steps over 12 plans, all as planned; 11 labelled early ends
+  G4       PASS  4 places at the planned centre
+  G5       PASS  planned_sense_render=10
+  G15      PASS  5 senses, each classified on its planned region
+  G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+  G19      FAIL  seed 1: 1747173590.312597.json (pinned 1747173593)
+  G18      PASS  initialize return to rollout start 0.035 s (initialize_call +0.010 s, initialize_return +4.852 s, scene_map_asserted +0.025 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.010 s, rollout_start +0.000 s)
+  G19h     PASS  seed 1, both RNGs untouched, PYTHONHASHSEED 0
+  G11      PASS  12 solve calls, 12 plan rows
+  G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 9742}
+seed 1: outcome gate_failed, their RolloutHistory rewards[-1] = 0.0; details in /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/archive/tampura_bridge_plan_2026-10-25/bf/BF59_slip/probes/grasp_geometry/ep_seed1

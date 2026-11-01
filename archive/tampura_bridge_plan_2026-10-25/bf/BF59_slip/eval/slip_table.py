@@ -146,7 +146,11 @@ class Arm:
         return sum(int(r.get('pick_tries') or 0) for r in self.recs)
 
     def metric(self, key):
-        return [((r.get('metrics') or {}).get(key)) for r in self.recs]
+        # Over the finished episodes only: a timed-out episode carries a
+        # metrics object too, with wall_s null but planning_s and exec_s at
+        # their partial value at the cap (the second opinion's finding).
+        return [((r.get('metrics') or {}).get(key)) for r in self.recs
+                if (r.get('metrics') or {}).get('wall_s') is not None]
 
     def mixed_seeds(self):
         by_seed = defaultdict(list)
@@ -214,9 +218,9 @@ def main(argv):
 
     out('## Our arms (one row per arm and job; base runs in every job)')
     out('')
-    out('Wall "all" is the process wall of every episode with the timeouts at the cap (median and mean); "finished" the pipeline\'s own wall over the episodes that reached an outcome, so an arm that times out on the slow seeds looks faster there than it is: the paired ratios in the next tables compare the same seeds.')
+    out('Wall "all" is the process wall of every episode with the timeouts at the cap (median and mean); "finished" the pipeline\'s own wall, planning and execution over the episodes that reached an outcome (a timed-out episode carries partial counters, excluded), so an arm that times out on the slow seeds looks faster there than it is: the paired ratios in the next table compare the same seeds. The p-values are descriptive: the episodes share three scenes and the same seeds.')
     out('')
-    out('| job | arm | episodes | success | timeouts | carries | losses | loss/carry [95 %] | pick tries | wall s all: median | mean | wall s finished | planning s | exec s | mixed seeds | job elapsed |')
+    out('| job | arm | episodes | success | timeouts | carries | losses | loss/carry [95 %] | pick tries | wall s all: median | mean | wall s finished | planning s finished | exec s finished | mixed seeds | job elapsed |')
     out('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
     rows_for_scene = []
     for job in sorted(jobs):
@@ -336,7 +340,7 @@ def main(argv):
         censored = sum(1 for r in recs if r.get('censored'))
         lo, hi = clopper_pearson(succ, len(recs))
         out(f'- episodes {len(recs)}, successes {succ} ({fmt(100 * succ / len(recs), 0)} %, exact 95 % [{fmt(100 * lo, 0)}, {fmt(100 * hi, 0)}] %), '
-            f'crashed {crashed}, censored at the cap {censored}')
+            f'crashed {crashed}, booked as censored {censored} (a crash is booked censored at the cap; the same episode when the counts agree)')
         reps = sorted({r['rep'] for r in recs})
         out('- per repetition: ' + '; '.join(
             f"rep {k}: {sum(1 for r in recs if r['rep'] == k and r.get('success'))}/{sum(1 for r in recs if r['rep'] == k)}" for k in reps))

@@ -1,0 +1,57 @@
+pybullet build time: Jan 29 2025 23:17:20
+/root/tampura-work/tampura_environments/tampura_environments/__init__.py:20: UserWarning: tampura_environments: skipping subpackage 'toy_discrete': No module named 'tampura_environments.toy_discrete'
+  _warnings.warn(f"tampura_environments: skipping subpackage '{_name}': {_e}")
+cell (0.673, 0.216) k0 dx 0 dy 0 delta   0.0: rest rel -0.0 half 21.07 nf 12.55 closed rel -0.04 lift True held True nfmin 1.325 lost None
+cell (0.673, 0.216) k0 dx 0 dy 0 delta   3.0: rest rel 3.0 half 21.26 nf 18.16 closed rel 2.98 lift True held True nfmin 0.057 lost carry
+cell (0.673, 0.216) k0 dx 0 dy 0 delta   6.0: rest rel 6.0 half 21.78 nf 18.27 closed rel 6.07 lift True held False nfmin 0.0 lost carry
+cell (0.673, 0.216) k0 dx 0 dy 0 delta  45.0: rest rel -45.0 half 28.91 nf 14.9 closed rel 44.97 lift True held False nfmin 0.0 lost carry
+cell (0.592, -0.242) k0 dx 0 dy 0 delta   0.0: rest rel -0.0 half None nf None closed rel None lift None held None nfmin None lost None
+cell (0.592, -0.242) k0 dx 0 dy 0 delta   3.0: rest rel 3.0 half None nf None closed rel None lift None held None nfmin None lost None
+cell (0.592, -0.242) k0 dx 0 dy 0 delta   6.0: rest rel 6.0 half None nf None closed rel None lift None held None nfmin None lost None
+cell (0.592, -0.242) k0 dx 0 dy 0 delta  45.0: rest rel -45.0 half None nf None closed rel None lift None held None nfmin None lost None
+cell (0.5, 0.05) k0 dx 0 dy 0 delta   0.0: rest rel -0.0 half 20.75 nf 19.46 closed rel -0.05 lift True held True nfmin 3.87 lost None
+cell (0.5, 0.05) k0 dx 0 dy 0 delta   3.0: rest rel 3.0 half 21.26 nf 15.98 closed rel 2.93 lift True held True nfmin 0.0 lost carry
+cell (0.5, 0.05) k0 dx 0 dy 0 delta   6.0: rest rel 6.0 half 21.77 nf 16.31 closed rel 6.04 lift True held False nfmin 0.0 lost carry
+cell (0.5, 0.05) k0 dx 0 dy 0 delta  45.0: rest rel -45.0 half 28.6 nf 23.05 closed rel -44.98 lift True held True nfmin 0.187 lost carry
+cell (0.42, -0.1) k0 dx 0 dy 0 delta   0.0: rest rel -0.0 half 20.75 nf 23.25 closed rel -0.69 lift True held True nfmin 0.759 lost None
+cell (0.42, -0.1) k0 dx 0 dy 0 delta   3.0: rest rel 3.0 half 20.86 nf 18.2 closed rel 1.67 lift True held True nfmin 0.272 lost carry
+cell (0.42, -0.1) k0 dx 0 dy 0 delta   6.0: rest rel 6.0 half 21.36 nf 18.2 closed rel 4.79 lift True held False nfmin 0.0 lost carry
+cell (0.42, -0.1) k0 dx 0 dy 0 delta  45.0: rest rel -45.0 half 28.56 nf 20.38 closed rel 44.64 lift True held True nfmin 0.07 lost carry
+cell (0.6, 0.3) k0 dx 0 dy 0 delta   0.0: rest rel -0.0 half 21.07 nf 12.69 closed rel -0.07 lift True held True nfmin 0.84 lost None
+cell (0.6, 0.3) k0 dx 0 dy 0 delta   3.0: rest rel 3.0 half 21.26 nf 18.47 closed rel 3.06 lift True held True nfmin 0.067 lost carry
+cell (0.6, 0.3) k0 dx 0 dy 0 delta   6.0: rest rel 6.0 half 21.78 nf 18.55 closed rel 6.11 lift True held False nfmin 0.0 lost carry
+cell (0.6, 0.3) k0 dx 0 dy 0 delta  45.0: rest rel -45.0 half 28.91 nf 14.97 closed rel 44.98 lift True held False nfmin 0.0 lost carry
+cell (0.45, 0.25) k0 dx 0 dy 0 delta   0.0: rest rel -0.0 half 21.07 nf 12.57 closed rel -0.1 lift True held True nfmin 0.759 lost None
+cell (0.45, 0.25) k0 dx 0 dy 0 delta   3.0: rest rel 3.0 half 21.27 nf 16.46 closed rel 3.04 lift True held True nfmin 0.0 lost carry
+cell (0.45, 0.25) k0 dx 0 dy 0 delta   6.0: rest rel 6.0 half 21.78 nf 16.89 closed rel 6.17 lift True held False nfmin 0.0 lost carry
+cell (0.45, 0.25) k0 dx 0 dy 0 delta  45.0: rest rel -45.0 half 28.91 nf 14.78 closed rel -45.0 lift True held False nfmin 0.0 lost carry
+cell (0.65, -0.05) k0 dx 0 dy 0 delta   0.0: rest rel -0.0 half 20.75 nf 19.22 closed rel 0.05 lift True held True nfmin 1.435 lost None
+cell (0.65, -0.05) k0 dx 0 dy 0 delta   3.0: rest rel 3.0 half 21.26 nf 15.98 closed rel 3.0 lift True held True nfmin 0.564 lost None
+cell (0.65, -0.05) k0 dx 0 dy 0 delta   6.0: rest rel 6.0 half 21.77 nf 18.52 closed rel 5.97 lift True held False nfmin 0.0 lost carry
+cell (0.65, -0.05) k0 dx 0 dy 0 delta  45.0: rest rel -45.0 half 28.6 nf 22.98 closed rel -44.99 lift True held False nfmin 0.0 lost carry
+cell (0.38, 0.12) k0 dx 0 dy 0 delta   0.0: rest rel -0.0 half 20.87 nf 23.42 closed rel 0.04 lift True held True nfmin 0.243 lost carry
+cell (0.38, 0.12) k0 dx 0 dy 0 delta   3.0: rest rel 3.0 half 21.26 nf 15.73 closed rel 2.87 lift True held True nfmin 0.25 lost carry
+cell (0.38, 0.12) k0 dx 0 dy 0 delta   6.0: rest rel 6.0 half 21.77 nf 17.32 closed rel 5.95 lift True held False nfmin 0.0 lost carry
+cell (0.38, 0.12) k0 dx 0 dy 0 delta  45.0: rest rel -45.0 half 28.57 nf 23.62 closed rel 44.98 lift True held True nfmin 0.0 lost carry
+{
+ "0.0": {
+  "grips": 7,
+  "held": 7,
+  "half_mm_med": 20.87
+ },
+ "3.0": {
+  "grips": 7,
+  "held": 7,
+  "half_mm_med": 21.26
+ },
+ "6.0": {
+  "grips": 7,
+  "held": 0,
+  "half_mm_med": 21.77
+ },
+ "45.0": {
+  "grips": 7,
+  "held": 3,
+  "half_mm_med": 28.6
+ }
+}

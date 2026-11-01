@@ -8497,6 +8497,221 @@ BF#58 [DONE]  RULE: THE DATA-CLEANER MENTALITY: A LEDGER OF WHAT EVERY
   is tracked now as BF#53's evidence.
   CLAIM EFFECT: none.  HONESTY CLASS: process; disclosed.
 
+BF#59 [DONE, decisions open]  THE DIE-SLIP CAMPAIGN: SIX FIXES AS SWITCHES,
+      EVERY ONE AND A PRE-REGISTERED SET ON THE CLUSTER, 3 REPETITIONS OF
+      SEEDS 0-19, TAMPURA BESIDE  (user, 2026-10-31 to 2026-11-01)
+  WHAT: Hani (2026-10-31): "tackle the problem of the slipping die once and
+  for all ... the grasp samplers really just need to be that good. we make
+  suggestions, review those, then implement and review implementations and
+  then run eval ... utilize git, worktrees and clusters to test all
+  improvements and fixes in parallel ... we are doing this scientifically,
+  so at the end make a table of all the changes and if they actually
+  performed ... suggest the best changes that should stay in and test a
+  version with all of those in; all tests on the same seeds; TAMPURA on
+  those seeds; report time; scene variance via replicated instances".
+  THE PROBLEM: BF#53's per-fix eval lost the die in 21 % of its carries,
+  always in the move home after a verified pick (the Panda's friction
+  pinch of the 17.8 mm, 5.2 g die).
+  THE WORKFLOW (archive/tampura_bridge_plan_2026-10-25/bf/BF59_slip/, the
+  campaign folder: BRIEF.md, STATE.md the live state, proposals/, reviews/,
+  probes/, eval/): (1) four Opus agents diagnosed, each from one angle
+  with its own probes (grasp_geometry, hold_physics, carry_motion,
+  loss_dynamics; proposals/<angle>.md); (2) four Opus reviewers reviewed
+  them (reviews/<angle>.md); (3) the orchestrator cut the list to seven
+  candidates, one mechanism per switch; (4) six were implemented by Opus
+  agents in sibling worktrees sb-slip-<name> on branches slip/<name>, each
+  with unit tests and tools/slip_check.sh (tests, bridge tests, static
+  gates, one locked episode); (5) the orchestrator reviewed every
+  implementation (reviews/implrev_<name>.md, all accepted; the seventh,
+  pad_rolling, was dropped as a fallback not needed); (6) all six merged
+  on slip/campaign (cff9bc5 = tampura-bridge 562db41 + the six), the
+  all-on, all-off and injected-loss checks green; (7) the eval on the
+  cluster; (8) this table.  Every fix is a switch of the registry
+  slip_fixes.py (register/configure/on; `--slip-fixes a,b` of run_logger
+  and the bridge driver; a name nobody registered refuses the run),
+  default OFF; the physics switches bind through execute_fn's configure
+  call before d9_setup; tests/test_slip_<name>.py per switch.
+  THE DIAGNOSIS (the proposals and reviews, with the probes' numbers): the
+  die rotates out of a near-face pinch during the swing home: the 0.5 mm
+  position hold's force collapses to 0 N once the fingers stop inside the
+  close's tolerance; the hold depends on the yaw between pads and faces
+  (exact face 79-88 % held, 1-25 deg off 46-51 %, edge pinch 80-94 %) and
+  the eye's 9.5 deg yaw noise cannot certify a face pinch; every carry
+  home spins the wrist (joint 7) 168 to 242 deg because the world-frame
+  yaw wrap picks the "smallest rotation" in the world, not on the arm, and
+  a die that sits off its face turns out of the pinch; the waypoint
+  junctions decelerate at 60 to 97 m/s^2; a 10 N force-limited hold needs
+  200 solver iterations (at PyBullet's default 50 a convergence artefact
+  expels the 5 g die) and coupled fingers (PyBullet ignores the URDF's
+  mimic tag); the per-carry outcome is non-deterministic (one seed: held,
+  lost, lost); the slow tail is a cup loop, not the die (the overhead
+  refresh after a move overwrites the wrist observe's pose radius, 0.4 mm
+  to 5.5 mm, the pick's commit check refuses, up to 90 plans until the
+  cap).
+  THE SIX SWITCHES: solver_iters: 200 contact-solver iterations per step
+  on the executing world (boxel_env, d9_setup, re-applied after reset).
+  force_hold: after the close, a force-limited position hold 4 mm inside
+  the measured width at 10 N per finger, the fingers coupled by a
+  JOINT_GEAR constraint (ratio -1, erp 0.1, 50 N); requires solver_iters
+  (robot_utils).  pose_radius_keep: a consistent later detection keeps
+  min(r_new, r_old + centre shift) and the wrist yaw over the eye yaw
+  (pose_belief.record_detection).  grasp_wrist_home: the grasp sampler
+  takes, of a top-down grasp yaw and its pad-swapped twin (yaw + pi), the
+  one whose joint 7 is nearer home (tie band 5 deg, the joint limit
+  2.8973 rad respected; pose_belief, streams).  carry_trapezoid: one
+  acceleration-bounded schedule per move made while holding, collinear
+  pairs merged, a rest at every direction change (test_full_pipeline's
+  move action, execution).  carry_hold_check: after every move made while
+  holding, both pads must touch the held body or the move fails as an
+  empty hand and is replanned, the finger width growth logged (execution).
+  THE EVAL (tools/slip_eval.py, tools/cluster/slip_eval.sbatch and
+  slip_t.sbatch; snapshot sb_cff9bc5, code only, BF#56): arms = sets of
+  switches on; base in every job; seeds 0-19 (TAMPURA's seeds, BF#9),
+  which load only THREE scenes on the cluster (1747173590: seeds 5, 6, 10,
+  17, 19; 1747173591: 0, 7, 9, 11, 12, 13, 16; 1747173593: 1, 2, 3, 4, 8,
+  14, 15, 18), so every number below is 3 scenes x 3 repetitions x their
+  seeds; 3 repetitions of every seed per arm (60 episodes) because the
+  per-carry outcome is a near coin flip; 600 s cap per episode; carries =
+  verified die picks (the curated "firm grip" line), losses = the lift
+  loss, the carry loss and the goal check's physical loss (finger-pad
+  contact incomplete or a graze), each counted once from the pipeline's
+  run log (the harness double-counted twice before the eval, 74cffac and
+  562db41, tests/test_slip_eval.py).  Five jobs on five idle rleap_cpu
+  nodes, submitted 21:08 on 2026-10-31: A 5006486 cn-101 (base,
+  solver_iters, solver_iters+force_hold; 5 h 18 min), B 5006487 cn-102
+  (base, pose_radius_keep, pose_radius_keep+grasp_wrist_home; 5 h 40), C
+  5006488 cn-103 (base, pose_radius_keep+grasp_wrist_home+carry_trapezoid,
+  carry_hold_check; 6 h 38), D 5006489 cn-105 (base and the PRE-REGISTERED
+  combined set, stated in STATE.md at 21:00 before any result:
+  solver_iters+force_hold+pose_radius_keep+grasp_wrist_home; 2 h 49), T
+  5006490 cn-106 (TAMPURA as shipped, their planner, 3 repetitions of the
+  same seeds, _bridge_campaign.py --arms T; 2 h 50).  The records (one
+  JSON line per episode), summaries, static gates and job logs are in
+  eval/<job>/ (tracked); eval/slip_table.py builds eval/TABLE.md from
+  them (Fisher's exact test two-sided, Clopper-Pearson intervals, paired
+  times); a Sonnet agent recomputed every number independently from the
+  records (623 cells, no discrepancy; its two readings were adopted: the
+  planning and execution medians over finished episodes only, since a
+  timed-out episode carries partial counters, and the p-values as
+  descriptive, since the episodes share three scenes and the same seeds).
+  THE TABLE (success of 60 episodes; T = timeouts at the cap; losses per
+  carry; p = Fisher's exact test against the base of the same job, on the
+  losses per carry / on the successes, descriptive; mixed = seeds whose
+  three repetitions disagree; wall = the median over the episodes both
+  arms finished of the arm's wall over base's, the same seed and
+  repetition):
+    arm                                succ   T  losses/carries   p              mixed  wall
+    base, job A                         44    8   8/52   0.15                    8/20
+    solver_iters                        26    4  31/57   0.54  2e-5 / 0.002 WORSE 7/20  x1.08
+    solver_iters+force_hold             54    5   0/54   0.00  0.003 / 0.03      3/20  x1.06
+    base, job B                         40    8  11/51   0.22                    7/20
+    pose_radius_keep                    39    1  20/59   0.34  0.20 / 1          10/20 x1.00
+    pose_radius_keep+grasp_wrist_home   49   10   1/50   0.02  0.004 / 0.09      5/20  x1.01
+    base, job C                         42    6  12/54   0.22                    5/20
+    carry_hold_check                    42   10   9/51   0.18  0.63 / 1          7/20  x1.02
+    pose_radius_keep+grasp_wrist_home
+      +carry_trapezoid                  54    5   0/54   0.00  0.0002 / 0.01     5/20  x1.07
+    base, job D                         42    9   9/51   0.18                    6/20
+    THE D SET: solver_iters+force_hold
+      +pose_radius_keep+grasp_wrist_home 60   0   0/60   0.00  0.0006 / 2e-6     0/20  x1.07
+    base pooled, 240 episodes          168   31  40/208  0.19 [0.14, 0.25]      13/20
+    TAMPURA, 60 episodes                40    1 crash                             9/20
+  PER SCENE (base pooled): the die is lost on scene 1747173593 (35 of 95
+  carries) and 1747173590 (4 of 29; that scene mostly times out in the
+  cup loop: all 31 of base's timeouts are its 60 episodes), never on
+  1747173591 (1 of 84): the die's resting yaw there gives a face pinch.
+  The D set: 15/15, 21/21, 24/24.
+  TIMES: the switches cost per episode (paired, the same seeds): the 200
+  iterations x1.15 on execution, the trapezoid x1.22; the D set's episode
+  is x1.07 base's where base finishes quickly, but its mean process wall
+  is 38 s against base's 129 s (no 600 s loops, no lost die); base's
+  medians over its finished episodes wall 27 s, planning 13 s; TAMPURA's
+  median loop 153 s (its
+  successes 93 s), planning 132 s, on the same seeds and the same kind of
+  node.
+  TAMPURA on the same seeds, 3 repetitions: 40/60 (67 %, exact 95 % [53,
+  78] %; 13, 14, 13 per repetition; one crash, seed 9 rep 3, censored),
+  per scene 7/15, 19/21, 14/24, 9 of 20 seeds with disagreeing
+  repetitions; its RolloutHistory rewards[-1] decides (P4.6 G12).  The D
+  set's 60/60 against it: Fisher p 3e-7.  DISCLOSED: TAMPURA runs its
+  own physics at PyBullet's 50 solver iterations while our solver_iters
+  arms run 200; the comparison is planner against planner each in its own
+  simulation, as in BF#9 and BF#53, not a controlled physics comparison.
+  FINDINGS: (a) solver_iters ALONE is harmful: with today's 0.5 mm
+  position hold the firmer convergence expels the die on every scene (14
+  of 20 carries even on 1747173591), 0.54 losses per carry against base's
+  0.15; force_hold requires it in the registry, and the reverse holds in
+  practice.  (b) the hold is cured by the pair: 0 of 54 (job A) and 0 of
+  60 (job D) against 8 of 52 and 9 of 51; the pair alone still times out
+  in the cup loop (5) and gave up one pick.  (c) pose_radius_keep alone
+  cures the cup loop (1 timeout against 8; scene 1747173590 11/15 against
+  6/15) and the die then reaches the carry on the seeds that used to loop,
+  where it is lost (0.34 per carry; p 0.20 against its base, 0.02 against
+  the pooled base: not significant alone, noted).  (d) grasp_wrist_home
+  with pose_radius_keep cures the hold nearly alone (1 of 50) but opens a
+  NEW CUP LOOP on scene 1747173593 (10 timeouts: seed 1 three times, 4
+  and 14 twice, 3, 15, 18 once), read in seed 1's log: the plan wants
+  e_cups_ud; the closer look gives the wrist detection's radius 0.49 mm;
+  the overhead refresh after the next move gives the eye's 5.71 mm with a
+  centre 2.56 mm from the wrist's; the rule keeps min(5.71, 0.49 + 2.56)
+  = 3.04 mm, outside the commit margin, the pick is skipped ("pose is too
+  uncertain, I should look first"), the plan is remade, the look repeats:
+  69 refusals, 93 plans, 600 s.  The centre-shift term is the mechanism:
+  under pose_radius_keep a cup whose eye and wrist centres disagree by
+  more than the margin minus the wrist radius loops for ever (the 2 to
+  3 mm disagreement between looks was noted at the implementation as the
+  M8 calibration issue, STATE.md phase 5).  Base never wants that cup on
+  that seed; the D set reaches it without the disagreement: WHY is OPEN
+  (a hypothesis: the hold pair changes the cups' settled poses or the
+  plan).  (e) carry_trapezoid on top of (d): no measurable gain (0 of 54
+  against 1 of 50), the same loop (5 timeouts, six more episodes of 160
+  to 540 s), execution x1.22: not kept, as the real-pick probe
+  (reviews/carry_trapezoid_probe/) predicted.  (f) carry_hold_check: no
+  safer carry (0.18 against 0.22, p 0.63), the replans after a detected
+  loss push four more cup-loop episodes past the cap; an honest ending,
+  not a fix: not kept in the set, the switch stays for diagnosis.  (g)
+  THE D SET, pre-registered: 60/60, 0 timeouts, 0 losses in 60 carries
+  (exact 95 % [0, 0.06]), 0 mixed seeds, the only arm free of both loops;
+  the prediction stated before the eval held.
+  VARIANCE: base disagrees with itself on 13 of 20 seeds over its 240
+  episodes (26 of its 80 job-seed triples, 5 to 8 per job); TAMPURA on 9
+  of 20; the D set on none.  The
+  replication was the right call: job B's repetition 0 alone reads
+  pose_radius_keep+grasp_wrist_home 15/20 against base 14/20, the three
+  repetitions 49/60 against 40/60; job A's repetition 0 reads
+  solver_iters+force_hold 18/20 against 12/20, the three 54/60 against
+  44/60.
+  DECISION (orchestrator, 2026-11-01 04:30; Hani's to confirm): the set
+  that stays is the D set; carry_trapezoid and carry_hold_check out; the
+  switches stay default OFF on tampura-bridge until Hani decides (a) the
+  merge of slip/campaign into tampura-bridge and (b) the four on by
+  default.  Job E (the plan's test of the chosen set) is D itself; a
+  further job adds repetitions or tests release_retreat (BF#61, on
+  slip/release_retreat, the cup release jam: not in this eval, its
+  cluster run needs Hani's approval).
+  DISCLOSED: (1) the three-scene map above (20 seeds are 3 scenes); (2)
+  the harness double-counted losses twice before the eval and was fixed
+  and verified on four real episodes (74cffac, 562db41); (3) the
+  hold_physics probe's quoted console_debug.log was deleted by a keep-path
+  mistake, its line survives in reviews/hold_physics.md (the ledger has
+  the lesson); (4) the force_hold review found a cup release jam that is
+  base's own (25 % of the harness's releases), probed under
+  probes/force_hold/ and taken to BF#61 on its own branch; (5)
+  carry_trapezoid's real-pick probe found no gain on top of the flip
+  before the eval, so its arm was a check of that null; (6) the per-carry
+  outcome is non-deterministic under load, so a single episode proves
+  nothing here; (7) the agents' probe sweeps and episodes under probes/
+  (155 MB) go at the campaign's end once this entry stands; the scripts,
+  work logs and summaries stay.
+  CLAIM EFFECT: on TAMPURA's find_dice seeds the pipeline with the D set
+  holds the die in 60 of 60 carries and succeeds in 60 of 60 episodes
+  (base 168 of 240, TAMPURA 40 of 60); the per-episode wall is x1.07
+  base's where base succeeds, the mean x0.3.  HONESTY CLASS: physics and
+  model fixes pipeline-wide behind default-off switches (the solver
+  iterations, a force hold with the fingers coupled as the URDF's mimic
+  intends, the pose-radius rule, the wrist twin rule); no bridge-only
+  tuning; disclosed.
+
 BF#60 [OPEN, FOR LATER]  ENTROPY SEARCH FOR THE SEARCH ORDER: NOT FOR THIS
       PAPER  (user decision, 2026-10-31 13:02)
   WHAT: Hani asked where entropy search could apply in this project.  The

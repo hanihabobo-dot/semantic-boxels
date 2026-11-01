@@ -525,6 +525,21 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      wall x1.07 (the trapezoid schedule is slower); against B's arm
      without it (1 loss in 50) no measurable gain. Not in the final
      set, as pre-registered.
+   SECOND OPINION (a Sonnet agent, 05:00, its scripts deleted with the
+   session's scratch): 623 cells of TABLE.md reproduced from the
+   records, no numeric discrepancy; four readings adopted or noted: the
+   planning and execution medians are now over finished episodes only
+   (every timed-out episode carries a metrics object with partial
+   planning_s and exec_s at the cap; the table and the entry say
+   "finished"); the pooled base's 13 of 20 mixed seeds is over 12
+   repetitions, like for like it is 26 of 80 job-seed triples; TAMPURA's
+   crash and its censored episode are the same one (rep 3 seed 9);
+   Fisher's and Clopper-Pearson's independence does not hold across
+   three scenes and replicated seeds, so the p-values are descriptive.
+   Sanity: 180/180/180/120/60 records, the full seed x rep grid in every
+   arm, no duplicate keys, losses never above carries, one episode with
+   two carries (A solver_iters seed 18 rep 0), the 66 timeouts all
+   without an outcome.
    DECISION (the orchestrator's suggestion, 04:30): the final set is
    the pre-registered D set, solver_iters+force_hold+pose_radius_keep+
    grasp_wrist_home: 60/60, 0 losses in 60 carries, 0 timeouts, 0
@@ -539,6 +554,20 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
    release_retreat, 3 reps of seeds 0-19 on one node, about 6 h).
    Hani's decisions: merge slip/campaign into tampura-bridge (switch
    code, default off) and whether the four go on by default.
+   PHASE 8 STATUS (04:50): the BF#59 entry is written into
+   PAPER_AUDIT.txt between BF#58 and BF#60 (209 lines) and staged as its
+   own hunk (the index blob built from HEAD plus the entry, so the other
+   sessions' unstaged hunks in that file stay theirs); committed once
+   the Sonnet second opinion on the numbers is in. GARBAGE DELETED (the
+   ledger's log, 2026-11-01 04:50): the probes' sweep outputs and
+   episodes 151 MB (the 71 scripts and summaries tracked first), the
+   six fix worktrees and the campaign worktree (1.27 GB on disk; the
+   branches stay), the cluster's loss_context duplicates. KEPT: the
+   cluster's five episode trees (615 MB, retention), the snapshot
+   sb_cff9bc5 until job E is decided, probes/force_hold/out (BF#61's
+   comparison data, review), hold_physics/runs' carry.jsonl. The
+   cluster is 1.4 GB against its 1 GiB cap by protected data (the B8 T
+   trees are Hani's call).
    - Cluster cap: prune_work at T's end counted 1178 MiB of 1024 and
      found nothing it may delete (the two B8 campaigns' T episodes
      625 MiB cited by BF#54, the per-fix eval's 111 MiB behind the open
