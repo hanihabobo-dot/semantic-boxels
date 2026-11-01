@@ -587,6 +587,31 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      slip/release_retreat merges into tampura-bridge is Hani's call,
      beside the merge of slip/campaign, the defaults, job E for more
      reps and the B8 T trees.
+   - MERGE (Hani's decision 1, 2026-11-01 21:00): slip/campaign cff9bc5
+     merged into tampura-bridge as 968bd81, a clean three-way merge in
+     the main checkout; tampura-bridge had changed no code since the
+     campaign's base 562db41 (only the archive, the ledger and the
+     audit), so the merged code equals cff9bc5's, the code the eval
+     ran. The other session's unstaged hunk in test_full_pipeline.py
+     (13 lines in main() and the slip_fixes line of run_config) was
+     parked in a stash for the merge and restored unchanged (its line
+     numbers moved by the 222 lines the campaign added above it). The
+     six switches stay default off; the branches slip/<name> and
+     slip/campaign are fully merged now (their deletion is Hani's
+     call). Checks on the merged checkout: tools/slip_check.sh seed 0
+     with the switches off, then with the D set on; results below once
+     in, their outputs under BF59_slip/checks/ deleted after recording.
+     CHECKS (21:08 and 21:10, both green): switches off: 119 tests
+     passed, 89 bridge tests passed (3 skipped), gates G7, G11(i), G17
+     PASS, the seed-0 episode a success in 24 s with slip_fixes empty
+     in its run record and one die carry; the D set on: the same
+     counts, the seed-0 episode a success in 23 s, its run record naming
+     solver_iters,force_hold,pose_radius_keep,grasp_wrist_home. The two
+     check stamps (0.63 MB, 42 files) deleted and logged in the ledger.
+     The merge is DONE. Next, Hani's call: the four D-set switches on by
+     default (slip_fixes.py's defaults, the tests' off-by-default
+     assertions, a seed-0 check), then job E for more reps, the B8 T
+     trees on the cluster, slip/release_retreat, the pushes.
 
 ## Diagnosis so far (from the two finished proposals)
 
