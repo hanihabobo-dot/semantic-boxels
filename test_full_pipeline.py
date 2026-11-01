@@ -112,10 +112,232 @@ from execution import (audit_robot_held_state,
                        held_cargo_config, detection_complete,
                        record_initial_detections, handle_observe_action,
                        pick_contact_floor)
+# BF#59 carry_hold_check: the move's hold postcondition (execution.py).
+from execution import carry_hold_begin, carry_hold_end
 import pose_belief
 import m8_domain
 import observe_views
 from streams import HOME_PSEUDO_BOXEL
+import logging
+import math
+import robot_utils
+import slip_fixes
+
+# BF#59 carry_trapezoid (proposals/carry_motion.md 2.2, with loss_dynamics'
+# carry_accel_limit merged into it by both reviews; STATE.md candidate 5).
+# Today every waypoint pair of a move restarts move_robot_smooth's ramp
+# from the lagging readback, so the commanded velocity collapses to a
+# tenth at every junction and rebuilds: the hand takes 60 to 97 m/s^2 for
+# a step or two at every pair start of every recorded die carry
+# (loss_dynamics 1.3; 81 to 93 m/s^2 in carry_motion's probe, 3 m/s^2
+# under this schedule), and two of three recorded releases came 0 to 6
+# steps after a junction.  The switch replaces that per-pair stream, for a
+# move made while the hand holds a body, by ONE acceleration-bounded
+# schedule over the whole waypoint list: collinear pairs merged into one
+# segment, a trapezoid in the path parameter per segment, at rest at every
+# direction change (the rest-at-a-bend rule tested on carry_motion's via
+# path, 94 of 96 held), the F14 velocity limits as the cruise bound, the
+# settle at the last waypoint and the home hold unchanged.  The path is
+# the planned polyline, every waypoint in order (rule 1: the executor's
+# streaming changes, the plan does not); every held body (rule 2).  Not
+# here, by the carry_motion review: no single-hop extension (descents and
+# lifts keep move_robot_smooth as is), no keep-speed-under-30-deg rule
+# (loss_dynamics review item 3: a corner taken at speed is the junction
+# kick again).  Never run alone: in carry_motion's placed-die probe the
+# schedule alone harms the 3 deg pinch (36 against 44 of 48 held, p 0.008);
+# its arm pairs it with grasp_wrist_home.  On straight carries it streams
+# fewer steps (carry_motion's two episodes: 336 and 356 against about 454).
+slip_fixes.register('carry_trapezoid',
+                    'one acceleration-bounded schedule per move made while '
+                    'holding: collinear pairs merged, a rest at every '
+                    'direction change')
+
+_carry_log = logging.getLogger('test_full_pipeline')
+
+# Franka Emika Panda datasheet joint acceleration limits, rad/s^2, joints
+# 1 to 7: the same datasheet F14's JOINT_VELOCITY_LIMITS come from, and
+# the values carry_motion's probe and episodes ran (probe --amax ds,
+# episode_fix.AMAX).
+CARRY_TRAP_ACCEL_LIMITS = np.array([15.0, 7.5, 10.0, 12.5, 15.0, 20.0, 20.0])
+# Two consecutive waypoint pairs whose joint-space directions agree to this
+# cosine are one straight segment (carry_motion's trap_schedule): the 9
+# equal pairs of _linear_trajectory, the direct carry home of every
+# recorded die carry, become one segment with no rest.
+CARRY_TRAP_COLLINEAR_COS = 0.9999
+# Today's per-pair floor (the dispatcher's steps=30); used only to log the
+# step count today's stream would have commanded for the same waypoints.
+_TODAY_PAIR_STEPS = 30
+
+
+def carry_trapezoid_schedule(points, vmax=None, amax=None, dt=None):
+    """carry_trapezoid's schedule (BF#59), ported from carry_motion's tested
+    trap_schedule (probes/carry_motion/episode_fix.py, the code the two
+    episodes ran; probe_carry_motion.py for the probe).
+
+    ``points``: the joint-space polyline, the readback first, then the
+    move's waypoints.  Collinear pairs (cosine > CARRY_TRAP_COLLINEAR_COS)
+    merge into one segment and zero-length pairs drop.  Each segment is
+    timed by a trapezoid in its path parameter s in [0, 1]: the largest
+    ds/dt no joint's JOINT_VELOCITY_LIMITS exceeds, the largest d2s/dt2 no
+    joint's CARRY_TRAP_ACCEL_LIMITS exceeds (a triangle when the segment is
+    too short to cruise), starting and ending at rest, so the arm rests at
+    every direction change.  Returns (commands, vertices): one commanded
+    configuration per simulation step (the last of each segment is its
+    end vertex exactly) and the merged vertices (segments = len - 1)."""
+    vmax = robot_utils.JOINT_VELOCITY_LIMITS if vmax is None else np.asarray(vmax, dtype=float)
+    amax = CARRY_TRAP_ACCEL_LIMITS if amax is None else np.asarray(amax, dtype=float)
+    dt = robot_utils.SIM_TIMESTEP if dt is None else float(dt)
+    pts = [np.asarray(points[0], dtype=float)[:7]]
+    for w in points[1:]:
+        w = np.asarray(w, dtype=float)[:7]
+        if len(pts) >= 2:
+            d0, d1 = pts[-1] - pts[-2], w - pts[-1]
+            if (np.linalg.norm(d0) > 1e-9 and np.linalg.norm(d1) > 1e-9 and
+                    np.dot(d0, d1) / (np.linalg.norm(d0) * np.linalg.norm(d1))
+                    > CARRY_TRAP_COLLINEAR_COS):
+                pts[-1] = w
+                continue
+        if np.linalg.norm(w - pts[-1]) > 1e-9:
+            pts.append(w)
+    commands = []
+    for a, b in zip(pts[:-1], pts[1:]):
+        d = b - a
+        absd = np.abs(d)
+        nz = absd > 1e-9
+        sv = float(np.min(vmax[nz] / absd[nz]))      # max ds/dt
+        sa = float(np.min(amax[nz] / absd[nz]))      # max d2s/dt2
+        t_acc = sv / sa
+        if sa * t_acc * t_acc >= 1.0:                # triangle: no cruise
+            t_acc = math.sqrt(1.0 / sa)
+            sv, t_flat = sa * t_acc, 0.0
+        else:
+            t_flat = (1.0 - sa * t_acc * t_acc) / sv
+        T = 2 * t_acc + t_flat
+        for k in range(1, max(1, int(math.ceil(T / dt))) + 1):
+            t = min(T, k * dt)
+            if t < t_acc:
+                s = 0.5 * sa * t * t
+            elif t < t_acc + t_flat:
+                s = 0.5 * sa * t_acc ** 2 + sv * (t - t_acc)
+            else:
+                s = 1.0 - 0.5 * sa * (T - t) ** 2
+            commands.append(a + d * s)
+    return commands, pts
+
+
+def _today_stream_steps(points):
+    """The step count today's per-pair stream commands for the same
+    polyline before its settle (move_robot_smooth's 30-step floor and F14
+    stretch per pair, measured from the planned waypoint, not the lagging
+    readback, so a lower bound).  Log only."""
+    n = 0
+    for a, b in zip(points[:-1], points[1:]):
+        delta = np.abs(np.asarray(b, dtype=float)[:7] - np.asarray(a, dtype=float)[:7])
+        need = int(np.ceil(np.max(delta / (robot_utils.JOINT_VELOCITY_LIMITS
+                                           * robot_utils.SIM_TIMESTEP))))
+        n += max(_TODAY_PAIR_STEPS, min(need, robot_utils.MAX_INTERP_STEPS))
+    return n
+
+
+def _stream_carry_trapezoid(robot_id, waypoints, gui, on_step=None):
+    """carry_trapezoid's stream of one move (BF#59): the schedule from the
+    joint readback through waypoints[1:], every commanded step through
+    move_robot_smooth (one step each, so its motor write, stepSimulation,
+    telemetry tick, on_step and GUI pacing are the primitive's own), then
+    move_robot_smooth's settle at the last waypoint as today.
+
+    The per-step calls pass velocity_bounded=False: the F14 stretch
+    measures the hop from the READBACK, which lags the command by about
+    v / 24 (carry_motion log 1: 0.046 rad at 0.93 rad/s), so at cruise it
+    would spread every one-step command over about ten steps and bring the
+    per-call restart back; the schedule's cruise speed is the same
+    JOINT_VELOCITY_LIMITS bound, applied to the command itself (no
+    command moves a joint more than its limit times one timestep)."""
+    arm = robot_model().arm_joints
+    q0 = np.array([p.getJointState(robot_id, j)[0] for j in arm], dtype=float)
+    targets = [np.asarray(wp.joint_positions, dtype=float)[:7] for wp in waypoints[1:]]
+    if not targets:
+        return
+    points = [q0] + targets
+    commands, vertices = carry_trapezoid_schedule(points)
+    n_seg = len(vertices) - 1
+    last_wp_idx = len(waypoints) - 1
+    if telemetry.is_active():
+        # #P1 F17's per-pair notes, made from the planned waypoints before
+        # the one stream (the stream has no per-pair restart to note at).
+        for wi in range(1, len(points)):
+            _dq = points[wi] - points[wi - 1]
+            telemetry.note(
+                f"waypoint {wi}/{last_wp_idx} -> "
+                f"max|dq|={np.max(np.abs(_dq)):.4f} rad "
+                f"(j{int(np.argmax(np.abs(_dq)))}), "
+                f"||dq||={np.linalg.norm(_dq):.4f} rad, "
+                f"settle={wi == last_wp_idx}, carry_trapezoid")
+    # The peak commanded joint acceleration against the bound (the arm
+    # starts the schedule from rest at the readback).
+    seq = np.array([q0, q0] + list(commands)) if commands else np.array([q0])
+    peak = 0.0
+    if len(seq) >= 3:
+        acc = np.abs(seq[2:] - 2 * seq[1:-1] + seq[:-2]) / robot_utils.SIM_TIMESTEP ** 2
+        peak = float(np.max(acc / CARRY_TRAP_ACCEL_LIMITS))
+    settle_steps = [0]
+
+    def _count_settle():
+        settle_steps[0] += 1
+        if on_step is not None:
+            on_step()
+
+    for q in commands:
+        move_robot_smooth(robot_id, q.tolist(), gui, steps=1, settle=False,
+                          velocity_bounded=False, on_step=on_step)
+    move_robot_smooth(robot_id, waypoints[-1].joint_positions, gui, steps=1,
+                      settle=True, on_step=_count_settle)
+    _carry_log.info(
+        "carry_trapezoid: %d waypoints in (readback + %d), %d segment(s) after "
+        "merging, %d rest(s) inserted, %d schedule steps + %d settle steps "
+        "streamed (today's per-pair stream: at least %d steps before its "
+        "settle), peak commanded joint acceleration %.2f of the datasheet bound",
+        len(waypoints), len(targets), n_seg, max(0, n_seg - 1), len(commands),
+        settle_steps[0], _today_stream_steps(points), peak)
+
+
+def stream_move_waypoints(robot_id, waypoints, gui, holding, on_step=None):
+    """The move action's streaming of a trajectory's waypoints.
+
+    With carry_trapezoid on and a body held, one schedule for the whole
+    move (_stream_carry_trapezoid; ``on_step`` is its per-step hook, the
+    real-pick probe's tactile trace).  Otherwise today's per-pair stream,
+    unchanged (the dispatcher passes no on_step and today's path takes
+    none)."""
+    if holding and slip_fixes.on('carry_trapezoid'):
+        _stream_carry_trapezoid(robot_id, waypoints, gui, on_step=on_step)
+        return
+    # Stream intermediate waypoints; settle ONLY the final
+    # one (#P1 endpoint hold).  The last waypoint is the
+    # approach pose that seeds the subsequent contact IK
+    # (audit #37/#38), so its accuracy matters; settling
+    # every waypoint made the arm visibly stutter (user
+    # report 2026-08-20).
+    last_wp_idx = len(waypoints) - 1
+    for wi, wp in enumerate(waypoints[1:], start=1):
+        # #P1 F17: record the joint-space size of every
+        # waypoint pair BEFORE executing it.  The executor
+        # spends a fixed step count per pair, so this number
+        # divided by the step count is the commanded per-step
+        # jump — the quantity behind a thrown cargo.
+        if telemetry.is_active():
+            _q_now = np.array([p.getJointState(robot_id, j)[0]
+                               for j in robot_model().arm_joints])
+            _dq = np.asarray(wp.joint_positions) - _q_now
+            telemetry.note(
+                f"waypoint {wi}/{last_wp_idx} -> "
+                f"max|dq|={np.max(np.abs(_dq)):.4f} rad "
+                f"(j{int(np.argmax(np.abs(_dq)))}), "
+                f"||dq||={np.linalg.norm(_dq):.4f} rad, "
+                f"settle={wi == last_wp_idx}")
+        move_robot_smooth(robot_id, wp.joint_positions,
+                          gui, steps=30,
+                          settle=(wi == last_wp_idx))
 
 
 def goal_satisfied(goal, on_relations=None, target_found=False) -> bool:
@@ -1881,32 +2103,18 @@ def main(gui=True, run_logger=None, scene_config=None,
                             dispatch_end('motion_resolve_failed')
                             break
 
-                # Stream intermediate waypoints; settle ONLY the final
-                # one (#P1 endpoint hold).  The last waypoint is the
-                # approach pose that seeds the subsequent contact IK
-                # (audit #37/#38), so its accuracy matters; settling
-                # every waypoint made the arm visibly stutter (user
-                # report 2026-08-20).
-                last_wp_idx = len(traj.waypoints) - 1
-                for wi, wp in enumerate(traj.waypoints[1:], start=1):
-                    # #P1 F17: record the joint-space size of every
-                    # waypoint pair BEFORE executing it.  The executor
-                    # spends a fixed step count per pair, so this number
-                    # divided by the step count is the commanded per-step
-                    # jump — the quantity behind a thrown cargo.
-                    if telemetry.is_active():
-                        _q_now = np.array([p.getJointState(robot_id, j)[0]
-                                           for j in robot_model().arm_joints])
-                        _dq = np.asarray(wp.joint_positions) - _q_now
-                        telemetry.note(
-                            f"waypoint {wi}/{last_wp_idx} -> "
-                            f"max|dq|={np.max(np.abs(_dq)):.4f} rad "
-                            f"(j{int(np.argmax(np.abs(_dq)))}), "
-                            f"||dq||={np.linalg.norm(_dq):.4f} rad, "
-                            f"settle={wi == last_wp_idx}")
-                    move_robot_smooth(robot_id, wp.joint_positions,
-                                      gui, steps=30,
-                                      settle=(wi == last_wp_idx))
+                # BF#59 carry_hold_check: the finger and wrist readback at
+                # the start of a move made while holding (None when the
+                # switch is off or the hand is empty).
+                _carry0 = carry_hold_begin(robot_id, held_body_id)
+
+                # Stream the waypoints (stream_move_waypoints: today's
+                # per-pair stream with the settle at the last one, the
+                # #P1 endpoint hold and the F17 notes; BF#59
+                # carry_trapezoid's one schedule when it is on and a
+                # body is held).
+                stream_move_waypoints(robot_id, traj.waypoints, gui,
+                                      holding=held_body_id is not None)
                 # Read the arm's true joint state after motion completes.
                 # Position control can undershoot the IK target; if we
                 # used the planned q2 directly, errors would accumulate
@@ -1971,6 +2179,58 @@ def main(gui=True, run_logger=None, scene_config=None,
                           f"left TAMPURA's at-home test false; ending the "
                           f"episode (home_not_reached, D7 (vi)).")
                     dispatch_end('home_not_reached')
+                    break
+                # BF#59 carry_hold_check (proposals/loss_dynamics.md 2.1):
+                # the move's postcondition while holding, checked after the
+                # home hold and the at-home test.  Without it nothing reads
+                # the pads after the pick, a die lost on the swing home
+                # leaves held_body_id set and the goal check is the first
+                # to notice (physics_mismatch).  A loss takes the empty-hand
+                # path of the place entry assert, unchanged: the transit
+                # strike, the held state cleared, the pose unknown, the
+                # lost-region refresh, then a replan.  In 3 of 3 recorded
+                # losses the die ended outside W, so that replan mostly
+                # ends as target_lost (reviews/loss_dynamics.md).
+                _carry = carry_hold_end(
+                    robot_id, held_body_id, _carry0,
+                    body_id_to_name.get(held_body_id), dest_boxel_id, gui)
+                if _carry is not None and not _carry.held:
+                    _lost_obj = body_id_to_name.get(held_body_id,
+                                                    str(held_body_id))
+                    transit_loss_counts[_lost_obj] = \
+                        transit_loss_counts.get(_lost_obj, 0) + 1
+                    print(f"    transit loss {transit_loss_counts[_lost_obj]}"
+                          f"/3 for {_lost_obj} (review-fix strike counter)")
+                    if (transit_loss_counts[_lost_obj] >= 3
+                            and _lost_obj not in pick_giveup_objects):
+                        print(f"    ERROR: {_lost_obj} lost in transit "
+                              f"{transit_loss_counts[_lost_obj]} times, "
+                              f"giving up on grasping it (#P1 F2 giveup, "
+                              f"transit edition).")
+                        pick_giveup_objects.add(_lost_obj)
+                        planner.streams.ungraspable_objects.add(_lost_obj)
+                        pick_giveup_marked_at[_lost_obj] = plan_count
+                    held_body_id = None
+                    held_object_boxel_id = None
+                    # The readback just taken carried the lost body as
+                    # cargo; the same readback without it (the hand is
+                    # empty now) starts the next plan.
+                    current_config = _readback_config(
+                        current_config.joint_positions, current_config.name)
+                    audit_robot_held_state(
+                        env, robot_id, expected_held_body_id=None,
+                        tag=f"post-carry-loss:{_lost_obj}")
+                    env.update_object_positions()
+                    # M8 A: lost in transit, its pose is unknown.
+                    pose_belief.mark_pose_unknown(registry.get_boxel(_lost_obj))
+                    _lost = refresh_object_aabbs(env, registry, viz=viz,
+                                                 check_lost=True)
+                    if _lost:
+                        retire_lost_objects(
+                            _lost, registry, viz, shadows,
+                            shadow_occluder_map, boxel_centers,
+                            occluders, belief, env=env)
+                    dispatch_end('empty_hand')
                     break
                 # #P2 (a): a transit is the action that most often
                 # disturbs bystanders (F18, F10) and nothing re-read the

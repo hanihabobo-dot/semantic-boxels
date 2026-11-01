@@ -16,6 +16,28 @@ from typing import Optional
 
 import numpy as np
 
+import slip_fixes
+
+# BF#59 pose_radius_keep (proposals/loss_dynamics.md 2.4, rule changed by
+# reviews/loss_dynamics.md): a later complete detection of a body the
+# belief already bounds does not loosen the radius beyond the bound the
+# earlier detection still gives around the new centre, and the overhead
+# eye's re-fused yaw does not replace a consistent wrist yaw.  OFF keeps
+# record_detection's "latest detection sets the radius, yaw = latest".
+slip_fixes.register(
+    'pose_radius_keep',
+    'a consistent later detection keeps min(r_new, r_old + centre shift) '
+    'and the wrist yaw over the eye yaw (record_detection)')
+
+# BF#59 grasp_wrist_home (proposals/carry_motion.md 2.1, reviews/
+# carry_motion.md): the switch lives here, with the twin choice below, and
+# streams.BoxelStreams.sample_grasp asks it.  Registered at import, off by
+# default.
+slip_fixes.register(
+    'grasp_wrist_home',
+    'the grasp sampler takes, of a top-down grasp yaw and its pad-swapped '
+    'twin (yaw + pi), the one whose wrist (joint 7) is nearer home')
+
 # A: one pixel of detection noise, declared a priori (not fitted).
 DETECTION_PIXEL_NOISE_PX = 1.0
 
@@ -197,6 +219,78 @@ def fitted_grasp_candidates(yaw: float, body_extents,
     return sorted(cands, key=lambda c: c[1])
 
 
+# BF#59 grasp_wrist_home.  "Smallest wrist rotation" above (and the AABB
+# sampler's "wrist-neutral" yaw 0) is measured from the Euler yaw 0 of the
+# hand in the world, not on the arm: on the Panda, top_down(0) is half a
+# turn from the wrist at both homes (REST_POSES and their DEFAULT_ARM_POS
+# have joint 7 = 0.785).  Every recorded die carry home unwound joint 7 by
+# 168 to 199 deg (reviews/carry_motion.md 1, the planned waypoints) while
+# the pads held the die, and that unwind turns a die sitting a few degrees
+# off its face out of the pinch: in grasp_geometry's real-pick probe, the
+# pad-swapped grasp (yaw + pi, the same pinch of any box) held 55 of 56
+# near-face grips under today's carry against 32 at today's yaw (McNemar
+# p 2e-7).  Today's yaw also clips joint 7 at its limit for believed yaws
+# above about 15 deg, so those grasps land up to 10 deg off their yaw
+# (the IK's orientation tolerance) or find no IK; the twin sits inside the
+# range.
+#
+# Joint 7 of a top-down grasp follows from the grasp yaw and the target's
+# bearing from the base, with no IK: with the hand pointing down, joint 7
+# turns the hand about the vertical against joint 1, so the hand's world
+# yaw is bearing - q7 + C.  C = 5 pi / 4 for the Panda (both URDFs, base
+# yaw included in the bearing): at REST_POSES (q1 = 0, q7 = pi / 4) the
+# hand is top_down(pi).  The arm's null space (joints 3 and 5) moves the
+# real value by a few degrees (probes/grasp_wrist_home, the formula against
+# the kin stream's IK).
+PANDA_TOP_DOWN_Q7_OFFSET = 1.25 * math.pi
+# Joint 7's limit (robot_utils.JOINT_LIMITS_*, the same for both Pandas):
+# a predicted joint 7 past it is where the IK clips.
+PANDA_Q7_LIMIT = 2.8973
+# Near the split both members need about a quarter turn and the
+# prediction's few degrees decide; within this band of the split today's
+# member is kept (reviews/carry_motion.md, rule 2, asked for a tie band,
+# "say within 20 deg", against a world-frame angle that ignores the base
+# joint's turn; the bearing above removes that).  Measured on 450 grid
+# cells of both worlds (probes/grasp_wrist_home/analyse_band*.txt): 5 deg
+# never flips to the member the IK puts farther from home and picks the
+# IK-nearer one in 362 of 369 cells; 0 deg flips 4 cells to a member up to
+# 11 deg farther; 20 deg keeps today's member in 42 cells where the twin
+# is up to 39 deg nearer.
+WRIST_HOME_TIE_BAND = math.radians(5.0)
+
+
+def wrist_joint7_top_down(target_xy, base_xy, grasp_yaw: float) -> float:
+    """BF#59 grasp_wrist_home: joint 7 (rad, in [-pi, pi)) of a top-down
+    hand at ``grasp_yaw`` over ``target_xy``, the robot base at
+    ``base_xy``: bearing - yaw + PANDA_TOP_DOWN_Q7_OFFSET."""
+    t = np.asarray(target_xy, dtype=float)[:2]
+    b = np.asarray(base_xy, dtype=float)[:2]
+    bearing = math.atan2(float(t[1] - b[1]), float(t[0] - b[0]))
+    return _wrap(bearing - float(grasp_yaw) + PANDA_TOP_DOWN_Q7_OFFSET,
+                 2.0 * math.pi)
+
+
+def wrist_home_twin(grasp_yaw: float, target_xy, base_xy, q7_home: float,
+                    tie_band: float = WRIST_HOME_TIE_BAND):
+    """BF#59 grasp_wrist_home: of ``grasp_yaw`` and its pad-swapped twin
+    (yaw + pi, wrapped to [-pi, pi)), the one whose predicted joint 7 is
+    nearer ``q7_home``; today's yaw unless the twin is nearer by more than
+    twice ``tie_band`` (today's member more than tie_band past the quarter
+    turn split).  The distance is to joint 7 clipped at its limit, where
+    the IK puts it.  Returns (chosen yaw, info) with info the two yaws,
+    their joint 7 values and distances (rad) and 'twin' (bool)."""
+    twin = _wrap(float(grasp_yaw) + math.pi, 2.0 * math.pi)
+    q_a = wrist_joint7_top_down(target_xy, base_xy, grasp_yaw)
+    q_b = wrist_joint7_top_down(target_xy, base_xy, twin)
+    lim = PANDA_Q7_LIMIT
+    d_a = abs(min(max(q_a, -lim), lim) - float(q7_home))
+    d_b = abs(min(max(q_b, -lim), lim) - float(q7_home))
+    use_twin = d_a - d_b > 2.0 * tie_band
+    info = {'yaw': float(grasp_yaw), 'twin_yaw': twin, 'q7': q_a,
+            'twin_q7': q_b, 'd': d_a, 'twin_d': d_b, 'twin': use_twin}
+    return (twin if use_twin else float(grasp_yaw)), info
+
+
 def pinch_half_extent(pinch_dir_xy, yaw: float, body_extents) -> float:
     """Half the width of the yawed rectangle along a pinch direction."""
     d = np.asarray(pinch_dir_xy, dtype=float)[:2]
@@ -247,14 +341,15 @@ def _any_on() -> bool:
     return any(SWITCHES.values())
 
 
-def _fuse(boxel, det, camera: str, max_span: float) -> None:
+def _fuse(boxel, det, camera: str, max_span: float) -> bool:
     """M9 fusion of a complete detection's rectangle into the boxel: the
     new yaw is first aligned to the stored one (the k * pi/2 equivalent
     nearest it, extents swapped on an odd quarter turn), then
     body_extents = per-axis max, yaw = latest, capped at max_span in xy.
     An observation larger than the stored extents by more than the pixel
     noise (one pixel each side) is not fused.  Q-C: a yaw within the
-    camera's deadband of 0 is stored as 0."""
+    camera's deadband of 0 is stored as 0.  Returns whether it fused
+    (BF#59 pose_radius_keep reads it; every other caller ignores it)."""
     ext = np.asarray(det.body_extents, dtype=float).copy()
     yaw = float(det.yaw)
     if boxel.body_extents is not None:
@@ -268,7 +363,7 @@ def _fuse(boxel, det, camera: str, max_span: float) -> None:
             print(f"    [M9] {boxel.id}: rectangle {np.round(ext[:2] * 1e3, 1)} mm "
                   f"exceeds the fused {np.round(stored[:2] * 1e3, 1)} mm by more "
                   f"than the pixel noise — not fused")
-            return
+            return False
         ext = np.maximum(ext, stored)
     ext[:2] = np.minimum(ext[:2], max_span)
     if abs(yaw) < YAW_DEADBAND[camera]:
@@ -277,6 +372,7 @@ def _fuse(boxel, det, camera: str, max_span: float) -> None:
     boxel.yaw = yaw
     boxel.yaw_valid = True
     boxel.rect_center = np.asarray(det.rect_center, dtype=float).copy()
+    return True
 
 
 def record_detection(boxel, det, camera: str, complete: bool,
@@ -286,17 +382,138 @@ def record_detection(boxel, det, camera: str, complete: bool,
     a COMPLETE detection sets the radius by the formula (after fusing its
     rectangle, M9); a partial one leaves the radius and is never fused,
     except at an object's FIRST registration, where it gets the formula
-    plus half its completion.  No-op while every switch is OFF."""
+    plus half its completion.  No-op while every switch is OFF.
+
+    ``camera`` names the detection's source ('eye' the overhead camera,
+    'wrist' M8's observe); BF#59 pose_radius_keep reads it for the yaw
+    keep (see _prk_apply)."""
     if not _any_on():
         return
+    _keep = slip_fixes.on('pose_radius_keep')
+    if _keep:
+        # Captured before the fusion overwrites the yaw.
+        _prior = _prk_prior(boxel)
+    _fused = False
     if complete and det.yaw_valid and det.body_extents is not None:
-        _fuse(boxel, det, camera, max_span)
+        _fused = _fuse(boxel, det, camera, max_span)
     if complete or first:
         boxel.pose_radius = pose_radius(
             det, YAW_NOISE[camera], boxel.body_extents, rigid_ext,
             first_partial=not complete)
+        if _keep:
+            _prk_apply(boxel, det, camera, first, _fused, _prior)
     if complete:
         boxel.complete_detections += 1
+
+
+# BF#59 pose_radius_keep (reviews/loss_dynamics.md, pose_radius_keep):
+# the cup loop.  M8's wrist observe sets a cup's radius to 0.39 mm; the
+# next move's overhead refresh (execution.refresh_object_aabbs) re-poses
+# the cup at the eye's centre, 1.66 mm away, and today sets the eye's own
+# 5.49 mm (mostly its yaw term, 9.475 deg times the 25.5 mm half side),
+# outside the cup's commit margin (about 3 mm, the reviewer's estimate from
+# believed_margin), so the pick refuses and the next plan observes again,
+# up to 90 plans.  The two estimates agree; the bookkeeping replaced the
+# finer one.  If the body did not move, the truth lies in the earlier
+# detection's disc D(c_ref, r_ref), so around the new centre it lies
+# within r_ref + |c_new - c_ref|; the radius is
+#     min(r_new, r_ref + |c_new - c_ref|)
+# (0.39 + 1.66 = 2.05 mm in the loop, under the margin; the review's
+# 1.95 mm uses its 1.56 mm estimate-to-estimate shift).  A body the robot
+# moved shows a large shift, so r_new wins and today's behaviour returns.
+# The proposal's min(r_old, r_new) was rejected by the review: it states
+# 0.39 mm around a centre measured 1.66 mm off.
+#
+# The reference disc is the measured detection whose own radius set the
+# current bound (the wrist's while the eye's re-poses are bounded by it),
+# not the bound itself, so repeated eye refreshes do not add their shifts
+# up.  It is used only while the belief is still the one this rule last
+# wrote: the same radius (mark_pose_unknown, mark_pose_commanded, M10's
+# touched bodies and every other radius writer invalidate it) and the box
+# where that write's caller put it (a place, or a re-pose from a partial
+# detection, moves the box without this rule and invalidates it).
+# _PRK_BOX_TOL (m): the box writers skip a write within 0.1 mm per axis
+# (refresh_object_aabbs, handle_observe_action), so 0.5 mm covers that
+# early return and nothing a robot move does.
+_PRK_BOX_TOL = 0.0005
+
+
+def _prk_centres(det):
+    """The two xy centres a pick may aim at, from one detection: the
+    AABB's (every pick) and the fitted rectangle's (M9's aim, when the
+    detection carries a valid yaw)."""
+    aabb = np.asarray(det.est_center, dtype=float)[:2].copy()
+    rect = (np.asarray(det.rect_center, dtype=float)[:2].copy()
+            if det.yaw_valid and det.rect_center is not None else None)
+    return aabb, rect
+
+
+def _prk_prior(boxel) -> dict:
+    """The belief before a detection is recorded (pose_radius_keep)."""
+    box = (np.asarray(boxel.min_corner, dtype=float)[:2]
+           + np.asarray(boxel.max_corner, dtype=float)[:2]) / 2.0
+    return {'radius': float(boxel.pose_radius), 'box': box,
+            'yaw': float(boxel.yaw),
+            'yaw_ok': bool(boxel.yaw_valid and boxel.body_extents is not None),
+            'ref': getattr(boxel, '_prk_ref', None)}
+
+
+def _prk_apply(boxel, det, camera: str, first: bool, fused: bool,
+               prior: dict) -> None:
+    """pose_radius_keep, after the A formula set boxel.pose_radius = r_new:
+    the radius rule above, then the yaw keep.  A first registration is
+    left as the formula sets it (it only becomes the reference)."""
+    r_new = float(boxel.pose_radius)
+    c_aabb, c_rect = _prk_centres(det)
+    ref = prior['ref']
+    valid = (not first and ref is not None
+             and math.isfinite(prior['radius'])
+             and prior['radius'] == ref['written']
+             and float(np.linalg.norm(prior['box'] - ref['box'])) <= _PRK_BOX_TOL)
+    shift = math.inf
+    if valid:
+        # The larger of the two centres' shifts, so the bound holds for
+        # whichever centre the pick aims at.
+        shift = float(np.linalg.norm(c_aabb - ref['aabb']))
+        if c_rect is not None and ref['rect'] is not None:
+            shift = max(shift, float(np.linalg.norm(c_rect - ref['rect'])))
+    bound = ref['r'] + shift if valid else math.inf
+    if bound < r_new:
+        boxel.pose_radius = bound
+        print(f"    pose_radius_keep: {boxel.id} radius kept {bound * 1e3:.2f} mm "
+              f"(this {camera} detection's {r_new * 1e3:.2f} mm; the {ref['cam']} "
+              f"detection's {ref['r'] * 1e3:.2f} mm + centre shift "
+              f"{shift * 1e3:.2f} mm)")
+        new_ref = dict(ref)
+    else:
+        new_ref = {'r': r_new, 'aabb': c_aabb, 'rect': c_rect, 'cam': camera}
+    new_ref['written'] = float(boxel.pose_radius)
+    new_ref['box'] = c_aabb.copy()
+    boxel._prk_ref = new_ref
+    if not fused:
+        return
+    # The yaw keep (the review's point 4): _fuse sets yaw = latest, so the
+    # eye's refresh replaces the wrist's 0.2 deg yaw by its own, which
+    # snaps yaws within about 10 deg of an axis to 0; a grasp that needs
+    # the wrist's yaw would loop like the cup.  The wrist's yaw stays when
+    # the eye's detection agrees with the belief: the discs overlap
+    # (shift <= r_ref + r_new; a moved body fails this) and the eye's
+    # aligned yaw lies within the two cameras' noise of the wrist's.
+    # The fused extents and the rectangle centre stay the eye's, as the
+    # box does.
+    yaw_cam = getattr(boxel, '_prk_yaw_cam', None)
+    d_yaw = abs(_wrap(float(boxel.yaw) - prior['yaw'], 2.0 * math.pi))
+    if (camera == 'eye' and yaw_cam == 'wrist' and prior['yaw_ok']
+            and valid and shift <= ref['r'] + r_new
+            and d_yaw <= YAW_NOISE['eye'] + YAW_NOISE['wrist']):
+        if d_yaw > 0.0:
+            print(f"    pose_radius_keep: {boxel.id} yaw kept "
+                  f"{math.degrees(prior['yaw']):.2f} deg (wrist) over this eye "
+                  f"detection's {math.degrees(float(boxel.yaw)):.2f} deg "
+                  f"(centre shift {shift * 1e3:.2f} mm)")
+        boxel.yaw = prior['yaw']
+    else:
+        boxel._prk_yaw_cam = camera
 
 
 def mark_pose_unknown(boxel) -> None:

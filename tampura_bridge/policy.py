@@ -34,6 +34,7 @@ import pybullet as p
 
 import m8_domain
 import robot_utils
+import slip_fixes
 import telemetry
 import test_full_pipeline
 import world_eye
@@ -66,6 +67,17 @@ def d9_setup(world, model):
     c = world.client._client
     p.setGravity(0, 0, task_spec.GRAVITY_Z, physicsClientId=c)
     p.setTimeStep(task_spec.TIMESTEP, physicsClientId=c)
+    # BF#59 solver_iters: our solver iterations beside our gravity and
+    # timestep (robot_utils.SOLVER_ITERATIONS, the value boxel_env sets on
+    # our own world); their tree sets none, so their world runs PyBullet's
+    # 50, which arm T keeps.
+    if slip_fixes.on('solver_iters'):
+        p.setPhysicsEngineParameter(
+            numSolverIterations=robot_utils.SOLVER_ITERATIONS,
+            physicsClientId=c)
+        _n = p.getPhysicsEngineParameters(physicsClientId=c)['numSolverIterations']
+        print(f"  solver_iters: numSolverIterations {_n} on the executing "
+              f"world (client {c}, D9 set-up)")
     for body, cat in zip(world.objects, world.categories):
         p.changeDynamics(body, -1, mass=task_spec.CLASS_MASS_KG[cat],
                          localInertiaDiagonal=list(task_spec.CLASS_INERTIA_DIAG[cat]),
@@ -77,6 +89,28 @@ def d9_setup(world, model):
                          physicsClientId=c)
         p.resetJointState(world.robot.body, fj, task_spec.FINGER_OPEN,
                           physicsClientId=c)
+    # BF#59 force_hold (slip_fixes.py; finger_gear folded in): their URDF
+    # couples the fingers (panda.urdf line 356, <mimic
+    # joint="panda_finger_joint1"/>) and PyBullet ignores the tag, so a
+    # JOINT_GEAR constraint realises it on the executing client, here in
+    # phase 'setup' before any step (after set_phase('main') G14 would
+    # refuse it).  Only the executing client steps; the plan twin and the kin
+    # stream need no gear.  Constants in robot_utils (FINGER_GEAR_*).
+    if slip_fixes.on('force_hold'):
+        robot_utils.force_hold_requires_solver_iters('d9_setup')
+        f1, f2 = model.finger_joints
+        gear = p.createConstraint(world.robot.body, f1, world.robot.body, f2,
+                                  jointType=p.JOINT_GEAR, jointAxis=[1, 0, 0],
+                                  parentFramePosition=[0, 0, 0],
+                                  childFramePosition=[0, 0, 0], physicsClientId=c)
+        p.changeConstraint(gear, gearRatio=robot_utils.FINGER_GEAR_RATIO,
+                           erp=robot_utils.FINGER_GEAR_ERP,
+                           maxForce=robot_utils.FINGER_GEAR_MAX_FORCE, physicsClientId=c)
+        logging.getLogger(__name__).info(
+            "force_hold: finger gear constraint %d on client %d (joints %d, %d, "
+            "gearRatio %g, erp %g, maxForce %g N)", gear, c, f1, f2,
+            robot_utils.FINGER_GEAR_RATIO, robot_utils.FINGER_GEAR_ERP,
+            robot_utils.FINGER_GEAR_MAX_FORCE)
 
 
 def _poses(world):
@@ -186,6 +220,10 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 target_symbol=target[0], domain_file=domain_file))
             with gate_hooks.write_only('settle_disclosure'):
                 before = _poses(world)
+            # BF#59 solver_iters: main() configures the slip fixes, but D9's
+            # set-up runs before main(), so the same flag is configured here
+            # first (main() then sets the same names again).
+            slip_fixes.configure(cfg.switches.get('slip_fixes', ''))
             d9_setup(world, model)
             # GF6: only D9's calls run under 'setup'; the adapter build and
             # main() are checked by G3, G6 and G14.
