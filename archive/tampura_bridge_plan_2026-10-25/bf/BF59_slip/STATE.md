@@ -612,6 +612,35 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      default (slip_fixes.py's defaults, the tests' off-by-default
      assertions, a seed-0 check), then job E for more reps, the B8 T
      trees on the cluster, slip/release_retreat, the pushes.
+   - GARBAGE (Hani's "delete all of that garbage data now", 21:30): the
+     ledger's Deleted bullet of 21:30 has it all: on the cluster the two
+     B8 TAMPURA trees and the per-fix eval's trees (736 MB, their
+     summaries pulled into bf/BF54_b8_campaigns and tracked first); on
+     the laptop the jam probe's json traces (its per-trial summaries
+     tracked), the hold_physics episodes' outputs and the force_hold
+     implementer's run outputs; the seven merged slip/* branches
+     deleted. KEPT: the BF#59 eval's episode trees on the cluster
+     (615 MB, the raw data behind the table and the open cup-loop
+     finding; prune_work compacts them after 2 days). The cluster
+     counts 620 MB against its 1 GiB cap.
+   - JOB E (Hani's "run a new eval", 21:32): 5017307 on cn-105 from the
+     snapshot sb_cff9bc5 (byte for byte the merge 968bd81's code):
+     base, the chosen set solver_iters+force_hold+pose_radius_keep+
+     grasp_wrist_home, and ALL SIX (the chosen set + carry_trapezoid +
+     carry_hold_check); 3 reps of seeds 0-19, 600 s cap, no screenshots
+     (BOXEL_EYE_IMAGES=0 in every cluster job). Expected 4 to 6 h.
+     Submitted as: sbatch -w cn-105 $W/sb_cff9bc5/tools/cluster/
+     slip_eval.sbatch sb_cff9bc5 base,<chosen>,<all six> 0-19 3 0-19;
+     results in $W/results/slip_cff9bc5/5017307, log
+     $W/logs/p4-slip_5017307.txt. A laptop waiter (ssh every 20 min)
+     wakes the session at the job's end. THEN: pull metadata.json,
+     results.jsonl, static.txt, summary.txt and the job log into
+     eval/E_5017307/ (tracked), regenerate eval/TABLE.md with
+     slip_table.py (the all-six arm is new to it), write a RESULT E
+     addendum into the BF#59 entry (the chosen set's replication
+     against job D; the all-six arm against the chosen set: losses,
+     timeouts, exec time), ledger rows, memory. Hani's remaining calls:
+     the defaults, the release_retreat merge, the pushes.
 
 ## Diagnosis so far (from the two finished proposals)
 

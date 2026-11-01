@@ -1,0 +1,13 @@
+graph    INFO  33 modules; roots not present yet: none
+G1       PASS  76 hits, all reviewed
+G2       PASS  46 hits, all reviewed
+G7       PASS  no scene literal
+G11(i)   PASS  pddlstream imported only by pddlstream_planner.py and streams.py
+G17      PASS  clean
+G10      INFO  domain_pddlstream.pddl a21877fe170997c7  stream.pddl 9f767855831731a4
+G10      PASS  pddl/domain_pddlstream_m8.pddl e49e249bb03b7fdd = regenerated (live + M8 delta); an OFF run must load the live file, an ON run this one
+G13      PASS  tampura: HEAD cdddf14, tree fbc0cd060ddbb4af, 0 declared change(s) (BF#3), nothing else modified or stray
+G13      PASS  tampura_environments: HEAD 4167c35, tree e339e7b865a82c1b, 1 declared change(s) (BF#3), nothing else modified or stray
+G13      INFO  arm T pip freeze 0cdfcf0c5ae35ee4
+G13      PASS  arm T's installed tampura: 2502 of 2506 tracked files byte-equal to the checkout, the rest never installed and never read, build 5f75024e7c619d4f
+G13      PASS  T driver = run_planner.py line for line, plus the one import
