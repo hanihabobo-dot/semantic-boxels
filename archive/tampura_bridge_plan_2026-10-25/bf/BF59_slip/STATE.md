@@ -574,6 +574,19 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      replan-loop finding, D 62 MB, T 210 MB); A, B and C add about
      280 MB. Nothing of ours is garbage by the ledger's rules; whether
      the B8 T episodes may go is Hani's call.
+   - release_retreat, the side session's final (11:00): branch
+     slip/release_retreat at 958c965 (after 15cf540 and 9168b58; worktree
+     sb-slip-release_retreat, the side session's; nothing pushed). Its
+     BF#61 entry, on that branch, now counts the release jams in the
+     finished jobs' logs over release attempts, the counted lines
+     stated: base 18 jams in 536 attempts, the D set 0 in 141; why the
+     zero-jam arms do not jam is marked open. Job E for release_retreat:
+     declined by this session on Hani's "if parent agent says no, then
+     no" to that session (no power against 0 of 141 under the chosen
+     set, the cap exceeded); the switch stays default off. Whether
+     slip/release_retreat merges into tampura-bridge is Hani's call,
+     beside the merge of slip/campaign, the defaults, job E for more
+     reps and the B8 T trees.
 
 ## Diagnosis so far (from the two finished proposals)
 
