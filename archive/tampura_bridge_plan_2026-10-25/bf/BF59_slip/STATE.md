@@ -464,9 +464,29 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      (the medians in the table). TAMPURA runs at its own 50 solver
      iterations (to disclose beside our solver_iters arms) and the M8
      calibration issue stays open.
-   - A and B were at 112/180 and C at 71/180 at 00:11; the waiter wakes
-     the session when the first ends (A and B about 02:00, C about
-     05:00).
+   - Job A (5006486, cn-101, 21:08 to 02:27, 5 h 18 min, 180 episodes;
+     pulled 02:50 after one gateway drop): base 44/60, 8 timeouts, 8
+     losses in 52 carries (0.15), 8 of 20 seeds mixed. solver_iters
+     ALONE 26/60, 4 timeouts, 31 losses in 57 carries (0.54, p 2e-5
+     against its base): the firmer convergence with today's 0.5 mm
+     position hold expels the die on every scene, 14 of 20 carries even
+     on 1747173591 where base never loses, so solver_iters must never
+     ship alone (force_hold already requires it; the reverse holds
+     too). solver_iters+force_hold 54/60, 5 timeouts (the cup loop:
+     seed 17 in all three reps, 5 and 6 once; no pose_radius_keep in
+     this arm), one pick give-up (seed 13 rep 0, no carry), 0 losses in
+     54 carries (p 0.0025 against its base, 0.0007 against the pooled
+     base), 3 of 20 seeds mixed (5, 6, 13: the timeouts and the
+     give-up); paired wall x1.06, exec x1.15 (the iterations), mean
+     process wall 100 s vs 118 s. Base's losses sit on scene 1747173593
+     (8 of 24 carries in A, 6 of 24 in D) and 1747173590 (3 of 6 in D);
+     scene 1747173591 never loses in base (0 of 42 carries over A and
+     D).
+   - B was at 178/180 and C at 146/180 at 02:43; the waiter
+     (b17r72a2y) wakes the session when both have ended (C about
+     04:00). B's arm pose_radius_keep+grasp_wrist_home timed out on
+     seed 18 rep 2 (scene 1747173593, not the cup-loop scene): to be
+     read in B's records.
    - Cluster cap: prune_work at T's end counted 1178 MiB of 1024 and
      found nothing it may delete (the two B8 campaigns' T episodes
      625 MiB cited by BF#54, the per-fix eval's 111 MiB behind the open
