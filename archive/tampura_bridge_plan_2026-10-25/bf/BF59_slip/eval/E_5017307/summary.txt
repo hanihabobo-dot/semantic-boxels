@@ -1,0 +1,52 @@
+arms base, solver_iters+force_hold+pose_radius_keep+grasp_wrist_home, solver_iters+force_hold+pose_radius_keep+grasp_wrist_home+carry_trapezoid+carry_hold_check; seeds 20: 0-19
+rows 180 (repetition 0: 60)
+
+arm            episodes  success timeouts  carries  losses loss/carry pick tries
+base                 60       41        6       54      13       0.24         54
+solver_iters+force_hold+pose_radius_keep+grasp_wrist_home       60       60        0       60       0       0.00         60
+solver_iters+force_hold+pose_radius_keep+grasp_wrist_home+carry_trapezoid+carry_hold_check       60       60        0       60       0       0.00         60
+
+medians over the 18 seeds every arm ran to the ledger's close (repetition 0, any outcome)
+metric                    basesolver_iters+force_hold+pose_radius_keep+grasp_wrist_homesolver_iters+force_hold+pose_radius_keep+grasp_wrist_home+carry_trapezoid+carry_hold_check
+wall_s                    21.9        16.7        27.7
+planning_s                12.1         9.4        13.6
+planning_first_s           3.4         3.3         3.3
+exec_s                     8.1         5.4        12.2
+plan_calls                 5.0         3.0         5.0
+steps                     17.0        11.0        23.0
+picks                      3.0         2.0         4.0
+moves                     10.0         6.0        12.0
+senses                     1.0         1.0         3.0
+observes                   1.0         1.0         1.0
+
+each arm against base on the seeds both ran to the close (repetition 0): success, losses per carry, and the median per-seed ratio of wall and planning
+  solver_iters+force_hold+pose_radius_keep+grasp_wrist_home (18 seeds): success 11 -> 18; losses/carries 7/18 -> 0/18; wall_s x0.87, planning_s x0.83, exec_s x0.98
+  solver_iters+force_hold+pose_radius_keep+grasp_wrist_home+carry_trapezoid+carry_hold_check (18 seeds): success 11 -> 18; losses/carries 7/18 -> 0/18; wall_s x1.03, planning_s x1.00, exec_s x1.14
+
+replication (the same arm and seed run more than once): outcomes per run, and the wall times; "mixed" marks a seed whose runs disagree
+  base         mixed 11/20: seed 0: SSS [22, 20, 19]; seed 1: FSF [34, 38, 40] mixed; seed 2: FSS [40, 66, 29] mixed; seed 3: SSS [27, 40, 40]; seed 4: SSS [40, 568, 29]; seed 5: FSS [124, 295, 146] mixed; seed 6: TST [600, 135, 600] mixed; seed 7: SSS [18, 18, 17]; seed 8: SSF [33, 34, 39] mixed; seed 9: SSS [18, 18, 19]; seed 10: SSF [42, 43, 390] mixed; seed 11: SSS [134, 55, 35]; seed 12: FSS [19, 16, 18] mixed; seed 13: SSS [20, 17, 17]; seed 14: FSS [40, 42, 60] mixed; seed 15: SFS [35, 39, 29] mixed; seed 16: SSS [17, 22, 18]; seed 17: TTT [600, 600, 620]; seed 18: FFS [42, 55, 40] mixed; seed 19: FTF [186, 600, 47] mixed
+  solver_iters+force_hold+pose_radius_keep+grasp_wrist_home mixed 0/20: seed 0: SSS [17, 18, 18]; seed 1: SSS [29, 42, 29]; seed 2: SSS [29, 30, 44]; seed 3: SSS [53, 70, 126]; seed 4: SSS [41, 42, 44]; seed 5: SSS [53, 55, 56]; seed 6: SSS [58, 58, 63]; seed 7: SSS [18, 18, 20]; seed 8: SSS [29, 42, 42]; seed 9: SSS [18, 18, 36]; seed 10: SSS [46, 77, 49]; seed 11: SSS [18, 19, 16]; seed 12: SSS [18, 17, 18]; seed 13: SSS [18, 18, 18]; seed 14: SSS [31, 41, 54]; seed 15: SSS [41, 42, 29]; seed 16: SSS [18, 18, 16]; seed 17: SSS [54, 54, 53]; seed 18: SSS [41, 43, 29]; seed 19: SSS [62, 49, 56]
+  solver_iters+force_hold+pose_radius_keep+grasp_wrist_home+carry_trapezoid+carry_hold_check mixed 0/20: seed 0: SSS [18, 18, 18]; seed 1: SSS [40, 45, 40]; seed 2: SSS [48, 35, 40]; seed 3: SSS [40, 83, 43]; seed 4: SSS [40, 28, 59]; seed 5: SSS [63, 52, 52]; seed 6: SSS [56, 55, 57]; seed 7: SSS [17, 18, 18]; seed 8: SSS [39, 40, 40]; seed 9: SSS [17, 17, 18]; seed 10: SSS [52, 45, 137]; seed 11: SSS [85, 18, 30]; seed 12: SSS [17, 18, 17]; seed 13: SSS [18, 17, 17]; seed 14: SSS [52, 45, 41]; seed 15: SSS [41, 28, 28]; seed 16: SSS [18, 18, 19]; seed 17: SSS [52, 52, 51]; seed 18: SSS [30, 41, 41]; seed 19: SSS [59, 53, 95]
+
+outcome and wall_s per seed, repetition 0 (x: not run, T: timeout, F: no success)
+seed          basesolver_iters+force_hold+pose_radius_keep+grasp_wrist_homesolver_iters+force_hold+pose_radius_keep+grasp_wrist_home+carry_trapezoid+carry_hold_check
+0             10.6         8.1         8.7
+1             F 34        16.4        28.3
+2             F 40        17.0        35.5
+3             15.4        40.5        27.7
+4             27.4        29.3        27.8
+5            F 124        39.7        50.8
+6                T        44.4        43.3
+7              7.5         8.4         7.8
+8             21.4        16.3        27.6
+9              7.8         8.1         7.9
+10            30.1        32.6        40.3
+11           123.3         8.0        76.0
+12            F 19         7.8         8.0
+13            10.3         7.8         7.9
+14            F 40        18.2        39.7
+15            22.0        29.2        28.4
+16             7.6         8.3         7.9
+17               T        39.8        40.1
+18            F 42        28.7        17.0
+19           F 186        49.3        46.2

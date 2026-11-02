@@ -15,7 +15,10 @@ Wall "all" is the process wall of every episode with the timeouts at the cap (me
 | C_5006488 | pose_radius_keep+grasp_wrist_home+carry_trapezoid | 60 | 54 | 5 | 54 | 0 | 0.00 [0.00, 0.07] | 54 | 53.0 | 152.7 | 38.4 | 22.2 | 14.4 | 5/20 (1,3,4,15,18) | 06:37:52 |
 | D_5006489 | base | 60 | 42 | 9 | 51 | 9 | 0.18 [0.08, 0.31] | 51 | 40.5 | 129.1 | 26.9 | 13.8 | 9.2 | 6/20 (1,5,8,10,14,18) | 02:48:56 |
 | D_5006489 | solver_iters+force_hold+pose_radius_keep+grasp_wrist_home | 60 | 60 | 0 | 60 | 0 | 0.00 [0.00, 0.06] | 60 | 42.5 | 37.8 | 30.4 | 14.3 | 13.9 | 0/20 | 02:48:56 |
-| all | base (pooled) | 240 | 168 | 31 | 208 | 40 | 0.19 [0.14, 0.25] | 208 | 39.4 | 116.5 | 26.8 | 13.3 | 11.1 | 13/20 | - |
+| E_5017307 | base | 60 | 41 | 6 | 54 | 13 | 0.24 [0.13, 0.38] | 54 | 39.3 | 117.7 | 24.6 | 13.0 | 9.8 | 11/20 (1,2,5,6,8,10,12,14,15,18,19) | 03:17:18 |
+| E_5017307 | solver_iters+force_hold+pose_radius_keep+grasp_wrist_home | 60 | 60 | 0 | 60 | 0 | 0.00 [0.00, 0.06] | 60 | 40.9 | 38.0 | 28.7 | 13.5 | 9.3 | 0/20 | 03:17:18 |
+| E_5017307 | solver_iters+force_hold+pose_radius_keep+grasp_wrist_home+carry_trapezoid+carry_hold_check | 60 | 60 | 0 | 60 | 0 | 0.00 [0.00, 0.06] | 60 | 40.4 | 39.9 | 28.0 | 13.3 | 12.3 | 0/20 | 03:17:18 |
+| all | base (pooled) | 300 | 209 | 37 | 262 | 53 | 0.20 [0.16, 0.26] | 262 | 39.4 | 116.7 | 26.8 | 13.3 | 11.1 | 14/20 | - |
 
 ## Times paired with the base of the same job (the same seed and repetition, both finished)
 
@@ -28,6 +31,8 @@ Wall "all" is the process wall of every episode with the timeouts at the cap (me
 | C_5006488 | carry_hold_check | 50 | 24.1 / 26.7 | x1.02 | 12.2 / 13.3 | x1.02 | 8.7 / 11.2 | x1.05 | 137.8 / 105.4 |
 | C_5006488 | pose_radius_keep+grasp_wrist_home+carry_trapezoid | 49 | 37.4 / 26.8 | x1.07 | 21.7 / 13.3 | x1.04 | 14.1 / 11.2 | x1.22 | 152.7 / 105.4 |
 | D_5006489 | solver_iters+force_hold+pose_radius_keep+grasp_wrist_home | 51 | 28.4 / 26.9 | x1.07 | 13.6 / 13.8 | x0.97 | 12.9 / 9.2 | x1.15 | 37.8 / 129.1 |
+| E_5017307 | solver_iters+force_hold+pose_radius_keep+grasp_wrist_home | 54 | 17.6 / 24.6 | x1.04 | 9.8 / 13.0 | x0.95 | 5.4 / 9.8 | x1.08 | 38.0 / 117.7 |
+| E_5017307 | solver_iters+force_hold+pose_radius_keep+grasp_wrist_home+carry_trapezoid+carry_hold_check | 54 | 27.6 / 24.6 | x1.03 | 13.3 / 13.0 | x0.96 | 11.9 / 9.8 | x1.10 | 39.9 / 117.7 |
 
 ## Per scene: successes/episodes and losses/carries
 
@@ -44,18 +49,23 @@ Wall "all" is the process wall of every episode with the timeouts at the cap (me
 | C_5006488 | pose_radius_keep+grasp_wrist_home+carry_trapezoid | 15/15, losses 0/15 | 21/21, losses 0/21 | 18/24, losses 0/18 |
 | D_5006489 | base | 3/15, losses 3/6 | 21/21, losses 0/21 | 18/24, losses 6/24 |
 | D_5006489 | solver_iters+force_hold+pose_radius_keep+grasp_wrist_home | 15/15, losses 0/15 | 21/21, losses 0/21 | 24/24, losses 0/24 |
+| E_5017307 | base | 5/15, losses 4/9 | 20/21, losses 1/21 | 16/24, losses 8/24 |
+| E_5017307 | solver_iters+force_hold+pose_radius_keep+grasp_wrist_home | 15/15, losses 0/15 | 21/21, losses 0/21 | 24/24, losses 0/24 |
+| E_5017307 | solver_iters+force_hold+pose_radius_keep+grasp_wrist_home+carry_trapezoid+carry_hold_check | 15/15, losses 0/15 | 21/21, losses 0/21 | 24/24, losses 0/24 |
 
 ## Each arm against base (Fisher's exact test, two-sided)
 
 | job | arm | losses/carries arm vs base of its job | p | vs pooled base | p | success arm vs base of its job | p | vs pooled base | p |
 |---|---|---|---|---|---|---|---|---|---|
-| A_5006486 | solver_iters | 31/57 vs 8/52 | 2.28e-05 | 31/57 vs 40/208 | 4.53e-07 | 26/60 vs 44/60 | 0.00152 | 26/60 vs 168/240 | 0.000238 |
-| A_5006486 | solver_iters+force_hold | 0/54 vs 8/52 | 0.0025 | 0/54 vs 40/208 | 6.69e-05 | 54/60 vs 44/60 | 0.0321 | 54/60 vs 168/240 | 0.00153 |
-| B_5006487 | pose_radius_keep | 20/59 vs 11/51 | 0.203 | 20/59 vs 40/208 | 0.0217 | 39/60 vs 40/60 | 1 | 39/60 vs 168/240 | 0.533 |
-| B_5006487 | pose_radius_keep+grasp_wrist_home | 1/50 vs 11/51 | 0.00383 | 1/50 vs 40/208 | 0.00109 | 49/60 vs 40/60 | 0.0943 | 49/60 vs 168/240 | 0.0773 |
-| C_5006488 | carry_hold_check | 9/51 vs 12/54 | 0.63 | 9/51 vs 40/208 | 1 | 42/60 vs 42/60 | 1 | 42/60 vs 168/240 | 1 |
-| C_5006488 | pose_radius_keep+grasp_wrist_home+carry_trapezoid | 0/54 vs 12/54 | 0.000246 | 0/54 vs 40/208 | 6.69e-05 | 54/60 vs 42/60 | 0.011 | 54/60 vs 168/240 | 0.00153 |
-| D_5006489 | solver_iters+force_hold+pose_radius_keep+grasp_wrist_home | 0/60 vs 9/51 | 0.000602 | 0/60 vs 40/208 | 2.02e-05 | 60/60 vs 42/60 | 1.7e-06 | 60/60 vs 168/240 | 1.16e-08 |
+| A_5006486 | solver_iters | 31/57 vs 8/52 | 2.28e-05 | 31/57 vs 53/262 | 5.9e-07 | 26/60 vs 44/60 | 0.00152 | 26/60 vs 209/300 | 0.000168 |
+| A_5006486 | solver_iters+force_hold | 0/54 vs 8/52 | 0.0025 | 0/54 vs 53/262 | 2.94e-05 | 54/60 vs 44/60 | 0.0321 | 54/60 vs 209/300 | 0.000741 |
+| B_5006487 | pose_radius_keep | 20/59 vs 11/51 | 0.203 | 20/59 vs 53/262 | 0.0378 | 39/60 vs 40/60 | 1 | 39/60 vs 209/300 | 0.541 |
+| B_5006487 | pose_radius_keep+grasp_wrist_home | 1/50 vs 11/51 | 0.00383 | 1/50 vs 53/262 | 0.000785 | 49/60 vs 40/60 | 0.0943 | 49/60 vs 209/300 | 0.0615 |
+| C_5006488 | carry_hold_check | 9/51 vs 12/54 | 0.63 | 9/51 vs 53/262 | 0.848 | 42/60 vs 42/60 | 1 | 42/60 vs 209/300 | 1 |
+| C_5006488 | pose_radius_keep+grasp_wrist_home+carry_trapezoid | 0/54 vs 12/54 | 0.000246 | 0/54 vs 53/262 | 2.94e-05 | 54/60 vs 42/60 | 0.011 | 54/60 vs 209/300 | 0.000741 |
+| D_5006489 | solver_iters+force_hold+pose_radius_keep+grasp_wrist_home | 0/60 vs 9/51 | 0.000602 | 0/60 vs 53/262 | 9.19e-06 | 60/60 vs 42/60 | 1.7e-06 | 60/60 vs 209/300 | 5.34e-09 |
+| E_5017307 | solver_iters+force_hold+pose_radius_keep+grasp_wrist_home | 0/60 vs 13/54 | 2.56e-05 | 0/60 vs 53/262 | 9.19e-06 | 60/60 vs 41/60 | 7.01e-07 | 60/60 vs 209/300 | 5.34e-09 |
+| E_5017307 | solver_iters+force_hold+pose_radius_keep+grasp_wrist_home+carry_trapezoid+carry_hold_check | 0/60 vs 13/54 | 2.56e-05 | 0/60 vs 53/262 | 9.19e-06 | 60/60 vs 41/60 | 7.01e-07 | 60/60 vs 209/300 | 5.34e-09 |
 
 ## Replication: outcomes per seed (S success, F failure, T timeout; repetitions in order)
 
@@ -72,6 +82,9 @@ Wall "all" is the process wall of every episode with the timeouts at the cap (me
 | C_5006488 | pose_radius_keep+grasp_wrist_home+carry_trapezoid | SSS | STS | SSS | STS | STF | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | TSS | SSS | SSS | TSS | SSS |
 | D_5006489 | base | SSS | FSS | SSS | SSS | SSS | SFF | TTT | SSS | FSS | SSS | SSF | SSS | SSS | SSS | FFS | SSS | SSS | TTT | FSF | TTT |
 | D_5006489 | solver_iters+force_hold+pose_radius_keep+grasp_wrist_home | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS |
+| E_5017307 | base | SSS | FSF | FSS | SSS | SSS | FSS | TST | SSS | SSF | SSS | SSF | SSS | FSS | SSS | FSS | SFS | SSS | TTT | FFS | FTF |
+| E_5017307 | solver_iters+force_hold+pose_radius_keep+grasp_wrist_home | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS |
+| E_5017307 | solver_iters+force_hold+pose_radius_keep+grasp_wrist_home+carry_trapezoid+carry_hold_check | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS | SSS |
 
 ## TAMPURA (arm T, job T_5006490, elapsed 02:50:28)
 

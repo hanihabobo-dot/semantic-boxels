@@ -8711,6 +8711,43 @@ BF#59 [DONE, decisions open]  THE DIE-SLIP CAMPAIGN: SIX FIXES AS SWITCHES,
   iterations, a force hold with the fingers coupled as the URDF's mimic
   intends, the pose-radius rule, the wrist twin rule); no bridge-only
   tuning; disclosed.
+  RESULT E (2026-11-02; job 5017307 on cn-105, 03:17:18, started
+  2026-11-01 21:32 from the snapshot sb_cff9bc5, whose code is byte for
+  byte the merge 968bd81's; Hani: "run a new eval ... under all of your
+  changes + under your chosen set"): three arms, base, the D set and ALL
+  SIX switches (the D set + carry_trapezoid + carry_hold_check), 3
+  repetitions of seeds 0 to 19, the 600 s cap, no screenshots.  The D
+  set REPLICATES job D exactly: 60 of 60 successes, 0 losses in 60
+  carries, 0 timeouts, 0 of 20 seeds mixed, in an independent job 15 h
+  later.  Base in this job: 41 of 60, 13 losses in 54 carries (0.24),
+  6 timeouts, 11 of 20 seeds mixed (Fisher against the D set: losses
+  p 2.6e-5, success p 7e-7).  All six: the same 60 of 60, 0 losses in
+  60, 0 timeouts, 0 mixed; so on these seeds carry_trapezoid and
+  carry_hold_check add nothing to the D set (0 of 60 against 0 of 60)
+  and cost execution time: paired with base on the 54 seed-repetitions
+  both finished, exec x1.10 against the D set's x1.08 (planning x0.96
+  and x0.95, wall x1.03 and x1.04); medians over the finished episodes
+  exec 12.3 s against 9.3 s, picks 4 against 3, senses 3 against 2.
+  The one all-six episode with 22 picks (seed 11, repetition 0, 43 plan
+  calls, 76 s of pipeline wall, a success) is the pipeline's own replan
+  loop picking the cup 21 times before the die, read in its run log;
+  every hold check in it reports "held", so the check did not cause it;
+  base has the same loop in 8 of its 54 finished episodes (12 to 46
+  picks), the D set's worst episode has 8 picks.  Pooled base over the
+  five jobs: 209 of 300, 53 losses in 262 carries (0.20 [0.16, 0.26]),
+  37 timeouts, 14 of 20 seeds mixed.  eval/TABLE.md is regenerated with
+  E in every section; the evidence is eval/E_5017307/ (metadata.json,
+  results.jsonl, static.txt, summary.txt, the job log), tracked; the
+  episode tree stays on the cluster under prune_work's retention.  The
+  choice stands: the four switches of the D set; the other two stay in
+  the registry, off.  Mistake disclosed: the laptop waiter that was to
+  wake the session at E's end read squeue's error on a finished job id
+  as "still running" and waited 13 h; the results were pulled at 10:45
+  instead of about 01:00; the job was unaffected.
+  CLAIM EFFECT (after E): the D set holds the die in 120 of 120 carries
+  over two independent jobs and succeeds in 120 of 120 episodes; base
+  209 of 300 (TAMPURA 40 of 60); the two remaining switches change
+  nothing but the execution time.
 
 BF#60 [OPEN, FOR LATER]  ENTROPY SEARCH FOR THE SEARCH ORDER: NOT FOR THIS
       PAPER  (user decision, 2026-10-31 13:02)

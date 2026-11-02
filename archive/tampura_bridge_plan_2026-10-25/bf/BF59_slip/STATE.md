@@ -641,6 +641,26 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      against job D; the all-six arm against the chosen set: losses,
      timeouts, exec time), ledger rows, memory. Hani's remaining calls:
      the defaults, the release_retreat merge, the pushes.
+     RESULTS E (pulled 2026-11-02 10:45; the job ended 00:50 after
+     03:17:18): base 41/60, 13 losses in 54 carries (0.24), 6
+     timeouts, 11/20 seeds mixed; the D set 60/60, 0 losses in 60, 0
+     timeouts, 0 mixed (REPLICATES job D exactly); ALL SIX 60/60, 0
+     losses in 60, 0 timeouts, 0 mixed: carry_trapezoid and
+     carry_hold_check add nothing to the D set and cost execution time
+     (paired exec x1.10 against the D set's x1.08; finished medians
+     exec 12.3 s against 9.3 s, picks 4 against 3, senses 3 against 2;
+     one all-six episode, seed 11 rep 0, took 22 picks and 43 plan
+     calls, 76 s of pipeline wall, to its success: the pipeline's own
+     cup replan loop, every hold check in it "held"). Pooled base 209/300,
+     53 losses in 262 carries (0.20), 37 timeouts. TABLE.md regenerated
+     with E in every section; the RESULT E addendum is in the BF#59
+     entry; eval/E_5017307/ tracked. The choice stands: the four of
+     the D set. The snapshot sb_cff9bc5 deleted (no job references it;
+     re-pushable). MISTAKE: the laptop waiter read squeue's error on a
+     finished job id as "still running" and waited 13 h (the results
+     were pulled at 10:45 instead of about 01:00; the job itself was
+     unaffected); a waiter must poll sacct -j <id> -n -o State, or
+     treat squeue's "Invalid job id" as finished.
 
 ## Diagnosis so far (from the two finished proposals)
 
