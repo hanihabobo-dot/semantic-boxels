@@ -673,9 +673,12 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      names them, 24 s) and with 'none' (record 'none', 23 s); three M9
      sampler tests got a slip_off fixture (their stub lacked the robot
      base the wrist rule reads). The two check stamps deleted (ledger).
-     REMAINING for Hani: slip/release_retreat's merge, the pushes
-     (tampura-bridge over 60 commits ahead of origin), the older B8
-     campaign re-runs.
+     PUSHED (Hani's "Push to origin", 2026-11-02 12:45): tampura-bridge
+     0a74d85..471d248 (62 commits) to origin, the RWTH GitLab; the first
+     attempt failed with a GitLab 500 in its pre-receive hook, the retry
+     went through unchanged; the github remote untouched (Hani, 2026-10-31).
+     REMAINING for Hani: slip/release_retreat's merge, the older B8
+     campaign re-runs; this STATE.md line is one commit past the push.
 
 ## Diagnosis so far (from the two finished proposals)
 
