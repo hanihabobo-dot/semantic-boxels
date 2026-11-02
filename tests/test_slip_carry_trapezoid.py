@@ -23,9 +23,10 @@ AMAX = tfp.CARRY_TRAP_ACCEL_LIMITS
 
 @pytest.fixture
 def switch():
-    """The registry as the import left it; ENABLED and KNOWN restored after."""
+    """The registry as the import left it, every switch off for the test;
+    ENABLED and KNOWN restored after."""
     known, enabled = dict(slip_fixes.KNOWN), slip_fixes.ENABLED
-    slip_fixes.configure('')
+    slip_fixes.configure('none')
     yield slip_fixes
     slip_fixes.KNOWN.clear()
     slip_fixes.KNOWN.update(known)
@@ -48,6 +49,7 @@ HOME = np.array([0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785])
 def test_registered_and_off_by_default(switch):
     assert 'carry_trapezoid' in switch.KNOWN
     assert not switch.on('carry_trapezoid')
+    assert 'carry_trapezoid' not in switch.configure('')      # not one of BF#62's four
     assert switch.configure('carry_trapezoid') == {'carry_trapezoid'}
     assert switch.on('carry_trapezoid')
 

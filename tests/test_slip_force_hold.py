@@ -112,9 +112,11 @@ class _Motors:
 
 # ----- the switch -----------------------------------------------------------
 
-def test_registered_and_off_by_default(registry):
+def test_registered_and_on_by_default(registry):
     assert 'force_hold' in registry.KNOWN
-    assert registry.configure('') == frozenset()
+    assert 'force_hold' in registry.configure('')            # BF#62: one of the four
+    assert registry.on('force_hold') and registry.on('solver_iters')
+    assert registry.configure('none') == frozenset()
     assert not registry.on('force_hold')
 
 

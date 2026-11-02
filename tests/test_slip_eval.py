@@ -90,6 +90,6 @@ def test_nothing(tmp_path):
     assert slip_eval.count_carries(str(tmp_path)) == (0, 0, 0)
 
 
-@pytest.mark.parametrize('arm, fixes', [('base', ''), ('a', 'a'), ('a+b', 'a,b')])
+@pytest.mark.parametrize('arm, fixes', [('base', 'none'), ('a', 'a'), ('a+b', 'a,b')])
 def test_arm_fixes(arm, fixes):
     assert slip_eval.arm_fixes(arm) == fixes

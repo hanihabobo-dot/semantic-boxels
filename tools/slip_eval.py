@@ -67,9 +67,11 @@ PICK_TRY_RE = re.compile(r"Picking dice")
 
 
 def arm_fixes(arm):
-    """The fix names of an arm ('base' -> none), as the driver's flag value."""
+    """The fix names of an arm as the driver's flag value; 'base' is 'none',
+    every switch off (BF#62 made the chosen four the default, so an empty
+    value would run them)."""
     if arm == 'base':
-        return ''
+        return 'none'
     names = [n.strip() for n in arm.split('+') if n.strip()]
     if not names:
         raise SystemExit(f"empty arm {arm!r}")

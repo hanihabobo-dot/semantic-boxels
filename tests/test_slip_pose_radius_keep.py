@@ -28,6 +28,7 @@ def belief(monkeypatch):
     saved = dict(pose_belief.SWITCHES)
     pose_belief.SWITCHES.update({'M8': True, 'M9': True})
     known, enabled = dict(slip_fixes.KNOWN), slip_fixes.ENABLED
+    slip_fixes.ENABLED = frozenset()                         # every switch off for the test
     monkeypatch.setattr(
         pose_belief, 'pose_radius',
         lambda det, yaw_noise, *a, **k:
@@ -89,9 +90,17 @@ def loop(b, eye_offset_mm=(1.66, 0.0)):
     return c_w
 
 
-def test_registered_and_off_by_default():
+def test_registered_and_on_by_default():
     assert 'pose_radius_keep' in slip_fixes.KNOWN
-    assert not slip_fixes.on('pose_radius_keep')
+    assert 'pose_radius_keep' in slip_fixes.DEFAULT_ON       # BF#62: one of the four
+    saved = slip_fixes.ENABLED
+    try:
+        assert 'pose_radius_keep' in slip_fixes.configure('')
+        assert slip_fixes.on('pose_radius_keep')
+        assert slip_fixes.configure('none') == frozenset()
+        assert not slip_fixes.on('pose_radius_keep')
+    finally:
+        slip_fixes.ENABLED = saved
 
 
 def test_off_the_refresh_sets_the_eye_radius_and_yaw(belief, capsys):

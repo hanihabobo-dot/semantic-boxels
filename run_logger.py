@@ -864,13 +864,17 @@ def parse_pipeline_args(argv=None):
         help="pddlstream solve(initial_complexity=...): the stream "
              "complexity level the adaptive loop starts at (BF#53, default "
              "3); 0 is pddlstream's default.")
-    # BF#59 (the die-slip campaign): the candidate fixes' switches, every
-    # one off unless named here (slip_fixes.py holds the names the fixes
-    # register; an unknown name is refused before anything runs).
+    # BF#59 (the die-slip campaign): the candidate fixes' switches
+    # (slip_fixes.py holds the names the fixes register; an unknown name is
+    # refused before anything runs).  BF#62 (Hani, 2026-11-02): the four
+    # switches of the chosen set are on unless the run says otherwise.
     parser.add_argument(
         '--slip-fixes', default='',
         help="BF#59: comma-separated names of the die-slip campaign's fixes "
-             "to switch on (slip_fixes.py; the default is none, the base arm).")
+             "to switch on (slip_fixes.py).  Empty: the four defaults "
+             "(solver_iters, force_hold, pose_radius_keep, grasp_wrist_home; "
+             "BF#62).  'none': every fix off, the base arm.  'default,x': "
+             "the four and x.")
     # GF10 (PAPER_AUDIT.txt BF#38): the pick close's squeeze; 0.5 mm is the
     # default since BF#44 (Hani's GUI verdict, 2026-10-30), 3 mm was before.
     parser.add_argument(

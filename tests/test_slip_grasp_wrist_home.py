@@ -22,9 +22,10 @@ YAWS = [-0.7, -0.3, 0.0, 0.2, 0.4, 0.7]
 
 @pytest.fixture
 def switch():
-    """The registry as the import left it, ENABLED restored after the test."""
+    """The registry as the import left it, every switch off for the test,
+    ENABLED restored after."""
     known, enabled = dict(slip_fixes.KNOWN), slip_fixes.ENABLED
-    slip_fixes.configure('')
+    slip_fixes.configure('none')
     yield slip_fixes
     slip_fixes.KNOWN.clear()
     slip_fixes.KNOWN.update(known)
@@ -74,11 +75,14 @@ def q7(boxel, yaw):
     return pose_belief.wrist_joint7_top_down(boxel.center[:2], BASE, yaw)
 
 
-def test_registered_and_off_by_default(switch):
+def test_registered_and_on_by_default(switch):
     assert 'grasp_wrist_home' in slip_fixes.KNOWN
-    assert not slip_fixes.on('grasp_wrist_home')
-    assert slip_fixes.configure('grasp_wrist_home') == {'grasp_wrist_home'}
+    assert not slip_fixes.on('grasp_wrist_home')             # the fixture: every switch off
+    assert 'grasp_wrist_home' in slip_fixes.configure('')     # BF#62: one of the four
     assert slip_fixes.on('grasp_wrist_home')
+    assert slip_fixes.configure('grasp_wrist_home') == {'grasp_wrist_home'}
+    slip_fixes.configure('none')
+    assert not slip_fixes.on('grasp_wrist_home')
 
 
 def test_off_the_wrap_gives_todays_yaw(switch, m9_on):
@@ -98,7 +102,7 @@ def test_on_the_chosen_twin_is_nearer_home_and_the_count_is_kept(switch, m9_on):
         off = sampled(b)
         switch.configure('grasp_wrist_home')
         on = sampled(b)
-        switch.configure('')
+        switch.configure('none')
         assert len(on) == len(off)
         assert [z for _, z in on] == [z for _, z in off]
         for (y_on, _), (y_off, _) in zip(on, off):
@@ -133,7 +137,7 @@ def test_a_yaw_already_nearest_home_is_unchanged(switch, m9_on):
         off = sampled(b, home_q7=today)
         switch.configure('grasp_wrist_home')
         assert sampled(b, home_q7=today) == off
-        switch.configure('')
+        switch.configure('none')
     for yaw in YAWS:
         b = die(yaw)
         gy = pose_belief._wrap(yaw, math.pi / 2)

@@ -39,6 +39,7 @@ import tampura_environments                      # noqa: E402,F401
 
 from tampura_bridge import g13_runtime              # noqa: E402
 from tampura_bridge import policy as bridge_policy   # noqa: E402
+import slip_fixes                                    # noqa: E402  (BF#59, BF#62)
 
 
 class _SceneFile(logging.Handler):
@@ -101,7 +102,9 @@ def main():
     ap.add_argument('--search-effort-weight', default='1')
     ap.add_argument('--search-initial-complexity', type=int, default=3)
     # BF#59: the die-slip campaign's switches (slip_fixes.py; run_logger's
-    # --slip-fixes), passed through like the switches; none is the base arm.
+    # --slip-fixes), passed through like the switches.  BF#62: an empty
+    # value is the four defaults, 'none' the base arm; the episode's record
+    # carries the effective set.
     ap.add_argument('--slip-fixes', default='')
     # BF#50 (user rule, 2026-10-30): the eye images are for debugging only,
     # off unless asked; passed through like the switches.
@@ -187,7 +190,7 @@ def main():
                   'grip_squeeze_mm': str(a.grip_squeeze_mm),
                   'search_effort_weight': a.search_effort_weight,
                   'search_initial_complexity': str(a.search_initial_complexity),
-                  'slip_fixes': a.slip_fixes,
+                  'slip_fixes': slip_fixes.resolve(a.slip_fixes),
                   'save_screenshots': a.save_screenshots})
     cfg.driver = {'events': events, 'seed': config['global_seed'],
                   'rng_untouched': rng_untouched,

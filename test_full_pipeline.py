@@ -3212,7 +3212,7 @@ if __name__ == "__main__":
         "n_extra_distractors": args.n_extra_distractors,
         "n_objects":    args.n_objects,
         "seed":         args.seed,
-        "slip_fixes": getattr(args, 'slip_fixes', ''),                               # BF#59
+        "slip_fixes": slip_fixes.resolve(getattr(args, 'slip_fixes', '')),            # BF#59, BF#62
         "goal":         args.goal,
         "stack_height": args.stack_height,
         "unit_costs":   args.unit_costs,

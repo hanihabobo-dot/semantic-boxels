@@ -8809,6 +8809,66 @@ BF#60 [OPEN, FOR LATER]  ENTROPY SEARCH FOR THE SEARCH ORDER: NOT FOR THIS
   CLAIM EFFECT: none for this paper.  HONESTY CLASS: to be decided then
   (a model tweak if built).
 
+BF#62 [DONE]  USER DECISION: THE FOUR SWITCHES OF THE CHOSEN SET ARE ON BY
+  DEFAULT  (Hani, 2026-11-02: "Yes, on by default")
+  WHAT: slip_fixes.py's defaults.  Since BF#59 every candidate fix of the
+  die-slip campaign sat behind a name that was off unless --slip-fixes
+  named it.  After the eval (BF#59, jobs D and E: the chosen set
+  solver_iters+force_hold+pose_radius_keep+grasp_wrist_home held the die
+  in 120 of 120 carries and succeeded in 120 of 120 episodes, base 209 of
+  300 with 53 losses in 262 carries) and the merge of slip/campaign into
+  tampura-bridge (968bd81), Hani decided the four go on by default.
+  THE FLAG NOW (run_logger's --slip-fixes, the bridge driver's of the same
+  name, slip_fixes.configure): an empty value (or no flag) means the
+  defaults, DEFAULT_ON = {solver_iters, force_hold, pose_radius_keep,
+  grasp_wrist_home}; 'none' switches every fix off (the campaign's base
+  arm, the pipeline of commit 92d1e06); a list names exactly those
+  switches and no others (so the eval's arm specs keep their meaning);
+  'default,x' is the four and x.  slip_fixes.resolve(value) gives the
+  effective set as a string without switching, and spec() prints 'none'
+  for the empty set, so configure(spec()) is a round trip.  The records
+  carry the effective set, not the flag's text: the pipeline's run record
+  ("slip_fixes" in run_config, test_full_pipeline.py's __main__), the
+  bridge episode's switches (run_bridge_on_finddice.py, which the
+  executing side configures from, tampura_bridge/policy.py:226) and the
+  ledger's domain row (slip_fixes.spec()); a base run says 'none', a
+  default run names the four.  tools/slip_eval.py's 'base' arm passes
+  'none' (an empty value would now run the four); tools/slip_check.sh's
+  third argument the same.  carry_trapezoid and carry_hold_check stay in
+  the registry, off (BF#59 RESULT E: nothing but execution time).
+  FILES: slip_fixes.py (DEFAULT_ON, NONE, DEFAULT, parse/resolve/
+  configure/spec; ENABLED is the defaults until configure runs, so a
+  process that imports the pipeline without the flag behaves as the
+  pipeline does), run_logger.py (the help), test_full_pipeline.py (the
+  run record's line), tampura_bridge/run_bridge_on_finddice.py (import,
+  the record), tools/slip_eval.py (arm_fixes), tools/slip_check.sh (the
+  usage), tools/bridge_gates_allowlist.txt (one comment).
+  TESTS: tests/test_slip_fixes.py (the four on by default, 'none', the
+  'default' token, resolve and the round trip, the plumbing strings);
+  the six switch tests start every test from all off (the fixtures
+  configure 'none' or set ENABLED empty) and the four assert "on by
+  default", the two "off by default"; tests/test_slip_eval.py ('base' ->
+  'none'); tests/test_m9_grasp.py: its three sample_grasp tests pin the
+  M9 sampler on its own and got a slip_off fixture (with the wrist rule
+  on by default their stub stream lacked the robot base the rule reads;
+  the rule's own tests are tests/test_slip_grasp_wrist_home.py).
+  CHECKS (tools/slip_check.sh on the main checkout, 2026-11-02 12:05 and
+  12:07): with the empty flag, 89 bridge tests passed (3 skipped), gates
+  G7, G11(i), G17 PASS, the seed-0 episode a success in 24 s with its
+  record saying "force_hold,grasp_wrist_home,pose_radius_keep,
+  solver_iters" and one die carry; with 'none' the same, 23 s, the record
+  "none".  The unit tests of that first pass failed the three M9 sampler
+  tests above (119 passed); after the fixture, 122 passed (12:15).  The
+  check outputs deleted after recording (ledger).
+  NOT CHANGED: the switches' code paths and numbers (BF#59), the cluster
+  harness's arm names, the GUI launcher (tools/watch.ps1 passes no flag,
+  so it runs the four now).  An old command line with an explicit empty
+  flag would run the four, which its record shows.
+  CLAIM EFFECT: the pipeline as run from now on is the BF#59 chosen set;
+  every comparison against base names 'none'.  HONESTY CLASS: a default
+  change of physics and model switches whose effect BF#59 measured on
+  TAMPURA's find_dice seeds; pipeline-wide; disclosed.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

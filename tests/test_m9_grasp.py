@@ -21,6 +21,18 @@ def m9_on():
     pose_belief.SWITCHES.update(saved)
 
 
+@pytest.fixture
+def slip_off():
+    """BF#62 made the wrist twin rule (grasp_wrist_home) a default; the
+    sample_grasp tests here pin the M9 sampler on its own, so every slip
+    switch is off for them (the rule has tests/test_slip_grasp_wrist_home.py)."""
+    import slip_fixes
+    saved = slip_fixes.ENABLED
+    slip_fixes.configure('none')
+    yield
+    slip_fixes.ENABLED = saved
+
+
 def test_fitted_candidates_rectangle_and_square():
     c = pose_belief.fitted_grasp_candidates(0.3, [0.04, 0.02, 0.02], 0.005)
     assert c[0] == pytest.approx((0.3, 0.02))
@@ -71,18 +83,18 @@ def boxel(yaw_valid):
     return b
 
 
-def test_sample_grasp_off_is_the_aabb_sampler():
+def test_sample_grasp_off_is_the_aabb_sampler(slip_off):
     got = sampler(boxel(True))
     assert [y for y, _ in got] == [pytest.approx(0.0)] * 2 + [pytest.approx(math.pi / 2)] * 2
 
 
-def test_sample_grasp_m9_uses_the_fitted_yaw(m9_on):
+def test_sample_grasp_m9_uses_the_fitted_yaw(m9_on, slip_off):
     got = sampler(boxel(True))
     assert [y for y, _ in got] == [pytest.approx(0.4)] * 2 + \
         [pytest.approx(0.4 + math.pi / 2 - math.pi)] * 2
 
 
-def test_sample_grasp_m9_without_a_valid_yaw_falls_back(m9_on):
+def test_sample_grasp_m9_without_a_valid_yaw_falls_back(m9_on, slip_off):
     pose_belief.SWITCHES['M9'] = False
     off = sampler(boxel(False))
     pose_belief.SWITCHES['M9'] = True

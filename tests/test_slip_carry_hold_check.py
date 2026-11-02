@@ -73,7 +73,7 @@ def both_pads(nf=1.5):
 
 def test_registered_and_off_by_default(registry):
     assert NAME in registry.KNOWN
-    assert registry.configure('') == frozenset()
+    assert NAME not in registry.configure('')                 # not one of BF#62's four
     assert not registry.on(NAME)
     args = test_full_pipeline.parse_pipeline_args(['--no-gui', '--goal', 'holding'])
     assert args.slip_fixes == ''

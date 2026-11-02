@@ -1,7 +1,7 @@
 """BF#59 solver_iters: 200 contact-solver iterations per step on the
 executing world (tampura_bridge/policy.py d9_setup, boxel_env.py's own
 world, re-applied after BoxelTestEnv.reset()), behind
-slip_fixes.on('solver_iters'), default off.  Every value is read back with
+slip_fixes.on('solver_iters'), one of BF#62's defaults.  Every value is read back with
 getPhysicsEngineParameters on a fresh DIRECT client."""
 import inspect
 from types import SimpleNamespace
@@ -50,17 +50,19 @@ def _d9_on_fresh_client():
     return c
 
 
-def test_registered_and_off_by_default(registry):
+def test_registered_and_on_by_default(registry):
     assert 'solver_iters' in registry.KNOWN
     assert 'solver_iters' in boxel_env.slip_fixes.KNOWN
     registry.configure('')
+    assert registry.on('solver_iters')                       # BF#62: one of the four
+    registry.configure('none')
     assert not registry.on('solver_iters')
     assert robot_utils.SOLVER_ITERATIONS == 200
-    assert _default_iters() == 50          # PyBullet's default, which base keeps
+    assert _default_iters() == 50          # PyBullet's default, which the base arm keeps
 
 
 def test_off_d9_setup_keeps_the_default(registry):
-    registry.configure('')
+    registry.configure('none')
     c = _d9_on_fresh_client()
     try:
         assert _iters(c) == _default_iters()
@@ -79,7 +81,7 @@ def test_on_d9_setup_sets_200(registry, capsys):
 
 
 def test_off_our_world_keeps_the_default(registry):
-    registry.configure('')
+    registry.configure('none')
     env = BoxelTestEnv(gui=False)
     try:
         assert _iters(env.client_id) == _default_iters()

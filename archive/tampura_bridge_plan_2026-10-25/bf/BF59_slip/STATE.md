@@ -661,6 +661,21 @@ plain `/compact`, so everything a continuation needs is HERE, not in chat.
      were pulled at 10:45 instead of about 01:00; the job itself was
      unaffected); a waiter must poll sacct -j <id> -n -o State, or
      treat squeue's "Invalid job id" as finished.
+   - DEFAULTS (Hani's decision 2, 2026-11-02 12:20, "Yes, on by default"):
+     DONE as BF#62 (committed with this line): slip_fixes.DEFAULT_ON =
+     the four of the chosen set; an empty --slip-fixes means them,
+     'none' the base arm, a list exactly those, 'default,x' the four
+     and x; the records carry the effective set (the run record, the
+     bridge episode's switches, the ledger's domain row);
+     tools/slip_eval.py's base arm passes 'none'; tools/slip_check.sh's
+     third argument the same. Checks on the main checkout: 122 tests, 89
+     bridge tests, gates PASS, seed 0 a success with the four (record
+     names them, 24 s) and with 'none' (record 'none', 23 s); three M9
+     sampler tests got a slip_off fixture (their stub lacked the robot
+     base the wrist rule reads). The two check stamps deleted (ledger).
+     REMAINING for Hani: slip/release_retreat's merge, the pushes
+     (tampura-bridge over 60 commits ahead of origin), the older B8
+     campaign re-runs.
 
 ## Diagnosis so far (from the two finished proposals)
 

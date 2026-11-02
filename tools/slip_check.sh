@@ -7,6 +7,8 @@
 # archive/.../BF59_slip/checks/<stamp>/ (untracked; garbage once recorded).
 #   bash tools/slip_check.sh <checkout, WSL path> [seed] [fixes]
 #   e.g. bash tools/slip_check.sh /mnt/c/Users/HaniAlassiriAlhabbou/git/sb-slip-grasp_align 0 grasp_align
+#   [fixes] empty: the four defaults of BF#62; none: the base arm (every
+#   switch off); a,b: exactly those.
 set -u
 S=${1:?the checkout as a WSL path}
 SEED=${2:-0}
