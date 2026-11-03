@@ -12,7 +12,10 @@
 # the BF#59 jobs (8 CPUs, 24 GB).  One job per group of scenes, each pinned
 # to a different node (-w), so two of our pipelines never share a node.
 # The per-run gates run before the first episode and the tree check after
-# the last.  No screenshots.
+# the last.  Failure screenshots: the harness's default (--shots failures)
+# keeps every run that is not a counted success under OUT/failures/ with
+# its metadata (arm O's episodes get BOXEL_EYE_IMAGES=1 from the harness);
+# pull them into archive/ before the results compact (two days).
 # Usage (submit from cn-04, after tools/cluster/push_snapshot.ps1 -CodeOnly):
 #   sbatch -w cn-1xx $W/sb_<sha>/tools/cluster/gen_eval.sbatch sb_<sha> 100-103 2 [OUT]
 #   arguments: snapshot, scene seeds, repetitions, OUT (optional: a results

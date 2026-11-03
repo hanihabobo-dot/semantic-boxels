@@ -78,34 +78,58 @@ def _rng_untouched(seed):
 # it): the final scene from two fixed cameras over the table, one oblique
 # and one from above (the robot at the bottom); (file, eye, target, up).
 OVERVIEW_VIEWS = (
-    ('overview_final.png', (1.25, -0.75, 0.85), (0.40, 0.0, 0.10), (0, 0, 1)),
-    ('overview_final_top.png', (0.45, 0.03, 1.15), (0.45, 0.03, 0.0), (1, 0, 0)),
+    ('overview_final.png', (1.45, -0.35, 1.25), (0.40, 0.0, 0.15), (0, 0, 1)),
+    ('overview_final_top.png', (0.45, 0.01, 0.94), (0.45, 0.01, 0.0), (1, 0, 0)),
 )
+OVERVIEW_SIZE = (1024, 768)
 
 
-def _save_overview(client, save_dir):
+def _die_ring(img, die_pos, view, proj):
+    """A red ring round the die's true position: the die is 3 cm of grey on
+    a grey table, a few pixels in a view of the whole table, and may sit
+    under a cup (the ring is then on the cup)."""
+    from PIL import ImageDraw
+    V = np.asarray(view, dtype=float).reshape(4, 4).T
+    P = np.asarray(proj, dtype=float).reshape(4, 4).T
+    clip = P @ V @ np.append(np.asarray(die_pos, dtype=float), 1.0)
+    if clip[3] <= 0:
+        return
+    x = (clip[0] / clip[3] + 1) / 2 * img.width
+    y = (1 - clip[1] / clip[3]) / 2 * img.height
+    r = 18
+    d = ImageDraw.Draw(img)
+    d.ellipse([x - r, y - r, x + r, y + r], outline=(220, 0, 0), width=3)
+    d.text((x + r + 4, y - r), 'die', fill=(220, 0, 0))
+
+
+def _save_overview(world, save_dir):
     """The final scene from OVERVIEW_VIEWS into save_dir, after the rollout
     and its record, so a run keeps a picture of where the die, the cups and
     the arm ended up (the eye images are the robot's own camera, which may
-    not see a dropped die).  Only when the eye images are wanted
-    (world_eye.images_wanted(): --save-screenshots on and BOXEL_EYE_IMAGES
-    not 0); TinyRenderer, so headless runs make it too; a failure here
-    never touches the episode."""
+    not see a dropped die), the die ringed.  Only when the eye images are
+    wanted (world_eye.images_wanted(): --save-screenshots on and
+    BOXEL_EYE_IMAGES not 0); TinyRenderer, so headless runs make it too; a
+    failure here never touches the episode."""
     import world_eye
     if not world_eye.images_wanted():
         return []
     import pybullet as p
     from PIL import Image
+    c = world.client
+    die = next((b for b, cat in zip(world.objects, world.categories) if 'dice' in str(cat)), None)
+    die_pos = c.getBasePositionAndOrientation(die)[0] if die is not None else None
+    W, H = OVERVIEW_SIZE
+    proj = p.computeProjectionMatrixFOV(fov=55, aspect=W / H, nearVal=0.05, farVal=5.0)
     names = []
-    proj = p.computeProjectionMatrixFOV(fov=55, aspect=4 / 3, nearVal=0.05, farVal=5.0)
     for name, eye, target, up in OVERVIEW_VIEWS:
         try:
             view = p.computeViewMatrix(eye, target, up)
-            w, h, rgba, _, _ = client.getCameraImage(
-                800, 600, viewMatrix=view, projectionMatrix=proj,
-                renderer=p.ER_TINY_RENDERER)
-            Image.fromarray(np.asarray(rgba, dtype=np.uint8).reshape(h, w, 4)[:, :, :3]).save(
-                os.path.join(save_dir, name))
+            w, h, rgba, _, _ = c.getCameraImage(W, H, viewMatrix=view, projectionMatrix=proj,
+                                                renderer=p.ER_TINY_RENDERER)
+            img = Image.fromarray(np.asarray(rgba, dtype=np.uint8).reshape(h, w, 4)[:, :, :3])
+            if die_pos is not None:
+                _die_ring(img, die_pos, view, proj)
+            img.save(os.path.join(save_dir, name))
             names.append(name)
         except Exception:
             pass
@@ -268,7 +292,7 @@ def main():
                    'switches': dict(cfg.switches), **cfg.out}, f, indent=1,
                   default=str)
     try:
-        _save_overview(env.world.client, config['save_dir'])
+        _save_overview(env.world, config['save_dir'])
     except Exception:
         pass
     # The gate table and the outcome line are curated output: on the
