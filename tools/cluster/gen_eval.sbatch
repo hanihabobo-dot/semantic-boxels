@@ -32,7 +32,12 @@ export BRIDGE_SCENE_MANIFEST=$SB/tampura_bridge/gen_scenes/find_dice/manifest.js
 export PYTHONPATH=$SB:$W/pddlstream_lib:$TW/tampura:$TW/tampura_environments
 echo "host $(hostname)  job ${SLURM_JOB_ID:-none}  $(date -Is)  snapshot $SB  scenes $SEEDS  reps $REPS  out $OUT"
 grep -m1 'model name' /proc/cpuinfo
-(cd $SB && $VA/python tools/bridge_gates.py all --save $OUT/g13_before.json) > $OUT/gates_before.txt 2>&1
+# The gates run without arm O's PYTHONPATH, as in slip_t.sbatch: with
+# $TW/tampura on it, G13's import check finds the checkout instead of arm
+# T's install and fails (it failed jobs 5061712 to 5061721), and pip freeze
+# lists the path's packages too.  Arm T's episodes never see it (child_env
+# sets their PYTHONPATH to the snapshot); arm O's need it.
+(cd $SB && env -u PYTHONPATH $VA/python tools/bridge_gates.py all --save $OUT/g13_before.json) > $OUT/gates_before.txt 2>&1
 GRC=$?
 cat $OUT/gates_before.txt
 if [ $GRC -ne 0 ]; then
@@ -44,7 +49,7 @@ fi
 $VA/python -u $SB/tools/gen_scene_eval.py --snapshot $SB --out $OUT --seeds $SEEDS \
   --reps $REPS --cap 900 --python-o $VA/python --venv-t $TW/.venv --tampura-work $TW
 echo "harness rc $?"
-(cd $SB && $VA/python tools/bridge_gates.py tree --compare $OUT/g13_before.json) > $OUT/gates_after.txt 2>&1
+(cd $SB && env -u PYTHONPATH $VA/python tools/bridge_gates.py tree --compare $OUT/g13_before.json) > $OUT/gates_after.txt 2>&1
 cat $OUT/gates_after.txt
 echo "results in $OUT"
 # BF#49: the cluster's data hygiene after every run.
