@@ -18,7 +18,13 @@ import gen_scene_eval as gse  # noqa: E402
 _spec = importlib.util.spec_from_file_location(
     'bridge_gates_bf63', os.path.join(REPO, 'tools', 'bridge_gates.py'))
 bg = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(bg)
+# the campaign's map alone, whether or not this shell names a manifest
+_manifest_env = os.environ.pop('BRIDGE_SCENE_MANIFEST', None)
+try:
+    _spec.loader.exec_module(bg)
+finally:
+    if _manifest_env is not None:
+        os.environ['BRIDGE_SCENE_MANIFEST'] = _manifest_env
 SCENES = os.path.join(REPO, 'tampura_bridge', 'gen_scenes', 'find_dice')
 
 

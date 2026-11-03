@@ -46,9 +46,21 @@ cups and the die, the die hidden from the home camera) makes more.
 
 ## Phases
 
-1. IN PROGRESS: scenes generated (seeds 100-139), code written, tests.
-2. Commit, local smoke (one scene, both arms, from a git-archive export).
-3. push_snapshot.ps1 -CodeOnly; Hani's cluster approval (asked alone).
+1. DONE: 40 scenes generated (seeds 100-139; cups 1: 7 scenes, 2: 9,
+   3: 8, 4: 8, 5: 8; 14 to 385 s each), code written, 6 tests pass.
+   Committed 6519b8e (tampura-bridge, not pushed).
+2. DONE: local smoke from a git-archive export of 6519b8e (scratchpad
+   bf63_smoke.sh, WSL, under the pipeline lock), scene 113 (1 cup), rep 0:
+   static gates PASS; arm T success, wall 115.1 s (their loop 92.7 s); arm
+   O success, wall 29.9 s, 1 die carry, 0 losses; both loaded
+   find_dice_gen_s113.json; G19 pinned through the manifest, no mismatch.
+   It showed two of the new tests failing when BRIDGE_SCENE_MANIFEST is set
+   (the merge at import); the test now loads bridge_gates without it
+   (passes with and without the variable). The smoke's outputs (9 MB in
+   WSL /root, 1.2 MB tarball) deleted after this line (ledger).
+3. push_snapshot.ps1 -CodeOnly (sb_6519b8e: the episodes' code is
+   6519b8e; the test fix after it touches no episode code); Hani's cluster
+   approval (asked alone).
 4. Submit; wait (poll sacct, never squeue alone); pull results.jsonl,
    metadata, gates and job logs into this folder (tracked).
 5. Report: tools/gen_scene_eval.py --report; BF#63 entry; ledger rows.
