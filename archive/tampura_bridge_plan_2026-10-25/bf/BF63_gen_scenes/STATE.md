@@ -58,9 +58,24 @@ cups and the die, the die hidden from the home camera) makes more.
    (the merge at import); the test now loads bridge_gates without it
    (passes with and without the variable). The smoke's outputs (9 MB in
    WSL /root, 1.2 MB tarball) deleted after this line (ledger).
-3. push_snapshot.ps1 -CodeOnly (sb_6519b8e: the episodes' code is
-   6519b8e; the test fix after it touches no episode code); Hani's cluster
-   approval (asked alone).
-4. Submit; wait (poll sacct, never squeue alone); pull results.jsonl,
-   metadata, gates and job logs into this folder (tracked).
+3. DONE 2026-11-03 19:25.  68e7434 added the failure screenshots (Hani:
+   every run that is not a counted success keeps its last two camera
+   views and its metadata under OUT/failures/<arm>_s<seed>_r<rep>_a<n>/).
+   The session that wrote it smoked the commit's own files in WSL
+   (/root/bf63_smoke2.sh, scene 113, --shots all, blobs checked): arm T
+   success 129.8 s, its one look's camera view kept; arm O success 33.2 s,
+   4 eye images taken, the last 2 kept; the RolloutHistory pickle deleted
+   after reading.  push_snapshot.ps1 -CodeOnly -Commit 68e7434 ->
+   $W/sb_68e7434 (1.2 MB archive; the harness files' blobs checked on
+   cn-04, LF).  Counted cluster usage before the run 495 MiB of 1024.
+   Hani's cluster approval asked alone: "Yes, submit".  sb_6519b8e
+   (pushed 18:56, before the screenshots) is referenced by no job.
+4. RUNNING since 2026-11-03 19:25: 10 jobs, OUT $W/results/gen_68e7434/
+   <job>, 2 reps each, 900 s cap, nodes from sinfo just before:
+   5061712 cn-102 100-103, 5061713 cn-103 104-107, 5061714 cn-104 108-111,
+   5061715 cn-109 112-115, 5061716 cn-111 116-119, 5061717 cn-112 120-123,
+   5061718 cn-113 124-127, 5061719 cn-114 128-131, 5061720 cn-115 132-135,
+   5061721 cn-116 136-139.  The laptop's waiter polls sacct -X (never
+   squeue alone).  Next: pull results.jsonl, metadata.json, gates_before/
+   after.txt, the job log and failures/ into eval/<job>/ (tracked).
 5. Report: tools/gen_scene_eval.py --report; BF#63 entry; ledger rows.
