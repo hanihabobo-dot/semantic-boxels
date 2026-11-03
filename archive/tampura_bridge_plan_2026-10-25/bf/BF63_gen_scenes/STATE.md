@@ -94,10 +94,46 @@ cups and the die, the die hidden from the home camera) makes more.
    result folders, sb_68e7434 and sb_6519b8e deleted 19:50 (ledger).
 5. Meanwhile another session committed 21226c8 and 811eda1: arm O's final
    scene from two fixed cameras (overview_final*.png, the die ringed),
-   kept first among its failure screenshots.  RUNNING: local end-to-end
-   check of 811eda1's job script (scratchpad bf63_e2e.sh: the snapshot laid
-   out like $W under WSL /root/bf63_e2e, gen_eval.sbatch as is on scene
-   113, then the harness with --shots all, both under the pipeline lock).
-6. Next: push sb_811eda1, Hani's approval again (asked alone), submit,
-   wait, pull into eval/<job>/, tools/gen_scene_eval.py --report,
-   REPORT.txt, the BF#63 entry, ledger rows.
+   kept first among its failure screenshots.  Local end-to-end check of
+   811eda1's job script (scratchpad bf63_e2e.sh: the snapshot laid out
+   like $W under WSL /root/bf63_e2e, gen_eval.sbatch as is on scene 113,
+   then the harness with --shots all, both under the pipeline lock),
+   2026-11-03 19:52 to 19:57: the job script STOPS AT THE STATIC GATES
+   (rc 1 after 37 s, nothing run): G2 FAIL "unlisted tampura_bridge/
+   run_bridge_on_finddice.py:120 _save_overview: die_pos =
+   c.getBasePositionAndOrientation(die)..." and G7 FAIL ":102 'die'" (the
+   ring's ground-truth read and its label); G13 now PASSes (the fix
+   holds).  The harness alone (--shots all) passes: T success 135.8 s, O
+   success 41.8 s; O's failures/ folder holds overview_final.png (28 kB),
+   overview_final_top.png (6 kB), two eye images, console_tail.txt,
+   eye_last.json, meta.json; T's one camera view and meta.json; no image
+   outside failures/, no RolloutHistory pickle left.  The main session is
+   told (811eda1 is its commit).  The same check of b2c6c5d (68e7434 +
+   21226c8's overviews without the ring + the G13 fix), 20:01 to 20:11:
+   CLEAN.  Job script rc 0 after 352 s: every gate PASS before (G2 46
+   hits all reviewed, G7 no scene literal, G13 with arm T's install), T
+   success 185.6 s, O success 50.5 s (1 carry, 0 losses), the tree check
+   after "unchanged", prune_work 8 MiB, GEN_DONE; no image outside
+   failures/.  With --shots all: T success 161.4 s, O success 35.4 s; O's
+   failures/ holds overview_final.png (21.5 kB), overview_final_top.png
+   (7.9 kB), two eye images, console_tail.txt, eye_last.json, meta.json; T
+   its camera view and meta.json.  (Laptop walls, not comparable with the
+   cluster's.)
+6. RUNNING since 2026-11-03 20:27.  Hani, asked alone (sb_b2c6c5d now,
+   or the ring made gate-clean first): "Yes, run b2c6c5d".  (The main
+   session had meanwhile committed d344d17 at 20:08, the ring from the
+   world eye's last record, gate-clean by its note; not known when the
+   question was asked and not in this run.)  push_snapshot.ps1 -CodeOnly
+   -Commit b2c6c5d -> $W/sb_b2c6c5d (six files' blobs checked on cn-04,
+   LF); counted 490 MiB before.  10 jobs, OUT $W/results/gen_b2c6c5d/
+   <job>, 2 reps, 900 s cap, nodes by idle CPUs just before: 5063076
+   cn-102 100-103, 5063077 cn-103 104-107, 5063078 cn-104 108-111,
+   5063079 cn-109 112-115, 5063080 cn-110 116-119, 5063081 cn-111
+   120-123, 5063082 cn-112 124-127, 5063083 cn-113 128-131, 5063084
+   cn-114 132-135, 5063085 cn-115 136-139.  The laptop's waiter polls
+   sacct -X; an early look reports the first finished scene.
+7. Next: pull results.jsonl, metadata.json, gates_before/after.txt,
+   g13_before.json, failures/ and the job log into eval/<job>/ (before
+   the results compact: two days), tools/gen_scene_eval.py --report ->
+   eval/REPORT.txt, list the runs that did not count, the BF#63 entry,
+   ledger rows, delete sb_b2c6c5d.
