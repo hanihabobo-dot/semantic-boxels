@@ -1,0 +1,31 @@
+{
+ "arm": "T",
+ "seed": 115,
+ "rep": 1,
+ "attempt": 1,
+ "scene": "find_dice_gen_s115.json",
+ "n_cups": 3,
+ "counts": true,
+ "why": "timeout",
+ "success": false,
+ "timed_out": true,
+ "wall_s": 939.648,
+ "loop_s": 900.0,
+ "host": "cn-109",
+ "finished": "2026-11-03 22:00:36",
+ "status": "killed",
+ "returncode": -9,
+ "max_reward": null,
+ "n_actions": null,
+ "get_action_actions": [
+  "look(o_ph_0, o_ph_2, o_co_10)"
+ ],
+ "scene_file": "find_dice_gen_s115.json",
+ "save_dir": "/work/rleap1/hani.alassiri.alhabboub/p4/results/gen_b2c6c5d/5063079/T/rep1/T/seed115",
+ "note": "killed at the 900.0 s cap; ",
+ "error": null,
+ "shots": {
+  "images": [],
+  "note": "no RolloutHistory (killed or crashed before it was written)"
+ }
+}

@@ -1,0 +1,5 @@
+G13      PASS  tampura: HEAD cdddf14, tree fbc0cd060ddbb4af, 0 declared change(s) (BF#3), nothing else modified or stray
+G13      PASS  tampura_environments: HEAD 4167c35, tree e339e7b865a82c1b, 1 declared change(s) (BF#3), nothing else modified or stray
+G13      INFO  arm T pip freeze 0cdfcf0c5ae35ee4
+G13      PASS  arm T's installed tampura: 2502 of 2506 tracked files byte-equal to the checkout, the rest never installed and never read, build 5f75024e7c619d4f
+G13      PASS  unchanged since /work/rleap1/hani.alassiri.alhabboub/p4/results/gen_b2c6c5d/5063080/g13_before.json

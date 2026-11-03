@@ -1,0 +1,89 @@
+{
+ "arm": "T",
+ "seed": 106,
+ "rep": 0,
+ "attempt": 1,
+ "scene": "find_dice_gen_s106.json",
+ "n_cups": 4,
+ "counts": true,
+ "why": "",
+ "success": false,
+ "timed_out": false,
+ "wall_s": 319.193,
+ "loop_s": 306.0,
+ "host": "cn-103",
+ "finished": "2026-11-03 20:53:01",
+ "status": "failure",
+ "returncode": 0,
+ "max_reward": 0.0,
+ "n_actions": 20,
+ "get_action_actions": [
+  "pick(o_ph_2, o_gr_17)",
+  "place(o_ph_2, o_gr_17, o_po_17)",
+  "look(o_ph_4, o_ph_2, o_co_22)",
+  "look(o_ph_4, o_ph_1, o_co_1)",
+  "look(o_ph_4, o_ph_0, o_co_0)",
+  "look(o_ph_4, o_ph_3, o_co_18)",
+  "pick(o_ph_4, o_gr_14)",
+  "pick(o_ph_4, o_gr_14)",
+  "pick(o_ph_4, o_gr_14)",
+  "pick(o_ph_4, o_gr_14)",
+  "pick(o_ph_4, o_gr_14)",
+  "pick(o_ph_4, o_gr_14)",
+  "pick(o_ph_4, o_gr_14)",
+  "pick(o_ph_4, o_gr_14)",
+  "pick(o_ph_4, o_gr_14)",
+  "pick(o_ph_4, o_gr_14)",
+  "pick(o_ph_4, o_gr_14)",
+  "pick(o_ph_4, o_gr_14)",
+  "pick(o_ph_4, o_gr_14)",
+  "pick(o_ph_4, o_gr_14)"
+ ],
+ "scene_file": "find_dice_gen_s106.json",
+ "save_dir": "/work/rleap1/hani.alassiri.alhabboub/p4/results/gen_b2c6c5d/5063077/T/rep0/T/seed106",
+ "note": "RolloutHistory pickle deleted after reading (33170035 bytes); ",
+ "error": null,
+ "shots": {
+  "images": [
+   {
+    "file": "tampura_step04_camera.png",
+    "step": 4,
+    "action": "look(o_ph_4, o_ph_0, o_co_0)"
+   },
+   {
+    "file": "tampura_step05_camera.png",
+    "step": 5,
+    "action": "look(o_ph_4, o_ph_3, o_co_18)"
+   }
+  ],
+  "camera_observations": [
+   2,
+   3,
+   4,
+   5
+  ],
+  "actions": [
+   "pick(o_ph_2, o_gr_17)",
+   "place(o_ph_2, o_gr_17, o_po_17)",
+   "look(o_ph_4, o_ph_2, o_co_22)",
+   "look(o_ph_4, o_ph_1, o_co_1)",
+   "look(o_ph_4, o_ph_0, o_co_0)",
+   "look(o_ph_4, o_ph_3, o_co_18)",
+   "pick(o_ph_4, o_gr_14)",
+   "pick(o_ph_4, o_gr_14)",
+   "pick(o_ph_4, o_gr_14)",
+   "pick(o_ph_4, o_gr_14)",
+   "pick(o_ph_4, o_gr_14)",
+   "pick(o_ph_4, o_gr_14)",
+   "pick(o_ph_4, o_gr_14)",
+   "pick(o_ph_4, o_gr_14)",
+   "pick(o_ph_4, o_gr_14)",
+   "pick(o_ph_4, o_gr_14)",
+   "pick(o_ph_4, o_gr_14)",
+   "pick(o_ph_4, o_gr_14)",
+   "pick(o_ph_4, o_gr_14)",
+   "pick(o_ph_4, o_gr_14)",
+   "None"
+  ]
+ }
+}

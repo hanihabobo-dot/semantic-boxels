@@ -119,7 +119,9 @@ cups and the die, the die hidden from the home camera) makes more.
    (7.9 kB), two eye images, console_tail.txt, eye_last.json, meta.json; T
    its camera view and meta.json.  (Laptop walls, not comparable with the
    cluster's.)
-6. RUNNING since 2026-11-03 20:27.  Hani, asked alone (sb_b2c6c5d now,
+6. DONE 2026-11-03 20:36 to 22:38 (all ten COMPLETED, 1 h 27 to 1 h 59;
+   every job's gates PASS before, tree unchanged after, harness rc 0).
+   Hani, asked alone (sb_b2c6c5d now,
    or the ring made gate-clean first): "Yes, run b2c6c5d".  (The main
    session had meanwhile committed d344d17 at 20:08, the ring from the
    world eye's last record, gate-clean by its note; not known when the
@@ -132,8 +134,15 @@ cups and the die, the die hidden from the home camera) makes more.
    120-123, 5063082 cn-112 124-127, 5063083 cn-113 128-131, 5063084
    cn-114 132-135, 5063085 cn-115 136-139.  The laptop's waiter polls
    sacct -X; an early look reports the first finished scene.
-7. Next: pull results.jsonl, metadata.json, gates_before/after.txt,
-   g13_before.json, failures/ and the job log into eval/<job>/ (before
-   the results compact: two days), tools/gen_scene_eval.py --report ->
-   eval/REPORT.txt, list the runs that did not count, the BF#63 entry,
-   ledger rows, delete sb_b2c6c5d.
+7. DONE 2026-11-03 22:40 to 23:10.  Pulled into eval/<job>/ (results.jsonl,
+   metadata.json, gates, g13_before.json, failures/ with 138 images, the
+   job log; 2 MB, tracked) through one tarball (deleted after, both ends).
+   eval/REPORT.txt (the harness's report), TABLES.txt, O_FAILURES.txt,
+   REPS.txt with their scripts.  Result, the load confound of repetition
+   1, our failure mode (the die under a cup without a registered shadow:
+   17 of our 23 failures) and the not-counted runs (TAMPURA's
+   ZeroDivisionError in print_F, 9 runs; scene 138 out of the pairs): the
+   BF#63 entry in PAPER_AUDIT.txt.  sb_b2c6c5d deleted (ledger).  Open
+   for Hani: a re-run on reserved nodes (--exclusive) to remove the load
+   confound; the analysis of the under-the-cup failures; whether a later
+   run carries d344d17's ring (its job script unchecked).

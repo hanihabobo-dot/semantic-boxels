@@ -1,0 +1,34 @@
+{
+ "arm": "T",
+ "seed": 105,
+ "rep": 1,
+ "attempt": 1,
+ "scene": "find_dice_gen_s105.json",
+ "n_cups": 5,
+ "counts": true,
+ "why": "timeout",
+ "success": false,
+ "timed_out": true,
+ "wall_s": 999.414,
+ "loop_s": 900.0,
+ "host": "cn-103",
+ "finished": "2026-11-03 21:38:20",
+ "status": "killed",
+ "returncode": -9,
+ "max_reward": null,
+ "n_actions": null,
+ "get_action_actions": [
+  "pick(o_ph_2, o_gr_8)",
+  "place(o_ph_2, o_gr_8, o_po_26)",
+  "look(o_ph_1, o_ph_2, o_co_26)",
+  "look(o_ph_1, o_ph_0, o_co_0)"
+ ],
+ "scene_file": "find_dice_gen_s105.json",
+ "save_dir": "/work/rleap1/hani.alassiri.alhabboub/p4/results/gen_b2c6c5d/5063077/T/rep1/T/seed105",
+ "note": "killed at the 900.0 s cap; ",
+ "error": null,
+ "shots": {
+  "images": [],
+  "note": "TimeoutExpired(['/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/bin/python', '-c', \"\\nimport glob, json, os, pickle, sys\\nimport numpy as np\\nfrom PIL import Image\\nd, out, keep = sys.argv[1], sys.argv[2], int(sys.argv[3])\\npks = sorted(glob.glob(os.path.join(d, '**', '*.pkl'), recursive=True), key=os.path.getmtime)\\nif not pks:\\n    print(json.dumps({'images': [], 'note': 'no RolloutHistory (killed or crashed before it was written)'}))\\n    sys.exit(0)\\nwith open(pks[-1], 'rb') as f:\\n    h = pickle.load(f)\\nshots = [(i, o.camera_image) for i, o in enumerate(h.observations)\\n         if getattr(o, 'camera_image', None) is not None]\\nos.makedirs(out, exist_ok=True)\\nsaved = []\\nfor i, ci in shots[-keep:]:\\n    rgb = np.asarray(ci.rgbPixels)\\n    if rgb.ndim != 3:\\n        continue\\n    name = 'tampura_step%02d_camera.png' % i\\n    Image.fromarray(rgb[:, :, :3].astype(np.uint8)).save(os.path.join(out, name))\\n    saved.append({'file': name, 'step': i,\\n                  'action': str(h.actions[i]) if i < len(h.actions) else None})\\nprint(json.dumps({'images': saved, 'camera_observations': [i for i, _ in shots],\\n                  'actions': [str(a) for a in h.actions]}))\\n\", '/work/rleap1/hani.alassiri.alhabboub/p4/results/gen_b2c6c5d/5063077/T/rep1/T/seed105', '/work/rleap1/hani.alassiri.alhabboub/p4/results/gen_b2c6c5d/5063077/failures/T_s105_r1_a1', '2'], 300)"
+ }
+}

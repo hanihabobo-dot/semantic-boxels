@@ -1,0 +1,40 @@
+● Moving over c_cups_ud … done  (0.5 s)
+● Picking up c_cups_ud …
+  ⎿ I have a firm grip on c_cups_ud: its half-width is 31.1 mm, I expected 31.8 mm
+  ⎿ done  (0.7 s)
+● Moving over a free spot … done  (0.5 s)
+● Setting c_cups_ud down on a free spot …
+  ⎿ c_cups_ud is where I put it (2356 px)
+  ⎿ done  (1.7 s)
+● Going home … done  (0.4 s)
+● Looking into the space behind c_cups_ud for dice … nothing there, replanning  (0.2 s)
+✻ Thinking… how to get hold of dice … 9 steps in 2.0 s
+  ⎿ I will pick up b_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over b_cups_ud … done  (0.5 s)
+● Picking up b_cups_ud …
+  ⎿ I have a firm grip on b_cups_ud: its half-width is 28.4 mm, I expected 29.7 mm
+  ⎿ done  (1.0 s)
+● Moving over a free spot … done  (0.4 s)
+● Setting b_cups_ud down on a free spot …
+  ⎿ b_cups_ud shifted 1.3 mm as I let go (2345 px)
+  ⎿ done  (1.5 s)
+● Going home … done  (0.5 s)
+● Looking into the space behind b_cups_ud for dice … nothing there, replanning  (0.2 s)
+✻ Thinking… how to get hold of dice … nothing to plan
+⚠ ERROR: Searched all shadows but target not found!
+────────────────────────────────────────────
+✘ Failed. All 0 shadows searched — target not found  (all_searched)
+  ⎿ 2 plans · 12 steps, 12 done · planning 4.3 s · 25.8 s in all
+  ⎿ log and raw stream in /work/rleap1/hani.alassiri.alhabboub/p4/results/gen_b2c6c5d/5063077/O/solver_iters+force_hold+pose_radius_keep+grasp_wrist_home/seed107_r1/ours/run_2026-11-03_22-08-22
+  ledger   PASS  99 rows, complete
+  G3       PASS  12 steps over 2 plans, all as planned; 2 labelled early ends
+  G4       PASS  2 places at the planned centre
+  G5       PASS  planned_sense_render=4
+  G15      PASS  2 senses, each classified on its planned region
+  G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+  G19      PASS  scene file matches the pinned map
+  G18      PASS  initialize return to rollout start 0.026 s (initialize_call +0.002 s, initialize_return +5.811 s, scene_map_asserted +0.013 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.013 s, rollout_start +0.000 s)
+  G19h     PASS  seed 107, both RNGs untouched, PYTHONHASHSEED 0
+  G11      PASS  2 solve calls, 2 plan rows
+  G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 3439}
+seed 107: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/gen_b2c6c5d/5063077/O/solver_iters+force_hold+pose_radius_keep+grasp_wrist_home/seed107_r1

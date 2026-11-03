@@ -1,0 +1,34 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ▣  S E M A N T I C   B O X E L S
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+● Starting up…
+  ⎿ Loading scene from find_dice_gen_s127.json (the campaign's pinned scene for this seed)
+  ⎿ ready  (105.8 s)
+● Mission: get hold of dice and bring it home.
+  ⎿ run_2026-11-03_21-42-31 · find_dice seed 127 · M8 on, M9 on, M10 on, pick aperture from pose on, grip squeeze 0.5 mm, planner ff-astar2, slip fixes force hold,grasp wrist home,pose radius keep,solver iters
+● Mission: get hold of dice and bring it home.
+  ⎿ run_2026-11-03_21-42-31 · find_dice seed 127 · M8 on, M9 on, M10 on, pick aperture from pose on, grip squeeze 0.5 mm, planner ff-astar2
+⚠ WARNING: degenerate shadow AABB for c_cups_ud (extent=[0.12229173821235795, 0.0, 0.0680936277968627]) — shadow NOT registered; occlusion model is missing a region (#P1 F3 guard, should be unreachable)
+● I see 2 objects on the table and 1 space hidden behind them.
+● I am after dice. It is not in view, so I will have to search.
+✻ Thinking… how to get hold of dice … 4 steps in 2.0 s
+  ⎿ I will look behind b_cups_ud for dice, pick up dice, then come home
+● Looking into the space behind b_cups_ud for dice … nothing there, replanning  (0.2 s)
+✻ Thinking… how to get hold of dice … nothing to plan
+⚠ ERROR: Searched all shadows but target not found!
+────────────────────────────────────────────
+✘ Failed. All 0 shadows searched — target not found  (all_searched)
+  ⎿ 1 plan · 1 step, 1 done · planning 2.0 s · 109.8 s in all
+  ⎿ log and raw stream in /work/rleap1/hani.alassiri.alhabboub/p4/results/gen_b2c6c5d/5063082/O/solver_iters+force_hold+pose_radius_keep+grasp_wrist_home/seed127_r0/ours/run_2026-11-03_21-42-31
+  ledger   PASS  30 rows, complete
+  G3       PASS  1 steps over 1 plans, all as planned; 1 labelled early ends
+  G4       PASS  0 places at the planned centre
+  G5       PASS  planned_sense_render=2
+  G15      PASS  1 senses, each classified on its planned region
+  G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+  G19      PASS  scene file matches the pinned map
+  G18      PASS  initialize return to rollout start 0.038 s (initialize_call +0.049 s, initialize_return +4.282 s, scene_map_asserted +0.012 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.026 s, rollout_start +0.000 s)
+  G19h     PASS  seed 127, both RNGs untouched, PYTHONHASHSEED 0
+  G11      PASS  1 solve calls, 1 plan rows
+  G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50}
+seed 127: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/gen_b2c6c5d/5063082/O/solver_iters+force_hold+pose_radius_keep+grasp_wrist_home/seed127_r0

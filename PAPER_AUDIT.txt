@@ -8869,6 +8869,153 @@ BF#62 [DONE]  USER DECISION: THE FOUR SWITCHES OF THE CHOSEN SET ARE ON BY
   change of physics and model switches whose effect BF#59 measured on
   TAMPURA's find_dice seeds; pipeline-wide; disclosed.
 
+BF#63 [DONE; FINDING OPEN]  GENERATED-SCENE EVAL: OURS 57 OF 80, TAMPURA 36
+  OF 78 ON 40 SCENES FROM THEIR OWN GENERATOR  (user request, 2026-11-03)
+  WHAT: Hani asked for quick, reliable numbers of ours against TAMPURA on
+  find_dice, at least 20 working seeds each and no incomparable results.
+  TAMPURA's paper publishes no seeds and its released find_dice ships
+  three scene files, so the campaign's seeds 0 to 19 are three layouts.
+  To new scenes from their own generator, one per seed, both arms on each,
+  their code untouched, Hani said "yes, maximally so".
+  DESIGN (declared before any run, BF63_gen_scenes/STATE.md): 40 scenes,
+  seeds 100 to 139, from their env_generator.py unmodified (tools/
+  gen_find_dice_scenes.py; scene s is the first it accepts after seeding
+  both RNGs with s; nothing filtered; 1 cup: 7 scenes, 2: 9, 3: 8, 4: 8,
+  5: 8).  Every episode runs in a fresh directory holding only its scene,
+  so their loader's random.choice can only load it; G19 pins seeds 100 to
+  139 through BRIDGE_SCENE_MANIFEST.  Per repetition the scenes are the
+  outer loop and both arms run back to back on the same node (T, then O);
+  2 repetitions; a 900 s wall cap for both.  Arm T: their planner as
+  shipped, success their rewards[-1] == 1.0 (belief, kinematic carry).
+  Arm O: BF#62's four switches, success the bridge outcome AND the
+  pipeline's goal check.  VALIDITY: an episode counts if it loaded its own
+  scene and ended with an outcome (success, failure, or the cap as a
+  failure); a crash, a gate failure or a wrong scene runs once more, and
+  if that does not count either, the scene's repetition leaves the pairs
+  for both arms and is listed.
+  RUNS: the first submission (2026-11-03 19:25, sb_68e7434, jobs 5061712
+  to 5061721) ran no episode: every job stopped at the per-run gates on
+  "G13 FAIL arm T's installed tampura: arm T imports the checkout itself".
+  gen_eval.sbatch exported arm O's PYTHONPATH (with $TW/tampura) before
+  bridge_gates.py, whose import check inherits it; slip_t.sbatch and
+  b8_campaign.sbatch run the gates without it, and arm T's episodes never
+  see it (child_env).  Fixed in b2c6c5d (env -u PYTHONPATH on both gate
+  calls).  The smokes had run the harness, never the job script, so the
+  job script was then run end to end on the laptop (gen_eval.sbatch as is
+  under P4_WORK in WSL, scene 113): 811eda1 (the failure overviews' die
+  ring) stopped at the static gates, G2 (an unlisted
+  getBasePositionAndOrientation in _save_overview) and G7 (the literal
+  'die'); b2c6c5d passed every gate and both arms.  Hani, asked alone:
+  "Yes, run b2c6c5d".  The run: sb_b2c6c5d, jobs 5063076 to 5063085, one
+  per node (cn-102, 103, 104, 109, 110, 111, 112, 113, 114, 115; Xeon
+  Platinum 8160; 8 CPUs, 24 GB), 2026-11-03 20:36 to 22:38.  Every job's
+  gates PASS before, the TAMPURA tree unchanged after, harness rc 0.  168
+  episode runs, 160 final (arm, scene, repetition).
+  RESULT (eval/REPORT.txt):
+    arm O  57 of 80 counted = 0.71 [0.61, 0.80] (Wilson 95 %), 3 timeouts,
+           0 not counted; median wall 51.1 s (successes 51.2 s); 57 die
+           carries, 0 lost in the hand.
+    arm T  36 of 78 counted = 0.46 [0.36, 0.57], 14 timeouts, 2 not counted
+           (scene 138, both repetitions); median wall 265.1 s (successes
+           174.0 s; their loop clock to success, median 161.8 s).
+    78 pairs: both succeed 30, only ours 25, only TAMPURA 6, neither 17;
+    exact McNemar p = 0.00088.
+    By cup count (successes of counted, ours vs TAMPURA; pairs both / only
+    ours / only TAMPURA / neither):
+      1 cup  (7 scenes)  14/14 vs 12/12   12 / 0 / 0 / 0
+      2 cups (9 scenes)  10/18 vs 10/18    6 / 4 / 4 / 4
+      3 cups (8 scenes)  10/16 vs  6/16    6 / 4 / 0 / 6
+      4 cups (8 scenes)  12/16 vs  4/16    2 / 10 / 2 / 2
+      5 cups (8 scenes)  11/16 vs  4/16    4 / 7 / 0 / 5
+    Beside the shipped scenes (BF#59): ours 120 of 120, TAMPURA 40 of 59
+    valid, 59 pairs: both 40, only ours 19, only TAMPURA 0.
+  LOAD CONFOUND (eval/REPS.txt): the nodes are shared (-w pins a node, it
+  does not reserve it), and repetition 1 ran on busier ones.  On the same
+  scenes, successful in both repetitions, repetition 1 took a median 150.5
+  s longer (TAMPURA's loop clock, 10 scenes) and 36.1 s longer (our
+  pipeline wall, 28 scenes); TAMPURA's timeouts were 3 in repetition 0 and
+  11 in repetition 1.  Repetition 0 alone: ours 28/40 = 0.70 [0.55, 0.82],
+  TAMPURA 19/39 = 0.49 [0.34, 0.64]; 39 pairs 15 / 12 / 4 / 8, p = 0.077.
+  Repetition 1: 29/40 against 17/39; 15 / 13 / 2 / 9, p = 0.0074.  Both
+  repetitions without the pairs whose TAMPURA run timed out: 64 pairs,
+  30 / 16 / 6 / 12, p = 0.053.  The direction holds in every cut; its
+  strength depends on how TAMPURA's timeouts are read.  A run on reserved
+  nodes (--exclusive) would remove the confound.
+  OUR FAILURES (FINDING, OPEN; eval/O_FAILURES.txt, from the world eye's
+  last record in each failures/ folder): 23 counted failures, none with a
+  die carry (no slip); the same outcome in both repetitions on 39 of 40
+  scenes.  17 end "all shadows searched, target not found": in each the
+  die lay under a cup for which the pipeline held no registered shadow at
+  the end (for 12 of them the cup was never classed an occluder:
+  is_occluder false, no shadow), while every registered shadow was known
+  empty.  The eye's true poses put each of these 17 dice inside its cup's
+  footprint at table height (under the upside-down cup); 4 of them lean
+  about 50 degrees against the cup's wall (scenes 102 and 107).  3 end
+  planner_failed: scene 104 twice (the die settled into view,
+  "[D9] the die is VISIBLE to the eye after the settle", 6 px, tilted 71
+  degrees, "degenerate shadow AABB for dice ... shadow NOT registered (#P1
+  F3 guard, should be unreachable)", then no plan) and scene 101 once (no
+  plan for its one unsearched shadow).  3 are timeouts (scene 101 rep 1,
+  scene 124 both; 5 cups, shadows still unsearched at the cap).  On the
+  shipped scenes the pipeline found the die in 120 of 120 episodes.  Why
+  those cups get no shadow is not analysed here; that analysis comes
+  before any fix.
+  TAMPURA'S FAILURES: 42 counted: 14 killed at the cap (their loop clock
+  reads 900 s; the process wall, up to 1081 s, includes the shutdown after
+  the kill), 28 ended below reward 1, most after repeated looks at one
+  object (REPORT.txt's per-scene table).  Its outcome differs between the
+  two repetitions on 16 of 39 scenes (ours on 1 of 40).
+  NOT COUNTED: 9 TAMPURA runs crashed (rc 1, no RolloutHistory), every one
+  on the same line of their own code: ZeroDivisionError in tampura/
+  structs.py:257 ab_probs, called from spec.py:98 print_F, called from
+  tampura_policy.py:147 get_action (their policy prints its learned model,
+  and one belief's action counts sum to zero).  The first runs of scenes
+  113 r0, 123 r0, 125 r1, 127 r1 and 137 r1 counted on their retry; scene
+  138 (1 cup) crashed on both attempts in both repetitions and leaves the
+  pairs (ours succeeded there twice).  One arm O run (136 r1) hung at
+  start-up before loading its scene (killed at the cap, "scene None") and
+  counted on its retry.  Counting the crashes as TAMPURA failures would
+  lower its rate, not raise it.
+  SCREENSHOTS (Hani's condition: "make sure that some screenshots from runs
+  where there was a failier in eirht run can stay saved with that metada.
+  most important scren shots is a one that explainthe failur. make sure
+  one like that makes it through"): the 75 runs that were not a counted
+  success kept failures/<arm>_s<seed>_r<rep>_a<n>/ with meta.json, 138
+  images in all.  Arm O: overview_final.png and overview_final_top.png
+  (the final scene from two fixed cameras, without the die ring: 811eda1's
+  failed G2 and G7, and its gate-clean version d344d17 came after Hani's
+  choice and was not run), its last two eye images, eye_last.json (true
+  and believed poses) and the console's tail.  Arm T: its last look views
+  from the RolloutHistory with the action list; the 23 T runs killed at
+  the cap or crashed wrote no history, so their folders, and the hung O
+  run's, hold the metadata alone.  Arm O ran with --save-screenshots on,
+  so its wall includes the image renders; arm T took none.
+  FILES: tools/gen_find_dice_scenes.py, tampura_bridge/gen_scenes/
+  find_dice/ (40 scenes, manifest.json), tools/gen_scene_eval.py (harness,
+  validity, report, failure screenshots), tools/slip_eval.py (extra_args,
+  extra_env), tools/bridge_gates.py (merge_scene_manifest), tools/cluster/
+  gen_eval.sbatch, tampura_bridge/run_bridge_on_finddice.py (the
+  overviews).  Commits run: 6519b8e, 2dde3fa, 68e7434, 21226c8, b2c6c5d;
+  not run: 811eda1, d344d17 (the ring).
+  EVIDENCE: archive/tampura_bridge_plan_2026-10-25/bf/BF63_gen_scenes/
+  (STATE.md; eval/<job>/ for the ten jobs: results.jsonl, metadata.json,
+  gates_before.txt, gates_after.txt, g13_before.json, failures/, the job
+  log; eval/REPORT.txt, TABLES.txt, O_FAILURES.txt, REPS.txt with the
+  scripts bf63_tables.py, bf63_why_o.py, bf63_reps.py; eval/
+  failed_g13_68e7434/, the first submission's logs).  The episode
+  directories: cluster $W/results/gen_b2c6c5d (324 MiB, prune_work's
+  retention).
+  CLAIM EFFECT: on 40 find_dice scenes from TAMPURA's own generator, ours
+  succeeds in 57 of 80 episodes and TAMPURA in 36 of 78, paired 25 to 6
+  (p = 0.0009); the claim carries the load confound (repetition 0 alone 12
+  to 4, p = 0.08; without TAMPURA's timeouts 16 to 6, p = 0.05) and our new
+  failure mode (the die under a cup the occlusion model does not register:
+  17 of our 23 failures).  The shipped-scene result stands, scoped to the
+  three shipped layouts.  HONESTY CLASS: measurement on scenes neither
+  side was tuned on (their generator, seeds fixed before any run, nothing
+  filtered), the validity rule declared before any run and applied as
+  written, every run that did not count listed with its cause; disclosed.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

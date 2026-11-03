@@ -1,0 +1,11 @@
+== repetition 0
+  O: 28/40 = 0.70 [0.55, 0.82], timeouts 1, median wall of successes 37.6 s
+  T: 19/39 = 0.49 [0.34, 0.64], timeouts 3, median wall of successes 122.3 s
+  39 pairs: both 15, only O 12, only T 4, neither 8; exact McNemar p = 0.0768
+== repetition 1
+  O: 29/40 = 0.72 [0.57, 0.84], timeouts 2, median wall of successes 146.6 s
+  T: 17/39 = 0.44 [0.29, 0.59], timeouts 11, median wall of successes 267.0 s
+  39 pairs: both 15, only O 13, only T 2, neither 9; exact McNemar p = 0.00739
+== T: 10 scenes successful in both reps; rep 1 minus rep 0 (their loop clock to success): median +150.5 s
+== O: 28 scenes successful in both reps; rep 1 minus rep 0 (pipeline wall): median +36.1 s
+== both reps, the pairs whose arm T run did not time out: 64 pairs: both 30, only O 16, only T 6, neither 12; exact McNemar p = 0.0525

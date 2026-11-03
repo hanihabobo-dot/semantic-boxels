@@ -1,0 +1,40 @@
+  ⎿ ready  (10.1 s)
+● Mission: get hold of dice and bring it home.
+  ⎿ run_2026-11-03_20-56-41 · find_dice seed 128 · M8 on, M9 on, M10 on, pick aperture from pose on, grip squeeze 0.5 mm, planner ff-astar2, slip fixes force hold,grasp wrist home,pose radius keep,solver iters
+● Mission: get hold of dice and bring it home.
+  ⎿ run_2026-11-03_20-56-41 · find_dice seed 128 · M8 on, M9 on, M10 on, pick aperture from pose on, grip squeeze 0.5 mm, planner ff-astar2
+⚠ WARNING: degenerate shadow AABB for b_cups_ud (extent=[0.04660759122129243, 0.0, 0.06511302291028184]) — shadow NOT registered; occlusion model is missing a region (#P1 F3 guard, should be unreachable)
+● I see 2 objects on the table and 1 space hidden behind them.
+● I am after dice. It is not in view, so I will have to search.
+✻ Thinking… how to get hold of dice … 11 steps in 1.4 s
+  ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.2 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 9 steps in 1.1 s
+  ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.2 s)
+● Picking up e_cups_ud …
+  ⎿ I have a firm grip on e_cups_ud: its half-width is 36.0 mm, I expected 34.9 mm
+  ⎿ done  (0.5 s)
+● Moving over a free spot … done  (0.4 s)
+● Setting e_cups_ud down on a free spot … done  (1.8 s)
+● Going home … done  (0.2 s)
+● Looking into the space behind e_cups_ud for dice … nothing there, replanning  (0.2 s)
+✻ Thinking… how to get hold of dice … nothing to plan
+⚠ ERROR: Searched all shadows but target not found!
+────────────────────────────────────────────
+✘ Failed. All 0 shadows searched — target not found  (all_searched)
+  ⎿ 2 plans · 8 steps, 8 done · planning 2.4 s · 17.7 s in all
+  ⎿ log and raw stream in /work/rleap1/hani.alassiri.alhabboub/p4/results/gen_b2c6c5d/5063083/O/solver_iters+force_hold+pose_radius_keep+grasp_wrist_home/seed128_r1/ours/run_2026-11-03_20-56-41
+  ledger   PASS  71 rows, complete
+  G3       PASS  8 steps over 2 plans, all as planned; 2 labelled early ends
+  G4       PASS  1 places at the planned centre
+  G5       PASS  planned_sense_render=2
+  G15      PASS  1 senses, each classified on its planned region
+  G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+  G19      PASS  scene file matches the pinned map
+  G18      PASS  initialize return to rollout start 0.027 s (initialize_call +0.002 s, initialize_return +4.254 s, scene_map_asserted +0.013 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.013 s, rollout_start +0.000 s)
+  G19h     PASS  seed 128, both RNGs untouched, PYTHONHASHSEED 0
+  G11      PASS  2 solve calls, 2 plan rows
+  G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 1952}
+seed 128: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /work/rleap1/hani.alassiri.alhabboub/p4/results/gen_b2c6c5d/5063083/O/solver_iters+force_hold+pose_radius_keep+grasp_wrist_home/seed128_r1
