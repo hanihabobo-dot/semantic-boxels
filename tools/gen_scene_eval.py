@@ -28,8 +28,21 @@ with the same scene, seed and repetition, and if that run does not count
 either, the scene's repetition leaves the paired comparison for both arms
 and is listed.
 
+SCREENSHOTS (Hani, 2026-11-03: a failed run keeps the screenshot that
+explains it, with its metadata): every run that is not a counted success,
+of either arm, gets OUT/failures/<arm>_s<seed>_r<rep>_a<attempt>/ with
+meta.json and its last two camera views: arm T's from its RolloutHistory
+(their look observations carry the wrist camera's image; read in their venv
+like _bridge_campaign's history reader; a run killed at the cap wrote no
+history, so its folder holds the metadata alone), arm O's last eye images
+(--save-screenshots on) with the curated console's tail and the eye's last
+record (true and believed poses).  A success's images are deleted, and so
+are every run's other images (--shots all keeps the views of successes too,
+for a check; none takes no screenshot).
+
   <arm O python> tools/gen_scene_eval.py --snapshot SB --out OUT --seeds 100-103 \\
       --reps 2 --python-o PY --venv-t TW/.venv --tampura-work TW [--cap 600]
+      [--shots failures|all|none]
   python tools/gen_scene_eval.py --report OUT [OUT ...]     the tables
 """
 import argparse
@@ -40,6 +53,7 @@ import os
 import re
 import shutil
 import statistics
+import subprocess
 import sys
 import time
 from types import SimpleNamespace
@@ -54,6 +68,95 @@ ARM_O = 'solver_iters+force_hold+pose_radius_keep+grasp_wrist_home'
 SCENES_REL = os.path.join('tampura_bridge', 'gen_scenes', 'find_dice')
 PROBLEMS_REL = os.path.join('tampura_environments', 'find_dice', 'problems')
 SCENE_RE = re.compile(r'Loading scene from (\S+)')
+SHOTS_KEPT = 2
+
+# Arm T's last camera views from its RolloutHistory, run in their venv with
+# nothing of ours on the path (the history reader's convention); prints one
+# JSON line.  The observation at index i follows the action at index i.
+# The pickle is the one their rollout wrote seconds earlier in this
+# episode's own save directory, never a file from elsewhere (the same trust
+# as _bridge_campaign's T_HISTORY_READER).
+T_SHOTS_READER = r"""
+import glob, json, os, pickle, sys
+import numpy as np
+from PIL import Image
+d, out, keep = sys.argv[1], sys.argv[2], int(sys.argv[3])
+pks = sorted(glob.glob(os.path.join(d, '**', '*.pkl'), recursive=True), key=os.path.getmtime)
+if not pks:
+    print(json.dumps({'images': [], 'note': 'no RolloutHistory (killed or crashed before it was written)'}))
+    sys.exit(0)
+with open(pks[-1], 'rb') as f:
+    h = pickle.load(f)
+shots = [(i, o.camera_image) for i, o in enumerate(h.observations)
+         if getattr(o, 'camera_image', None) is not None]
+os.makedirs(out, exist_ok=True)
+saved = []
+for i, ci in shots[-keep:]:
+    rgb = np.asarray(ci.rgbPixels)
+    if rgb.ndim != 3:
+        continue
+    name = 'tampura_step%02d_camera.png' % i
+    Image.fromarray(rgb[:, :, :3].astype(np.uint8)).save(os.path.join(out, name))
+    saved.append({'file': name, 'step': i,
+                  'action': str(h.actions[i]) if i < len(h.actions) else None})
+print(json.dumps({'images': saved, 'camera_observations': [i for i, _ in shots],
+                  'actions': [str(a) for a in h.actions]}))
+"""
+
+
+def t_shots(a, save_dir, dest):
+    env = os.environ.copy()
+    env.pop('PYTHONPATH', None)
+    env['PATH'] = os.path.join(a.venv_t, 'bin') + os.pathsep + env.get('PATH', '')
+    try:
+        out = subprocess.run([os.path.join(a.venv_t, 'bin', 'python'), '-c', T_SHOTS_READER,
+                              save_dir, dest, str(SHOTS_KEPT)], cwd=save_dir, env=env,
+                             capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return {'images': [], 'note': repr(e)}
+    for line in reversed(out.stdout.splitlines()):
+        if line.strip().startswith('{'):
+            try:
+                return json.loads(line)
+            except ValueError:
+                break
+    return {'images': [], 'note': (out.stderr or out.stdout)[-600:]}
+
+
+def drop_pickle(rec):
+    """_bridge_campaign's --drop-t-history, done here after the screenshots."""
+    pkl = (rec.get('history_read') or {}).get('pkl')
+    if pkl and os.path.isfile(pkl):
+        size = os.path.getsize(pkl)
+        os.remove(pkl)
+        rec['history_dropped'] = {'pkl': pkl, 'bytes': size}
+        rec['note'] = (rec.get('note') or '') + f"RolloutHistory pickle deleted after reading ({size} bytes); "
+
+
+def o_shots(save_dir, dest, keep):
+    """Arm O's last eye camera images copied to dest when kept; every
+    image of the run deleted from its run directory either way."""
+    pngs = sorted(glob.glob(os.path.join(save_dir, '**', 'eye_*.png'), recursive=True),
+                  key=lambda p: (os.path.dirname(p), os.path.basename(p)))
+    cams = [p for p in pngs if p.endswith('_camera.png')]
+    saved = []
+    if keep:
+        os.makedirs(dest, exist_ok=True)
+        for p in cams[-SHOTS_KEPT:]:
+            shutil.copyfile(p, os.path.join(dest, os.path.basename(p)))
+            saved.append(os.path.basename(p))
+        tail = se._read_text(os.path.join(save_dir, 'stdout.txt')).splitlines()[-40:]
+        with open(os.path.join(dest, 'console_tail.txt'), 'w', encoding='utf-8') as f:
+            f.write('\n'.join(tail) + '\n')
+        eye = sorted(glob.glob(os.path.join(save_dir, '**', 'eye.jsonl'), recursive=True))
+        if eye:
+            lines = se._read_text(eye[-1]).strip().splitlines()
+            if lines:
+                with open(os.path.join(dest, 'eye_last.json'), 'w', encoding='utf-8') as f:
+                    f.write(lines[-1] + '\n')
+    for p in pngs:
+        os.remove(p)
+    return {'images': saved, 'taken': len(pngs)}
 
 
 def load_rows(path):
@@ -113,22 +216,37 @@ def classify_o(rec, scene):
     return False, f"{st or 'no outcome'}: {rec.get('bridge_error', '')}"
 
 
+def keep_shots(a, ok, success):
+    return a.shots == 'all' or (a.shots == 'failures' and not (ok and success))
+
+
 def run_one(a, arm, seed, rep, attempt, scene, order):
     cwd = episode_cwd(a, arm, seed, rep, attempt, scene)
     sub = 'T' if arm == 'T' else 'O'
     out = os.path.join(a.out, sub if attempt == 1 else f'{sub}_retry')
+    shots_dir = os.path.join(a.out, 'failures', f'{arm}_s{seed}_r{rep}_a{attempt}')
     if arm == 'T':
         ns = SimpleNamespace(out=out, venv_t=a.venv_t, snapshot=a.snapshot, mode='full',
                              cap=a.cap, their_envs=cwd, pythonhashseed='0',
-                             tampura_work=a.tampura_work, drop_t_history=True)
+                             tampura_work=a.tampura_work, drop_t_history=False)
         rec = bc.episode_t(ns, rep, seed, order, {seed: scene}, bc.machine_check())
         ok, why = classify_t(rec)
         success = rec.get('status') == 'success'
+        keep = keep_shots(a, ok, success)
+        if keep:
+            try:                          # a screenshot never ends the eval
+                rec['shots'] = t_shots(a, rec['save_dir'], shots_dir)
+            except Exception as e:
+                rec['shots'] = {'images': [], 'note': f"{type(e).__name__}: {e}"}
+        drop_pickle(rec)
         wall, loop = rec.get('wall_s'), rec.get('loop_s')
         timed_out = rec.get('status') == 'killed'
     else:
         ns = SimpleNamespace(out=out, python=a.python_o, snapshot=a.snapshot, cwd=cwd, cap=a.cap)
-        rec = se.run_episode(ns, ARM_O, seed, rep)
+        shots_on = a.shots != 'none'
+        rec = se.run_episode(ns, ARM_O, seed, rep,
+                             extra_args=('--save-screenshots', 'on') if shots_on else (),
+                             extra_env={'BOXEL_EYE_IMAGES': '1'} if shots_on else None)
         ok, why = classify_o(rec, scene)
         m = rec.get('metrics') or {}
         # the bridge's outcome (their reward, the error, the ledger gates) and
@@ -137,14 +255,32 @@ def run_one(a, arm, seed, rep, attempt, scene, order):
         if (rec.get('bridge_status') == 'success') != (m.get('outcome') == 'success'):
             why = (why + '; ' if why else '') + (f"outcomes disagree: bridge {rec.get('bridge_status')}"
                                                  f", pipeline {m.get('outcome')}")
+        keep = keep_shots(a, ok, success)
+        try:                              # a screenshot never ends the eval
+            rec['shots'] = o_shots(rec['save_dir'], shots_dir, keep)
+        except Exception as e:
+            rec['shots'] = {'images': [], 'note': f"{type(e).__name__}: {e}"}
         wall, loop = rec.get('process_wall_s'), m.get('wall_s')
         timed_out = bool(rec.get('timed_out'))
     shutil.rmtree(cwd)
-    return {'arm': arm, 'seed': seed, 'rep': rep, 'attempt': attempt, 'scene': scene,
-            'n_cups': a.cups.get(str(seed)), 'counts': ok, 'why': why,
-            'success': bool(ok and success and not timed_out), 'timed_out': timed_out,
-            'wall_s': wall, 'loop_s': loop, 'host': os.uname().nodename,
-            'finished': time.strftime('%Y-%m-%d %H:%M:%S'), 'rec': rec}
+    row = {'arm': arm, 'seed': seed, 'rep': rep, 'attempt': attempt, 'scene': scene,
+           'n_cups': a.cups.get(str(seed)), 'counts': ok, 'why': why,
+           'success': bool(ok and success and not timed_out), 'timed_out': timed_out,
+           'wall_s': wall, 'loop_s': loop, 'host': os.uname().nodename,
+           'finished': time.strftime('%Y-%m-%d %H:%M:%S'), 'rec': rec}
+    if keep:
+        os.makedirs(shots_dir, exist_ok=True)
+        meta = {k: v for k, v in row.items() if k != 'rec'}
+        for k in ('status', 'returncode', 'max_reward', 'n_actions', 'get_action_actions',
+                  'bridge_status', 'reward', 'carries', 'losses', 'pick_tries', 'scene_file',
+                  'save_dir', 'note', 'error', 'bridge_error', 'shots'):
+            if k in rec:
+                meta[k] = rec[k]
+        if rec.get('metrics'):
+            meta['outcome_pipeline'] = rec['metrics'].get('outcome')
+            meta['metrics'] = rec['metrics']
+        bc.write_json(os.path.join(shots_dir, 'meta.json'), meta)
+    return row
 
 
 def run(a):
@@ -167,7 +303,7 @@ def run(a):
     md_path = os.path.join(a.out, 'metadata.json')
     if not os.path.isfile(md_path):
         bc.write_json(md_path, {'snapshot': a.snapshot, 'scenes': a.scenes, 'seeds': seeds,
-                                'reps': a.reps, 'cap_s': a.cap, 'arm_o': ARM_O,
+                                'reps': a.reps, 'cap_s': a.cap, 'arm_o': ARM_O, 'shots': a.shots,
                                 'python_o': a.python_o, 'venv_t': a.venv_t,
                                 'tampura_work': a.tampura_work, 'host': os.uname().nodename,
                                 'cpu': bc.cpu_model(), 'job': os.environ.get('SLURM_JOB_ID'),
@@ -302,6 +438,12 @@ def report(dirs):
     lines.append(f"arm O die carries {o_c}, lost in the hand {o_l}")
     t_s = [r['rec'].get('time_to_success_s') for (x, _, _), r in final.items() if x == 'T' and r['success']]
     lines.append(f"arm T median time to success {_f(_med(t_s))} s (their loop clock)")
+    shot_rows = [r for r in rows if (r['rec'].get('shots') or {}).get('images') is not None
+                 and not (r['counts'] and r['success'])]
+    lines.append(f"failure screenshots: {len(shot_rows)} runs, "
+                 f"{sum(len(r['rec']['shots']['images']) for r in shot_rows)} images under failures/ "
+                 f"(no image: " + (', '.join(f"{r['arm']} s{r['seed']} r{r['rep']}" for r in shot_rows
+                                             if not r['rec']['shots']['images']) or 'none') + ')')
     return '\n'.join(lines)
 
 
@@ -316,6 +458,8 @@ def main(argv=None):
     ap.add_argument('--python-o', help="arm O's python (its venv)")
     ap.add_argument('--venv-t', help="arm T's venv (theirs)")
     ap.add_argument('--tampura-work', help='their tree: tampura, tampura_environments')
+    ap.add_argument('--shots', choices=('failures', 'all', 'none'), default='failures',
+                    help="which runs keep their last camera views (see SCREENSHOTS)")
     a = ap.parse_args(argv)
     if a.report:
         print(report(a.report))

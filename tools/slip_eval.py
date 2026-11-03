@@ -182,14 +182,16 @@ def count_carries(save_dir):
     return carries, losses, tries
 
 
-def run_episode(a, arm, seed, rep):
+def run_episode(a, arm, seed, rep, extra_args=(), extra_env=None):
+    # extra_args / extra_env: BF#63's generated-scene eval adds
+    # --save-screenshots on for its failure screenshots; none here.
     save_dir = os.path.join(a.out, arm, f'seed{seed:02d}_r{rep}')
     os.makedirs(save_dir, exist_ok=True)
     cmd = [a.python,
            os.path.join(a.snapshot, 'tampura_bridge', 'run_bridge_on_finddice.py'),
            '--global-seed', str(seed), '--vis', '0', '--save-dir', save_dir,
-           '--allow-g19-mismatch', '1', '--slip-fixes', arm_fixes(arm)]
-    env = dict(os.environ, PYTHONHASHSEED='0', PYTHONDONTWRITEBYTECODE='1')
+           '--allow-g19-mismatch', '1', '--slip-fixes', arm_fixes(arm)] + list(extra_args)
+    env = dict(os.environ, PYTHONHASHSEED='0', PYTHONDONTWRITEBYTECODE='1', **(extra_env or {}))
     t0 = time.time()
     timed_out = False
     with open(os.path.join(save_dir, 'stdout.txt'), 'w', encoding='utf-8') as log:
