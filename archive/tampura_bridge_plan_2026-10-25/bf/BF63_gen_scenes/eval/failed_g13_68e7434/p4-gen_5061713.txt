@@ -1,0 +1,47 @@
+--------------------- Slurm Task Prolog ------------------------
+Job ID: 5061713
+Job name: p4-gen
+Host: cn-103
+Date: Tue Nov  3 19:34:38 CET 2026
+User: hani.alassiri.alhabboub
+Slurm account: rleap
+Slurm partition: rleap_cpu
+Work dir: 
+------------------
+Node usage:
+JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
+5061713 rleap_cpu   p4-gen hani.ala  R       0:00      1 cn-103
+5053969_18 rleap_cpu stages-m maximili  R    3:36:29      1 cn-103
+5051350_3 rleap_cpu stages-g maximili  R    5:25:22      1 cn-103
+5051350_4 rleap_cpu stages-g maximili  R    5:25:22      1 cn-103
+5055894_15 rleap_cpu ao-micon martin.f  R      26:02      1 cn-103
+5056018_13 rleap_cpu ao-trans martin.f  R      43:43      1 cn-103
+------------------
+Show launch script with:
+sacct -B -j 
+------------------
+--------------------- Slurm Task Prolog ------------------------
+host cn-103  job 5061713  2026-11-03T19:34:39+01:00  snapshot /work/rleap1/hani.alassiri.alhabboub/p4/sb_68e7434  scenes 104-107  reps 2  out /work/rleap1/hani.alassiri.alhabboub/p4/results/gen_68e7434/5061713
+model name	: Intel(R) Xeon(R) Platinum 8160 CPU @ 2.10GHz
+graph    INFO  36 modules; roots not present yet: none
+G1       PASS  83 hits, all reviewed
+G2       PASS  46 hits, all reviewed
+G7       PASS  no scene literal
+G11(i)   PASS  pddlstream imported only by pddlstream_planner.py and streams.py
+G17      PASS  clean
+G10      INFO  domain_pddlstream.pddl a21877fe170997c7  stream.pddl 9f767855831731a4
+G10      PASS  pddl/domain_pddlstream_m8.pddl e49e249bb03b7fdd = regenerated (live + M8 delta); an OFF run must load the live file, an ON run this one
+G13      PASS  tampura: HEAD cdddf14, tree fbc0cd060ddbb4af, 0 declared change(s) (BF#3), nothing else modified or stray
+G13      PASS  tampura_environments: HEAD 4167c35, tree e339e7b865a82c1b, 1 declared change(s) (BF#3), nothing else modified or stray
+G13      INFO  arm T pip freeze 6a5ec31dad83b090
+G13      FAIL  arm T's installed tampura: arm T imports the checkout itself, not the install G13 expects
+G13      PASS  T driver = run_planner.py line for line, plus the one import
+per-run gates FAILED before the eval: nothing run
+--------------------- Slurm Task Epilog ------------------------
+Job ID: 5061713
+Time: Tue Nov  3 19:37:07 CET 2026
+Elapsed Time: 00:02:29
+Billing per second for TRES: billing=256,cpu=8,mem=24G,node=1
+Show resource usage with e.g.:
+sacct -j 5061713 -o Elapsed,TotalCPU,UserCPU,SystemCPU,MaxRSS,ReqTRES%60,MaxDiskRead,MaxDiskWrite
+--------------------- Slurm Task Epilog ------------------------

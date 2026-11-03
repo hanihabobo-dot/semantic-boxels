@@ -70,12 +70,34 @@ cups and the die, the die hidden from the home camera) makes more.
    cn-04, LF).  Counted cluster usage before the run 495 MiB of 1024.
    Hani's cluster approval asked alone: "Yes, submit".  sb_6519b8e
    (pushed 18:56, before the screenshots) is referenced by no job.
-4. RUNNING since 2026-11-03 19:25: 10 jobs, OUT $W/results/gen_68e7434/
-   <job>, 2 reps each, 900 s cap, nodes from sinfo just before:
-   5061712 cn-102 100-103, 5061713 cn-103 104-107, 5061714 cn-104 108-111,
-   5061715 cn-109 112-115, 5061716 cn-111 116-119, 5061717 cn-112 120-123,
-   5061718 cn-113 124-127, 5061719 cn-114 128-131, 5061720 cn-115 132-135,
-   5061721 cn-116 136-139.  The laptop's waiter polls sacct -X (never
-   squeue alone).  Next: pull results.jsonl, metadata.json, gates_before/
-   after.txt, the job log and failures/ into eval/<job>/ (tracked).
-5. Report: tools/gen_scene_eval.py --report; BF#63 entry; ledger rows.
+4. FAILED, NOTHING RUN (2026-11-03 19:25 to 19:39): 10 jobs, OUT
+   $W/results/gen_68e7434/<job>, 2 reps each, 900 s cap, nodes from sinfo
+   just before: 5061712 cn-102 100-103, 5061713 cn-103 104-107, 5061714
+   cn-104 108-111, 5061715 cn-109 112-115, 5061716 cn-111 116-119, 5061717
+   cn-112 120-123, 5061718 cn-113 124-127, 5061719 cn-114 128-131, 5061720
+   cn-115 132-135, 5061721 cn-116 136-139.  All ten stopped at the per-run
+   gates before the first episode, each on the same line: "G13 FAIL arm
+   T's installed tampura: arm T imports the checkout itself, not the
+   install G13 expects".  Cause: gen_eval.sbatch exported arm O's
+   PYTHONPATH (with $TW/tampura) before bridge_gates.py all and tree, and
+   the gate's import check (_run) inherits the environment; slip_t.sbatch
+   and b8_campaign.sbatch run the gates without it.  Arm T's episodes
+   never see it (child_env sets their PYTHONPATH to the snapshot), so only
+   the gate step was wrong.  Reproduced in WSL: with that PYTHONPATH G13
+   FAILs (and pip freeze hashes differently), without it PASSes (2502 of
+   2506 tracked files byte-equal, the line of job 5006490).  The smokes ran
+   the harness, never the job script.  Seven jobs sat 5 to 10 min in a
+   cluster stall (both gateways timed out 19:33 to 19:37; six ended at
+   19:36:38, three at 19:37:07); 5061719 and 5061720 failed in under a
+   minute.  Fix b2c6c5d: env -u PYTHONPATH on both gate calls.  The ten job
+   logs are in eval/failed_g13_68e7434/ (tracked); the ten gate-only
+   result folders, sb_68e7434 and sb_6519b8e deleted 19:50 (ledger).
+5. Meanwhile another session committed 21226c8 and 811eda1: arm O's final
+   scene from two fixed cameras (overview_final*.png, the die ringed),
+   kept first among its failure screenshots.  RUNNING: local end-to-end
+   check of 811eda1's job script (scratchpad bf63_e2e.sh: the snapshot laid
+   out like $W under WSL /root/bf63_e2e, gen_eval.sbatch as is on scene
+   113, then the harness with --shots all, both under the pipeline lock).
+6. Next: push sb_811eda1, Hani's approval again (asked alone), submit,
+   wait, pull into eval/<job>/, tools/gen_scene_eval.py --report,
+   REPORT.txt, the BF#63 entry, ledger rows.
