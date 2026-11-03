@@ -8965,7 +8965,8 @@ BF#63 [DONE; FINDING OPEN]  GENERATED-SCENE EVAL: OURS 57 OF 80, TAMPURA 36
   the kill), 28 ended below reward 1, most after repeated looks at one
   object (REPORT.txt's per-scene table).  Its outcome differs between the
   two repetitions on 16 of 39 scenes (ours on 1 of 40).
-  NOT COUNTED: 9 TAMPURA runs crashed (rc 1, no RolloutHistory), every one
+  NOT COUNTED: 9 TAMPURA runs crashed (rc 1, no RolloutHistory; their
+  console tails in eval/T_CRASHES.txt), every one
   on the same line of their own code: ZeroDivisionError in tampura/
   structs.py:257 ab_probs, called from spec.py:98 print_F, called from
   tampura_policy.py:147 get_action (their policy prints its learned model,
