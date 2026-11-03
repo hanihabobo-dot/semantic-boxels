@@ -74,6 +74,44 @@ def _rng_untouched(seed):
                       and tuple(s[2:]) == tuple(t[2:]))}
 
 
+# BF#63 (Hani, 2026-11-03: a failed run keeps the screenshot that explains
+# it): the final scene from two fixed cameras over the table, one oblique
+# and one from above (the robot at the bottom); (file, eye, target, up).
+OVERVIEW_VIEWS = (
+    ('overview_final.png', (1.25, -0.75, 0.85), (0.40, 0.0, 0.10), (0, 0, 1)),
+    ('overview_final_top.png', (0.45, 0.03, 1.15), (0.45, 0.03, 0.0), (1, 0, 0)),
+)
+
+
+def _save_overview(client, save_dir):
+    """The final scene from OVERVIEW_VIEWS into save_dir, after the rollout
+    and its record, so a run keeps a picture of where the die, the cups and
+    the arm ended up (the eye images are the robot's own camera, which may
+    not see a dropped die).  Only when the eye images are wanted
+    (world_eye.images_wanted(): --save-screenshots on and BOXEL_EYE_IMAGES
+    not 0); TinyRenderer, so headless runs make it too; a failure here
+    never touches the episode."""
+    import world_eye
+    if not world_eye.images_wanted():
+        return []
+    import pybullet as p
+    from PIL import Image
+    names = []
+    proj = p.computeProjectionMatrixFOV(fov=55, aspect=4 / 3, nearVal=0.05, farVal=5.0)
+    for name, eye, target, up in OVERVIEW_VIEWS:
+        try:
+            view = p.computeViewMatrix(eye, target, up)
+            w, h, rgba, _, _ = client.getCameraImage(
+                800, 600, viewMatrix=view, projectionMatrix=proj,
+                renderer=p.ER_TINY_RENDERER)
+            Image.fromarray(np.asarray(rgba, dtype=np.uint8).reshape(h, w, 4)[:, :, :3]).save(
+                os.path.join(save_dir, name))
+            names.append(name)
+        except Exception:
+            pass
+    return names
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--config', default='./env_configs/find_dice.yml')
@@ -229,6 +267,10 @@ def main():
         json.dump({'seed': a.global_seed, 'scene_file': scene.name_seen,
                    'switches': dict(cfg.switches), **cfg.out}, f, indent=1,
                   default=str)
+    try:
+        _save_overview(env.world.client, config['save_dir'])
+    except Exception:
+        pass
     # The gate table and the outcome line are curated output: on the
     # terminal (and mirrored into console_debug.log) under the console.
     with console_ui.terminal():

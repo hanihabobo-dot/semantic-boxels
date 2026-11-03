@@ -34,9 +34,13 @@ of either arm, gets OUT/failures/<arm>_s<seed>_r<rep>_a<attempt>/ with
 meta.json and its last two camera views: arm T's from its RolloutHistory
 (their look observations carry the wrist camera's image; read in their venv
 like _bridge_campaign's history reader; a run killed at the cap wrote no
-history, so its folder holds the metadata alone), arm O's last eye images
-(--save-screenshots on) with the curated console's tail and the eye's last
-record (true and believed poses).  A success's images are deleted, and so
+history, so its folder holds the metadata alone; their driver stays
+run_planner.py's copy, so nothing renders their final scene), arm O's
+final scene from two fixed cameras over the table (the bridge's
+overview_final*.png, made after the rollout; the one that shows where the
+die ended up) and its last eye images (--save-screenshots on), with the
+curated console's tail and the eye's last record (true and believed
+poses).  A success's images are deleted, and so
 are every run's other images (--shots all keeps the views of successes too,
 for a check; none takes no screenshot).
 
@@ -134,15 +138,17 @@ def drop_pickle(rec):
 
 
 def o_shots(save_dir, dest, keep):
-    """Arm O's last eye camera images copied to dest when kept; every
-    image of the run deleted from its run directory either way."""
+    """Arm O's final overviews and last eye camera images copied to dest
+    when kept; every image of the run deleted from its run directory
+    either way."""
     pngs = sorted(glob.glob(os.path.join(save_dir, '**', 'eye_*.png'), recursive=True),
                   key=lambda p: (os.path.dirname(p), os.path.basename(p)))
+    overviews = sorted(glob.glob(os.path.join(save_dir, 'overview_*.png')))
     cams = [p for p in pngs if p.endswith('_camera.png')]
     saved = []
     if keep:
         os.makedirs(dest, exist_ok=True)
-        for p in cams[-SHOTS_KEPT:]:
+        for p in overviews + cams[-SHOTS_KEPT:]:
             shutil.copyfile(p, os.path.join(dest, os.path.basename(p)))
             saved.append(os.path.basename(p))
         tail = se._read_text(os.path.join(save_dir, 'stdout.txt')).splitlines()[-40:]
@@ -154,9 +160,9 @@ def o_shots(save_dir, dest, keep):
             if lines:
                 with open(os.path.join(dest, 'eye_last.json'), 'w', encoding='utf-8') as f:
                     f.write(lines[-1] + '\n')
-    for p in pngs:
+    for p in pngs + overviews:
         os.remove(p)
-    return {'images': saved, 'taken': len(pngs)}
+    return {'images': saved, 'taken': len(pngs) + len(overviews)}
 
 
 def load_rows(path):

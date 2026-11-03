@@ -1,7 +1,9 @@
 """BF#63: the generated-scene eval.  G19's manifest pins seeds outside the
 campaign's map and never re-pins the campaign's twenty; the committed
 scenes match their manifest; an episode counts only on its own scene with
-an outcome (the declared validity rule); the tables' statistics."""
+an outcome (the declared validity rule); arm O's failure screenshots keep
+the final overviews first and leave no image in the run; the tables'
+statistics."""
 import hashlib
 import importlib.util
 import json
@@ -80,6 +82,37 @@ def test_validity_rule_arm_o(tmp_path):
     (tmp_path / 'stdout.txt').write_text(f'... Loading scene from {s}\n')
     assert gse.classify_o({'save_dir': str(tmp_path), 'timed_out': True,
                            'bridge_status': None}, s) == (True, 'timeout')
+
+
+def _o_run(tmp_path):
+    d = tmp_path / 'run'
+    eye = d / 'ours' / 'run_x'
+    eye.mkdir(parents=True)
+    for k in (1, 2, 3):
+        (eye / f'eye_{k:03d}_camera.png').write_bytes(b'png')
+    (eye / 'eye_003_gui.png').write_bytes(b'png')
+    (eye / 'eye.jsonl').write_text('{"k": 1}\n{"k": 3, "tag": "final"}\n')
+    (d / 'overview_final.png').write_bytes(b'png')
+    (d / 'overview_final_top.png').write_bytes(b'png')
+    (d / 'stdout.txt').write_text('a\nb\n')
+    return d
+
+
+def test_o_shots_keep_the_overviews_first(tmp_path):
+    d, dest = _o_run(tmp_path), tmp_path / 'failures' / 'O_s100_r0_a1'
+    shots = gse.o_shots(str(d), str(dest), True)
+    assert shots == {'images': ['overview_final.png', 'overview_final_top.png',
+                                'eye_002_camera.png', 'eye_003_camera.png'], 'taken': 6}
+    assert sorted(os.listdir(dest)) == sorted(shots['images'] + ['console_tail.txt', 'eye_last.json'])
+    assert json.loads((dest / 'eye_last.json').read_text())['tag'] == 'final'
+    assert not [f for _, _, fs in os.walk(d) for f in fs if f.endswith('.png')]
+
+
+def test_o_shots_of_a_success_delete_every_image(tmp_path):
+    d, dest = _o_run(tmp_path), tmp_path / 'failures' / 'O_s100_r0_a1'
+    assert gse.o_shots(str(d), str(dest), False) == {'images': [], 'taken': 6}
+    assert not dest.exists()
+    assert not [f for _, _, fs in os.walk(d) for f in fs if f.endswith('.png')]
 
 
 def test_statistics():
