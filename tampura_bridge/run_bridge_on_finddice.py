@@ -84,14 +84,30 @@ OVERVIEW_VIEWS = (
 OVERVIEW_SIZE = (1024, 768)
 
 
-def _die_ring(img, die_pos, view, proj):
-    """A red ring round the die's true position: the die is 3 cm of grey on
-    a grey table, a few pixels in a view of the whole table, and may sit
-    under a cup (the ring is then on the cup)."""
+def _eye_target(run_dir):
+    """(name, true position) of the target in the world eye's last record
+    (eye.jsonl, its final snapshot; the eye's own logging-only read of the
+    simulator, so the bridge makes no read of its own, G2), or None."""
+    try:
+        with open(os.path.join(run_dir, 'eye.jsonl'), 'r', encoding='utf-8') as f:
+            last = [line for line in f if line.strip()][-1]
+        for o in json.loads(last).get('objects', []):
+            if o.get('role') == 'target' and o.get('true_pos') is not None:
+                return o['name'], o['true_pos']
+    except (OSError, TypeError, ValueError, IndexError, KeyError, AttributeError):
+        pass
+    return None
+
+
+def _target_ring(img, target, view, proj):
+    """A red ring round the target's true position, named: the die is 3 cm
+    of grey on a grey table, a few pixels in a view of the whole table, and
+    may sit under a cup (the ring is then on the cup)."""
     from PIL import ImageDraw
+    name, pos = target
     V = np.asarray(view, dtype=float).reshape(4, 4).T
     P = np.asarray(proj, dtype=float).reshape(4, 4).T
-    clip = P @ V @ np.append(np.asarray(die_pos, dtype=float), 1.0)
+    clip = P @ V @ np.append(np.asarray(pos, dtype=float), 1.0)
     if clip[3] <= 0:
         return
     x = (clip[0] / clip[3] + 1) / 2 * img.width
@@ -99,36 +115,34 @@ def _die_ring(img, die_pos, view, proj):
     r = 18
     d = ImageDraw.Draw(img)
     d.ellipse([x - r, y - r, x + r, y + r], outline=(220, 0, 0), width=3)
-    d.text((x + r + 4, y - r), 'die', fill=(220, 0, 0))
+    d.text((x + r + 4, y - r), str(name), fill=(220, 0, 0))
 
 
-def _save_overview(world, save_dir):
+def _save_overview(client, save_dir, target):
     """The final scene from OVERVIEW_VIEWS into save_dir, after the rollout
     and its record, so a run keeps a picture of where the die, the cups and
     the arm ended up (the eye images are the robot's own camera, which may
-    not see a dropped die), the die ringed.  Only when the eye images are
-    wanted (world_eye.images_wanted(): --save-screenshots on and
-    BOXEL_EYE_IMAGES not 0); TinyRenderer, so headless runs make it too; a
-    failure here never touches the episode."""
+    not see a dropped die), the target ringed where the eye's final record
+    puts it (_eye_target).  Only when the eye images are wanted
+    (world_eye.images_wanted(): --save-screenshots on and BOXEL_EYE_IMAGES
+    not 0); TinyRenderer, so headless runs make it too; a failure here
+    never touches the episode."""
     import world_eye
     if not world_eye.images_wanted():
         return []
     import pybullet as p
     from PIL import Image
-    c = world.client
-    die = next((b for b, cat in zip(world.objects, world.categories) if 'dice' in str(cat)), None)
-    die_pos = c.getBasePositionAndOrientation(die)[0] if die is not None else None
     W, H = OVERVIEW_SIZE
     proj = p.computeProjectionMatrixFOV(fov=55, aspect=W / H, nearVal=0.05, farVal=5.0)
     names = []
-    for name, eye, target, up in OVERVIEW_VIEWS:
+    for name, eye, look_at, up in OVERVIEW_VIEWS:
         try:
-            view = p.computeViewMatrix(eye, target, up)
-            w, h, rgba, _, _ = c.getCameraImage(W, H, viewMatrix=view, projectionMatrix=proj,
-                                                renderer=p.ER_TINY_RENDERER)
+            view = p.computeViewMatrix(eye, look_at, up)
+            w, h, rgba, _, _ = client.getCameraImage(W, H, viewMatrix=view, projectionMatrix=proj,
+                                                     renderer=p.ER_TINY_RENDERER)
             img = Image.fromarray(np.asarray(rgba, dtype=np.uint8).reshape(h, w, 4)[:, :, :3])
-            if die_pos is not None:
-                _die_ring(img, die_pos, view, proj)
+            if target is not None:
+                _target_ring(img, target, view, proj)
             img.save(os.path.join(save_dir, name))
             names.append(name)
         except Exception:
@@ -292,7 +306,8 @@ def main():
                    'switches': dict(cfg.switches), **cfg.out}, f, indent=1,
                   default=str)
     try:
-        _save_overview(env.world, config['save_dir'])
+        _save_overview(env.world.client, config['save_dir'],
+                       _eye_target(cfg.out.get('run_dir') or ''))
     except Exception:
         pass
     # The gate table and the outcome line are curated output: on the
