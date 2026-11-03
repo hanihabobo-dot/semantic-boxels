@@ -118,6 +118,26 @@ for _scene, _seeds in (('1747173593', (1, 2, 3, 4, 8, 14, 15, 18)),
                        ('1747173590', (5, 6, 10, 17, 19))):
     for _s in _seeds:
         SCENE_MAP[_s] = _scene
+
+
+# BF#63: the generated-scene eval (find_dice scenes from their own
+# env_generator.py, tampura_bridge/gen_scenes/, each episode in a directory
+# that holds its one scene): the manifest BRIDGE_SCENE_MANIFEST names pins
+# its seeds to its scene files the same way, for seeds outside the
+# campaign's map only, so the campaign's twenty stay pinned as above.
+def merge_scene_manifest(scene_map, path):
+    with open(path, 'r', encoding='utf-8') as f:
+        scenes = json.load(f)['scenes']
+    for seed, scene in scenes.items():
+        seed = int(seed)
+        if seed in scene_map:
+            raise SystemExit(f"G19: the manifest {path} re-pins the campaign's seed {seed}")
+        scene_map[seed] = scene
+    return scene_map
+
+
+if os.environ.get('BRIDGE_SCENE_MANIFEST'):
+    merge_scene_manifest(SCENE_MAP, os.environ['BRIDGE_SCENE_MANIFEST'])
 # The 2026-05-26 laptop run's map (P4.2; ext4 lists [1747173590,
 # 1747173591, 1747173593]).  Used only to group that block by layout; it
 # pins no campaign episode.
