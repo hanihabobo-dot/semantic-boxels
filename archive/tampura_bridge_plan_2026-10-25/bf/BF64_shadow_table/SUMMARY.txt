@@ -1,0 +1,13 @@
+seed 100  rc 1  wall 60s  find_dice_gen_s100.json  degenerate 0  outcome failure  | I see 5 objects on the table and 5 spaces hidden | ✘ Failed. All 0 shadows searched — target not found  (all_searched)
+seed 102  rc 0  wall 37s  find_dice_gen_s102.json  degenerate 0  outcome success  | I see 3 objects on the table and 3 spaces hidden | ✔ Done. I am holding dice at home.
+seed 103  rc 0  wall 62s  find_dice_gen_s103.json  degenerate 0  outcome success  | I see 4 objects on the table and 4 spaces hidden | ✔ Done. I am holding dice at home.
+seed 104  rc 1  wall 18s  find_dice_gen_s104.json  degenerate 1  outcome failure  | I see 4 objects on the table and 6 spaces hidden | ✘ Failed. Planner returned no plan (6 unsearched shadows remaining)  (planner_failed)
+seed 107  rc 0  wall 40s  find_dice_gen_s107.json  degenerate 0  outcome success  | I see 4 objects on the table and 4 spaces hidden | ✔ Done. I am holding dice at home.
+seed 111  rc 0  wall 24s  find_dice_gen_s111.json  degenerate 0  outcome success  | I see 2 objects on the table and 2 spaces hidden | ✔ Done. I am holding dice at home.
+seed 127  rc 0  wall 16s  find_dice_gen_s127.json  degenerate 0  outcome success  | I see 2 objects on the table and 2 spaces hidden | ✔ Done. I am holding dice at home.
+seed 128  rc 1  wall 37s  find_dice_gen_s128.json  degenerate 0  outcome failure  | I see 2 objects on the table and 2 spaces hidden | ✘ Failed. No plan — but action skeleton(s) existed and stream binding failed to deliver values (#P1 F7 binding death; [F7-diag] in the log has the skeleton; 1 unsearched shadows remaining)  (no_plan_binding_death)
+seed 135  rc 1  wall 45s  find_dice_gen_s135.json  degenerate 0  outcome failure  | I see 3 objects on the table and 3 spaces hidden | ✘ Failed. No plan — but action skeleton(s) existed and stream binding failed to deliver values (#P1 F7 binding death; [F7-diag] in the log has the skeleton; 1 unsearched shadows remaining)  (no_plan_binding_death)
+seed 124  rc 124  wall 900s  find_dice_gen_s124.json  degenerate 0  no outcome  | I see 5 objects on the table and 6 spaces hidden | ?
+seed 101  rc 1  wall 85s  find_dice_gen_s101.json  degenerate 0  outcome failure  | I see 5 objects on the table and 5 spaces hidden | ✘ Failed. Planner returned no plan (1 unsearched shadows remaining)  (planner_failed)
+seed 105  rc 0  wall 69s  find_dice_gen_s105.json  degenerate 0  outcome success  | I see 5 objects on the table and 5 spaces hidden | ✔ Done. I am holding dice at home.
+seed 106  rc 0  wall 34s  find_dice_gen_s106.json  degenerate 0  outcome success  | I see 4 objects on the table and 4 spaces hidden | ✔ Done. I am holding dice at home.
