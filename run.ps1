@@ -5,6 +5,7 @@
 #   run tampura -Seed 7        another seed
 #   run tampura -Headless      no GUI: the console only (a diagnostic run, never scored;
 #                              it goes on past a G19 scene mismatch like a GUI run)
+#   run tampura -Seed 118 -Gen a scene from their own generator (BF#63's seeds 100 to 139)
 #   run boxels                 our own random-pairs holding scene, seed 0, in the GUI, the
 #                              same console and planner;  `boxels` alone is the same word
 #   run boxels -Seed 3 -Headless
@@ -27,6 +28,7 @@ param(
     [Parameter(Position = 0)][string]$What = 'tampura',
     [int]$Seed = 0,
     [switch]$Headless,
+    [switch]$Gen,
     [string]$Scene = 'random-pairs',
     [string]$Goal = 'holding',
     [int]$Occluders = 2,
@@ -46,7 +48,7 @@ $PY = '/root/armO-venvA/bin/python'
 $PROCS = "tr -d '\r' < $S/tools/run_procs.sh | bash -s --"
 
 if ($What -in 'help', '-h', '--help', '/?', '?') {
-    Get-Content $PSCommandPath | Select-Object -First 18 | ForEach-Object { $_ -replace '^# ?', '' }
+    Get-Content $PSCommandPath | Select-Object -First 19 | ForEach-Object { $_ -replace '^# ?', '' }
     return
 }
 if ($What -in 'ps', 'status') {
@@ -81,10 +83,29 @@ if ($What -eq 'tampura') {
     $g19 = if ($Headless) { ' --allow-g19-mismatch 1' } else { '' }
     $mine = "${kind}_s${Seed}_$stamp"
     $save = "$S/archive/tampura_bridge_plan_2026-10-25/bf/gui_runs/$mine"
-    $cmd = "TW=/root/tampura-work; cd `$TW/tampura_environments && " +
-           "PYTHONPATH=$S`:$S/pddlstream_lib`:`$TW/tampura`:`$TW/tampura_environments " +
+    $run = "PYTHONPATH=$S`:$S/pddlstream_lib`:`$TW/tampura`:`$TW/tampura_environments " +
            "PYTHONHASHSEED=0 $PY $S/tampura_bridge/run_bridge_on_finddice.py " +
            "--global-seed $Seed --vis $vis --save-dir $save$g19$sw$extra"
+    if ($Gen) {
+        # BF#63: their loader picks a random file of tampura_environments/
+        # find_dice/problems under the cwd, so the run starts in a directory
+        # holding only this scene (as tools/gen_scene_eval.py does); the
+        # manifest pins it for G19.  The directory goes when the run ends
+        # (run_procs.sh ends the python, never this bash, so the trap runs).
+        $json = "tampura_bridge/gen_scenes/find_dice/find_dice_gen_s${Seed}.json"
+        if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot $json))) {
+            Write-Host "run: no generated scene for seed $Seed (BF#63's are 100 to 139)" -ForegroundColor Yellow
+            exit 2
+        }
+        $D = "/root/run_gen_$mine"
+        $cmd = "TW=/root/tampura-work; trap 'rm -rf $D' EXIT; " +
+               "mkdir -p $D/tampura_environments/find_dice/problems && " +
+               "cp $S/$json $D/tampura_environments/find_dice/problems/ && " +
+               "ln -s `$TW/tampura_environments/env_configs $D/env_configs && cd $D && " +
+               "BRIDGE_SCENE_MANIFEST=$S/tampura_bridge/gen_scenes/find_dice/manifest.json $run"
+    } else {
+        $cmd = "TW=/root/tampura-work; cd `$TW/tampura_environments && $run"
+    }
 } else {
     $nogui = if ($Headless) { ' --no-gui' } else { '' }
     $mine = "test_full_pipeline.py$nogui --scene $Scene --seed $Seed --goal $Goal --n-occluders $Occluders"

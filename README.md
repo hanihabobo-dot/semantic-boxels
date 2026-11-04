@@ -30,6 +30,7 @@ python3 -u test_full_pipeline.py --no-gui --scene random-pairs --seed 0 --goal h
 run                          # the bridge episode on TAMPURA's find_dice, seed 0, in the GUI
 run tampura -Seed 7          # another seed
 run tampura -Headless        # no GUI, the console only; a diagnostic run, never scored
+run tampura -Seed 118 -Gen   # a scene from TAMPURA's own generator (BF#63's seeds 100 to 139)
 boxels                       # our own random-pairs scene, seed 0, in the GUI (same as: run boxels)
 run boxels -Seed 3 -Headless
 run boxels -Scene stack -Goal stack -Occluders 0
@@ -46,6 +47,7 @@ run help                     # the usage header of run.ps1
 | `-Off` | Without the model tweaks M8 to M10 and the aperture rule |
 | `-Squeeze MM` | The pick squeeze in mm (`--grip-squeeze-mm`) |
 | `-Screenshots` | Also save the eye PNGs (`--save-screenshots on`) |
+| `-Gen` | `run tampura` on a find_dice scene from TAMPURA's own generator (`tampura_bridge/gen_scenes/`, seeds 100 to 139), started in a directory that holds only that scene |
 | `-Music` / `-Sfx` / `-Voice` | Sound that follows the run: music and effects, the effects only, and Windows' voice reading the narration as well |
 | `-DryRun` | Print the command instead of running it |
 
