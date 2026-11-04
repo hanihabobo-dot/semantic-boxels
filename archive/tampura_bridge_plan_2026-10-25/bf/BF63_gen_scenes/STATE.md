@@ -228,3 +228,25 @@ cups and the die, the die hidden from the home camera) makes more.
    seed 118) and stopped, as it should.  Between the check and the
    commit, HEAD moved from f07eef2 to 330e5e8 (README.md, run.ps1,
    tools/watch.ps1: laptop launcher files the cluster never runs).
+   Committed 11744fd (with the BF#63 correction THE SLOW HOUR).
+9. RUNNING since 2026-11-04 14:22.  Hani, asked alone (the run as planned
+   in phase 8: a code-only snapshot of 11744fd, 10 jobs of 4 scenes, 2
+   repetitions, P4_LOCAL=1, 10 shared rleap_cpu nodes with 8 CPUs and 24
+   GB each, about 70 min, about 324 MiB): "Yes, run it (Recommended)".
+   push_snapshot.ps1 -CodeOnly -Commit 11744fd from 13:57 (its prune_work
+   first compacted slip_cff9bc5 on the slow volume: counted 415 MiB of
+   1024 after) -> $W/sb_11744fd; seven key files' blobs equal to the
+   commit's on cn-04, LF, 40 scenes and the manifest.  The parent
+   session's env_adapter.py fix (BF#64, the shadow caster's table range)
+   comes after 11744fd and is not in this run (it asked for exactly that).
+   Jobs, nodes by free CPUs just before (76 to 90 free): 5084295 cn-112
+   100-103, 5084296 cn-111 104-107, 5084297 cn-109 108-111, 5084298
+   cn-115 112-115, 5084299 cn-104 116-119, 5084300 cn-103 120-123, 5084301
+   cn-110 124-127, 5084302 cn-114 128-131, 5084303 cn-113 132-135, 5084304
+   cn-107 136-139.  OUT $W/results/gen_11744fd/<job>.tar.gz, logs
+   $W/logs/p4-gen_<job>.txt.  The laptop polls sacct -X (scratchpad
+   wait_jobs.ps1) and an early look reports the first finished scene
+   (early_look.ps1).  Next: on ALL DONE, the pull (scratchpad
+   pull_remote2.sh) into eval2/<job>/, REPORT.txt, the stall rule
+   (phase 8), the agreement with run 1, BF#63's RUN 2 section; delete
+   sb_11744fd (ledger).
