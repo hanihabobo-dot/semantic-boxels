@@ -8929,18 +8929,36 @@ BF#63 [DONE; FINDING OPEN]  GENERATED-SCENE EVAL: OURS 57 OF 80, TAMPURA 36
       5 cups (8 scenes)  11/16 vs  4/16    4 / 7 / 0 / 5
     Beside the shipped scenes (BF#59): ours 120 of 120, TAMPURA 40 of 59
     valid, 59 pairs: both 40, only ours 19, only TAMPURA 0.
-  LOAD CONFOUND (eval/REPS.txt): the nodes are shared (-w pins a node, it
-  does not reserve it), and repetition 1 ran on busier ones.  On the same
-  scenes, successful in both repetitions, repetition 1 took a median 150.5
-  s longer (TAMPURA's loop clock, 10 scenes) and 36.1 s longer (our
-  pipeline wall, 28 scenes); TAMPURA's timeouts were 3 in repetition 0 and
-  11 in repetition 1.  Repetition 0 alone: ours 28/40 = 0.70 [0.55, 0.82],
-  TAMPURA 19/39 = 0.49 [0.34, 0.64]; 39 pairs 15 / 12 / 4 / 8, p = 0.077.
-  Repetition 1: 29/40 against 17/39; 15 / 13 / 2 / 9, p = 0.0074.  Both
-  repetitions without the pairs whose TAMPURA run timed out: 64 pairs,
-  30 / 16 / 6 / 12, p = 0.053.  The direction holds in every cut; its
-  strength depends on how TAMPURA's timeouts are read.  A run on reserved
-  nodes (--exclusive) would remove the confound.
+  THE SLOW HOUR (corrected 2026-11-04; eval/WINDOW.txt, bf63_window.py):
+  this entry first read the slowdown as busier nodes in repetition 1.  It
+  was one hour on every node at once.  From about 21:00 to 22:00 our
+  planning calls ran 15 to 24 times slower while the execution steps kept
+  their speed (scene 111, repetition 1 against 0: "13 steps in 33.6 s"
+  against "12 steps in 1.4 s", the moves 0.3 to 0.7 s in both), on all
+  ten nodes, while other users' allocations on those nodes stayed flat at
+  2 to 28 of 96 CPUs (sacct; Slurm allocates each job its own cores,
+  CR_CORE_MEMORY with task/cgroup).  Planning writes its PDDL and temp
+  files in the episode's folder, which lay on the NFS volume under $W
+  (rleap-raid-1, a hard mount).  The 10 runs that took 16 to 181 s to end
+  after their kill at the cap all began between 21:21 and 21:44, and the
+  hung arm O start-up (136 r1, 21:26) fell in the same hour.  All 14 of
+  TAMPURA's timeouts began between 21:00 and 21:44: outside that hour it
+  never reached the cap.  On 2026-11-04 at 11:53 the volume still took
+  0.04 to 0.93 s to open a file from cn-04 and 0.18 to 0.96 s for a 4 kB
+  write with fsync (local disk 0.02 s).  Split by the hour (post hoc, the
+  hour read off the run; a pair is inside when either arm's run overlaps
+  21:00 to 22:00): the 45 pairs outside it, ours 31/45 = 0.69 [0.54,
+  0.80], TAMPURA 25/45 = 0.56 [0.41, 0.69], no TAMPURA timeout, 20 / 11 /
+  5 / 9, p = 0.21; the 33 pairs inside it, 24/33 against 11/33, 14
+  TAMPURA timeouts, 10 / 14 / 1 / 8, p = 0.00098.  The per-repetition
+  cuts (eval/REPS.txt: repetition 0 alone 15 / 12 / 4 / 8, p = 0.077;
+  repetition 1, 15 / 13 / 2 / 9, p = 0.0074; without TAMPURA's timeouts
+  30 / 16 / 6 / 12, p = 0.053) mix both sides of the slow hour.  Reserved
+  nodes (--exclusive) would not have removed it: they reserve CPUs and
+  memory, not the volume, and no rleap_cpu node was free (all 16 shared,
+  221 jobs pending on 2026-11-04 at 11:40; BF#53 found an 11 h wait).  The
+  second run (STATE.md phase 8, planned) keeps each job's folder on the
+  node's own disk and logs the volume's latency every 20 s.
   OUR FAILURES (FINDING, OPEN; eval/O_FAILURES.txt, from the world eye's
   last record in each failures/ folder): 23 counted failures, none with a
   die carry (no slip); the same outcome in both repetitions on 39 of 40
@@ -9008,11 +9026,14 @@ BF#63 [DONE; FINDING OPEN]  GENERATED-SCENE EVAL: OURS 57 OF 80, TAMPURA 36
   retention).
   CLAIM EFFECT: on 40 find_dice scenes from TAMPURA's own generator, ours
   succeeds in 57 of 80 episodes and TAMPURA in 36 of 78, paired 25 to 6
-  (p = 0.0009); the claim carries the load confound (repetition 0 alone 12
-  to 4, p = 0.08; without TAMPURA's timeouts 16 to 6, p = 0.05) and our new
+  (p = 0.0009), but the significance comes from the slow hour: outside it
+  the pairs split 11 to 5 (p = 0.21, 45 pairs), and all 14 of TAMPURA's
+  timeouts fall inside it.  This run is cited with the slow hour or not at
+  all; the second run decides the generated-scene comparison.  Our new
   failure mode (the die under a cup the occlusion model does not register:
-  17 of our 23 failures).  The shipped-scene result stands, scoped to the
-  three shipped layouts.  HONESTY CLASS: measurement on scenes neither
+  17 of our 23 failures, the same outcome in both repetitions on 39 of 40
+  scenes) does not depend on the hour.  The shipped-scene result stands,
+  scoped to the three shipped layouts.  HONESTY CLASS: measurement on scenes neither
   side was tuned on (their generator, seeds fixed before any run, nothing
   filtered), the validity rule declared before any run and applied as
   written, every run that did not count listed with its cause; disclosed.

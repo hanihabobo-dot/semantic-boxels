@@ -16,20 +16,101 @@
 # keeps every run that is not a counted success under OUT/failures/ with
 # its metadata (arm O's episodes get BOXEL_EYE_IMAGES=1 from the harness);
 # pull them into archive/ before the results compact (two days).
+# P4_LOCAL=1 (BF#63's second run): the job's folder is on the node's own
+# disk (P4_LOCAL_DIR, default /tmp) for the whole run, and at the end it
+# becomes one tarball, OUT.tar.gz, on $W.  On 2026-11-03, from about 21:00
+# to 22:00, the NFS volume under $W slowed the episodes' planning (it
+# writes its files in the episode's folder) 15 to 24 times on all ten nodes
+# at once while execution kept its speed, and all 14 of TAMPURA's timeouts
+# began in that hour.  The code and the venvs stay on $W (only read, and
+# cached after the first episode).  In both modes an I/O probe times, every
+# 20 s, opening a file on $W, a 4 kB write with fsync on $W and the same
+# write on the local disk (OUT/io_probe.tsv), so a slow volume shows in
+# the record.
 # Usage (submit from cn-04, after tools/cluster/push_snapshot.ps1 -CodeOnly):
-#   sbatch -w cn-1xx $W/sb_<sha>/tools/cluster/gen_eval.sbatch sb_<sha> 100-103 2 [OUT]
+#   sbatch -w cn-1xx [--export=ALL,P4_LOCAL=1] $W/sb_<sha>/tools/cluster/gen_eval.sbatch sb_<sha> 100-103 2 [OUT]
 #   arguments: snapshot, scene seeds, repetitions, OUT (optional: a results
-#   directory shared by the jobs; each job writes OUT/<job id>; read them
-#   together with tools/gen_scene_eval.py --report OUT).
+#   directory shared by the jobs; each job writes OUT/<job id>, or with
+#   P4_LOCAL=1 OUT/<job id>.tar.gz; read them together with
+#   tools/gen_scene_eval.py --report <the job folders>).
 set -uo pipefail
 W=${P4_WORK:-/work/rleap1/hani.alassiri.alhabboub/p4}
 SB=$W/${1:?snapshot dir, e.g. sb_1234567}
 SEEDS=${2:?scene seeds, e.g. 100-103}
 REPS=${3:-2}
-OUT=${4:-$W/results/gen_${SB##*/sb_}}/${SLURM_JOB_ID:-local}
+JOB=${SLURM_JOB_ID:-local}
+OUT=${4:-$W/results/gen_${SB##*/sb_}}/$JOB
 TW=$W/tampura-work
 VA=$W/armO-venvA/bin
-mkdir -p $OUT
+P4_LOCAL=${P4_LOCAL:-0}
+LD=${P4_LOCAL_DIR:-/tmp}
+FINAL=$OUT
+if [ "$P4_LOCAL" = 1 ]; then
+  OUT=$LD/p4gen_$JOB
+  if [ -e $FINAL ] || [ -e $FINAL.tar.gz ] || [ -e $OUT ]; then
+    echo "P4_LOCAL: $FINAL, $FINAL.tar.gz or $OUT exists already: nothing run"; exit 1
+  fi
+  FREE=$(df -Pk $LD | awk 'NR == 2 {print $4}')
+  if [ "${FREE:-0}" -lt 1048576 ]; then
+    echo "P4_LOCAL: under 1 GiB free on $LD: nothing run"; df -h $LD; exit 1
+  fi
+fi
+mkdir -p $OUT || { echo "cannot make $OUT: nothing run"; exit 1; }
+# The probe: one row every 20 s while OUT/.probe_on exists, in seconds: to
+# open a file on $W, to write 4 kB with fsync there, and the same locally.
+io_probe() {
+  local f=$W/inbox/.io_$JOB g=$LD/.io_$JOB t a b c d i
+  printf 'time\tw_open_s\tw_write_fsync_s\tlocal_write_fsync_s\n' > $OUT/io_probe.tsv
+  while [ -e $OUT/.probe_on ]; do
+    t=$(date '+%F %T'); a=$(date +%s.%N)
+    head -c 64 $SB/tools/gen_scene_eval.py > /dev/null
+    b=$(date +%s.%N)
+    dd if=/dev/zero of=$f bs=4k count=1 conv=fsync status=none; rm -f $f
+    c=$(date +%s.%N)
+    dd if=/dev/zero of=$g bs=4k count=1 conv=fsync status=none; rm -f $g
+    d=$(date +%s.%N)
+    awk -v t="$t" -v a=$a -v b=$b -v c=$c -v d=$d \
+      'BEGIN { printf "%s\t%.3f\t%.3f\t%.3f\n", t, b - a, c - b, d - c }' >> $OUT/io_probe.tsv
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+      [ -e $OUT/.probe_on ] || break
+      sleep 1
+    done
+  done
+}
+PROBE=
+FINISHED=0
+# Once, on every way out: the probe ends its row and stops (killed only if
+# stuck past 10 s); with P4_LOCAL=1 the folder becomes OUT.tar.gz on $W.
+finish() {
+  [ $FINISHED = 1 ] && return
+  FINISHED=1
+  rm -f $OUT/.probe_on
+  if [ -n "$PROBE" ]; then
+    ( sleep 10; kill $PROBE 2>/dev/null ) &
+    local dog=$!
+    wait $PROBE 2>/dev/null
+    kill $dog 2>/dev/null
+    wait $dog 2>/dev/null
+  fi
+  rm -f $W/inbox/.io_$JOB $LD/.io_$JOB
+  if [ "$P4_LOCAL" = 1 ]; then
+    mkdir -p ${FINAL%/*}
+    if tar -czf $FINAL.tar.gz -C $OUT .; then
+      echo "results in $FINAL.tar.gz ($(du -h $FINAL.tar.gz | cut -f1)), $OUT removed"
+      rm -rf $OUT
+    else
+      echo "P4_LOCAL: writing $FINAL.tar.gz FAILED; the results stay in $OUT on $(hostname)"
+    fi
+  else
+    echo "results in $OUT"
+  fi
+}
+trap finish EXIT
+trap 'exit 143' TERM
+touch $OUT/.probe_on
+io_probe &
+PROBE=$!
+[ "$P4_LOCAL" = 1 ] && echo "P4_LOCAL: the job's folder is $OUT on $(hostname) ($(df -h $LD | awk 'NR == 2 {print $4}') free), then $FINAL.tar.gz"
 export PYTHONHASHSEED=0 BOXEL_EYE_IMAGES=0 PYTHONDONTWRITEBYTECODE=1 TAMPURA_WORK=$TW
 export BRIDGE_SCENE_MANIFEST=$SB/tampura_bridge/gen_scenes/find_dice/manifest.json
 export PYTHONPATH=$SB:$W/pddlstream_lib:$TW/tampura:$TW/tampura_environments
@@ -54,7 +135,7 @@ $VA/python -u $SB/tools/gen_scene_eval.py --snapshot $SB --out $OUT --seeds $SEE
 echo "harness rc $?"
 (cd $SB && env -u PYTHONPATH $VA/python tools/bridge_gates.py tree --compare $OUT/g13_before.json) > $OUT/gates_after.txt 2>&1
 cat $OUT/gates_after.txt
-echo "results in $OUT"
+finish
 # BF#49: the cluster's data hygiene after every run.
 bash $SB/tools/cluster/prune_work.sh --apply || echo "prune_work rc $?"
 echo GEN_DONE

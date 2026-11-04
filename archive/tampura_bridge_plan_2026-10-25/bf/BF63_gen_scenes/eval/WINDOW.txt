@@ -1,0 +1,17 @@
+== all pairs: 78 pairs
+  O: 55/78 [0.60, 0.79], timeouts 3
+  T: 36/78 [0.36, 0.57], timeouts 14
+  both 30, only O 25, only T 6, neither 17; exact McNemar p = 0.000878
+== pairs outside 21:00-22:00: 45 pairs
+  O: 31/45 [0.54, 0.80], timeouts 1
+  T: 25/45 [0.41, 0.69], timeouts 0
+  both 20, only O 11, only T 5, neither 9; exact McNemar p = 0.21
+== pairs inside 21:00-22:00: 33 pairs
+  O: 24/33 [0.56, 0.85], timeouts 2
+  T: 11/33 [0.20, 0.50], timeouts 14
+  both 10, only O 14, only T 1, neither 8; exact McNemar p = 0.000977
+== timeouts by start time (final runs)
+  T: 14: 21:00 s116 r1, 21:02 s100 r1, 21:05 s126 r0, 21:11 s135 r0, 21:21 s101 r1, 21:21 s105 r1, 21:22 s122 r1, 21:22 s127 r0, 21:23 s117 r1, 21:25 s111 r1, 21:25 s114 r1, 21:38 s132 r1, 21:44 s115 r1, 21:44 s118 r1
+  O: 3: 20:44 s124 r0, 21:40 s101 r1, 22:01 s124 r1
+== runs killed at the cap that took longer than 905 s to end (all attempts)
+  T101 r1 1081 s (start 21:21), T105 r1 999 s (start 21:21), T122 r1 1007 s (start 21:22), T127 r0 1014 s (start 21:22), T117 r1 953 s (start 21:23), T111 r1 918 s (start 21:25), T114 r1 922 s (start 21:25), O101 r1 916 s (start 21:40), T115 r1 940 s (start 21:44), T118 r1 946 s (start 21:44)

@@ -146,3 +146,85 @@ cups and the die, the die hidden from the home camera) makes more.
    for Hani: a re-run on reserved nodes (--exclusive) to remove the load
    confound; the analysis of the under-the-cup failures; whether a later
    run carries d344d17's ring (its job script unchecked).
+8. PLANNED 2026-11-04 (Hani, to "Plan a re-run on reserved nodes to remove
+   the load confound?": "Yes, plan it").  The confound was not busy nodes
+   (BF#63 THE SLOW HOUR, eval/WINDOW.txt): from about 21:00 to 22:00 the
+   NFS volume under $W slowed every episode's planning on all ten nodes at
+   once (planning 15 to 24 times slower, execution steps unchanged, other
+   users' CPUs on the nodes flat); all 14 TAMPURA timeouts began in that
+   hour; outside it the pairs split 11 to 5 (p = 0.21, 45 pairs).
+   Reserved nodes would not remove it (they reserve CPUs and memory, not
+   the volume) and none is free (all 16 rleap_cpu nodes shared, 221 jobs
+   pending at 11:40; BF#53 found an 11 h wait).  At 11:53 the volume still
+   took up to 0.93 s to open a file and 0.96 s for a 4 kB write with fsync
+   from cn-04 (local disk 0.02 s).
+   RUN 2, declared before it runs:
+   - What changes: gen_eval.sbatch's P4_LOCAL=1 mode.  The job's whole
+     folder (episode folders, where planning writes its PDDL and temp
+     files; records; failures/) is on the node's own /tmp, and at the end
+     it becomes one tarball, $W/results/gen_<sha>/<job>.tar.gz.  The code
+     and the venvs stay on $W (only read; 5.4 + 6.8 GB, too big to copy
+     per node).  An I/O probe logs every 20 s (OUT/io_probe.tsv) the
+     seconds to open a file on $W, to write 4 kB with fsync there and the
+     same on the local disk.
+   - Code: the commit of this phase = f07eef2 + the job script; its
+     pipeline differs from run 1's b2c6c5d only in the final overviews
+     (811eda1, d344d17: the die ringed from the world eye's last record,
+     1024 x 768), drawn after the rollout and its record.  Before the push:
+     git diff --stat b2c6c5d <sha> lists no other pipeline file.
+   - The same as run 1: scenes 100-139, 2 repetitions, scenes outer, T then
+     O per scene on one node, the 900 s cap, BF#62's four switches, the
+     validity rule, --shots failures, 10 jobs of 4 scenes (100-103 ...
+     136-139), one per node (-w, nodes by free CPUs just before), 8 CPUs
+     and 24 GB each.  Submit: sbatch -w cn-1xx --export=ALL,P4_LOCAL=1
+     $W/sb_<sha>/tools/cluster/gen_eval.sbatch sb_<sha> <seeds> 2
+     $W/results/gen_<sha>
+   - Headline: run 2 alone, reported as run 1 (REPORT.txt: per arm the
+     counted runs, successes with Wilson 95 %, timeouts, not counted; the
+     pairs with the exact McNemar p; per cup; walls).  Runs 1 and 2 are
+     not pooled; run 1 stays in BF#63 with its slow hour.  Beside it: the
+     agreement of runs 1 and 2 per (arm, scene, repetition).
+   - Stall rule (fixed now): run 2's episodes write nothing to $W, so what
+     can still slow them is opening files there (every start-up imports
+     some thousand files from the venvs and the snapshot).  A stall is two
+     consecutive probe rows (40 s) with the open on $W at 1 s or more
+     (some 200 times a normal open).  The report lists every pair whose T
+     or O run overlaps a stall and gives the result without them beside
+     the headline; the write latencies on $W are reported per job (median,
+     maximum) as the volume's state, not used to flag.  No pair is re-run
+     for a stall; if stalls overlap more than a tenth of the pairs, the
+     run is reported as it is and a further run is Hani's call.  Read
+     beside it: arm O's planning-call times against run 1's outside the
+     slow hour.
+   - Time: about an hour (run 1's first repetition took 14 to 23 min per
+     job outside the slow hour; one job at most 4 scenes x 2 repetitions x
+     2 arms x 900 s = 4 h).  Data: about 324 MiB as run 1, as ten
+     tarballs; counted usage 816 MiB of 1024 before, and the push's
+     prune_work compacts slip_cff9bc5 (490 MiB, due since 00:50).
+   - Pull: from each tarball the evidence files (results.jsonl,
+     metadata.json, the gates, g13_before.json, io_probe.tsv, failures/)
+     and the job log into eval2/<job>/; the tarballs stay under
+     prune_work's retention.
+   Checked on the laptop before asking (scratchpad trap_test.sh and
+   bf63_e2e2.sh): the exit paths on stubs (the gates fail: rc 1 and the
+   tarball; SIGTERM to the process group mid-harness: rc 143 and the
+   tarball; an existing tarball: nothing run; no local folder, probe file
+   or process left in each), then the job script end to end with
+   P4_LOCAL=1 in WSL on scene 113 (f07eef2's code-only archive with the
+   new job script, P4_WORK and P4_LOCAL_DIR under /root/bf63_e2e, under
+   the pipeline lock), 12:05 to 12:15: rc 0 after 264 s; every gate PASS
+   before (G2 46 hits all reviewed and G7 no scene literal, with the ring
+   code), T success 154.7 s, O success 44.1 s (1 carry, 0 losses), the
+   tree check after "unchanged", one tarball (92 kB: results.jsonl,
+   metadata.json, the gates, g13_before.json, io_probe.tsv with 13 rows,
+   T/ and O/), the local folder removed, no probe file left, prune_work,
+   GEN_DONE.  Then the harness alone with --shots all: rc 0, T success
+   190.8 s, O success 14.9 s; O's folder holds overview_final.png with the
+   die ringed and named in the gripper (looked at), overview_final_top.png
+   (the held die outside its frame, so no ring), two eye images,
+   eye_last.json, the console tail and meta.json.  A first attempt at
+   12:03 ran no episode: the harness's MACHINE check found another
+   pipeline process alive (the parent session's headless watch run of
+   seed 118) and stopped, as it should.  Between the check and the
+   commit, HEAD moved from f07eef2 to 330e5e8 (README.md, run.ps1,
+   tools/watch.ps1: laptop launcher files the cluster never runs).
