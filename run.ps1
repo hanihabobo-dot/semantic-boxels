@@ -3,6 +3,9 @@
 # work from anywhere; from the repository root `.\run` works as well.
 #   run                        the bridge episode on TAMPURA's find_dice, seed 0, in the GUI
 #   run tampura -Seed 7        another seed
+#   run tampura -Seed [118, 102, 103] -Gen   several seeds (also 118,102,103 or 118 102 103),
+#                              one run after another, then a line for each; closing a GUI
+#                              window goes on with the next seed, Ctrl-C stops the list
 #   run tampura -Headless      no GUI: the console only (a diagnostic run, never scored;
 #                              it goes on past a G19 scene mismatch like a GUI run)
 #   run tampura -Seed 118 -Gen a scene from their own generator (BF#63's seeds 100 to 139)
@@ -26,7 +29,7 @@
 # mode, so nothing on this side ever sees the key).
 param(
     [Parameter(Position = 0)][string]$What = 'tampura',
-    [int]$Seed = 0,
+    [string[]]$Seed = '0',
     [switch]$Headless,
     [switch]$Gen,
     [string]$Scene = 'random-pairs',
@@ -48,7 +51,7 @@ $PY = '/root/armO-venvA/bin/python'
 $PROCS = "tr -d '\r' < $S/tools/run_procs.sh | bash -s --"
 
 if ($What -in 'help', '-h', '--help', '/?', '?') {
-    Get-Content $PSCommandPath | Select-Object -First 19 | ForEach-Object { $_ -replace '^# ?', '' }
+    Get-Content $PSCommandPath | Select-Object -First 22 | ForEach-Object { $_ -replace '^# ?', '' }
     return
 }
 if ($What -in 'ps', 'status') {
@@ -67,6 +70,30 @@ if ($What -notin 'tampura', 'boxels') {
     exit 2
 }
 
+# -Seed takes one seed or a list, run one after another: 7, 118,102 or
+# [118, 102, 103] as typed (PowerShell hands the brackets over as text).
+# Seeds with only spaces between them land in $Rest ahead of any pipeline
+# flag (a flag's value never comes first) and join the list from there.
+while ($Rest.Count -gt 0 -and "$($Rest[0])" -match '^[\[\]\d,\s]+$') {
+    $Seed += $Rest[0]
+    $Rest = @($Rest | Select-Object -Skip 1)
+}
+$seeds = @(($Seed -join ',') -split '[\s,\[\]]+' | Where-Object { $_ })
+if ($seeds.Count -eq 0 -or @($seeds | Where-Object { $_ -notmatch '^\d+$' }).Count -gt 0) {
+    Write-Host "run: -Seed takes a seed or a list (7, 118,102 or [118, 102, 103]), not '$($Seed -join ' ')'" -ForegroundColor Yellow
+    exit 2
+}
+$seeds = @($seeds | ForEach-Object { [int]$_ })
+if ($What -eq 'tampura' -and $Gen) {
+    $missing = @($seeds | Where-Object {
+        -not (Test-Path -LiteralPath (Join-Path $PSScriptRoot "tampura_bridge/gen_scenes/find_dice/find_dice_gen_s$_.json")) })
+    if ($missing.Count -gt 0) {
+        $word = if ($missing.Count -gt 1) { 'seeds' } else { 'seed' }
+        Write-Host "run: no generated scene for $word $($missing -join ', ') (BF#63's are 100 to 139)" -ForegroundColor Yellow
+        exit 2
+    }
+}
+
 $sw = if ($Off) { ' --m8 off --m9 off --m10 off --pick-aperture-from-pose off' } else { '' }
 if ($Squeeze -gt 0) {
     $sw += ' --grip-squeeze-mm ' + $Squeeze.ToString([cultureinfo]::InvariantCulture)
@@ -74,102 +101,145 @@ if ($Squeeze -gt 0) {
 if ($Screenshots) { $sw += ' --save-screenshots on' }
 $extra = (@($Args) + @($Rest) | Where-Object { $_ -and $_ -ne '--' }) -join ' '
 if ($extra) { $extra = ' ' + $extra }
+$audio = if ($Music) { 'on' } elseif ($Sfx) { 'sfx' } else { '' }
 
-# $mine: text found in this run's command line and no other's, for ending this run alone.
-if ($What -eq 'tampura') {
-    $stamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
-    $vis = if ($Headless) { 0 } else { 1 }
-    $kind = if ($Headless) { 'headless' } else { 'watch' }
-    $g19 = if ($Headless) { ' --allow-g19-mismatch 1' } else { '' }
-    $mine = "${kind}_s${Seed}_$stamp"
-    $save = "$S/archive/tampura_bridge_plan_2026-10-25/bf/gui_runs/$mine"
-    $run = "PYTHONPATH=$S`:$S/pddlstream_lib`:`$TW/tampura`:`$TW/tampura_environments " +
-           "PYTHONHASHSEED=0 $PY $S/tampura_bridge/run_bridge_on_finddice.py " +
-           "--global-seed $Seed --vis $vis --save-dir $save$g19$sw$extra"
-    if ($Gen) {
-        # BF#63: their loader picks a random file of tampura_environments/
-        # find_dice/problems under the cwd, so the run starts in a directory
-        # holding only this scene (as tools/gen_scene_eval.py does); the
-        # manifest pins it for G19.  The directory goes when the run ends
-        # (run_procs.sh ends the python, never this bash, so the trap runs).
-        $json = "tampura_bridge/gen_scenes/find_dice/find_dice_gen_s${Seed}.json"
-        if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot $json))) {
-            Write-Host "run: no generated scene for seed $Seed (BF#63's are 100 to 139)" -ForegroundColor Yellow
-            exit 2
+# One seed's run, built when it starts (its folder is stamped with that time).
+# Mine: text found in this run's command line and no other's, for ending this
+# run alone; Record: its episode record (tampura only).  (Not $s: PowerShell
+# names ignore case, and $S is the checkout.)
+function New-Run([int]$seedNo) {
+    $record = $null
+    if ($What -eq 'tampura') {
+        $stamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
+        $vis = if ($Headless) { 0 } else { 1 }
+        $kind = if ($Headless) { 'headless' } else { 'watch' }
+        $g19 = if ($Headless) { ' --allow-g19-mismatch 1' } else { '' }
+        $mine = "${kind}_s${seedNo}_$stamp"
+        $save = "$S/archive/tampura_bridge_plan_2026-10-25/bf/gui_runs/$mine"
+        $record = Join-Path $PSScriptRoot "archive/tampura_bridge_plan_2026-10-25/bf/gui_runs/$mine/bridge_episode.json"
+        $run = "PYTHONPATH=$S`:$S/pddlstream_lib`:`$TW/tampura`:`$TW/tampura_environments " +
+               "PYTHONHASHSEED=0 $PY $S/tampura_bridge/run_bridge_on_finddice.py " +
+               "--global-seed $seedNo --vis $vis --save-dir $save$g19$sw$extra"
+        if ($Gen) {
+            # BF#63: their loader picks a random file of tampura_environments/
+            # find_dice/problems under the cwd, so the run starts in a directory
+            # holding only this scene (as tools/gen_scene_eval.py does); the
+            # manifest pins it for G19.  The directory goes when the run ends
+            # (run_procs.sh ends the python, never this bash, so the trap runs).
+            $json = "tampura_bridge/gen_scenes/find_dice/find_dice_gen_s${seedNo}.json"
+            $D = "/root/run_gen_$mine"
+            $cmd = "TW=/root/tampura-work; trap 'rm -rf $D' EXIT; " +
+                   "mkdir -p $D/tampura_environments/find_dice/problems && " +
+                   "cp $S/$json $D/tampura_environments/find_dice/problems/ && " +
+                   "ln -s `$TW/tampura_environments/env_configs $D/env_configs && cd $D && " +
+                   "BRIDGE_SCENE_MANIFEST=$S/tampura_bridge/gen_scenes/find_dice/manifest.json $run"
+        } else {
+            $cmd = "TW=/root/tampura-work; cd `$TW/tampura_environments && $run"
         }
-        $D = "/root/run_gen_$mine"
-        $cmd = "TW=/root/tampura-work; trap 'rm -rf $D' EXIT; " +
-               "mkdir -p $D/tampura_environments/find_dice/problems && " +
-               "cp $S/$json $D/tampura_environments/find_dice/problems/ && " +
-               "ln -s `$TW/tampura_environments/env_configs $D/env_configs && cd $D && " +
-               "BRIDGE_SCENE_MANIFEST=$S/tampura_bridge/gen_scenes/find_dice/manifest.json $run"
     } else {
-        $cmd = "TW=/root/tampura-work; cd `$TW/tampura_environments && $run"
+        $nogui = if ($Headless) { ' --no-gui' } else { '' }
+        $mine = "test_full_pipeline.py$nogui --scene $Scene --seed $seedNo --goal $Goal --n-occluders $Occluders"
+        $cmd = "cd $S && PYTHONHASHSEED=0 $PY $mine$sw$extra"
     }
-} else {
-    $nogui = if ($Headless) { ' --no-gui' } else { '' }
-    $mine = "test_full_pipeline.py$nogui --scene $Scene --seed $Seed --goal $Goal --n-occluders $Occluders"
-    $cmd = "cd $S && PYTHONHASHSEED=0 $PY $mine$sw$extra"
+    if ($audio) { $cmd = "export SB_AUDIO=$audio; " + $cmd }
+    if ($Voice) { $cmd = 'export SB_VOICE=on; ' + $cmd }
+    [pscustomobject]@{ Seed = $seedNo; Cmd = $cmd; Mine = $mine; Record = $record }
 }
 
-$audio = if ($Music) { 'on' } elseif ($Sfx) { 'sfx' } else { '' }
-if ($audio) { $cmd = "export SB_AUDIO=$audio; " + $cmd }
-if ($Voice) { $cmd = 'export SB_VOICE=on; ' + $cmd }
 if ($DryRun) {
-    Write-Output $cmd
+    foreach ($one in $seeds) { Write-Output (New-Run $one).Cmd }
     return
 }
-$busy = wsl -e bash -c "$PROCS list"
-if ($busy) {
-    Write-Host "run: another pipeline run is going, never two at once (pddlstream temp/ race):" -ForegroundColor Yellow
-    $busy | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
-    Write-Host "  a ghost (its window closed, its terminal gone)?   run kill   ends them all" -ForegroundColor Yellow
-    exit 2
-}
 
-# The run is a child process polled from here, not a blocking call, so the
+# Each run is a child process polled from here, not a blocking call, so the
 # GUI window can be watched meanwhile: WSLg shows it to Windows as an
 # msrdc.exe window titled 'Bullet Physics ...'; once seen and then gone
 # while the run goes on, the run is ended (BF#51).  Ctrl-C goes to wsl.exe,
 # which holds the console in raw mode and forwards it to the run as SIGINT;
 # the console (console_ui) lets SIGINT end the process at the kernel level,
-# so a stuck run dies of it too and this script just sees the exit.
-$psi = [System.Diagnostics.ProcessStartInfo]::new('wsl.exe')
-foreach ($a in '-e', 'bash', '-lc', $cmd) { $psi.ArgumentList.Add($a) }
-$psi.UseShellExecute = $false
-$t0 = Get-Date
-$p = [System.Diagnostics.Process]::Start($psi)
-$seen = $false
-$ended = ''
-try {
-    while (-not $p.HasExited) {
-        Start-Sleep -Milliseconds 700
-        if ($Headless -or $ended) { continue }
-        $open = @(Get-Process -Name msrdc -ErrorAction SilentlyContinue |
-                  Where-Object { $_.MainWindowTitle -like '*Bullet Physics*' }).Count
-        if ($open -gt 0) { $seen = $true }
-        elseif ($seen) {
-            # A run that is ending closes its own window: give it a moment.
-            if (-not $p.WaitForExit(3000)) {
-                $ended = 'the window was closed'
-                $null = wsl -e bash -c "$PROCS kill-mine '$mine' $([int]((Get-Date) - $t0).TotalSeconds + 60)"
+# so a stuck run dies of it too and this script just sees the exit (130).
+# In a list, a closed window ends that seed's run and the next one starts;
+# Ctrl-C stops the list.
+$many = $seeds.Count -gt 1
+$done = @()
+$code = 0
+for ($i = 0; $i -lt $seeds.Count; $i++) {
+    $busy = wsl -e bash -c "$PROCS list"
+    if ($busy) {
+        Write-Host "run: another pipeline run is going, never two at once (pddlstream temp/ race):" -ForegroundColor Yellow
+        $busy | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+        Write-Host "  a ghost (its window closed, its terminal gone)?   run kill   ends them all" -ForegroundColor Yellow
+        $code = 2
+        break
+    }
+    $r = New-Run $seeds[$i]
+    if ($many) { Write-Host "run: seed $($r.Seed), $($i + 1) of $($seeds.Count)" -ForegroundColor Cyan }
+    $psi = [System.Diagnostics.ProcessStartInfo]::new('wsl.exe')
+    foreach ($a in '-e', 'bash', '-lc', $r.Cmd) { $psi.ArgumentList.Add($a) }
+    $psi.UseShellExecute = $false
+    $t0 = Get-Date
+    $p = [System.Diagnostics.Process]::Start($psi)
+    $seen = $false
+    $ended = ''
+    try {
+        while (-not $p.HasExited) {
+            Start-Sleep -Milliseconds 700
+            if ($Headless -or $ended) { continue }
+            $open = @(Get-Process -Name msrdc -ErrorAction SilentlyContinue |
+                      Where-Object { $_.MainWindowTitle -like '*Bullet Physics*' }).Count
+            if ($open -gt 0) { $seen = $true }
+            elseif ($seen) {
+                # A run that is ending closes its own window: give it a moment.
+                if (-not $p.WaitForExit(3000)) {
+                    $ended = 'the window was closed'
+                    $null = wsl -e bash -c "$PROCS kill-mine '$($r.Mine)' $([int]((Get-Date) - $t0).TotalSeconds + 60)"
+                }
             }
         }
+    } finally {
+        if (-not $p.HasExited -and -not $p.WaitForExit(3000)) {
+            # This script was stopped while the run goes on (a closed host, a
+            # Stop-Process): the run gets 3 s to end by itself, then it is ended here.
+            $ended = 'the launcher was stopped'
+            $null = wsl -e bash -c "$PROCS kill-mine '$($r.Mine)' $([int]((Get-Date) - $t0).TotalSeconds + 60)"
+            $null = $p.WaitForExit(5000)
+        }
+        # The console hides the cursor while a step runs; show it whatever happened.
+        [Console]::Out.Write("`e[?25h")
+        if ($ended) {
+            [Console]::Out.WriteLine("run: $ended, so the run was ended from here; nothing of it is left in WSL")
+        } elseif ($p.HasExited -and $p.ExitCode -eq 130) {
+            [Console]::Out.WriteLine('run: interrupted (Ctrl-C ends the run at once; its files stay as they were)')
+        }
     }
-} finally {
-    if (-not $p.HasExited -and -not $p.WaitForExit(3000)) {
-        # This script was stopped while the run goes on (a closed host, a
-        # Stop-Process): the run gets 3 s to end by itself, then it is ended here.
-        $ended = 'the launcher was stopped'
-        $null = wsl -e bash -c "$PROCS kill-mine '$mine' $([int]((Get-Date) - $t0).TotalSeconds + 60)"
-        $null = $p.WaitForExit(5000)
-    }
-    # The console hides the cursor while a step runs; show it whatever happened.
-    [Console]::Out.Write("`e[?25h")
-    if ($ended) {
-        [Console]::Out.WriteLine("run: $ended, so the run was ended from here; nothing of it is left in WSL")
-    } elseif ($p.HasExited -and $p.ExitCode -eq 130) {
-        [Console]::Out.WriteLine('run: interrupted (Ctrl-C ends the run at once; its files stay as they were)')
-    }
+    $code = $p.ExitCode
+    $done += [pscustomobject]@{ Seed = $r.Seed; Code = $code; Ended = $ended
+                                Wall = [int]((Get-Date) - $t0).TotalSeconds; Record = $r.Record }
+    if ($code -eq 130) { break }
 }
-exit $p.ExitCode
+
+if ($many) {
+    # One line per seed: the record's outcome (success, failure, crashed,
+    # gate_failed) where there is one, else what the exit says; then the
+    # seeds a refusal or Ctrl-C left out.
+    Write-Host ''
+    Write-Host "run: $($done.Count) of $($seeds.Count) seeds run, one after another"
+    foreach ($x in $done) {
+        $status = if ($x.Ended) { 'window closed' } elseif ($x.Code -eq 130) { 'interrupted' }
+                  elseif ($x.Code -eq 0) { 'success' } else { "exit $($x.Code)" }
+        $folder = ''
+        if ($x.Record) {
+            $folder = Split-Path (Split-Path $x.Record -Parent) -Leaf
+            if (-not $x.Ended -and $x.Code -ne 130 -and (Test-Path -LiteralPath $x.Record)) {
+                try { $status = (Get-Content -Raw -LiteralPath $x.Record | ConvertFrom-Json).outcome.status } catch { }
+            }
+        }
+        $color = if ($status -eq 'success') { 'Green' } else { 'Yellow' }
+        Write-Host ("  seed {0,-5} {1,-14} {2,5} s   {3}" -f $x.Seed, $status, $x.Wall, $folder) -ForegroundColor $color
+    }
+    $left = @($seeds | Select-Object -Skip $done.Count)
+    if ($left.Count -gt 0) { Write-Host "  not run: $($left -join ', ')" -ForegroundColor Yellow }
+    # The list's exit: 2 refused, 130 interrupted, else 0 when every run succeeded.
+    if ($code -notin 2, 130) { $code = [int](@($done | Where-Object { $_.Code -ne 0 }).Count -gt 0) }
+}
+exit $code

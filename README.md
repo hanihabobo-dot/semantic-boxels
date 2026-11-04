@@ -29,6 +29,7 @@ python3 -u test_full_pipeline.py --no-gui --scene random-pairs --seed 0 --goal h
 ```powershell
 run                          # the bridge episode on TAMPURA's find_dice, seed 0, in the GUI
 run tampura -Seed 7          # another seed
+run tampura -Seed [118, 102, 103] -Gen   # several seeds, one run after another (also 118,102,103 or 118 102 103)
 run tampura -Headless        # no GUI, the console only; a diagnostic run, never scored
 run tampura -Seed 118 -Gen   # a scene from TAMPURA's own generator (BF#63's seeds 100 to 139)
 boxels                       # our own random-pairs scene, seed 0, in the GUI (same as: run boxels)
@@ -40,7 +41,7 @@ run kill                     # end every one of them
 run help                     # the usage header of run.ps1
 ```
 
-`boxels` runs `test_full_pipeline.py --scene random-pairs --seed 0 --goal holding --n-occluders 2`; `-Scene`, `-Seed`, `-Goal` and `-Occluders` change those values, and a run's files land in `logs/run_<timestamp>/`. `run tampura` runs the bridge driver (below), with its files under `archive/tampura_bridge_plan_2026-10-25/bf/gui_runs/`.
+`boxels` runs `test_full_pipeline.py --scene random-pairs --seed 0 --goal holding --n-occluders 2`; `-Scene`, `-Seed`, `-Goal` and `-Occluders` change those values, and a run's files land in `logs/run_<timestamp>/`. `run tampura` runs the bridge driver (below), with its files under `archive/tampura_bridge_plan_2026-10-25/bf/gui_runs/`. With several seeds the runs go one after another and end with one line per seed (its outcome, wall time and, for `run tampura`, its folder); closing a GUI window goes on with the next seed, Ctrl-C stops the list, and so does another pipeline run still going when the next seed is due.
 
 | Switch | Effect |
 |--------|--------|
