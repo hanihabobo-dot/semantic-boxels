@@ -4,6 +4,7 @@ runtime gate, and the phantom overlay it replaces does not: a createMultiBody
 there is a G14 violation, which is why audit R4.2 turned the overlay off and
 why the bridge never takes the phantoms.  The option is off by default and the
 driver refuses a kind it does not know."""
+import ast
 import os
 import subprocess
 import sys
@@ -95,10 +96,70 @@ def test_drawing_is_off_by_default_and_boxels_is_the_one_kind():
     assert policy.DRAW_KINDS == ('boxels',)
 
 
-def test_the_driver_refuses_a_kind_it_does_not_know():
+def test_the_driver_refuses_a_kind_it_does_not_know(tmp_path):
     driver = os.path.join(REPO, 'tampura_bridge', 'run_bridge_on_finddice.py')
+    # HOME in tmp_path: the console writes its start-up debug file under
+    # ~/.cache/semantic_boxels, which no tool sweeps; a test run leaves none there.
     proc = subprocess.run(
         [sys.executable, driver, '--global-seed', '0', '--draw', 'boxles'],
-        capture_output=True, text=True, timeout=300)
+        capture_output=True, text=True, timeout=300,
+        env=dict(os.environ, HOME=str(tmp_path)))
     assert proc.returncode == 2
-    assert 'boxels' in proc.stderr and 'boxles' in proc.stderr
+    # The driver's console takes fds 1 and 2 over and shows argparse's text on
+    # its terminal stream (stdout here), so both streams are read.  The usage
+    # block names --draw but not the bad kind: only the refusal says "not boxles".
+    out = proc.stdout + proc.stderr
+    assert '--draw takes boxels' in out and 'not boxles' in out, out
+
+
+# What a unit test cannot run is execute_fn (a whole TAMPURA world) or a GUI
+# session, and the keywords at three call sites decide the whole feature: so
+# they are pinned as written.  A change of any of them fails here, not only in
+# the first GUI run.
+def _tree(*parts):
+    with open(os.path.join(REPO, *parts), encoding='utf-8') as f:
+        return ast.parse(f.read())
+
+
+def _calls(tree, name):
+    """Every call in tree to `name` or `x.name`."""
+    out = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Call):
+            f = n.func
+            if (f.attr if isinstance(f, ast.Attribute) else getattr(f, 'id', None)) == name:
+                out.append(n)
+    return out
+
+
+def _kw(call, name):
+    return {k.arg: ast.unparse(k.value) for k in call.keywords}.get(name)
+
+
+def test_the_bridge_asks_main_for_lines_only_and_only_on_request():
+    mains = [c for c in _calls(_tree('tampura_bridge', 'policy.py'), 'main')
+             if ast.unparse(c.func) == 'test_full_pipeline.main']
+    assert len(mains) == 1
+    assert _kw(mains[0], 'draw_boxel_overlays') == "'boxels' in cfg.draw"
+    assert _kw(mains[0], 'overlay_bodies') == 'False'
+
+
+def test_main_builds_a_lines_only_visualizer_from_overlay_bodies():
+    tree = _tree('test_full_pipeline.py')
+    (main,) = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main']
+    pos = main.args.args
+    defaults = dict(zip([a.arg for a in pos[len(pos) - len(main.args.defaults):]],
+                        map(ast.unparse, main.args.defaults)))
+    # `run boxels` and every other caller keep the phantom overlay
+    assert defaults['overlay_bodies'] == 'True'
+    assert [_kw(c, 'phantoms') for c in _calls(main, 'BoxelVisualizer')] == ['overlay_bodies']
+    assert not [c for c in _calls(tree, 'main') if _kw(c, 'overlay_bodies') is not None]
+
+
+def test_the_driver_passes_the_kinds_on_and_draws_nothing_by_default():
+    tree = _tree('tampura_bridge', 'run_bridge_on_finddice.py')
+    (cfg,) = _calls(tree, 'EpisodeConfig')
+    assert _kw(cfg, 'draw') == 'frozenset(draw)'
+    flag = [c for c in _calls(tree, 'add_argument') if c.args
+            and ast.unparse(c.args[0]) == "'--draw'"]
+    assert len(flag) == 1 and _kw(flag[0], 'default') == "''"
