@@ -27,23 +27,41 @@ Read BRIEF.md first; this file says where the work stands.
   decisions and rules, 07 the TAMPURA cost probe). The probe's WSL folder
   (25 MB) was deleted at 12:58 after its text evidence went to
   `work/understand/07_probe_evidence/` (DATA_LEDGER.md, Kept and Deleted).
-- 2026-11-06 13:00: Hani started the dev tracks
+- 2026-11-06 13:40: Hani started the dev tracks
   (`../tracks/STATE.md`, BF#68): the session "Go" orchestrates four
   paths. This plan stays HELD and its phase 1 goes to path 2 (which
   TAMPURA tasks give SB a quick result) as input; whether the plan
   resumes when the argument below is final is Hani's call.
+- 2026-11-06 14:14: the argument is final
+  (`../wire_sb_into_tampura/ARGUMENT.md` section 12, "survives with
+  changes"; REVIEW.md beside it) and releases this plan's Route hold
+  (ARGUMENT.md:284, 600). Its inputs for Route:
+  - section 3.2: SB "in mode S", with possible_fruit and is_fruit as
+    K-literals, inspect as a sense whose optimistic outcome is "not a
+    fruit", pick gated on a known class, drop to the bowl region, and the
+    literals read from their abstract belief, declared; expected 3 + 2k
+    steps for k fruits;
+  - the conflict with the no-object-model rule: their pick takes saved
+    grasps and sim-world poses by body id (ARGUMENT.md:282), which this
+    plan's D-1, D-2 and D-7 weigh;
+  - W9: (a) their pick, models in execution for both arms; (b) our
+    grasps from our renders wrapped as their Grasp; (c) leave
+    class_uncertain to this plan, recommended (ARGUMENT.md:648-653);
+  - W5 (a): reads of their literals declared and counted;
+  - W6 (b): the world-state test primary, their reward beside it.
+
+  Its questions would also take Q19 onward if logged; whichever is logged
+  second takes the next free numbers (ARGUMENT.md:602).
 - NOW: phase 1 reported to Hani (the D-list below, in full). Phase 2
-  (Route) is HELD until `../wire_sb_into_tampura/ARGUMENT.md` carries its
-  final verdict (its author writes it, a fresh reviewer writes REVIEW.md,
-  the author answers under "Review and answers" and ends with the
-  verdict). The Project status session
-  (local_703e54b0-db94-4f4f-a93b-57d54ad77738) messages this session when
-  it is final.
+  (Route) waits for Hani's answer: resume now, or after path 2's ranking
+  of TAMPURA's tasks (asked 14:15 and again 14:25; recommended: after
+  path 2).
 
 ## Phases (BRIEF.md, "How to run it")
 
 1. Understand: DONE (above).
-2. Design: two or three route designs, judged. HELD (the argument above).
+2. Design: two or three route designs, judged. HELD on Hani's answer (the
+   argument is final since 14:14 and released its side of the hold).
 3. Adversarial verification of every cite in the chosen plan.
 4. Completeness critic, which also hunts for unlisted deviations.
 5. PLAN.md, BF#67, the `go` section of CLAUDE.md deleted, local commit.
