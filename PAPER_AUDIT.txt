@@ -9433,10 +9433,39 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   misses its Table 2.  Path 3: the four-agent review-round only for its
   larger fixes (TB-1, TB-8), with Sonnet reviewers; `run kill` will end
   only the runs `run` started (TB-17).  Still open: the cluster A/B of
-  BF#64's fix and path 6's plan, each confirmed on its own.
+  BF#64's fix and path 6's plan, each confirmed on its own.  Go folded
+  the A/B into path 6's plan as its arm A' (the tag plus TB-1 on path 6's
+  200 fresh find_dice scenes) and confirmed the plan (tracks/eval/
+  PLAN.md v1.3, about 53 node-hours); Hani's yes to the cluster run is
+  still open.
   The class_uncertain plan (BF#67) stays held; its phase 1 is path 2's
-  input.
-  EVIDENCE: tracks/STATE.md, the six briefs, tracks/stable_check/.
+  input.  Path 2's ranking is in (tracks/tasks/TRIAGE.md): with SB's
+  planning layer on TAMPURA's execute layer, class_uncertain scores 18 of
+  20 under their reward and 17 of 20 by the world-state test (their
+  random policy 0 of 5), slam_collect 17 and 21 of 25; its questions Q40
+  to Q45 are open, and resuming the plan is Hani's call.
+  MERGES INTO THE TRUNK: TB-16 (run.ps1 runs the checkout it lives in) as
+  564ff5b; track/draw as afd80a3 (`run tampura -Draw boxels`, a merge of
+  b43f962).  -Draw boxels draws the registry as debug lines and labels
+  only, and without -Draw nothing changes (the commands run.ps1 -DryRun
+  builds are byte-equal in five default cases; the equivalence pairs are
+  in tracks/draw/evidence/).  It amends R4.2: every bridge run passes
+  draw_boxel_overlays=False unless -Draw boxels is given, and then the
+  overlay creates, moves and removes no body on the executing client, so
+  G14 stays armed (tracks/draw/evidence/AUDIT_NOTE.md).
+  FINDING (Go, while reviewing path 6's plan): run_logger.py calls every
+  failed run without a give-up reason "timeout" (6b00cd7 :256-260, the
+  tag :467-471).  In the thesis sweep's semantic-auto stack cells, 25 of
+  the 29 "timeout" rows ended after 8 to 21 s: they are the CB#122 case
+  (a symbolic stack success that the end-of-run physics rejected,
+  physics_mismatch at the tag); 4 of the 29 reached the 1800 s budget.
+  thesis/chapters/results.tex:85 counts all of them as cells that reached
+  the budget: its 24 % on stack (16 % on holding, 31 % on
+  find-and-tray-stack) is the "timeout" share of the semantic,
+  semantic+mbs0.05 and uniform arms (65 of 270 stack cells).  Path 6's
+  report counts a timeout only for the runner's stub at the cap.
+  EVIDENCE: tracks/STATE.md, the six briefs, tracks/stable_check/,
+  tracks/draw/evidence/, tracks/eval/PLAN.md.
   CLAIM EFFECT: none.  HONESTY CLASS: process decision, no pipeline
   change.
 
