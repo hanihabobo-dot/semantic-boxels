@@ -18,6 +18,8 @@
 #   run tampura -Music         8-bit music and effects that follow the run (Windows plays them);
 #                              -Sfx   the effects only;  -Voice   Windows' voice reads the narration too
 #   run boxels -Args '--n-extra-distractors 1'   more pipeline flags, one quoted string, as is
+#   run wumpus -Seed 3         the 3-D Wumpus world (path 4), explore test controller, GUI;  -Size 10 (default 5),
+#                              -Headless;  [3, 4] runs a list as above
 #   run ps                     the pipeline processes alive in WSL;  run kill   ends every one of them
 #   run help                   this text;  -DryRun prints the command instead of running it
 # Never two pipeline runs at once (pddlstream temp/ race): it refuses while one is going.
@@ -31,6 +33,7 @@ param(
     [Parameter(Position = 0)][string]$What = 'tampura',
     [string[]]$Seed = '0',
     [switch]$Headless,
+    [int]$Size = 5,
     [switch]$Gen,
     [string]$Scene = 'random-pairs',
     [string]$Goal = 'holding',
@@ -51,7 +54,7 @@ $PY = '/root/armO-venvA/bin/python'
 $PROCS = "tr -d '\r' < $S/tools/run_procs.sh | bash -s --"
 
 if ($What -in 'help', '-h', '--help', '/?', '?') {
-    Get-Content $PSCommandPath | Select-Object -First 22 | ForEach-Object { $_ -replace '^# ?', '' }
+    Get-Content $PSCommandPath | Select-Object -First 24 | ForEach-Object { $_ -replace '^# ?', '' }
     return
 }
 if ($What -in 'ps', 'status') {
@@ -65,8 +68,8 @@ if ($What -eq 'kill') {
     if ($gone) { $gone } else { Write-Host 'run: nothing to kill, no pipeline process is alive in WSL' -ForegroundColor DarkGray }
     exit $rc
 }
-if ($What -notin 'tampura', 'boxels') {
-    Write-Host "run: unknown target '$What' (tampura or boxels; run help)" -ForegroundColor Yellow
+if ($What -notin 'tampura', 'boxels', 'wumpus') {
+    Write-Host "run: unknown target '$What' (tampura, boxels or wumpus; run help)" -ForegroundColor Yellow
     exit 2
 }
 
@@ -136,6 +139,14 @@ function New-Run([int]$seedNo) {
         } else {
             $cmd = "TW=/root/tampura-work; cd `$TW/tampura_environments && $run"
         }
+    } elseif ($What -eq 'wumpus') {
+        $stamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
+        $vis = if ($Headless) { 0 } else { 1 }
+        $kind = if ($Headless) { 'headless' } else { 'watch' }
+        $mine = "wumpus_${kind}_n${Size}_s${seedNo}_$stamp"
+        $save = "$S/archive/tampura_bridge_plan_2026-10-25/tracks/wumpus/runs/$mine"
+        $record = Join-Path $PSScriptRoot "archive/tampura_bridge_plan_2026-10-25/tracks/wumpus/runs/$mine/episode.json"
+        $cmd = "cd $S && PYTHONHASHSEED=0 $PY $S/wumpus/run_wumpus.py --size $Size --seed $seedNo --vis $vis --save-dir $save$extra"
     } else {
         $nogui = if ($Headless) { ' --no-gui' } else { '' }
         $mine = "test_full_pipeline.py$nogui --scene $Scene --seed $seedNo --goal $Goal --n-occluders $Occluders"
@@ -231,7 +242,7 @@ if ($many) {
         if ($x.Record) {
             $folder = Split-Path (Split-Path $x.Record -Parent) -Leaf
             if (-not $x.Ended -and $x.Code -ne 130 -and (Test-Path -LiteralPath $x.Record)) {
-                try { $status = (Get-Content -Raw -LiteralPath $x.Record | ConvertFrom-Json).outcome.status } catch { }
+                try { $o = (Get-Content -Raw -LiteralPath $x.Record | ConvertFrom-Json).outcome; $status = if ($o.status) { $o.status } else { $o.outcome } } catch { }
             }
         }
         $color = if ($status -eq 'success') { 'Green' } else { 'Yellow' }
