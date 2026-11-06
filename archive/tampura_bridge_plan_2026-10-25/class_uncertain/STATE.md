@@ -55,7 +55,9 @@ Read BRIEF.md first; this file says where the work stands.
 - NOW: phase 1 reported to Hani (the D-list below, in full). Phase 2
   (Route) waits for Hani's answer: resume now, or after path 2's ranking
   of TAMPURA's tasks (asked 14:15 and again 14:25; recommended: after
-  path 2).
+  path 2). Since 15:10 that is the default unless Hani says otherwise:
+  resume when path 2 (`local_c0b7d721-3c95-4898-bf80-236b5f81d882`)
+  reports its ranking.
 
 ## Phases (BRIEF.md, "How to run it")
 
