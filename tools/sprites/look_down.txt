@@ -1,0 +1,71 @@
+key: look_down
+width: 12
+period_ms: 160
+pingpong: yes
+notes: the head camera looks down on the cell from above: a bright scan bar sweeps across it and lights the three marker spots (breeze tile, stench tile, gold bar) as it passes
+frame 1
+╭──────────╮
+│┃█      ██│
+│┃   ◉     │
+│┃       ██│
+╰──────────╯
+kkkkkkkkkkkk
+kCB      ggk
+kC   c     k
+kC       yyk
+kkkkkkkkkkkk
+frame 2
+╭──────────╮
+│██┃     ██│
+│  ┃ ◉     │
+│  ┃     ██│
+╰──────────╯
+kkkkkkkkkkkk
+kBBC     ggk
+k  C c     k
+k  C     yyk
+kkkkkkkkkkkk
+frame 3
+╭──────────╮
+│██  ┃   ██│
+│    ┃     │
+│    ┃   ██│
+╰──────────╯
+kkkkkkkkkkkk
+kbb  C   ggk
+k    C     k
+k    C   yyk
+kkkkkkkkkkkk
+frame 4
+╭──────────╮
+│██   ┃  ██│
+│    ◉┃    │
+│     ┃  ██│
+╰──────────╯
+kkkkkkkkkkkk
+kbb   C  ggk
+k    WC    k
+k     C  yyk
+kkkkkkkkkkkk
+frame 5
+╭──────────╮
+│██     ┃██│
+│    ◉  ┃  │
+│       ┃██│
+╰──────────╯
+kkkkkkkkkkkk
+kbb     CGGk
+k    c  C  k
+k       CYYk
+kkkkkkkkkkkk
+frame 6
+╭──────────╮
+│██      █┃│
+│    ◉    ┃│
+│        █┃│
+╰──────────╯
+kkkkkkkkkkkk
+kbb      GCk
+k    c    Ck
+k        YCk
+kkkkkkkkkkkk

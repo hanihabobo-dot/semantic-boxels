@@ -1,0 +1,93 @@
+key: grab
+width: 12
+period_ms: 180
+pingpong: no
+notes: the open gripper descends on the gold bar standing on its pedestal, the fingers close on its ends with a spark and it lifts the bar off, the gold glinting
+frame 1
+     ═╤═
+      │
+ ╵         ╵
+    ▄▄▄▄▄
+▔▔▔▔▐███▌▔▔▔
+     ccc
+      c
+ c         c
+    ddddd
+kkkkwwwwwkkk
+frame 2
+     ═╤═
+      │
+  ╵       ╵
+    ▄▄▄▄▄
+▔▔▔▔▐███▌▔▔▔
+     ccc
+      c
+  c       c
+    ddddd
+kkkkwwwwwkkk
+frame 3
+
+     ═╤═
+      │
+  ╵ ▄▄▄▄▄ ╵
+▔▔▔▔▐███▌▔▔▔
+
+     ccc
+      c
+  c ddddd c
+kkkkwwwwwkkk
+frame 4
+
+     ═╤═
+      │
+   ▐▄▄▄▄▄▌
+▔▔▔▔▐███▌▔▔▔
+
+     CCC
+      c
+   CYYYYYC
+kkkkwwwwwkkk
+frame 5
+
+     ═╤═
+ ✦    │   ✧
+   ▐▄▄▄▄▄▌
+▔▔▔▔▐███▌▔▔▔
+
+     CCC
+ W    c   Y
+   CYYYYYC
+kkkkwwwwwkkk
+frame 6
+     ═╤═
+      │
+   ▐▄▄▄▄▄▌
+
+▔▔▔▔▐███▌▔▔▔
+     ccc
+      c
+   cdddddc
+
+kkkkwwwwwkkk
+frame 7
+     ═╤═
+      │  ✦
+   ▐▄▄▄▄▄▌
+ ✧
+▔▔▔▔▐███▌▔▔▔
+     ccc
+      c  W
+   cYYYYYc
+ Y
+kkkkwwwwwkkk
+frame 8
+     ═╤═
+  ✧   │
+   ▐▄▄▄▄▄▌
+          ✦
+▔▔▔▔▐███▌▔▔▔
+     ccc
+  Y   c
+   cYYYYYc
+          W
+kkkkwwwwwkkk

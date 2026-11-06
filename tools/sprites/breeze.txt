@@ -1,0 +1,71 @@
+key: breeze
+width: 12
+period_ms: 150
+pingpong: no
+notes: three wavy wind streams curl across from the left over a light blue floor tile (the breeze marker), a few specks drifting with them
+frame 1
+≈≈≈≈≈≈╮
+∿╯   ∿∿∿∿∿∿∿
+≈╮      ≈≈≈≈
+ ·     ·
+▔▔▔▀▀▀▀▀▀▔▔▔
+ccccccB
+BB   BBBBBBB
+cB      cccc
+ c     k
+kkkBBBBBBkkk
+frame 2
+  ≈≈≈≈≈≈╮
+∿∿∿╯   ∿∿∿∿∿
+≈≈≈╮      ≈≈
+   ·     ·
+▔▔▔▀▀▀▀▀▀▔▔▔
+  ccccccB
+BBBB   BBBBB
+cccB      cc
+   c     k
+kkkBBBBBBkkk
+frame 3
+    ≈≈≈≈≈≈╮
+∿∿∿∿∿╯   ∿∿∿
+≈≈≈≈≈╮
+     ·     ·
+▔▔▔▀▀▀▀▀▀▔▔▔
+    ccccccB
+BBBBBB   BBB
+cccccB
+     c     k
+kkkBBBBBBkkk
+frame 4
+╮     ≈≈≈≈≈≈
+∿∿∿∿∿∿∿╯   ∿
+  ≈≈≈≈≈╮
+ ·     ·
+▔▔▔▀▀▀▀▀▀▔▔▔
+B     cccccc
+BBBBBBBB   B
+  cccccB
+ k     c
+kkkBBBBBBkkk
+frame 5
+≈≈╮     ≈≈≈≈
+ ∿∿∿∿∿∿∿∿╯
+    ≈≈≈≈≈╮
+   ·     ·
+▔▔▔▀▀▀▀▀▀▔▔▔
+ccB     cccc
+ BBBBBBBBB
+    cccccB
+   k     c
+kkkBBBBBBkkk
+frame 6
+≈≈≈≈╮     ≈≈
+   ∿∿∿∿∿∿∿∿╯
+      ≈≈≈≈≈╮
+     ·     ·
+▔▔▔▀▀▀▀▀▀▔▔▔
+ccccB     cc
+   BBBBBBBBB
+      cccccB
+     k     c
+kkkBBBBBBkkk

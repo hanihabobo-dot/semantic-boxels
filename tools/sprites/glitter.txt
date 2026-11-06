@@ -1,0 +1,93 @@
+key: glitter
+width: 12
+period_ms: 140
+pingpong: no
+notes: a gold bar on its pedestal, a white shine running along it and sparkles twinkling around it
+frame 1
+   ·      ✦
+     ✦  ✶
+ ✧        ·
+   ▄▄▄▄▄▄
+▔▔▔▐████▌▔▔▔
+   y      W
+     W  W
+ Y        y
+   Wddddd
+kkkwwwwwwkkk
+frame 2
+   ✧      ✶
+     ✧  ✦
+ ·
+   ▄▄▄▄▄▄
+▔▔▔▐████▌▔▔▔
+   Y      W
+     Y  W
+ y
+   ddWddd
+kkkwwwwwwkkk
+frame 3
+   ✦      ✦
+     ·  ✧
+          ·
+   ▄▄▄▄▄▄
+▔▔▔▐████▌▔▔▔
+   W      W
+     y  Y
+          y
+   ddddWd
+kkkwwwwwwkkk
+frame 4
+   ✶      ✧
+        ·
+ ·        ✧
+   ▄▄▄▄▄▄
+▔▔▔▐████▌▔▔▔
+   W      Y
+        y
+ y        Y
+   dddddd
+kkkwwwwwwkkk
+frame 5
+   ✦      ·
+     ·
+ ✧        ✦
+   ▄▄▄▄▄▄
+▔▔▔▐████▌▔▔▔
+   W      y
+     y
+ Y        W
+   Wddddd
+kkkwwwwwwkkk
+frame 6
+   ✧
+     ✧  ·
+ ✦        ✶
+   ▄▄▄▄▄▄
+▔▔▔▐████▌▔▔▔
+   Y
+     Y  y
+ W        W
+   ddWddd
+kkkwwwwwwkkk
+frame 7
+   ·      ·
+     ✦  ✧
+ ✶        ✦
+   ▄▄▄▄▄▄
+▔▔▔▐████▌▔▔▔
+   y      y
+     W  Y
+ W        W
+   ddddWd
+kkkwwwwwwkkk
+frame 8
+          ✧
+     ✶  ✦
+ ✦        ✧
+   ▄▄▄▄▄▄
+▔▔▔▐████▌▔▔▔
+          Y
+     W  W
+ W        Y
+   dddddd
+kkkwwwwwwkkk

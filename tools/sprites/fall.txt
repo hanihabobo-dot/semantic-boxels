@@ -1,0 +1,93 @@
+key: fall
+width: 12
+period_ms: 160
+pingpong: no
+notes: seen from above: the robot rolls to the edge of a dark shaft and drops in, shrinking away, then a red cross and rings mark the spot and the cell border turns red
+frame 1
+╭──────────╮
+│   ▄▄▄▄   │
+│■  ████   │
+│   ▀▀▀▀   │
+╰──────────╯
+kkkkkkkkkkkk
+k   kkkk   k
+kC  KKKK   k
+k   kkkk   k
+kkkkkkkkkkkk
+frame 2
+╭──────────╮
+│   ▄▄▄▄   │
+│ ■ ████   │
+│   ▀▀▀▀   │
+╰──────────╯
+kkkkkkkkkkkk
+k   kkkk   k
+k C KKKK   k
+k   kkkk   k
+kkkkkkkkkkkk
+frame 3
+╭──────────╮
+│   ▄▄▄▄   │
+│  ■████   │
+│   ▀▀▀▀   │
+╰──────────╯
+kkkkkkkkkkkk
+k   kkkk   k
+k  CKKKK   k
+k   kkkk   k
+kkkkkkkkkkkk
+frame 4
+╭──────────╮
+│   ▄▄▄▄   │
+│   ■███   │
+│   ▀▀▀▀   │
+╰──────────╯
+kkkkkkkkkkkk
+k   kkkk   k
+k   CKKK   k
+k   kkkk   k
+kkkkkkkkkkkk
+frame 5
+╭──────────╮
+│   ▄▄▄▄   │
+│   █▪██   │
+│   ▀▀▀▀   │
+╰──────────╯
+kkkkkkkkkkkk
+k   kkkk   k
+k   KcKK   k
+k   kkkk   k
+kkkkkkkkkkkk
+frame 6
+╭──────────╮
+│   ▄▄▄▄   │
+│   █·██   │
+│   ▀▀▀▀   │
+╰──────────╯
+kkkkkkkkkkkk
+k   kkkk   k
+k   KkKK   k
+k   kkkk   k
+kkkkkkkkkkkk
+frame 7
+╭──────────╮
+│  ◌▄▄▄▄   │
+│   ████   │
+│   ▀▀▀▀◌  │
+╰──────────╯
+kkkkkkkkkkkk
+k  Rkkkk   k
+k   KKKK   k
+k   kkkkR  k
+kkkkkkkkkkkk
+frame 8
+╭──────────╮
+│ ○ ▄▄▄▄   │
+│   █✖██   │
+│   ▀▀▀▀ ○ │
+╰──────────╯
+rrrrrrrrrrrr
+r r kkkk   r
+r   KRKK   r
+r   kkkk r r
+rrrrrrrrrrrr
