@@ -26,14 +26,15 @@ def cell_ij(cell: str):
 
 
 def default_counts(n: int):
-    """LW1's counts by board size (AAAI 2014, Table 2): up to 5x5 one
-    wumpus and one pit, 6 to 10 two and two, above 10 four and four.
-    Provisional until their generator is read."""
-    if n <= 5:
-        return 1, 1
-    if n <= 10:
-        return 2, 2
-    return 4, 4
+    """LW1's counts by board size, as in their 600 hidden states
+    (benchmarks/lw1/wumpus/p<NN>-1f/h.pddl, 100 per size, read 2026-11-06):
+    5x5 one wumpus and one pit, 7x7 and 10x10 two and two, 15x15 four and
+    four, 20x20 eight and eight, 25x25 sixteen and sixteen.  A size between
+    two of theirs takes the larger one's counts."""
+    for limit, k in ((5, 1), (10, 2), (15, 4), (20, 8)):
+        if n <= limit:
+            return k, k
+    return 16, 16
 
 
 class WumpusWorld:
