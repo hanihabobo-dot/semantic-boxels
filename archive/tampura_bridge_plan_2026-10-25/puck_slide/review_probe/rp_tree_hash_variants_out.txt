@@ -1,0 +1,2 @@
+tampura: ls-files|xargs sha256sum|sha256sum=0e8267e1b90a9ccc  sorted=0e8267e1b90a9ccc  cat=a42b84ebd28dd285
+tampura_environments: ls-files|xargs sha256sum|sha256sum=b68dbf8ebfee50c0  sorted=b68dbf8ebfee50c0  cat=caf8bce285bc08f6

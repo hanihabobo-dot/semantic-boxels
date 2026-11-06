@@ -1,0 +1,33 @@
+
+S1y 10 0 replica False None world_first 14 world_end True looks 7 replica_coll_end True s 46.93
+S1y 10 1 replica False None world_first 12 world_end True looks 6 replica_coll_end True s 41.54
+S1y 10 2 replica False None world_first None world_end False looks 7 replica_coll_end True s 45.8
+S1y 11 0 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 42.61
+S1y 11 1 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 76.0
+S1y 11 2 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 44.12
+S1y 12 0 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 43.15
+S1y 12 1 replica True 14 world_first 14 world_end True looks 7 replica_coll_end False s 60.48
+S1y 12 2 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 40.62
+S1y 13 0 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 42.67
+S1y 13 1 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 39.76
+S1y 13 2 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 67.83
+S1y 14 0 replica True 14 world_first 14 world_end True looks 7 replica_coll_end False s 49.2
+S1y 14 1 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 46.53
+S1y 14 2 replica False None world_first 14 world_end True looks 7 replica_coll_end True s 47.52
+S1y 15 0 replica False None world_first 16 world_end True looks 8 replica_coll_end True s 59.67
+S1y 15 1 replica True 14 world_first 14 world_end True looks 7 replica_coll_end False s 48.39
+S1y 15 2 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 45.57
+S1y 16 0 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 41.85
+S1y 16 1 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 40.72
+S1y 16 2 replica True 12 world_first None world_end False looks 10 replica_coll_end True s 65.65
+S1y 17 0 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 45.95
+S1y 17 1 replica True 14 world_first 14 world_end True looks 7 replica_coll_end False s 47.31
+S1y 17 2 replica False None world_first 12 world_end True looks 6 replica_coll_end True s 41.85
+S1y 18 0 replica True 14 world_first 14 world_end True looks 7 replica_coll_end False s 49.85
+S1y 18 1 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 52.66
+S1y 18 2 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 40.27
+S1y 19 0 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 40.44
+S1y 19 1 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 61.68
+S1y 19 2 replica True 12 world_first 12 world_end True looks 6 replica_coll_end False s 82.57
+SUMMARY S1y n 30 replica success 24 return 0.623 | world first 28 return 0.723 world end 28
+

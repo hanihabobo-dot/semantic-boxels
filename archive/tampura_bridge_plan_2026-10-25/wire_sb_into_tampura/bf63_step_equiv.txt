@@ -1,0 +1,27 @@
+arm O counted successes with t_equiv > 15 (seed, rep, cups, picks/places/senses/observes):
+  s101 r1 cups 5: t_equiv 54 (23/5/5/20), plan_calls 43, wall 188.4
+  s105 r0 cups 5: t_equiv 19 (6/5/4/3), plan_calls 9, wall 73.2
+  s105 r1 cups 5: t_equiv 19 (6/5/5/2), plan_calls 8, wall 69.0
+  s116 r1 cups 5: t_equiv 19 (6/5/5/2), plan_calls 8, wall 71.6
+  s119 r0 cups 3: t_equiv 18 (6/5/3/3), plan_calls 9, wall 51.0
+  s120 r1 cups 5: t_equiv 16 (6/3/3/3), plan_calls 9, wall 71.8
+  s133 r0 cups 4: t_equiv 16 (5/4/4/2), plan_calls 7, wall 55.9
+  s139 r0 cups 2: t_equiv 19 (8/2/2/6), plan_calls 14, wall 42.8
+  s139 r1 cups 2: t_equiv 69 (33/2/2/31), plan_calls 64, wall 116.2
+successes by cup count, actions (O: t_equiv; T: their actions), median [min, max]:
+  1 cups: O n 14 6.0 [4, 12]   T n 12 5.0 [5, 6]
+  2 cups: O n 10 5.0 [4, 69]   T n 10 5.0 [5, 8]
+  3 cups: O n 10 12.0 [5, 18]   T n 10 6.0 [5, 9]
+  4 cups: O n 12 8.0 [4, 16]   T n 6 5.0 [5, 6]
+  5 cups: O n 11 12 [8, 54]   T n 8 11.0 [5, 15]
+arm O counted successes, t_equiv: n 57, median 8, min 4, max 69, mean 10.68
+arm O counted successes, t_equiv without observes: n 57, median 8, min 4, max 38, mean 8.88
+  of those > 20: 2  mean return: 0.600 over 80
+  successes with t_equiv > 20: 2
+  successes with t_equiv > 15: 9
+arm O counted failures, primitives so far (no go-home): n 23, median 4, min 0, max 197, mean 23.26
+arm T counted successes, actions to first reward 1: n 46, median 5.0, min 5, max 15, mean 6.61
+mean discounted return over counted episodes, gamma 0.98:
+  O (t_equiv convention): 0.585 over 80
+  T (their actions):      0.530 over 76
+  O under today's one-action harness would read 0.98 per success (rewards[1] == 1): 0.698

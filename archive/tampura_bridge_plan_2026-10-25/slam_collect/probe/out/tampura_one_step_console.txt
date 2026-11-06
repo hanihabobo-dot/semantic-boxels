@@ -1,0 +1,4 @@
+
+
+{"task": "slam_collect", "seed": 0, "get_action_s": 174.43, "action": "move_pick(o_target_0)", "actions_in_F": 15, "source_beliefs_in_F": 14}
+
