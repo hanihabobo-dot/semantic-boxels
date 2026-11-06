@@ -9260,6 +9260,84 @@ BF#65 [FINDING OPEN]  THE DIE UNDER A CUP LIES IN NONE OF OUR HIDING
   measured.  HONESTY CLASS: diagnosis from the run records, logs and eye
   records of local reruns; no pipeline change.
 
+BF#66 [LOGGED, FAR FUTURE WORK]  ATTRIBUTE BOXELIZATION: MERGE BY WHAT THE
+      PLANNER READS; A PROBABILITY DISTRIBUTION AS ISO-MASS BOXELS  (user
+      idea, 2026-11-06; logged on Hani's word the same day)
+  WHAT: Hani's idea, saved with his question and the answer as he asked
+  ("save this convo, my question and your answer into the main memory or
+  log file here under far in the future work section").  The design is in
+  PROPOSAL_ATTRIBUTE_BOXELS.md (repo root, written on tampura-bridge at
+  177cc87, line-cited to the working tree of 2026-11-06); #P9 points here.
+  No code changed.  Extends BF#60 (entropy search), which Hani parked for
+  after the paper on 2026-10-31; that decision stands.
+  QUESTION (Hani, 2026-11-06, verbatim): "i know that this sounds crazy but
+  hear me out. we use the boxels idea to drecrtize the spcae whereever
+  theres a probablitly ditribution in 2d. we dont need to enumerate every
+  possible vlaue of the distrubution. so we desctritze the areas in space
+  where the prob densetiy is high vs low. humor as much as you can and try
+  to make this work. so i wanna appply the boxlilization thong to toher
+  attrubuelts, fluntls and values we have here. we merge based on a commen
+  atribute instead of ommen surface or we also ry commen surface."
+  ANSWER (the session, 2026-11-06): It is not crazy; it is a known move in
+  two literatures, and the thesis already promises it (thesis/chapters/
+  conclusion.tex:47-51, the "full semantic merge" paragraph).  The one
+  rule: a boxel is a maximal region over which the planner's predicates
+  are constant; probability density is one more predicate; the shared face
+  stays an option, the attribute decides.  In MDP terms this is a
+  bisimulation quotient (Givan, Dean and Greig, AIJ 2003; Li, Walsh and
+  Littman, ISAIM 2006); in mapping it is OctoMap's pruning (Hornung et
+  al., Autonomous Robots 2013), where children with equal occupancy
+  collapse into their parent: "high versus low density" is that clamping,
+  applied to a belief the planner reads.  Found in the code:
+  (1) The merge rule is tiny to generalise: cell_merger.py:125-166 checks
+      only the label and an exactly aligned face.  A key callable, key
+      equality required, additive fields (mass, hide count) summed, is
+      about 15 lines; the default key reproduces today's merge.
+  (2) The belief is lossless with two levels: the declared prior is
+      uniform over the hiding spots that streams.py:650
+      (test_target_can_hide_in_shadow) already walks on a 1 cm grid.  A
+      perfect sensor only removes spots and renormalises, so the posterior
+      stays uniform over a shrinking set and the levels {zero, positive}
+      are exact.  Levels with a declared ratio matter only once the sensor
+      is noisy.
+  (3) The update is the slab cut we have: a look from one configuration
+      sees part of a fragment; subtracting the seen box with
+      shadow_calculator.py:375 (_subtract_aabb) shrinks the fragment,
+      which F12's withdrawn sense_partial could not do and why seed 13
+      looped to three strikes (BF#60).
+  (4) TAMPURA's grid is the enumerated version of ours: candidate voxels
+      cleared per look (PAPER_AUDIT.txt:3567-3569); ours is the same set
+      pruned to maximal boxes with mass, a symbol count independent of the
+      grid resolution (a handful of boxels against about a thousand 15 mm
+      cells in window W, task_spec.py:81-82).
+  (5) Free space keyed by its view signature is a pure compression: cells
+      with the same blocks_view_at, placement_hides, on_surface and
+      reachability rows are indistinguishable to FastDownward, so merging
+      them cannot change the plan set; BF#13's plan-count test accepts it
+      by showing equality.
+  (6) Values boxelize too: class_uncertain's six classes collapse into the
+      two fluents the goal reads ("may be a fruit", "may break"); inspect
+      refines.  That answers the class_uncertain plan's question 2 and
+      keeps the uncertainty equal for both arms.
+  LIMITS (proposal section 6): ID churn under split and merge (the
+  reboxelize.py diff pattern maps old IDs to new); a region of boxes stays
+  a two-level structure so every sampler keeps a box; every constant
+  pipeline-wide, never set from a find_dice failure; find_dice cannot show
+  the belief part (BF#60's reason: three saved scenes), random-pairs can;
+  the sense slices (12 mm) and the hide grid (1 cm) bound what a cut
+  resolves.
+  RECOMMENDATION (the session): a paragraph in the paper stating the rule
+  and the lossless fact as the representation's relation to TAMPURA's
+  grid; the belief and class work after the 2026-12-04 deadline, on a
+  branch, behind default-off switches (proposal section 7, six steps);
+  the free-space merge only if the B8 re-runs leave room for one more arm.
+  DECISION 2026-11-06 (user): saved here as far future work; no option of
+  the proposal's section 8 chosen yet.
+  EVIDENCE: PROPOSAL_ATTRIBUTE_BOXELS.md (sections 0 to 8); the memory
+  note project_attribute_boxels_proposal.md.
+  CLAIM EFFECT: none for this paper.  HONESTY CLASS: design note, no
+  pipeline change.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
@@ -9339,6 +9417,10 @@ EXISTING SPEC: CB#105 (Wumpus-World baseline: cell-belief search, no shadow
 geometry) is the natural first rung and doubles as an ablation of the semantic
 partition.  Treat #P9 as post-deadline research unless #P1-#P4 finish early;
 for the December paper it is future work, at most a positioning paragraph.
+BF#66 (2026-11-06) logs Hani's attribute-boxelization idea as far future
+work beside this item: merge boxels by the predicates the planner reads, the
+hidden-target belief as iso-mass boxels, fluent values as classes; design in
+PROPOSAL_ATTRIBUTE_BOXELS.md, decision open.
 
 ================================================================================
 #P10. [REMARK]  DIVISION OF LABOUR AND FRAMING
