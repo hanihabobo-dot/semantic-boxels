@@ -23,7 +23,7 @@ captured console), counted in `paced` so wall times can be corrected.
 import re
 import time
 
-from console_ui import _mark, _plural, _secs
+from console_ui import _mark, _plural, _secs, _short_path
 
 _CELL = re.compile(r'\bp(\d+)-(\d+)\b')
 
@@ -270,7 +270,19 @@ class WumpusTask:
         if kind == 'wumpus_result':
             self.final = dict(row)
             return True
+        if kind == 'wumpus_files':
+            self._files(console, row)
+            return True
         return False
+
+    def _files(self, console, row):
+        """The per-seed closing line, under the verdict like the bridge's outcome line."""
+        cols = console._cols()
+        where = _short_path(row.get('where') or '', max(24, cols - 48) if cols else None)
+        said = [b for b in (f"seed {row['seed']}" if row.get('seed') is not None else None,
+                            row.get('outcome'),
+                            _plural(row['actions'], 'action') if row.get('actions') is not None else None) if b]
+        console.note(f"{', '.join(said)} {console.g('dot')} episode files in {where}", style='dim')
 
     def _mission(self, console, row):
         self.world = dict(row)
