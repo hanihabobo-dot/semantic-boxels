@@ -710,7 +710,8 @@ def main(gui=True, run_logger=None, scene_config=None,
          home_joints=None,
          goal_at_home: bool = False,
          held_cargo_resolve: bool = False,
-         home_hold_step_cap: Optional[int] = None):
+         home_hold_step_cap: Optional[int] = None,
+         overlay_bodies: bool = True):
     """Run one episode: set-up, boxelization, the plan-act-sense loop.
 
     #P4 B3 parameters (PAPER_AUDIT P4.4), every default today's
@@ -742,6 +743,12 @@ def main(gui=True, run_logger=None, scene_config=None,
                         from the readback with the held body as cargo.
       home_hold_step_cap  a move to q_home ends with a final hold of at
                         most this many steps (None: no hold).
+    BF#68 (run tampura -Draw boxels):
+      overlay_bodies    True draws the boxel overlay with its translucent
+                        phantom bodies (today's behaviour); False draws
+                        debug lines and labels alone, so the overlay adds no
+                        body to the world (draw_boxel_overlays with the GUI
+                        on decides whether anything is drawn at all).
     There is no goal argument: main() builds the goal.
     """
     print("=" * 60)
@@ -1013,7 +1020,7 @@ def main(gui=True, run_logger=None, scene_config=None,
 
     viz = None
     if gui and draw_boxel_overlays:
-        viz = BoxelVisualizer()
+        viz = BoxelVisualizer(phantoms=overlay_bodies)
         viz.draw_registry(registry, duration=0, label_size=1.0,
                           skip_free=not show_free)
 
