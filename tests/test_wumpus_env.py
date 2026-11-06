@@ -47,6 +47,8 @@ def test_hidden_file_blocks(tmp_path):
 
 def test_random_world_rules_and_counts():
     assert default_counts(5) == (1, 1) and default_counts(10) == (2, 2) and default_counts(15) == (4, 4)
+    # LW1's own hidden states (p07-1f to p25-1f): 2+2, 8+8, 16+16
+    assert default_counts(7) == (2, 2) and default_counts(20) == (8, 8) and default_counts(25) == (16, 16)
     for n in (5, 10, 15):
         for seed in range(20):
             w = WumpusWorld.random(n, seed)
