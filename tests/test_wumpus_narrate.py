@@ -311,7 +311,8 @@ def test_runner_wiring(tmp_path, monkeypatch):
     with open(os.path.join(run_dir, 'ledger.jsonl'), encoding='utf-8') as f:
         kinds = [json.loads(line)['kind'] for line in f if line.strip()]
     assert kinds[:2] == ['ledger_open', 'wumpus_mission']
-    assert kinds[-2:] == ['wumpus_result', 'ledger_close']       # the logger closes after the verdict
+    # the verdict, the closing line with where the files are, then the logger closes
+    assert kinds[-3:] == ['wumpus_result', 'wumpus_files', 'ledger_close']
     assert kinds.count('step') == rec['n_actions']
 
 
@@ -339,7 +340,8 @@ def test_console_of_a_success(tmp_path):
     for phrase in ('Mission: find the gold and grab it.', 'in a 5x5 world of 25 cells',
                    'Thinking', 'how to find the gold', 'I will go to',
                    'Moving to p', 'Looking around p', 'All quiet: no breeze, no stench, no glitter',
-                   'Grabbing the gold', 'Done.', 'I am holding the gold', 'cells visited'):
+                   'Grabbing the gold', 'Done.', 'I am holding the gold', 'cells visited',
+                   'seed 3, success', 'episode files in'):
         assert phrase in out, phrase
     assert 'Traceback' not in out and 'pybullet' not in out.lower()
     run_dirs = os.listdir(tmp_path / 'logs')

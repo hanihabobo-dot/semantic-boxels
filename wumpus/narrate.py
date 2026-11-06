@@ -13,6 +13,7 @@ curated console (--log-level normal) the rows are still written.
     action_begin('move', 'p1-2') / action_end(ok=True)
     percept('p1-2', stench=False, breeze=True, glitter=False)
     outcome('success', 'the gold is held')         the run ends (the runner)
+    episode_files('runs/x', seed=3, outcome='success', actions=30)   the closing line (the runner)
 
 NarratedEnv wraps anything with the env's move / perceive / grab and makes
 the action and percept calls for it, so a controller that only talks to the
@@ -145,6 +146,14 @@ def outcome(outcome, reason='', cell=None, visited=None, held=False):
                        exit_reason=None if outcome == 'success' else str(outcome),
                        plan_count=_S['plans'], plan_times=list(_S['plan_times']),
                        total_plan_time=float(sum(_S['plan_times'])))
+
+
+def episode_files(where, seed=None, outcome=None, actions=None):
+    """The closing line after the verdict, as the bridge prints its outcome
+    line: which seed ended how and where the episode's files are.  Call it
+    when the files are written (the runner does)."""
+    run_logger.ledger_event('wumpus_files', where=str(where), seed=seed, outcome=outcome,
+                            actions=actions)
 
 
 def paced_s():

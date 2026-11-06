@@ -175,6 +175,8 @@ def _episode(a, world, logger):
             json.dump(rec, f, indent=1, default=float)
     print(f"wumpus: outcome {outcome['outcome']} ({outcome['reason']}), {len(steps)} actions, "
           f"{run_s:.1f} s")
+    narrate.episode_files(a.save_dir or logger.run_dir, seed=a.seed, outcome=outcome['outcome'],
+                          actions=len(steps))
     if a.vis:
         time.sleep(a.hold if a.hold is not None else 10.0)
     env.close()

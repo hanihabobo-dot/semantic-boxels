@@ -217,6 +217,7 @@ def main(argv=None):
         out = explore(env, die=a.die)
         narrate.outcome(out['outcome'], out['reason'], cell=env.robot_cell(),
                         visited=out['visited'], held=out['outcome'] == 'success')
+        narrate.episode_files(logger.run_dir, seed=a.seed, outcome=out['outcome'])
         code = 0 if out['outcome'] == 'success' else 1
     finally:
         logger.close()
