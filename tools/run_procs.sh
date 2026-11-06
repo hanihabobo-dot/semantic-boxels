@@ -1,8 +1,9 @@
 #!/bin/bash
 # run_procs.sh: the pipeline's processes in WSL, behind run.ps1 (run ps, run
 # kill, its busy refusal and the clean-up after every run).  Each one is a
-# python running test_full_pipeline.py, run_bridge_on_finddice.py or
-# run_planner.py.
+# python running test_full_pipeline.py, run_bridge_on_finddice.py,
+# run_planner.py or tools/draw_equiv_run.py (BF#68: the check harness that
+# runs the bridge driver in its own process).
 #   bash run_procs.sh list                     one line each; nothing when none
 #   bash run_procs.sh kill                     TERM, then KILL, every one of them
 #   bash run_procs.sh kill-mine TEXT MAXAGE    the same for those whose command line
@@ -14,7 +15,7 @@
 # (nothing written to its run directory for 12 min; a long plan search looks
 # the same, so that one is only a hint).
 # run.ps1 feeds this file to bash through tr -d '\r', so CRLF does no harm.
-PAT='test_full_pipeline\.py|run_bridge_on_finddice\.py|run_planner\.py'
+PAT='test_full_pipeline\.py|run_bridge_on_finddice\.py|run_planner\.py|draw_equiv_run\.py'
 
 pipeline_pids() {
     local p
@@ -44,6 +45,12 @@ what() {   # a short name from the command line
         vis=$(sed -n 's/.*--vis \([0-9]\).*/\1/p' <<< "$c")
         save=$(sed -n 's/.*--save-dir \([^ ]*\).*/\1/p' <<< "$c")
         printf 'bridge find_dice seed %s, %s, %s' "${seed:-?}" \
+            "$([ "$vis" = 1 ] && echo GUI || echo headless)" "$(basename "${save:-?}")"
+    elif [[ "$c" == *draw_equiv_run.py* ]]; then
+        seed=$(sed -n 's/.*--global-seed \([0-9]*\).*/\1/p' <<< "$c")
+        vis=$(sed -n 's/.*--vis \([0-9]\).*/\1/p' <<< "$c")
+        save=$(sed -n 's/.*--out \([^ ]*\).*/\1/p' <<< "$c")
+        printf 'check harness (BF#68) seed %s, %s, %s' "${seed:-?}" \
             "$([ "$vis" = 1 ] && echo GUI || echo headless)" "$(basename "${save:-?}")"
     elif [[ "$c" == *test_full_pipeline.py* ]]; then
         scene=$(sed -n 's/.*--scene \([^ ]*\).*/\1/p' <<< "$c")

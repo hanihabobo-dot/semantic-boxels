@@ -32,6 +32,7 @@ run tampura -Seed 7          # another seed
 run tampura -Seed [118, 102, 103] -Gen   # several seeds, one run after another (also 118,102,103 or 118 102 103)
 run tampura -Headless        # no GUI, the console only; a diagnostic run, never scored
 run tampura -Seed 118 -Gen   # a scene from TAMPURA's own generator (BF#63's seeds 100 to 139)
+run tampura -Draw boxels     # the GUI also draws the boxels, as lines and labels that follow the registry
 boxels                       # our own random-pairs scene, seed 0, in the GUI (same as: run boxels)
 run boxels -Seed 3 -Headless
 run boxels -Scene stack -Goal stack -Occluders 0
@@ -48,6 +49,7 @@ run help                     # the usage header of run.ps1
 | `-Off` | Without the model tweaks M8 to M10 and the aperture rule |
 | `-Squeeze MM` | The pick squeeze in mm (`--grip-squeeze-mm`) |
 | `-Screenshots` | Also save the eye PNGs (`--save-screenshots on`) |
+| `-Draw boxels` | `run tampura` in the GUI also draws the registry's boxels (`--draw boxels`): wireframes and labels by kind (shadows grey, occluders red, other objects blue), redrawn as the registry changes. Debug lines only, so the run, its world and its camera images are the same with and without it; `-Headless` ignores it (and says so), and `run boxels` draws its boxels without it |
 | `-Gen` | `run tampura` on a find_dice scene from TAMPURA's own generator (`tampura_bridge/gen_scenes/`, seeds 100 to 139), started in a directory that holds only that scene |
 | `-Music` / `-Sfx` / `-Voice` | Sound that follows the run: music and effects, the effects only, and Windows' voice reading the narration as well |
 | `-DryRun` | Print the command instead of running it |
