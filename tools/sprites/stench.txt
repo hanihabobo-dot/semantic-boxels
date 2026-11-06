@@ -1,0 +1,49 @@
+key: stench
+width: 12
+period_ms: 190
+pingpong: no
+notes: three wavy green fume lines rise from a green floor tile (the stench marker), a bright puff travelling up each, bubbles drifting up on both sides
+frame 1
+  ╰╮ ╰╮ ╰╮
+  ╭╯ ╭╯ ╭╯ °
+  ╰╮ ╰╮ ╰╮
+o ╭╯ ╭╯ ╭╯
+▔▔▔▀▀▀▀▀▀▔▔▔
+  KK KK KK
+  gg gg gg l
+  gg gg gg
+g GG GG GG
+kkkggggggkkk
+frame 2
+  ╭╯ ╭╯ ╭╯ °
+  ╰╮ ╰╮ ╰╮
+o ╭╯ ╭╯ ╭╯
+  ╰╮ ╰╮ ╰╮
+▔▔▔▀▀▀▀▀▀▔▔▔
+  KK KK KK l
+  gg gg gg
+g GG GG GG
+  ll ll ll
+kkkggggggkkk
+frame 3
+  ╰╮ ╰╮ ╰╮
+o ╭╯ ╭╯ ╭╯
+  ╰╮ ╰╮ ╰╮
+  ╭╯ ╭╯ ╭╯ °
+▔▔▔▀▀▀▀▀▀▔▔▔
+  KK KK KK
+g GG GG GG
+  gg gg gg
+  ll ll ll l
+kkkggggggkkk
+frame 4
+o ╭╯ ╭╯ ╭╯
+  ╰╮ ╰╮ ╰╮
+  ╭╯ ╭╯ ╭╯ °
+  ╰╮ ╰╮ ╰╮
+▔▔▔▀▀▀▀▀▀▔▔▔
+g GG GG GG
+  gg gg gg
+  gg gg gg l
+  ll ll ll
+kkkggggggkkk
