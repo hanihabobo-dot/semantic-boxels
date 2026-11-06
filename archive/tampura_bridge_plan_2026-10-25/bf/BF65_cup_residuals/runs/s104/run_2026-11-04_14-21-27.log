@@ -1,0 +1,104 @@
+14:21:27 [INFO   ] root: Run started  : 2026-11-04_14-21-27
+14:21:27 [INFO   ] root: Log file     : /root/bf64_check/s104/ours/run_2026-11-04_14-21-27/run_2026-11-04_14-21-27.log
+14:21:27 [INFO   ] root: Verbosity    : smart (console), DEBUG (file)
+  solver_iters: numSolverIterations 200 on the executing world (client 0, D9 set-up)
+14:21:27 [INFO   ] tampura_bridge.policy: force_hold: finger gear constraint 1 on client 0 (joints 12, 13, gearRatio -1, erp 0.1, maxForce 50 N)
+14:21:28 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IHDR' 16 13
+14:21:28 [DEBUG  ] PIL.PngImagePlugin: STREAM b'pHYs' 41 9
+14:21:28 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IDAT' 62 8192
+14:21:28 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IHDR' 16 13
+14:21:28 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IDAT' 41 8192
+14:21:28 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IHDR' 16 13
+14:21:28 [DEBUG  ] PIL.PngImagePlugin: STREAM b'pHYs' 41 9
+14:21:28 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IDAT' 62 8192
+14:21:28 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IHDR' 16 13
+14:21:28 [DEBUG  ] PIL.PngImagePlugin: STREAM b'pHYs' 41 9
+14:21:28 [DEBUG  ] PIL.PngImagePlugin: STREAM b'IDAT' 62 8192
+Boxel Test Environment initialized successfully!
+Camera position: [0.17861445 0.04880322 0.58831882]
+Camera target: [ 3.28582478 -0.16977984 -3.32287836]
+Adopted executing client 0; plan twin client 2
+Objects in scene: ['plane', 'table', 'robot', 'e_cups_ud', 'dice', 'd_cups_ud', 'b_cups_ud']
+============================================================
+FULL PIPELINE: PDDLStream + Replanning
+============================================================
+  model tweaks: {'M8': True, 'M9': True, 'M10': True, 'pick_aperture_from_pose': True}; domain domain_pddlstream_m8.pddl
+
+--- Phase 1: Environment Setup ---
+  [audit-66/67] Effective minimum boxel size: 0.087 m (largest object AABB 0.077 m + 0.01 m headroom).
+Robot ID: 0
+  [D9] the die is VISIBLE to the eye after the settle: scene_changed_by_settle (reported in its own row)
+
+--- Phase 2: Calculating Boxels ---
+    WARNING: degenerate shadow AABB for dice (extent=[0.0, 0.002350693427533246, 0.018632186844581317]) — shadow NOT registered; occlusion model is missing a region (#P1 F3 guard, should be unreachable)
+  Merge iteration 1: 16 merges, 17 boxels remaining
+  Merge iteration 2: 6 merges, 11 boxels remaining
+  Merge iteration 3: 1 merges, 10 boxels remaining
+  Merging complete: 33 -> 10 boxels
+  Calculated 20 boxels
+
+--- Phase 3: Creating BoxelRegistry ---
+Saved 20 boxels to boxel_data.json
+14:21:29 [DEBUG  ] root: Saved artefact: boxel_data.json -> /root/bf64_check/s104/ours/run_2026-11-04_14-21-27/boxel_data.json
+  20 boxels, 6 shadows, 4 occluders
+
+--- Phase 4: Hidden Object Scenario ---
+  Target: dice at boxel dice (given; in the first observation, direct pick)
+  Shadow blockers (audit #78):
+    shadow_of_b_cups_ud__00 blocked by: ['b_cups_ud']
+    shadow_of_b_cups_ud__01 blocked by: ['b_cups_ud']
+    shadow_of_d_cups_ud blocked by: ['d_cups_ud']
+    shadow_of_e_cups_ud blocked by: ['e_cups_ud']
+  Shadow shadow_of_b_cups_ud__02: no blocker above sense tolerance — view-clear, directly sensable
+  Shadow shadow_of_b_cups_ud__03: no blocker above sense tolerance — view-clear, directly sensable
+  Boxel->PyBullet mapping: 4 objects
+
+--- Phase 5: Planning with Replanning ---
+    [eye #1] initial observation (phase 2-4) | held=none | unknown shadows=6 | e_cups_ud@(0.327,-0.056)[bel 9mm] dice@(0.313,-0.058)[bel 8mm] d_cups_ud@(0.675,0.277)[bel 4mm] b_cups_ud@(0.566,0.262)[bel 4mm]
+  Exported initial problem to /root/bf64_check/s104/ours/run_2026-11-04_14-21-27/problem_debug.pddl
+14:21:29 [DEBUG  ] root: Saved artefact: /root/bf64_check/s104/ours/run_2026-11-04_14-21-27/problem_debug.pddl -> /root/bf64_check/s104/ours/run_2026-11-04_14-21-27/problem_initial.pddl
+
+=== PLAN #1 ===
+Unknown shadows remaining: 6
+14:21:31 [DEBUG  ] streams: grasp_wrist_home: dice yaw 0.0 deg (joint 7 -2.53 rad, 190 deg from home) or twin -180.0 deg (joint 7 +0.61 rad, 10 deg from home): twin
+14:21:31 [DEBUG  ] streams: sample_grasp: dice -> grasp_dice_1 (yaw=-3.14 span=0.002 z=0.10)
+14:21:31 [DEBUG  ] streams: compute_kin: dice at shadow_of_b_cups_ud__00 -> q_kin_dice_1  ee_target=[0.608091992408931, 0.258727136562228, 0.13245708008351265] ignored_body=11 seed=0
+14:21:31 [DEBUG  ] streams: compute_kin: dice at shadow_of_b_cups_ud__01 -> q_kin_dice_2  ee_target=[0.6292940596473877, 0.27359607739113645, 0.13245708008351265] ignored_body=11 seed=0
+14:21:31 [DEBUG  ] streams: compute_kin: dice at shadow_of_b_cups_ud__02 -> q_kin_dice_3  ee_target=[0.6422098576260621, 0.2356033334055158, 0.13245708008351265] ignored_body=11 seed=0
+14:21:31 [DEBUG  ] streams: compute_kin: dice at shadow_of_b_cups_ud__03 -> q_kin_dice_4  ee_target=[0.6422098576260621, 0.31515225185533025, 0.13245708008351265] ignored_body=11 seed=0
+14:21:32 [DEBUG  ] streams: compute_kin: dice at shadow_of_d_cups_ud -> q_kin_dice_5  ee_target=[0.7431563283283975, 0.2950444087658838, 0.13519629161476773] ignored_body=11 seed=0
+14:21:32 [DEBUG  ] streams: compute_kin: dice at shadow_of_e_cups_ud -> q_kin_dice_6  ee_target=[0.3828380354086377, -0.06611340665011885, 0.13587479003014472] ignored_body=11 seed=0
+  [M8] init: 6 sense_view, 8 look_config facts (pose unknown: ['e_cups_ud', 'dice', 'd_cups_ud']), 9 view boxels, 0 shadows on the current-config fallback; 13 twin renders 1.76s; 0/6 over-region folds 1.32s; total 3.13s
+  [#76-diag] init facts: 284 total, by predicate: {'blocks_view_at': 59, 'boxel_fits': 58, 'obj_at_boxel_KIF': 43, 'Boxel': 30, 'is_free_space': 10, 'config_for_boxel': 10, 'is_view': 9, 'Config': 9, 'look_config': 8, 'on_surface': 7, 'is_shadow': 6, 'sense_view': 6, 'obj_at_boxel': 5, 'Obj': 5, 'on_table': 4, 'clear': 4, 'marginally_blocked': 4, 'is_object': 4, 'obj_pose_known': 1, 'at_config': 1, 'handempty': 1}
+  [#76-diag] goal: ('and', ('holding', 'dice'), ('at_config', q_home))
+  [#76-diag] held_obj=None, max_time=900.0s, verbose=False
+  [#76-diag] boxel_fits per obj: {'b_cups_ud': 14, 'd_cups_ud': 14, 'dice': 16, 'e_cups_ud': 14}
+  [#76-diag] shadows (6 total, 2 view-clear NOW): ['shadow_of_d_cups_ud(blockers=1)', 'shadow_of_b_cups_ud__00(blockers=1)', 'shadow_of_e_cups_ud(blockers=1)', 'shadow_of_b_cups_ud__03(blockers=0)', 'shadow_of_b_cups_ud__01(blockers=1)', 'shadow_of_b_cups_ud__02(blockers=0)']
+  [#76-diag] sense_options per obj (view-clear AND fits AND not-KIF): {'b_cups_ud': [], 'd_cups_ud': [], 'dice': [], 'e_cups_ud': []}
+  [#76-diag] obj_at_boxel per obj: {'b_cups_ud': ['b_cups_ud'], 'd_cups_ud': ['d_cups_ud'], 'dice': ['dice', 'dice'], 'e_cups_ud': ['e_cups_ud']}
+  [F11-diag] 3 egregious per-object placement-blocking triple(s) beyond the cell criterion: [('b_cups_ud', 'free_008', 'shadow_of_e_cups_ud'), ('d_cups_ud', 'free_008', 'shadow_of_e_cups_ud'), ('e_cups_ud', 'free_008', 'shadow_of_e_cups_ud')]
+
+Iteration: 1 | Complexity: 3 | Skeletons: 0 | Skeleton Queue: 0 | Disabled: 0 | Evaluations: 280 | Eager Calls: 0 | Cost: inf | Search Time: 0.000 | Sample Time: 0.000 | Total Time: 0.000
+Attempt: 1 | Results: 261 | Depth: 0 | Success: False | Time: 0.452
+Stream plan (inf, 0, inf): False
+Action plan (inf, inf): False
+Summary: {complexity: 3, cost: inf, evaluations: 280, iterations: 1, length: inf, run_time: 0.453, sample_time: 0.000, search_time: 0.453, skeletons: 0, solutions: 0, solved: False, timeout: False}
+  [#76-diag] outcome=no_plan, elapsed=0.460s, plan_len=0, cost=inf
+    [eye #2] plan#1 planned (no plan) | held=none | unknown shadows=6 | e_cups_ud@(0.327,-0.056)[bel 9mm] dice@(0.313,-0.058)[bel 8mm] d_cups_ud@(0.675,0.277)[bel 4mm] b_cups_ud@(0.566,0.262)[bel 4mm]
+  [timing] planner.plan() #1: 3.629s (cumulative 3.629s)
+ERROR: No plan found!
+    [eye #3] final (FAILED: planner_failed) | held=none | unknown shadows=6 | e_cups_ud@(0.327,-0.056)[bel 9mm] dice@(0.313,-0.058)[bel 8mm] d_cups_ud@(0.675,0.277)[bel 4mm] b_cups_ud@(0.566,0.262)[bel 4mm]
+
+============================================================
+FAILED: Planner returned no plan (6 unsearched shadows remaining)
+  Plans executed: 1
+
+--- Planning timing summary ---
+  Total plan() calls       : 1
+  Cumulative planning time : 3.629s
+  Average per call         : 3.629s
+  Per-call (s)             : [3.629]
+  Timing summary written to /root/bf64_check/s104/ours/run_2026-11-04_14-21-27/timing_summary.json
+============================================================
+14:21:33 [INFO   ] root: Run finished : 2026-11-04_14-21-33
+14:21:33 [INFO   ] root: Full log at  : /root/bf64_check/s104/ours/run_2026-11-04_14-21-27/run_2026-11-04_14-21-27.log

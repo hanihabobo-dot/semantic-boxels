@@ -1,0 +1,348 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ▣  S E M A N T I C   B O X E L S
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+● Starting up…
+  ⎿ Loading scene from find_dice_gen_s124.json (the campaign's pinned scene for this seed)
+  ⎿ ready  (16.3 s)
+● Mission: get hold of dice and bring it home.
+  ⎿ run_2026-11-04_14-24-31 · find_dice seed 124 · M8 on, M9 on, M10 on, pick aperture from pose on, grip squeeze 0.5 mm, planner ff-astar2, slip fixes force hold,grasp wrist home,pose radius keep,solver iters
+● I see 5 objects on the table and 6 spaces hidden behind them.
+● I am after dice. It is not in view, so I will have to search.
+✻ Thinking… how to get hold of dice … 4 steps in 6.7 s
+  ⎿ I will look behind a_cups_ud for dice, pick up dice, then come home
+● Looking into the space behind a_cups_ud for dice … nothing there, replanning  (0.3 s)
+✻ Thinking… how to get hold of dice … 8 steps in 8.1 s
+  ⎿ I will pick up a_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over a_cups_ud … done  (0.8 s)
+● Picking up a_cups_ud …
+  ⎿ I have a firm grip on a_cups_ud: its half-width is 26.6 mm, I expected 27.8 mm
+  ⎿ done  (2.5 s)
+● Moving over a free spot … done  (1.5 s)
+● Setting a_cups_ud down on a free spot …
+  ⎿ a_cups_ud shifted 1.0 mm as I let go (1022 px)
+  ⎿ done  (2.3 s)
+● Moving to the space behind a_cups_ud … done  (0.7 s)
+● Looking into the space behind a_cups_ud for dice … nothing there, replanning  (0.4 s)
+✻ Thinking… how to get hold of dice … 12 steps in 15.6 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.4 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 4.3 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.3 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 12.9 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.3 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 10 steps in 4.4 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.4 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 13.4 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.4 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 3.1 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.3 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 11.8 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.3 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 10 steps in 3.6 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.3 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 13.0 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.3 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 10 steps in 3.1 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.3 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 13.5 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.4 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 4.2 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.5 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 13.1 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.3 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 10 steps in 4.0 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.3 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 14.1 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.3 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 10 steps in 3.1 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.4 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 11.3 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.3 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 10 steps in 4.2 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.4 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 13.1 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.3 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 10 steps in 5.6 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.6 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 19.0 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.4 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 10 steps in 6.8 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (1.0 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 26.8 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.4 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 10 steps in 5.2 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.6 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 11 steps in 18.2 s
+  ⎿ I will look closer at e_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.6 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 5.2 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.7 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 18.4 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.4 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 6.5 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.4 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 16.7 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.3 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 10 steps in 4.0 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.4 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 13.8 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.6 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 4.1 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.3 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 12.0 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.5 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 4.3 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.4 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 14.8 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.3 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 10 steps in 3.8 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.3 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 11.0 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.3 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 10 steps in 3.7 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.3 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 12.5 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.4 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 10 steps in 4.6 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.3 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 12.2 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.3 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 10 steps in 3.5 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.4 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 14.5 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.3 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 10 steps in 3.4 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.3 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 11 steps in 16.7 s
+  ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at d_cups_ud … done  (0.8 s)
+● Taking a closer look at d_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 12 steps in 20.1 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.9 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 6.6 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.5 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 22.2 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.5 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 3.6 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.5 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 18.7 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.6 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 5.9 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.7 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 19.9 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.4 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 9 steps in 3.6 s
+  ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.4 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 4.7 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.3 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 9 steps in 5.2 s
+  ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.4 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 23.2 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.6 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 4.6 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.9 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 22.4 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.5 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 4.7 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.4 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 16.9 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.5 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 3.6 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.5 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 20.1 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.6 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 4.7 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.8 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 21.1 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.7 s)
+● Taking a closer look at e_cups_ud … seen  (0.1 s)
+✻ Thinking… how to get hold of dice … 10 steps in 4.7 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.5 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 27.9 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.7 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 6.5 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.6 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 20.2 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.4 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 4.6 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.5 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 16 steps in 20.6 s
+  ⎿ I will pick up b_cups_ud, set it down on a free spot, look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, then and 2 more steps
+● Moving over b_cups_ud … done  (0.7 s)
+● Picking up b_cups_ud …
+  ⎿ I have a firm grip on b_cups_ud: its half-width is 28.6 mm, I expected 29.1 mm
+  ⎿ done  (1.5 s)
+● Moving over a free spot … done  (0.9 s)
+● Setting b_cups_ud down on a free spot …
+  ⎿ b_cups_ud is where I put it (2525 px)
+  ⎿ done  (2.1 s)
+● Moving in for a look at e_cups_ud … done  (0.5 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 11.9 s
+  ⎿ I will look behind b_cups_ud for dice, pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Looking into the space behind b_cups_ud for dice … nothing there, replanning  (0.2 s)
+✻ Thinking… how to get hold of dice … 11 steps in 3.3 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 5.2 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.4 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 5.9 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.4 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 3.6 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.8 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 8.4 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.6 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 3.6 s
+  ⎿ I will pick up e_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.8 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice … 12 steps in 8.0 s
+  ⎿ I will look closer at e_cups_ud, pick it up, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at e_cups_ud … done  (0.7 s)
+● Taking a closer look at e_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 9 steps in 7.3 s
+  ⎿ I will pick up e_cups_ud, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over e_cups_ud … done  (0.8 s)
+● Picking up e_cups_ud … skipped: e_cups_ud's pose is too uncertain, I should look first, replanning  (0.0 s)
+✻ Thinking… how to get hold of dice

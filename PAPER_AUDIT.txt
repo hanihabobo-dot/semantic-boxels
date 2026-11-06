@@ -9038,6 +9038,138 @@ BF#63 [DONE; FINDING OPEN]  GENERATED-SCENE EVAL: OURS 57 OF 80, TAMPURA 36
   filtered), the validity rule declared before any run and applied as
   written, every run that did not count listed with its cause; disclosed.
 
+BF#65 [FINDING OPEN]  THE DIE UNDER A CUP LIES IN NONE OF OUR HIDING
+  REGIONS: WE FIND IT ONLY BY LIFTING THE CUP  (BF#63's open finding; asked
+  by the BF#63 eval session, resumed by Hani, 2026-11-04 to 2026-11-06)
+  WHAT: BF#63 left open why the pipeline held no hiding region for the
+  upside-down cup over the die (17 of our 23 counted failures on the
+  generated scenes).  Asked: the cause with code references and a local
+  reproduction, and fix options for Hani; no fix.  Meanwhile BF#64 found
+  the shadow caster clipped to the window W; its fix is in the checkout,
+  uncommitted, and Hani stopped that work on 2026-11-04 at 14:50
+  (bf/BF64_shadow_table/STATE.md).  This entry gives the cause behind the
+  whole failure mode and the cause of each failure that remains with
+  BF#64's fix in place.
+  THE CAUSE: our hiding regions are the space behind an object as the
+  camera sees it, never the space under it.  shadow_calculator.py casts
+  rays past the caster's back corners, joins the caster's box and then
+  cuts that box away along the dominant horizontal axis (:226-236,
+  s_min[dom] = max(s_min[dom], o_max[dom])), so every shadow starts at its
+  caster's back face.  TAMPURA's generator puts the die at a cup's pose
+  (env_generator.py:126-127, BF#64), and the three shipped layouts do the
+  same (the die at d's or e's position, or 14 mm from d's centre): the die
+  sits under an upside-down cup, inside the caster's own box.  In every
+  find_dice scene, shipped or generated, the die starts in none of our
+  regions.
+  HOW WE FIND IT ANYWAY: the plan lifts a cup to look behind it.  The
+  refresh render after the pick shows the die where the cup stood, F20
+  registers it as directly pickable (execution.py register_new_detections;
+  seed 111: "[F20] dice is visible in this observation but had no boxel
+  ... directly pickable, no sense needed"), and the planned sense of that
+  cup's shadow then reads clear_but_empty.  Every success we have on
+  find_dice came this way (HOW_FOUND.txt, from the run records): 57 of 57
+  on the generated scenes (BF#63) and 653 of 653 in BF#59's eval on the
+  shipped scenes, every arm; no sense found the die in any of them.  The
+  cup over the die is lifted only because the space behind it is unknown,
+  and whatever removes that reason loses the die.
+  THE FAILURES BY CAUSE (BF#63's 23 counted failures in 12 scenes, and
+  BF#64's local reruns with its fix, one headless episode per seed):
+  (a) the shadow behind the cup clipped away by W (BF#64): 16 of the 17
+      all_searched runs (scenes 102, 103, 107, 111, 118, 127, 128, 135).
+      With the fix, 102, 103, 107, 111, 118 and 127 succeed; 128 and 135
+      then fail at (c).
+  (b) the shadow seen empty before its cup is lifted: scene 100 (BF#63
+      repetition 0, and the rerun).  The camera, at (0.179, 0.049, 0.588),
+      stands 14 cm short of b_cups_ud, so b's shadow is a sliver 2.3 cm
+      deep (x 0.367 to 0.390) boxed to the cup's height; the die lies at
+      x 0.31 to 0.34, under b.  The first plan lifts c, and after the sense
+      of c's shadow the F16 sweep sees every grid point of b's sliver and
+      removes it (execution.py:2478-2495: "fragment shadow_of_b_cups_ud
+      observed empty in this render").  The observation is right; b is
+      never lifted and the run ends all_searched.  W plays no part here
+      (the cut at b's back face fixes the sliver either way).
+  (c) the plan through the shadow does not bind: 128 and 135 with the fix
+      (no_plan_binding_death, the F7 class).  The plan ends with the die's
+      pick out of the shadow, aimed at the shadow boxel's centre
+      (streams.py:1516), and the pre-IK reach gate (:1532; ee_reachable
+      :549-561, REACH_LIMIT_M 0.80 m at :38) refuses a centre that lies
+      behind a cup near the limit: 0.826 m from the base in 128, 0.845 to
+      0.853 m in 135, while the dice under those cups are at 0.761 and
+      0.774 m.  The planner searches the other cups first and ends with
+      nothing that binds.  A partial reveal can bring a centre back: in
+      135 the shadow of a_cups_ud went from 0.814 to 0.799 m and a was
+      lifted.
+  (d) the die in view, but no look can see it: scene 104 (both BF#63
+      repetitions, and the rerun).  After the settle the die, tilted 71
+      degrees inside e_cups_ud, shows 6 px (D9); the pipeline registers it
+      and goes for a direct pick.  Its estimate is a 2 x 2 x 19 mm sliver
+      inside e's footprint.  Under M8 the pick needs obj_pose_known
+      (pddl/domain_pddlstream_m8.pddl, pick), which only observe gives,
+      and observe needs a look_config: observe_views.py:227-269 keeps a
+      top-down wrist look only when no other body covers the object's
+      points (_blocking_ids, :202-213), and e covers all of the die's.  No
+      skeleton exists (planner_failed after 3.6 s).  The F3 guard's
+      warning about the die's own degenerate shadow does not bear on it.
+  (e) outside the occlusion model, M8 and M9 on a far cup.  Scene 101 (the
+      die under e_cups_ud, 0.667 m out, inside W): every wrist look gives
+      "rectangle [57.4 57.4] mm exceeds the fused [55.4 55.2] mm by more
+      than the pixel noise, not fused", a strike; after three, e is parked
+      with no look configurations and nothing plans (planner_failed;
+      BF#63's repetition 1 reached the cap with d's and e's shadows
+      unsearched).  Scene 124 (the die under c_cups_ud): the wrist look at
+      e_cups_ud ends "complete, pose_radius 0.69 mm"; the next fixed-camera
+      detection shifts e's centre 1.7 mm and pose_radius_keep keeps 2.39
+      mm, outside the pick's commit margin, so the pick turns into another
+      look.  The loop runs to the 900 s cap, and c's shadow stays unknown
+      through all 81 plans.
+  With BF#64's fix, 6 of the 12 scenes succeed in these reruns and 6 still
+  fail: 100 (b), 128 and 135 (c), 104 (d), 101 and 124 (e).
+  FIX OPTIONS (Hani's call; nothing changed):
+  1. A hiding region under a cup: for an object that can cover the target
+     (open underneath, its inside larger than the target class), a
+     fragment of its own footprint at table height, owned by it and
+     searched by lifting it.  This removes (a) to (c) at the root: W
+     cannot clip it away, the sweep cannot see it empty while the cup
+     stands (every ray to it meets the cup), and its pick target lies
+     under the cup, in reach whenever the cup is.  (d) further needs the
+     covering cup to count as what blocks the look.  It needs to know that
+     a body is open underneath: the scene's class name (cups_ud), which
+     TAMPURA's own model has, or the observed shape.  Our own scenes
+     (solid blocks) must not trigger it.  A default-off switch like M8 to
+     M10, then an A/B on the shipped and generated scenes and on ours; a
+     model addition, disclosed as one.
+  2. Narrow fixes that keep the side effect: (c) aim the pick out of a
+     region at its reachable part instead of its centre (streams.py
+     :1516-1536), pipeline-wide (any shadow that straddles the reach limit
+     on our scenes has the same hole); (d) a fact that moving the covering
+     body opens a look; (b) none short of option 1, since the sweep
+     observed correctly; (e) count a look whose only fault is a 2 mm size
+     mismatch (M9), and keep a fixed-camera detection from widening the
+     radius right after a wrist look (pose_radius_keep).  (e) belongs to
+     BF#62's switches, pipeline-wide, never for find_dice alone.
+  3. A limitation in the paper: our hiding regions are the space behind
+     objects; a target under an object is found when the plan moves that
+     object, which on find_dice it does to look behind each cup.
+  REPRODUCTION: BF#64's batch (bf/BF64_shadow_table/check.sh: one headless
+  episode per seed under the pipeline lock, BF#63's 900 s cap), 2026-11-04
+  14:18 to 14:41, on HEAD bf2c4bc (BF#63's pipeline b2c6c5d plus the
+  overview ring) with BF#64's env_adapter.py change; its SUMMARY.txt is in
+  bf/BF64_shadow_table.
+  EVIDENCE: archive/tampura_bridge_plan_2026-10-25/bf/BF65_cup_residuals/
+  (STATE.md; runs/s<seed>/ with console.txt and the run log for 100, 101,
+  104, 111, 128 and 135, and the first 1000 lines of 124's; EYE.txt, the
+  cited poses, boxes and shadows from the runs' eye records, with
+  bf65_eye_dump.py and bf65_eye_track.py; HOW_FOUND.txt with
+  bf65_how_found.py).
+  CLAIM EFFECT: BF#63's "the die under a cup the occlusion model does not
+  register" holds more broadly: no find_dice scene starts the die in any
+  of our hiding regions, the shipped ones included, and every success we
+  measured found it by lifting its cup to look behind it.  The paper must
+  not credit our occlusion model with modelling where the die hides on
+  find_dice unless option 1 is built; the measured numbers stand as
+  measured.  HONESTY CLASS: diagnosis from the run records, logs and eye
+  records of local reruns; no pipeline change.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
