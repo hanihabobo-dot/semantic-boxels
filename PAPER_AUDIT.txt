@@ -9407,6 +9407,24 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   worktree ..\sb-reverse); at about 15:53 path 6 "Path 6: cluster eval,
   ours now vs thesis vs TAMPURA" (Sonnet 5.5, local_247ba0ed; branch
   track/eval, worktree ..\sb-eval).
+  DECISIONS (Hani, 16:25: "Yes, all recommended", to Go's question "Take
+  the recommended answers to all open questions of paths 3, 4 and 5 (not
+  the cluster run)?").  Path 5: TAMPURA gets our fixed camera only (its
+  look keeps the arm move, the images come from our camera); both arms
+  are scored by the target held at the end in each arm's own executing
+  world, with TAMPURA's reward and "held and at home" as extra columns;
+  TAMPURA's own Panda model stands at our base pose, its grid and
+  placement surface is our whole table top, and our robot height stays.
+  Path 4, the recommendations of tracks/wumpus/PLAN.md section 10 (WQ1,
+  WQ3 to WQ9): the 2-D game as a physical 3-D scene, a Panda on a mobile
+  base, LW1's own hidden states seed for seed, our perception feeding LW1
+  through a one-function patch, no KIF baseline arm now, sizes 5x5, 7x7
+  and 10x10 with the robot and 15x15 with LW1 alone, no K-literals in
+  SB's own domains in this track, the authors asked only if LW1 alone
+  misses its Table 2.  Path 3: the four-agent review-round only for its
+  larger fixes (TB-1, TB-8), with Sonnet reviewers; `run kill` will end
+  only the runs `run` started (TB-17).  Still open: the cluster A/B of
+  BF#64's fix and path 6's plan, each confirmed on its own.
   The class_uncertain plan (BF#67) stays held; its phase 1 is path 2's
   input.
   EVIDENCE: tracks/STATE.md, the six briefs, tracks/stable_check/.
