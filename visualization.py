@@ -2,7 +2,9 @@
 Boxel Visualization utilities.
 
 This module handles rendering of boxels in the PyBullet GUI
-using debug lines and semi-transparent phantom objects.
+using debug lines and semi-transparent phantom objects.  The phantoms are
+optional (``BoxelVisualizer(phantoms=False)``, the bridge's overlay: lines and
+labels only, no body in the simulated world).
 
 Audit #35 (2026-04-17): unified to consume :class:`boxel_data.BoxelData`
 directly.  The previous shim that converted BoxelData → boxel_types.Boxel
@@ -152,8 +154,19 @@ class BoxelVisualizer:
     - Cyan = FREE_SPACE (merged)
     """
 
-    def __init__(self):
-        """Initialize the visualizer."""
+    def __init__(self, phantoms: bool = True):
+        """Initialize the visualizer.
+
+        phantoms: True draws the translucent AABB fills as visual-only
+            bodies beside the debug lines (today's overlay, ``run boxels``).
+            False draws the debug lines and labels alone (``run tampura
+            -Draw boxels``, BF#68): no body is created, moved or removed, so
+            the simulated world is untouched and the TinyRenderer images are
+            what they would be without the overlay.  A body creation on the
+            bridge's executing client is a G14 violation, which is why the
+            bridge never takes the phantoms.
+        """
+        self._phantoms = bool(phantoms)
         # Sets (audit #33): remove_boxel_viz() needs O(1) membership and
         # removal because reboxelization can churn many entries per replan.
         self.debug_items: Set[int] = set()
@@ -167,6 +180,10 @@ class BoxelVisualizer:
 
     def _draw_boxel_phantom(self, center, extent, color, opacity) -> int:
         """Draw a semi-transparent phantom AABB and return its body id."""
+        if not self._phantoms:
+            # Asserted at run time, not taken on trust: the lines-only
+            # overlay (the bridge's) must never reach a body creation.
+            raise RuntimeError("BoxelVisualizer(phantoms=False) draws no body")
         visual_shape_id = p.createVisualShape(
             shapeType=p.GEOM_BOX,
             halfExtents=extent,
@@ -210,8 +227,9 @@ class BoxelVisualizer:
             self.debug_items.add(line_id)
             item_ids.append(line_id)
 
-        body_id = self._draw_boxel_phantom(c, e, color, fill_opacity)
-        body_ids.append(body_id)
+        if self._phantoms:
+            body_id = self._draw_boxel_phantom(c, e, color, fill_opacity)
+            body_ids.append(body_id)
 
         if show_labels:
             text = _label_for_boxel(bd)
