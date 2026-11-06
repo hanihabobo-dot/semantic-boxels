@@ -151,7 +151,7 @@ def _episode(a, world, logger):
             outcome = run_explore(wrapped, max_steps=a.max_steps, narrate=narrate)
         else:
             from wumpus.lw1_driver import run_lw1
-            outcome = run_lw1(wrapped, max_steps=a.max_steps)
+            outcome = run_lw1(wrapped, max_steps=a.max_steps, narrate=narrate)
     except Exception as ex:      # recorded, never hidden
         import traceback
         traceback.print_exc()
