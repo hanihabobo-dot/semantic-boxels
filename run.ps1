@@ -15,6 +15,9 @@
 #   run boxels -Scene stack -Goal stack -Occluders 0
 #   run tampura -Off           without M8-M10 (the old pipeline);  -Squeeze 1   a pick squeeze in mm
 #   run tampura -Screenshots   also save the eye PNGs at every snapshot (debugging only; off since BF#50)
+#   run tampura -Draw boxels   the GUI also draws the boxels (lines and labels, changing as the registry
+#                              changes); adds nothing to the world and nothing to a camera image; with
+#                              -Headless it is ignored (nothing is drawn); run boxels draws them as is
 #   run tampura -Music         8-bit music and effects that follow the run (Windows plays them);
 #                              -Sfx   the effects only;  -Voice   Windows' voice reads the narration too
 #   run boxels -Args '--n-extra-distractors 1'   more pipeline flags, one quoted string, as is
@@ -38,6 +41,7 @@ param(
     [switch]$Off,
     [double]$Squeeze = 0,
     [switch]$Screenshots,
+    [string[]]$Draw = @(),
     [switch]$Music,
     [switch]$Sfx,
     [switch]$Voice,
@@ -51,7 +55,7 @@ $PY = '/root/armO-venvA/bin/python'
 $PROCS = "tr -d '\r' < $S/tools/run_procs.sh | bash -s --"
 
 if ($What -in 'help', '-h', '--help', '/?', '?') {
-    Get-Content $PSCommandPath | Select-Object -First 22 | ForEach-Object { $_ -replace '^# ?', '' }
+    Get-Content $PSCommandPath | Select-Object -First 25 | ForEach-Object { $_ -replace '^# ?', '' }
     return
 }
 if ($What -in 'ps', 'status') {
@@ -99,6 +103,24 @@ if ($Squeeze -gt 0) {
     $sw += ' --grip-squeeze-mm ' + $Squeeze.ToString([cultureinfo]::InvariantCulture)
 }
 if ($Screenshots) { $sw += ' --save-screenshots on' }
+# -Draw (BF#68): what the GUI draws besides the scene, one word or a comma
+# list, any case; boxels today.  The bridge driver takes it as --draw; it
+# draws nothing without the GUI and run boxels has its own overlay.
+$draws = @($Draw | ForEach-Object { $_ -split '[\s,]+' } | Where-Object { $_ } |
+           ForEach-Object { $_.ToLowerInvariant() } | Select-Object -Unique)
+$badDraw = @($draws | Where-Object { $_ -notin 'boxels' })
+if ($badDraw.Count -gt 0) {
+    Write-Host "run: -Draw takes boxels (several: a comma list), not '$($badDraw -join ' ')'" -ForegroundColor Yellow
+    exit 2
+}
+if ($draws.Count -gt 0 -and $What -ne 'tampura') {
+    Write-Host "run: -Draw is for run tampura; run boxels draws its boxels in the GUI as it is" -ForegroundColor Yellow
+    $draws = @()
+} elseif ($draws.Count -gt 0 -and $Headless) {
+    Write-Host "run: -Draw is ignored with -Headless (there is no GUI), nothing is drawn" -ForegroundColor Yellow
+    $draws = @()
+}
+if ($draws.Count -gt 0) { $sw += ' --draw ' + ($draws -join ',') }
 $extra = (@($Args) + @($Rest) | Where-Object { $_ -and $_ -ne '--' }) -join ' '
 if ($extra) { $extra = ' ' + $extra }
 $audio = if ($Music) { 'on' } elseif ($Sfx) { 'sfx' } else { '' }
