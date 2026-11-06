@@ -245,11 +245,15 @@ _provenance = []
 # dispatcher left a step without saying why, and fails G3.
 # 'home_not_reached' is D7 (vi)'s bound (#P4 B3(d)): the second
 # consecutive planned move to q_home that fails the at-home test.
+# 'action_failed' and 'dead' are the Wumpus world's (wumpus/narrate.py,
+# 2026-11-06): an action that returned not ok, and a move into a pit or the
+# wumpus's cell.  tools/bridge_gates.py keeps its own G3 list: a bridge run
+# never writes them.
 STEP_END_STATUSES = (
     'ok', 'sense_outcome', 'integrity_replan', 'motion_resolve_failed',
     'pick_failure', 'place_failure', 'stack_failure', 'empty_hand',
     'stale_precondition', 'home_not_reached', 'observe_ok',
-    'observe_incomplete', 'unlabelled',
+    'observe_incomplete', 'unlabelled', 'action_failed', 'dead',
 )
 
 
