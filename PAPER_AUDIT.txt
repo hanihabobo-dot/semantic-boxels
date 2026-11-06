@@ -9338,6 +9338,59 @@ BF#66 [LOGGED, FAR FUTURE WORK]  ATTRIBUTE BOXELIZATION: MERGE BY WHAT THE
   CLAIM EFFECT: none for this paper.  HONESTY CLASS: design note, no
   pipeline change.
 
+BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
+      "GO" ORCHESTRATES, ONE RESPONSIBLE SESSION PER PATH  (user request,
+      2026-11-06)
+  WHAT: Hani asked for "independent dev tracks" started from "a stable
+  function version woth reported numbers that are compareabe to tampura"
+  (his words in full: archive/tampura_bridge_plan_2026-10-25/tracks/
+  STATE.md).  Path 1 draws the boxels in the bridge GUI (`run tampura
+  -Draw boxels`), later the views of our cameras; path 2 finds which other
+  TAMPURA tasks give SB a quick result above 0 and above random; path 3
+  collects the tracks' bugs, fixes them and decides where each fix goes and
+  who is told; path 4 plans a 3-D Wumpus world with knowledge fluents in
+  place of our know-whether predicate obj_at_boxel_KIF (pddl/
+  domain_pddlstream_m8.pddl:47) and LW1 as the planner, has a sub-session
+  build the env and the robot, runs it and reports.  The session "Go"
+  stays the main orchestrator; every path has one responsible session,
+  which reports to its parent when its job is done, and the parent then
+  archives that conversation (Hani: "aungagents shoouuld always update
+  thier pparnets when thier jib is done. then the partent achives the
+  convo.").
+  THE STABLE BASE: tag stable-2026-11-06 on d6a9715 (tampura-bridge).  Its
+  pipeline code is the code BF#63 run 2 measured (snapshot sb_11744fd):
+  between 11744fd and d6a9715, outside archive/ and the documents, only
+  run.ps1 changed (the -Seed list, 177cc87).  Its numbers are BF#63 RUN
+  2's (eval2/REPORT.txt): ours 57 of 80 (0.71, Wilson 0.61 to 0.80),
+  TAMPURA 46 of 76 (0.61, 0.49 to 0.71), 76 pairs 18 to 9, exact McNemar
+  p = 0.122.  Laptop check the same day on a clean worktree of the tag
+  (tracks/stable_check/): unit tests 130 passed, bridge tests 89 passed and
+  3 skipped, bridge_gates.py static exit 0 (read in full), seed 0 success
+  in 36 s, generated seed 106 (run the way `run tampura -Gen` runs it)
+  success in 60 s.  Known failures at the base: BF#64 (its fix an
+  uncommitted hunk, owner open) and BF#65 (the die under a cup lies in no
+  hiding region).
+  HOW: each track codes on its own branch track/<name> in a sibling
+  worktree ..\sb-<name> (tools/track_worktree.ps1, after BF#59's
+  slip_worktree.ps1), cut from the tag; ..\sb-stable is a frozen checkout
+  of the tag for reproducing a bug on the base.  The main checkout stays
+  the trunk Hani runs from; only the orchestrator merges into it, after its
+  own check.  Bugs go to path 3's board (tracks/BUGS.md); questions for
+  Hani go up to the orchestrator; tracks launch Sonnet or Haiku agents
+  only.  Briefs: tracks/<name>/BRIEF.md; the rules for every track:
+  tracks/STATE.md.
+  SESSIONS (2026-11-06 14:07 to 14:08; full ids in tracks/STATE.md): path 1
+  "Path 1: boxel drawing in run tampura" (Sonnet 5.5, local_edbc58c4),
+  path 2 "Path 2: quick TAMPURA tasks for SB" (Opus 5.5, local_c0b7d721),
+  path 3 "Path 3: bug board and fix rollout" (Opus 5.5, local_67679174),
+  path 4 "Path 4: 3-D Wumpus with LW1" (Opus 5.5, local_05af7e92; its env
+  and robot by a Sonnet sub-session it starts).
+  The class_uncertain plan (BF#67) stays held; its phase 1 is path 2's
+  input.
+  EVIDENCE: tracks/STATE.md, the four briefs, tracks/stable_check/.
+  CLAIM EFFECT: none.  HONESTY CLASS: process decision, no pipeline
+  change.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
