@@ -21,6 +21,11 @@ W, H = 64, 48
 @pytest.fixture
 def world():
     cid = p.connect(p.DIRECT)
+    if cid != 0:
+        # BoxelVisualizer draws on the default client, which is client 0 in
+        # the pipeline; a test world on another id would not see its bodies
+        p.disconnect(cid)
+        pytest.skip('client 0 is held by another test: the visualizer draws on it')
     p.setAdditionalSearchPath(pybullet_data.getDataPath(), physicsClientId=cid)
     p.loadURDF('plane.urdf', physicsClientId=cid)
     box = p.createMultiBody(
@@ -81,18 +86,24 @@ def test_lines_only_overlay_adds_no_body(world):
 
 
 def test_lines_only_overlay_leaves_a_render_unchanged(world):
+    """The render is taken with the overlay drawn and NOT concealed (the
+    observation chokepoint's conceal would hide a phantom and the test could
+    not tell): had the overlay put a body into the world, this image would
+    differ, as the control below shows for phantoms.  What a DIRECT client
+    cannot show is that GUI debug lines stay out of a TinyRenderer image (it
+    draws no line at all and gives every debug item the id -1): that is held
+    by TinyRenderer drawing visual shapes only and by the GUI equivalence
+    runs, which hash every render (tools/draw_equiv_run.py)."""
     cid, box, view, proj = world
     before = _render(cid, view, proj)
     viz = BoxelVisualizer(phantoms=False)
-    viz.draw_registry(_registry(), duration=0, label_size=1.0)
-    visualization.conceal_overlay_for_observation()
     try:
+        viz.draw_registry(_registry(), duration=0, label_size=1.0)
         during = _render(cid, view, proj)
     finally:
-        visualization.restore_overlay_after_observation()
+        viz.clear_all()
     for a, b in zip(before, during):
         assert np.array_equal(a, b)
-    viz.clear_all()
 
 
 def test_control_the_default_overlay_adds_bodies_that_a_render_sees(world):

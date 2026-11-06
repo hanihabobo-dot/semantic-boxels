@@ -45,7 +45,8 @@ param(
     [switch]$Music,
     [switch]$Sfx,
     [switch]$Voice,
-    [switch]$DryRun,
+    # -D and -Dr meant -DryRun before -Draw existed; the aliases keep them so
+    [Alias('D', 'Dr')][switch]$DryRun,
     [string]$Args = '',
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest
 )
