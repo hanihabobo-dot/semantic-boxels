@@ -9444,6 +9444,15 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   20 under their reward and 17 of 20 by the world-state test (their
   random policy 0 of 5), slam_collect 17 and 21 of 25; its questions Q40
   to Q45 are open, and resuming the plan is Hani's call.
+  PATH 5'S RESULT (tracks/reverse/, batch1/summary.txt): TAMPURA's
+  planner, find_dice task model and config, unchanged (T-list: T-0 only,
+  a timer), on the scenes `run boxels` builds, ten seeds, both arms under
+  the lock: ours 10 of 10, TAMPURA 6 of 10, pairs 4 to 0, exact McNemar
+  p = 0.125.  Each arm is scored by the target held at the end in its own
+  executing world; TAMPURA's execution is kinematic and noise free, ours
+  physical, as in BF#63.  Three of TAMPURA's four failures are look
+  loops: our fixed camera (P5-Q1 A) gives its look no new viewpoint.
+  P5-Q6 (TAMPURA with its own hand camera on the same seeds) is open.
   MERGES INTO THE TRUNK: TB-16 (run.ps1 runs the checkout it lives in) as
   564ff5b; track/draw as afd80a3 (`run tampura -Draw boxels`, a merge of
   b43f962).  -Draw boxels draws the registry as debug lines and labels
