@@ -19,12 +19,13 @@ import re
 
 OBS_VARS = ('stench', 'breeze', 'glitter')
 ACTIONS = {'start': 1, 'move': 2, 'grab': 1}      # name -> number of cell arguments
-_TOKEN = re.compile(r'[^\s()]+')
+_TOKEN = re.compile(r'[^\s()_]+')
 
 
 def parse_action(text):
-    """'(move p1-1 p1-2)', 'move p1-1 p1-2' or FF's 'MOVE P1-1 P1-2' ->
-    ('move', 'p1-1', 'p1-2').  Raises ValueError for anything else."""
+    """'(move p1-1 p1-2)', 'move p1-1 p1-2', FF's 'MOVE P1-1 P1-2' or LW1's
+    ground name 'move_p1-1_p1-2' -> ('move', 'p1-1', 'p1-2').  Raises
+    ValueError for anything else (the domain's names have no '_')."""
     parts = tuple(t.lower() for t in _TOKEN.findall(str(text)))
     if not parts or parts[0] not in ACTIONS or len(parts) != 1 + ACTIONS[parts[0]]:
         raise ValueError(f'not an LW1 Wumpus action: {text!r}')
