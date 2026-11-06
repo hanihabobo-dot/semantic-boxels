@@ -6,20 +6,39 @@ wumpus-free; a cell proven free of both is safe.  It goes to the nearest
 unvisited safe cell over visited or safe cells, grabs on glitter, and stops
 ('stuck') when no safe unvisited cell is left.  Never reads truth().
 """
+import time
 from collections import deque
 
 
-def run_explore(env, max_steps=500, log=print):
+def run_explore(env, max_steps=500, log=print, narrate=None):
     """env: anything with cells(), adjacent(), robot_cell(), perceive(), move(),
-    grab() (the runner passes a logging wrapper).  Returns {'outcome', 'reason'}."""
+    grab() (the runner passes a logging wrapper).  Returns {'outcome', 'reason'}.
+
+    narrate: wumpus/narrate.py (anything with thinking() and plan()).  The
+    controller tells it what it knows before it plans and the plan it made,
+    and nothing it answers is read: with None the run is the same and silent."""
     nbrs = {}
     for a, b in env.adjacent():
         nbrs.setdefault(a, []).append(b)
     no_pit, no_wumpus, visited = set(), set(), set()
     steps = 0
+    cells = list(env.cells())
 
     def safe(c):
         return c in visited or (c in no_pit and c in no_wumpus)
+
+    def thinking(gold=False):
+        """The robot starts thinking and says what it knows; returns the start time."""
+        if narrate is not None:
+            narrate.thinking(visited=len(visited), safe=sum(1 for c in cells if safe(c)),
+                             maybe_pit=len(cells) - len(no_pit),
+                             maybe_wumpus=len(cells) - len(no_wumpus), gold_known=gold)
+        return time.perf_counter()
+
+    def plan(actions, t0):
+        """The plan it made ((name, cell) pairs, None for no plan) and the seconds it took."""
+        if narrate is not None:
+            narrate.plan(actions, time.perf_counter() - t0)
 
     def observe():
         cell = env.robot_cell()
@@ -37,18 +56,23 @@ def run_explore(env, max_steps=500, log=print):
             env.show_knowledge({c: ('safe' if safe(c) else 'unknown') for c in env.cells()})
         return cell, pc
 
+    t0 = thinking()
+    plan([('perceive', env.robot_cell())], t0)
     cell, pc = observe()
     steps += 1
     while True:
         if cell is None:
             return {'outcome': 'error', 'reason': f"perceive failed: {pc['why']}"}
         if pc['glitter']:
+            t0 = thinking(gold=True)
+            plan([('grab', cell)], t0)
             g = env.grab()
             steps += 1
             if g['held']:
                 return {'outcome': 'success', 'reason': 'the gold is held'}
             return {'outcome': 'error', 'reason': f"grab failed: {g['why']}"}
         # nearest unvisited safe cell by BFS over safe cells
+        t0 = thinking()
         prev, seen, q, goal = {cell: None}, {cell}, deque([cell]), None
         while q:
             c = q.popleft()
@@ -61,12 +85,14 @@ def run_explore(env, max_steps=500, log=print):
                     prev[n] = c
                     q.append(n)
         if goal is None:
+            plan(None, t0)
             return {'outcome': 'stuck', 'reason': 'no safe unvisited cell is left'}
         path = []
         c = goal
         while prev[c] is not None:
             path.append(c)
             c = prev[c]
+        plan([('move', c) for c in reversed(path)] + [('perceive', goal)], t0)
         for c in reversed(path):
             if steps >= max_steps:
                 return {'outcome': 'step_limit', 'reason': f'{max_steps} steps'}
