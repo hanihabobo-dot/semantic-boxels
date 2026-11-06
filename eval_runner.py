@@ -535,6 +535,43 @@ def _preflight_rejection(output: str) -> Optional[str]:
     return None
 
 
+def _stored_rejection(cell_dir: Path) -> Optional[str]:
+    """The pre-flight rejection line in a cell's stored stdout.log, or None."""
+    stdout_log = cell_dir / "stdout.log"
+    if not stdout_log.exists():
+        return None
+    return _preflight_rejection(
+        stdout_log.read_text(encoding="utf-8", errors="replace"))
+
+
+def _run_dir_claims(cells_root: Path) -> Dict[str, int]:
+    """How many cells of a sweep name each run directory in run_dir.txt."""
+    claims: Dict[str, int] = {}
+    if cells_root.is_dir():
+        for p in cells_root.glob("*/run_dir.txt"):
+            run_dir = p.read_text().strip()
+            claims[run_dir] = claims.get(run_dir, 0) + 1
+    return claims
+
+
+def _another_cells_run(cell_dir: Path, claims: Dict[str, int]) -> bool:
+    """Whether a stored summary whose run_config differs from its cell
+    shows that it is not the cell's own run (TB-20).
+
+    A differing run_config alone proves nothing: until 2026-08-23 the
+    pre-flight re-rolled a rejected seed, so a cell's own run of that time
+    carries another seed.  A summary the pre-fix runner banked from
+    another cell shows it: the cell's own output holds the pre-flight's
+    rejection (the cell made no run), or another cell of the sweep names
+    the same run directory.
+    """
+    if _stored_rejection(cell_dir):
+        return True
+    run_dir_txt = cell_dir / "run_dir.txt"
+    return (run_dir_txt.exists()
+            and claims.get(run_dir_txt.read_text().strip(), 0) > 1)
+
+
 def run_cell(
     cell: Dict,
     sweep_dir: Path,
@@ -546,7 +583,8 @@ def run_cell(
 
     Returns a dict suitable for aggregation: cell config + metrics, or a
     stub row with ``success=False`` and a diagnostic ``exit_reason`` on
-    timeout / crash / missing summary.
+    timeout / crash / pre-flight rejection / missing summary / a new
+    run's summary that belongs to another cell.
     """
     tag = cell_tag(cell)
     cell_dir = sweep_dir / "cells" / tag
@@ -562,16 +600,22 @@ def run_cell(
             existing = None
         # A summary banked from another cell (the pre-fix runner, see
         # _find_new_timing_summary) is not a result for this cell: run
-        # it again instead of resuming from it.  Runner stubs (timeout,
-        # crash, pre-flight) carry no run_config and are kept as is.
+        # it again instead of resuming from it.  Its run_config differs
+        # from the cell and the cell's files show it (_another_cells_run);
+        # a differing run_config alone is the cell's own run (TB-20).
+        # Runner stubs (timeout, crash, pre-flight) carry no run_config
+        # and are kept as is.
+        mismatch = (_summary_mismatch(existing["run_config"], cell)
+                    if existing is not None and "run_config" in existing
+                    else None)
         if existing is not None and (
-                "run_config" not in existing
-                or _summary_mismatch(existing["run_config"], cell) is None):
+                mismatch is None
+                or not _another_cells_run(cell_dir,
+                                          _run_dir_claims(cell_dir.parent))):
             return {**cell, **existing}
         if existing is not None:
             print(f"[runner] {tag}: stored summary belongs to another cell "
-                  f"({_summary_mismatch(existing['run_config'], cell)}); "
-                  f"re-running")
+                  f"({mismatch}); re-running")
 
     argv = cell_to_argv(cell, extra_args)
     print(f"[runner] {tag}: launching")
@@ -707,8 +751,13 @@ def aggregate(sweep_dir: Path) -> Path:
     a summary banked from another cell becomes a ``preflight_rejected``
     (or ``summary_mismatch``) row for this cell, and a ``no_summary`` stub
     whose output shows a pre-flight rejection is relabelled the same way.
+    A summary counts as banked when its run_config differs from the cell
+    and the cell's files show it (_another_cells_run); a differing
+    run_config alone, such as a seed the pre-flight re-rolled before
+    2026-08-23, stays the cell's own run (TB-20).
     """
     cells_root = sweep_dir / "cells"
+    claims = _run_dir_claims(cells_root)
     cells_by_tag: Dict[str, Dict] = {}
     matrix_path = sweep_dir / "matrix.json"
     if matrix_path.exists():
@@ -721,6 +770,7 @@ def aggregate(sweep_dir: Path) -> Path:
             print(f"[aggregate] cannot read {matrix_path}: {e}")
     rows: List[dict] = []
     n_relabelled = 0
+    n_own = 0
     if cells_root.is_dir():
         for tag_dir in sorted(cells_root.iterdir()):
             if not tag_dir.is_dir():
@@ -737,6 +787,12 @@ def aggregate(sweep_dir: Path) -> Path:
             mismatch = (_summary_mismatch(data["run_config"], cell)
                         if cell is not None and "run_config" in data
                         else None)
+            if mismatch is not None and not _another_cells_run(tag_dir,
+                                                               claims):
+                n_own += 1
+                print(f"[aggregate] {tag_dir.name}: run_config differs from "
+                      f"the cell ({mismatch}); kept as the cell's own run")
+                mismatch = None
             if mismatch is not None or data.get("exit_reason") == "no_summary":
                 stdout_log = tag_dir / "stdout.log"
                 rejection = (_preflight_rejection(stdout_log.read_text(
@@ -780,7 +836,8 @@ def aggregate(sweep_dir: Path) -> Path:
             f.write(json.dumps(r) + "\n")
 
     print(f"[aggregate] wrote {csv_path} ({len(rows)} rows, "
-          f"{n_relabelled} relabelled)")
+          f"{n_relabelled} relabelled, {n_own} kept as their own runs "
+          f"with a run_config unlike their cell)")
     print(f"[aggregate] wrote {jsonl_path}")
     return csv_path
 
