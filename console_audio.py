@@ -291,10 +291,35 @@ def _failure():
     return mix
 
 
+def _death():
+    """The Wumpus world (2026-11-06): a pit or the wumpus ends the run.  One
+    soft falling glide and a low thud at its end, in the style of `fail`."""
+    mix = Mix(1.7)
+    mix.tone(0.0, 0.9, 330.0, 'sine', vol=0.18, attack=0.01, release=0.2, sweep=58.0)
+    mix.tone(0.85, 0.55, 55.0, 'sine', vol=0.32, attack=0.005, release=0.15, sweep=38.0, decay=6.0)
+    mix.tone(0.85, 0.1, 1.0, 'noise', vol=0.07, attack=0.001, release=0.03, decay=40.0)
+    mix.echo(0.3, 0.25, wrap=False)
+    mix.normalize(0.42)
+    return mix
+
+
+def _gold():
+    """The Wumpus world: the gold bar is held.  Three soft rising sine notes
+    over a faint triangle shimmer, a little brighter than `found`."""
+    mix = Mix(1.9)
+    for i, name in enumerate(('D5', 'A5', 'D6')):
+        mix.tone(0.09 * i, 0.5, freq(name), 'sine', vol=0.13, attack=0.005, release=0.35)
+    mix.tone(0.3, 1.0, freq('F#5'), 'triangle', vol=0.05, attack=0.1, release=0.6, detune=0.004)
+    mix.echo(0.27, 0.35, wrap=False)
+    mix.normalize(0.4)
+    return mix
+
+
 PIECES = {
     'act': _cruise_loop, 'think': _drift_loop,                       # the loops
     'startup': _startup, 'found': _found, 'warn': _warn, 'fail': _fail,
     'success': _success, 'failure': _failure,                        # the effects
+    'death': _death, 'gold': _gold,        # the Wumpus world; no VERSION bump, only the new files are rendered
 }
 LOOPS = ('act', 'think')
 
