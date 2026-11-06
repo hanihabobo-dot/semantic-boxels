@@ -79,9 +79,9 @@ def batch(size, blocks, traces, out_dir, bench=BENCH, vis=False):
     rows = []
     for k in blocks:
         key = f'h{k:03d}.txt'
-        if key not in traces:
-            rows.append({'block': k, 'passed': False, 'why': 'no L trace'})
-            print(f'G-W2 {size}x{size} h{k:03d}: no L trace', flush=True)
+        if not traces.get(key):        # absent, or empty: L made no move (it failed), nothing to replay
+            rows.append({'block': k, 'passed': False, 'why': 'no L trace' if key not in traces else 'L trace empty'})
+            print(f"G-W2 {size}x{size} h{k:03d}: FAIL, {rows[-1]['why']}", flush=True)
             continue
         with open(os.path.join(bench, f'p{size:02d}-1f', 'broken-hidden', f'h{k:03d}.pddl')) as f:
             world = WumpusWorld.from_hidden(size, f.read())
