@@ -8,6 +8,11 @@ that one's summary (10 of CB#113's 43 rejected find-and-tray-stack cells
 held the preceding holding run's success).  These tests stand a fake
 test_full_pipeline.py in for subprocess.run: one cell that runs and writes
 its summary, one that the pre-flight rejects, back to back.
+
+TB-20 (2026-11-06): a run_config unlike the cell is no proof that a summary
+is another cell's.  Until 2026-08-23 the pre-flight re-rolled a rejected
+seed, so a cell's own run of that time carries another seed (34 successes
+of sweep_full_2026-05-28); such a cell is resumed and aggregated as before.
 """
 import json
 import types
@@ -22,6 +27,7 @@ HOLD = {'scene': 'random-pairs', 'n_occluders': 2, 'seed': 0,
         'min_boxel_size': 0.05}
 TRAY = dict(HOLD, goal='find-and-tray-stack')
 REJECTION = '[pre-flight] seed 0 rejected: the tray-stack goal cannot be formed'
+REROLLED = 577090037   # a seed the pre-flight drew in May 2026 (seed 1's)
 
 
 def _fake_pipeline(runs):
@@ -107,3 +113,57 @@ def test_aggregate_relabels_a_banked_cell_of_an_old_sweep(sweep):
     assert by_goal['holding']['success'] is True
     assert by_goal['find-and-tray-stack']['success'] is False
     assert by_goal['find-and-tray-stack']['exit_reason'] == 'preflight_rejected'
+
+
+def _rerolled_by_the_old_preflight(out):
+    """The holding cell runs; its stored summary is then what a sweep from
+    before 2026-08-23 holds when the pre-flight re-rolled the cell's seed:
+    the cell's own run (its own run directory, no rejection in its output)
+    with another seed in run_config."""
+    er.run_cell(HOLD, out, 60, [], skip_existing=False)
+    path = out / 'cells' / er.cell_tag(HOLD) / 'timing_summary.json'
+    data = json.loads(path.read_text())
+    data['run_config']['seed'] = REROLLED
+    path.write_text(json.dumps(data))
+    return path
+
+
+def _aggregated_rows(out, cells):
+    (out / 'matrix.json').write_text(json.dumps({'cells': cells}))
+    er.aggregate(out)
+    return [json.loads(line) for line in
+            (out / 'aggregated.jsonl').read_text().splitlines()]
+
+
+def test_aggregate_keeps_a_cell_whose_seed_the_old_preflight_rerolled(sweep):
+    out, _ = sweep
+    _rerolled_by_the_old_preflight(out)
+    rows = _aggregated_rows(out, [HOLD])
+    assert len(rows) == 1
+    assert rows[0]['success'] is True
+    assert rows[0]['exit_reason'] == 'success'
+
+
+def test_skip_existing_resumes_a_cell_whose_seed_the_old_preflight_rerolled(
+        sweep):
+    out, runs = sweep
+    path = _rerolled_by_the_old_preflight(out)
+    n = len(runs)
+    resumed = er.run_cell(HOLD, out, 60, [], skip_existing=True)
+    assert len(runs) == n                       # not run again
+    assert resumed['success'] is True
+    assert json.loads(path.read_text())['run_config']['seed'] == REROLLED
+
+
+def test_aggregate_relabels_a_cell_whose_run_directory_another_cell_names(
+        sweep):
+    # sweep_2026-05-11_18-13-24_random-pairs: a cell holds the run of the
+    # cell before it, with no pre-flight rejection in its own output.
+    out, _ = sweep
+    _banked_by_the_old_runner(out)
+    tray_dir = out / 'cells' / er.cell_tag(TRAY)
+    (tray_dir / 'stdout.log').write_text('ok\n\n--- STDERR ---\n')
+    by_goal = {r['goal']: r for r in _aggregated_rows(out, [HOLD, TRAY])}
+    assert by_goal['holding']['success'] is True
+    assert by_goal['find-and-tray-stack']['success'] is False
+    assert by_goal['find-and-tray-stack']['exit_reason'] == 'summary_mismatch'
