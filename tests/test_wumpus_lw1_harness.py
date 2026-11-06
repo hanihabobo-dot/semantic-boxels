@@ -18,7 +18,9 @@ def test_parse_action():
     assert lw1_exec.parse_action('MOVE P1-1 P1-2') == ('move', 'p1-1', 'p1-2')
     assert lw1_exec.parse_action('start p1-1') == ('start', 'p1-1')
     assert lw1_exec.parse_action('(GRAB P3-2)') == ('grab', 'p3-2')
-    for bad in ('', 'jump p1-1', 'move p1-1', 'grab p1-1 p1-2', '(start)'):
+    assert lw1_exec.parse_action('move_p1-1_p1-2') == ('move', 'p1-1', 'p1-2')   # LW1's ground name
+    assert lw1_exec.parse_action('start_p1-1') == ('start', 'p1-1')
+    for bad in ('', 'jump p1-1', 'move p1-1', 'grab p1-1 p1-2', '(start)', 'move_p1-1'):
         with pytest.raises(ValueError):
             lw1_exec.parse_action(bad)
 
