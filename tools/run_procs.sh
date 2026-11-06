@@ -2,7 +2,7 @@
 # run_procs.sh: the pipeline's processes in WSL, behind run.ps1 (run ps, run
 # kill, its busy refusal and the clean-up after every run).  Each one is a
 # python running test_full_pipeline.py, run_bridge_on_finddice.py or
-# run_planner.py.
+# run_planner.py or run_wumpus.py.
 #   bash run_procs.sh list                     one line each; nothing when none
 #   bash run_procs.sh kill                     TERM, then KILL, every one of them
 #   bash run_procs.sh kill-mine TEXT MAXAGE    the same for those whose command line
@@ -14,7 +14,7 @@
 # (nothing written to its run directory for 12 min; a long plan search looks
 # the same, so that one is only a hint).
 # run.ps1 feeds this file to bash through tr -d '\r', so CRLF does no harm.
-PAT='test_full_pipeline\.py|run_bridge_on_finddice\.py|run_planner\.py'
+PAT='test_full_pipeline\.py|run_bridge_on_finddice\.py|run_planner\.py|run_wumpus\.py'
 
 pipeline_pids() {
     local p
@@ -45,6 +45,11 @@ what() {   # a short name from the command line
         save=$(sed -n 's/.*--save-dir \([^ ]*\).*/\1/p' <<< "$c")
         printf 'bridge find_dice seed %s, %s, %s' "${seed:-?}" \
             "$([ "$vis" = 1 ] && echo GUI || echo headless)" "$(basename "${save:-?}")"
+    elif [[ "$c" == *run_wumpus.py* ]]; then
+        seed=$(sed -n 's/.*--seed \([0-9]*\).*/\1/p' <<< "$c")
+        scene=$(sed -n 's/.*--size \([0-9]*\).*/\1/p' <<< "$c")
+        vis=$(sed -n 's/.*--vis \([0-9]\).*/\1/p' <<< "$c")
+        printf 'wumpus N=%s seed %s, %s' "${scene:-?}" "${seed:-?}" "$([ "$vis" = 1 ] && echo GUI || echo headless)"
     elif [[ "$c" == *test_full_pipeline.py* ]]; then
         scene=$(sed -n 's/.*--scene \([^ ]*\).*/\1/p' <<< "$c")
         seed=$(sed -n 's/.*--seed \([0-9]*\).*/\1/p' <<< "$c")
