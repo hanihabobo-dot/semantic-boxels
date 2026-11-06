@@ -45,7 +45,11 @@ param(
     [string]$Args = '',
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest
 )
-$S = '/mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels'
+# The checkout this script lives in, as a WSL path (TB-16): `run` (the
+# pointer in ~/.local/bin) calls the main checkout's copy, and a worktree's
+# own run.ps1 runs that worktree's code, so the command, the save directory
+# and the record read after the run all name the same checkout.
+$S = '/mnt/' + $PSScriptRoot.Substring(0, 1).ToLowerInvariant() + ($PSScriptRoot.Substring(2) -replace '\\', '/')
 $PY = '/root/armO-venvA/bin/python'
 # tools/run_procs.sh (list, kill, kill-mine), fed to bash through tr so CRLF does no harm.
 $PROCS = "tr -d '\r' < $S/tools/run_procs.sh | bash -s --"
