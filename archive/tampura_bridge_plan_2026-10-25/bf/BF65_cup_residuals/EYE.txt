@@ -1,0 +1,117 @@
+# bf65_eye_dump.py on /root/bf64_check/s100 eye.jsonl, b_cups_ud and dice, records 1-12
+#1 initial observation (phase 2-4) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   b_cups_ud: true [0.321, 0.003, 0.035] tilt 0.0 true_aabb [[0.28, -0.042, -0.001], [0.369, 0.048, 0.068]] bel [[0.306, -0.028, 0.0], [0.367, 0.033, 0.065]] err 15.3 px 2118 occ True sh ['shadow_of_b_cups_ud'] hid None
+   dice: true [0.322, 0.005, 0.011] tilt 8.0 true_aabb [[0.307, -0.009, -0.002], [0.337, 0.019, 0.024]] bel None err None px 0 occ None sh None hid b_cups_ud
+   shadow_of_b_cups_ud: [[0.367, -0.037, 0.0], [0.39, 0.033, 0.065]] unknown blockers ['b_cups_ud']
+#2 plan#1 planned (10 actions) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   b_cups_ud: true [0.321, 0.003, 0.035] tilt 0.0 true_aabb [[0.28, -0.042, -0.001], [0.369, 0.048, 0.068]] bel [[0.306, -0.028, 0.0], [0.367, 0.033, 0.065]] err 15.3 px None occ True sh ['shadow_of_b_cups_ud'] hid None
+   dice: true [0.322, 0.005, 0.011] tilt 8.0 true_aabb [[0.307, -0.009, -0.002], [0.337, 0.019, 0.024]] bel None err None px None occ None sh None hid None
+   shadow_of_b_cups_ud: [[0.367, -0.037, 0.0], [0.39, 0.033, 0.065]] unknown blockers ['b_cups_ud']
+#3 plan#1 before action 1/10 move(c_cups_ud) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   b_cups_ud: true [0.321, 0.003, 0.035] tilt 0.0 true_aabb [[0.28, -0.042, -0.001], [0.369, 0.048, 0.068]] bel [[0.306, -0.028, 0.0], [0.367, 0.033, 0.065]] err 15.3 px None occ True sh ['shadow_of_b_cups_ud'] hid None
+   dice: true [0.322, 0.005, 0.011] tilt 8.0 true_aabb [[0.307, -0.009, -0.002], [0.337, 0.019, 0.024]] bel None err None px None occ None sh None hid None
+   shadow_of_b_cups_ud: [[0.367, -0.037, 0.0], [0.39, 0.033, 0.065]] unknown blockers ['b_cups_ud']
+#4 plan#1 before action 2/10 pick(c_cups_ud, c_cups_ud) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   b_cups_ud: true [0.322, 0.003, 0.035] tilt 0.0 true_aabb [[0.28, -0.042, -0.001], [0.369, 0.048, 0.068]] bel [[0.306, -0.028, 0.0], [0.367, 0.033, 0.065]] err 15.3 px None occ True sh ['shadow_of_b_cups_ud'] hid None
+   dice: true [0.324, 0.004, 0.01] tilt 0.0 true_aabb [[0.309, -0.011, -0.001], [0.338, 0.019, 0.021]] bel None err None px None occ None sh None hid None
+   shadow_of_b_cups_ud: [[0.367, -0.037, 0.0], [0.39, 0.033, 0.065]] unknown blockers ['b_cups_ud']
+#5 plan#1 before action 3/10 move(view__q_home) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   b_cups_ud: true [0.322, 0.003, 0.035] tilt 0.0 true_aabb [[0.28, -0.042, -0.001], [0.369, 0.048, 0.068]] bel [[0.306, -0.028, 0.0], [0.367, 0.033, 0.065]] err 15.3 px None occ True sh ['shadow_of_b_cups_ud'] hid None
+   dice: true [0.324, 0.004, 0.01] tilt 0.0 true_aabb [[0.309, -0.011, -0.001], [0.338, 0.019, 0.021]] bel None err None px None occ None sh None hid None
+   shadow_of_b_cups_ud: [[0.367, -0.037, 0.0], [0.39, 0.033, 0.065]] unknown blockers ['b_cups_ud']
+#6 plan#1 before action 4/10 move(free_008) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   b_cups_ud: true [0.322, 0.003, 0.035] tilt 0.0 true_aabb [[0.28, -0.042, -0.001], [0.369, 0.048, 0.068]] bel [[0.296, -0.015, -0.007], [0.356, 0.046, 0.058]] err 16.7 px None occ True sh ['shadow_of_b_cups_ud'] hid None
+   dice: true [0.324, 0.004, 0.01] tilt 0.0 true_aabb [[0.309, -0.011, -0.001], [0.338, 0.019, 0.021]] bel None err None px None occ None sh None hid None
+   shadow_of_b_cups_ud: [[0.367, -0.037, 0.0], [0.39, 0.033, 0.065]] unknown blockers ['c_cups_ud']
+#7 plan#1 before action 5/10 place(c_cups_ud, free_008) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   b_cups_ud: true [0.322, 0.003, 0.035] tilt 0.0 true_aabb [[0.28, -0.042, -0.001], [0.369, 0.048, 0.068]] bel [[0.306, -0.028, 0.0], [0.367, 0.033, 0.065]] err 15.3 px None occ True sh ['shadow_of_b_cups_ud'] hid None
+   dice: true [0.324, 0.004, 0.01] tilt 0.0 true_aabb [[0.309, -0.011, -0.001], [0.338, 0.019, 0.021]] bel None err None px None occ None sh None hid None
+   shadow_of_b_cups_ud: [[0.367, -0.037, 0.0], [0.39, 0.033, 0.065]] unknown blockers ['b_cups_ud']
+#8 plan#1 after place(c_cups_ud, free_008) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   b_cups_ud: true [0.322, 0.003, 0.035] tilt 0.0 true_aabb [[0.28, -0.042, -0.001], [0.369, 0.048, 0.068]] bel [[0.306, -0.028, 0.0], [0.367, 0.033, 0.065]] err 15.3 px None occ True sh ['shadow_of_b_cups_ud'] hid None
+   dice: true [0.324, 0.004, 0.01] tilt 0.0 true_aabb [[0.309, -0.011, -0.001], [0.338, 0.019, 0.021]] bel None err None px None occ None sh None hid None
+   shadow_of_b_cups_ud: [[0.367, -0.037, 0.0], [0.39, 0.033, 0.065]] unknown blockers ['b_cups_ud']
+#9 plan#1 before action 6/10 move(view__q_home) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   b_cups_ud: true [0.322, 0.003, 0.035] tilt 0.0 true_aabb [[0.28, -0.042, -0.001], [0.369, 0.048, 0.068]] bel [[0.306, -0.028, 0.0], [0.367, 0.033, 0.065]] err 15.3 px None occ True sh ['shadow_of_b_cups_ud'] hid None
+   dice: true [0.324, 0.004, 0.01] tilt 0.0 true_aabb [[0.309, -0.011, -0.001], [0.338, 0.019, 0.021]] bel None err None px None occ None sh None hid None
+   shadow_of_b_cups_ud: [[0.367, -0.037, 0.0], [0.39, 0.033, 0.065]] unknown blockers ['b_cups_ud']
+#10 plan#1 before action 7/10 sense(dice, shadow_of_c_cups_ud) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   b_cups_ud: true [0.322, 0.003, 0.035] tilt 0.0 true_aabb [[0.28, -0.042, -0.001], [0.369, 0.048, 0.068]] bel [[0.306, -0.028, 0.0], [0.367, 0.033, 0.065]] err 15.3 px None occ True sh ['shadow_of_b_cups_ud'] hid None
+   dice: true [0.324, 0.004, 0.01] tilt 0.0 true_aabb [[0.309, -0.011, -0.001], [0.338, 0.019, 0.021]] bel None err None px None occ None sh None hid None
+   shadow_of_b_cups_ud: [[0.367, -0.037, 0.0], [0.39, 0.033, 0.065]] unknown blockers ['b_cups_ud']
+#11 sense shadow_of_c_cups_ud -> clear_but_empty | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   b_cups_ud: true [0.322, 0.003, 0.035] tilt 0.0 true_aabb [[0.28, -0.042, -0.001], [0.369, 0.048, 0.068]] bel [[0.306, -0.028, 0.0], [0.367, 0.033, 0.065]] err 15.3 px 2117 occ True sh ['shadow_of_b_cups_ud'] hid None
+   dice: true [0.324, 0.004, 0.01] tilt 0.0 true_aabb [[0.309, -0.011, -0.001], [0.338, 0.019, 0.021]] bel None err None px 0 occ None sh None hid b_cups_ud
+   shadow_of_b_cups_ud: [[0.367, -0.037, 0.0], [0.39, 0.033, 0.065]] unknown blockers ['b_cups_ud']
+#12 plan#2 planned (8 actions) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   b_cups_ud: true [0.322, 0.003, 0.035] tilt 0.0 true_aabb [[0.28, -0.042, -0.001], [0.369, 0.048, 0.068]] bel [[0.306, -0.028, 0.0], [0.367, 0.033, 0.065]] err 15.3 px None occ True sh [] hid None
+   dice: true [0.324, 0.004, 0.01] tilt 0.0 true_aabb [[0.309, -0.011, -0.001], [0.338, 0.019, 0.021]] bel None err None px None occ None sh None hid None
+
+# bf65_eye_dump.py on /root/bf64_check/s101 eye.jsonl, e_cups_ud and dice, records 1-2
+#1 initial observation (phase 2-4) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   e_cups_ud: true [0.667, -0.012, 0.041] tilt 0.0 true_aabb [[0.624, -0.06, -0.001], [0.719, 0.035, 0.075]] bel [[0.635, -0.051, 0.0], [0.71, 0.024, 0.072]] err 8.1 px 2877 occ True sh ['shadow_of_e_cups_ud'] hid None
+   dice: true [0.657, -0.014, 0.012] tilt 50.7 true_aabb [[0.641, -0.027, -0.004], [0.673, -0.001, 0.029]] bel None err None px 0 occ None sh None hid e_cups_ud
+   shadow_of_e_cups_ud: [[0.71, -0.065, 0.0], [0.784, 0.024, 0.072]] unknown blockers ['e_cups_ud']
+#2 plan#1 planned (9 actions) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   e_cups_ud: true [0.667, -0.012, 0.041] tilt 0.0 true_aabb [[0.624, -0.06, -0.001], [0.719, 0.035, 0.075]] bel [[0.635, -0.051, 0.0], [0.71, 0.024, 0.072]] err 8.1 px None occ True sh ['shadow_of_e_cups_ud'] hid None
+   dice: true [0.657, -0.014, 0.012] tilt 50.7 true_aabb [[0.641, -0.027, -0.004], [0.673, -0.001, 0.029]] bel None err None px None occ None sh None hid None
+   shadow_of_e_cups_ud: [[0.71, -0.065, 0.0], [0.784, 0.024, 0.072]] unknown blockers ['e_cups_ud']
+
+# bf65_eye_dump.py on /root/bf64_check/s124 eye.jsonl, e_cups_ud, c_cups_ud and dice, record 1
+#1 initial observation (phase 2-4) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   e_cups_ud: true [0.501, 0.336, 0.041] tilt 0.0 true_aabb [[0.441, 0.28, -0.001], [0.552, 0.392, 0.075]] bel [[0.461, 0.297, 0.0], [0.533, 0.37, 0.072]] err 7.1 px 4606 occ True sh ['shadow_of_e_cups_ud'] hid None
+   c_cups_ud: true [0.344, -0.286, 0.036] tilt 0.0 true_aabb [[0.304, -0.327, -0.001], [0.382, -0.249, 0.071]] bel [[0.311, -0.322, 0.0], [0.375, -0.257, 0.068]] err 4.6 px 3135 occ True sh ['shadow_of_c_cups_ud'] hid None
+   dice: true [0.333, -0.287, 0.012] tilt 56.6 true_aabb [[0.316, -0.3, -0.004], [0.349, -0.275, 0.029]] bel None err None px 0 occ None sh None hid c_cups_ud
+   shadow_of_c_cups_ud: [[0.311, -0.37, 0.0], [0.401, -0.322, 0.068]] unknown blockers ['c_cups_ud']
+   shadow_of_e_cups_ud: [[0.533, 0.297, 0.0], [0.583, 0.415, 0.072]] unknown blockers ['e_cups_ud']
+
+# bf65_eye_track.py on /root/bf64_check/s124 eye.jsonl, c_cups_ud (the die's cup): its shadow state whenever it changes
+#1 initial observation (phase 2-4)
+   c_cups_ud: true [0.344, -0.286, 0.036] tilt 0.0 err 4.6 occ True sh ['shadow_of_c_cups_ud']
+   shadows [('shadow_of_c_cups_ud', [[0.311, -0.37, 0.0], [0.401, -0.322, 0.068]], 'unknown')]
+   known_empty [] unknown ['shadow_of_a_cups_ud__00', 'shadow_of_a_cups_ud__01', 'shadow_of_b_cups_ud', 'shadow_of_c_cups_ud', 'shadow_of_d_cups_ud', 'shadow_of_e_cups_ud']
+#5 plan#2 planned (8 actions)
+   c_cups_ud: true [0.344, -0.286, 0.036] tilt 0.0 err 4.6 occ True sh ['shadow_of_c_cups_ud']
+   shadows [('shadow_of_c_cups_ud', [[0.311, -0.37, 0.0], [0.401, -0.322, 0.068]], 'unknown')]
+   known_empty ['shadow_of_a_cups_ud__01'] unknown ['shadow_of_a_cups_ud__00', 'shadow_of_b_cups_ud', 'shadow_of_c_cups_ud', 'shadow_of_d_cups_ud', 'shadow_of_e_cups_ud']
+#14 plan#3 planned (12 actions)
+   c_cups_ud: true [0.344, -0.286, 0.036] tilt 0.0 err 4.8 occ True sh ['shadow_of_c_cups_ud']
+   shadows [('shadow_of_c_cups_ud', [[0.311, -0.37, 0.0], [0.401, -0.322, 0.068]], 'unknown')]
+   known_empty ['shadow_of_a_cups_ud__00', 'shadow_of_a_cups_ud__01'] unknown ['shadow_of_b_cups_ud', 'shadow_of_c_cups_ud', 'shadow_of_d_cups_ud', 'shadow_of_e_cups_ud']
+#232 plan#74 planned (11 actions)
+   c_cups_ud: true [0.344, -0.286, 0.036] tilt 0.0 err 4.9 occ True sh ['shadow_of_c_cups_ud']
+   shadows [('shadow_of_c_cups_ud', [[0.311, -0.37, 0.0], [0.401, -0.322, 0.068]], 'unknown')]
+   known_empty ['shadow_of_a_cups_ud__00', 'shadow_of_a_cups_ud__01', 'shadow_of_b_cups_ud'] unknown ['shadow_of_c_cups_ud', 'shadow_of_d_cups_ud', 'shadow_of_e_cups_ud']
+LAST 254 plan#81 before action 2/9 pick(e_cups_ud, e_cups_ud)
+
+# bf65_eye_dump.py on /root/bf64_check/s128 eye.jsonl, all cups and dice, record 1
+#1 initial observation (phase 2-4) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   e_cups_ud: true [0.349, 0.267, 0.041] tilt 0.0 true_aabb [[0.295, 0.206, -0.001], [0.408, 0.32, 0.075]] bel [[0.324, 0.225, 0.0], [0.394, 0.295, 0.072]] err 13.1 px 4639 occ True sh ['shadow_of_e_cups_ud'] hid None
+   b_cups_ud: true [0.664, 0.377, 0.035] tilt 0.0 true_aabb [[0.626, 0.337, -0.001], [0.7, 0.411, 0.068]] bel [[0.634, 0.344, 0.0], [0.693, 0.403, 0.065]] err 4.1 px 2292 occ True sh ['shadow_of_b_cups_ud'] hid None
+   dice: true [0.661, 0.378, 0.011] tilt 16.2 true_aabb [[0.648, 0.366, -0.003], [0.675, 0.391, 0.026]] bel None err None px 0 occ None sh None hid b_cups_ud
+   shadow_of_b_cups_ud: [[0.693, 0.344, 0.0], [0.757, 0.447, 0.065]] unknown blockers ['b_cups_ud']
+   shadow_of_e_cups_ud: [[0.324, 0.295, 0.0], [0.423, 0.329, 0.072]] unknown blockers ['e_cups_ud']
+
+# bf65_eye_dump.py on /root/bf64_check/s135 eye.jsonl, all cups and dice, record 1
+#1 initial observation (phase 2-4) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   c_cups_ud: true [0.68, -0.377, 0.036] tilt 0.0 true_aabb [[0.634, -0.423, -0.001], [0.731, -0.326, 0.071]] bel [[0.653, -0.407, 0.0], [0.716, -0.343, 0.068]] err 5.1 px 2374 occ True sh ['shadow_of_c_cups_ud'] hid None
+   dice: true [0.676, -0.377, 0.012] tilt 26.5 true_aabb [[0.661, -0.389, -0.004], [0.691, -0.366, 0.027]] bel None err None px 0 occ None sh None hid c_cups_ud
+   a_cups_ud: true [0.649, 0.383, 0.034] tilt 0.0 true_aabb [[0.607, 0.336, -0.001], [0.693, 0.423, 0.066]] bel [[0.623, 0.351, 0.0], [0.679, 0.407, 0.063]] err 4.6 px 2065 occ True sh ['shadow_of_a_cups_ud'] hid None
+   d_cups_ud: true [0.563, -0.098, 0.038] tilt 0.0 true_aabb [[0.526, -0.139, -0.001], [0.606, -0.059, 0.073]] bel [[0.533, -0.135, 0.0], [0.602, -0.065, 0.07]] err 5.9 px 3001 occ True sh ['shadow_of_d_cups_ud'] hid None
+   shadow_of_a_cups_ud: [[0.679, 0.351, 0.0], [0.739, 0.45, 0.063]] unknown blockers ['a_cups_ud']
+   shadow_of_c_cups_ud: [[0.716, -0.467, 0.0], [0.787, -0.343, 0.068]] unknown blockers ['c_cups_ud']
+   shadow_of_d_cups_ud: [[0.602, -0.16, 0.0], [0.66, -0.065, 0.07]] unknown blockers ['d_cups_ud']
+
+# bf65_eye_dump.py on /root/bf64_check/s104 eye.jsonl, all cups and dice, record 1
+#1 initial observation (phase 2-4) | cam [0.179, 0.049, 0.588] -> [3.286, -0.17, -3.323]
+   e_cups_ud: true [0.327, -0.056, 0.041] tilt 0.0 true_aabb [[0.266, -0.115, -0.001], [0.38, -0.001, 0.075]] bel [[0.3, -0.091, 0.0], [0.37, -0.021, 0.072]] err 9.2 px 3622 occ True sh ['shadow_of_e_cups_ud'] hid None
+   dice: true [0.313, -0.058, 0.011] tilt 71.4 true_aabb [[0.297, -0.072, -0.004], [0.328, -0.045, 0.027]] bel [[0.32, -0.057, 0.0], [0.322, -0.055, 0.019]] err 8.5 px 6 occ False sh [] hid (off-frame)
+   d_cups_ud: true [0.675, 0.277, 0.038] tilt 0.0 true_aabb [[0.627, 0.233, -0.001], [0.717, 0.322, 0.073]] bel [[0.638, 0.242, 0.0], [0.707, 0.312, 0.07]] err 4.1 px 2799 occ True sh ['shadow_of_d_cups_ud'] hid None
+   b_cups_ud: true [0.566, 0.262, 0.035] tilt 0.0 true_aabb [[0.526, 0.221, -0.001], [0.604, 0.298, 0.068]] bel [[0.535, 0.229, 0.0], [0.595, 0.289, 0.065]] err 4.0 px 2497 occ True sh ['shadow_of_b_cups_ud__00', 'shadow_of_b_cups_ud__01', 'shadow_of_b_cups_ud__02', 'shadow_of_b_cups_ud__03'] hid None
+   shadow_of_b_cups_ud__00: [[0.595, 0.229, 0.0], [0.621, 0.289, 0.065]] unknown blockers ['b_cups_ud']
+   shadow_of_b_cups_ud__01: [[0.621, 0.229, 0.0], [0.638, 0.318, 0.065]] unknown blockers ['b_cups_ud']
+   shadow_of_b_cups_ud__02: [[0.638, 0.229, 0.0], [0.647, 0.242, 0.065]] unknown blockers []
+   shadow_of_b_cups_ud__03: [[0.638, 0.312, 0.0], [0.647, 0.318, 0.065]] unknown blockers []
+   shadow_of_d_cups_ud: [[0.707, 0.242, 0.0], [0.779, 0.348, 0.07]] unknown blockers ['d_cups_ud']
+   shadow_of_e_cups_ud: [[0.37, -0.111, 0.0], [0.396, -0.021, 0.072]] unknown blockers ['e_cups_ud']
+
