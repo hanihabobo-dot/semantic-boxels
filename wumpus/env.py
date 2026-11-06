@@ -559,6 +559,10 @@ class WumpusEnv:
                 textSize=1.0, physicsClientId=self.cid))
 
     def close(self):
+        if self.gui:
+            # p.disconnect on a GUI client segfaults in this WSLg setup; the
+            # process ends right after, which frees the client.
+            return
         try:
             p.disconnect(physicsClientId=self.cid)
         except Exception:
