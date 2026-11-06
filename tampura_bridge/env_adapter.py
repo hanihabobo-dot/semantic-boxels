@@ -6,8 +6,9 @@ their World from its identity map (their world.objects and
 world.categories, the map their obs_from_camera_image applies, env.py:70-73)
 and builds the plan twin in a fresh DIRECT client with their own
 construction functions (the URDF, create_default_env, create_ycb).  It
-declares the D4 eye and the window W from task_spec, points the shadow
-caster at the plan twin (B3(c)), overrides the oracle to raise and
+declares the D4 eye and the window W (free space, placement) from task_spec,
+gives the shadow caster their shortened table (BF#64) and points it at the
+plan twin (B3(c)), overrides the oracle to raise and
 update_object_positions as a counted no-op (G16), and reset() to raise.
 It overrides nothing that touches perception, boxel generation or the
 plan-twin sync: those run as BoxelTestEnv's own code.
@@ -35,6 +36,21 @@ def _wrap_client(client_id):
     bc._pid = None
     bc._client = client_id
     return bc
+
+
+def shadow_table_ranges():
+    """The shadow caster's table as ((x_min, x_max), (y_min, y_max)): their
+    shortened table (panda_env_utils.get_shortened_table_dims, the region
+    their place sampler draws from and the table D8's window W was cut
+    from, BF#11 (e)), read from their module.  BF#64: with W as the
+    caster's table, a cup their generator put outside W cast a shadow
+    clipped to nothing, and the die under it was never looked for."""
+    from tampura_environments.panda_utils.panda_env_utils import (
+        get_shortened_table_dims)
+    pose, width, length, _ = get_shortened_table_dims()
+    cx, cy = pose[0][0], pose[0][1]
+    return ((cx - width / 2.0, cx + width / 2.0),
+            (cy - length / 2.0, cy + length / 2.0))
 
 
 class PoselessObjectInfo(ObjectInfo):
@@ -92,12 +108,14 @@ class TampuraWorldEnv(BoxelTestEnv):
             create_default_env, create_ycb)
         from tampura_environments.panda_utils.robot import PANDA_PATH
         w = self._world
-        # D8: the window W bounds free space, placement and the shadow
-        # caster (lateral shadows are clipped to it as ours are to the
-        # table ranges); their table top is z = 0.
+        # D8: the window W bounds free space and placement; their table top
+        # is z = 0.  The shadow caster takes their shortened table, as ours
+        # takes the logical table while free space keeps the safe ranges
+        # (BoxelTestEnv.__init__).  BF#64: their generator puts cups, and
+        # the die under one, outside W, and a shadow clipped to W came out
+        # empty or reversed, so those hiding places left the model.
         self.table_surface_height = task_spec.TABLE_TOP_Z
-        self.table_x_range = tuple(task_spec.WINDOW_X)
-        self.table_y_range = tuple(task_spec.WINDOW_Y)
+        self.table_x_range, self.table_y_range = shadow_table_ranges()
         self._SAFE_TABLE_X_RANGE = tuple(task_spec.WINDOW_X)
         self._SAFE_TABLE_Y_RANGE = tuple(task_spec.WINDOW_Y)
         self._tray_xy = None
