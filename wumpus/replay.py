@@ -58,19 +58,79 @@ def passed(result):
     return result['status'] == 'ok' and result['divergence'] is None
 
 
+BENCH = '/root/lw1-work/cp2fsc-and-replanner/benchmarks/lw1/wumpus'
+
+
+def _blocks(text):
+    out = []
+    for part in text.split(','):
+        a, _, b = part.partition('-')
+        out += list(range(int(a), int(b or a) + 1))
+    return out
+
+
+def batch(size, blocks, traces, out_dir, bench=BENCH, vis=False):
+    """G-W2 over LW1's own hidden blocks: for block k, the world from
+    broken-hidden/h<k>.pddl and L's trace for it (traces: gw1_summary.py's
+    --traces JSON, keyed 'h<k>.txt') replayed on the robot.  Writes one
+    record per block and a summary; returns the summary rows."""
+    from wumpus.env import WumpusEnv
+    os.makedirs(out_dir, exist_ok=True)
+    rows = []
+    for k in blocks:
+        key = f'h{k:03d}.txt'
+        if key not in traces:
+            rows.append({'block': k, 'passed': False, 'why': 'no L trace'})
+            print(f'G-W2 {size}x{size} h{k:03d}: no L trace', flush=True)
+            continue
+        with open(os.path.join(bench, f'p{size:02d}-1f', 'broken-hidden', f'h{k:03d}.pddl')) as f:
+            world = WumpusWorld.from_hidden(size, f.read())
+        expected = [tr.step(s['action'], s.get('obs')) for s in traces[key]]
+        env = WumpusEnv(world, gui=bool(vis))
+        try:
+            res = replay(env, expected)
+        finally:
+            env.close()
+        ok = passed(res)
+        row = {'block': k, 'passed': ok, 'status': res['status'], 'why': res['why'],
+               'actions': len(res['steps']), 'expected': len(expected),
+               'observations': sum(1 for s in expected if s['obs'] is not None),
+               'mismatches': res['mismatches'], 'divergence': res['divergence'], 'wall_s': res['wall_s']}
+        rows.append(row)
+        with open(os.path.join(out_dir, f'gw2_p{size:02d}_h{k:03d}.json'), 'w') as f:
+            json.dump({'instance': world.to_dict(), **row, 'steps': res['steps']}, f, indent=1, default=float)
+        print(f"G-W2 {size}x{size} h{k:03d}: {'PASS' if ok else 'FAIL'}  {row['actions']}/{row['expected']} "
+              f"actions, {row['observations']} observations, status {res['status']}, mismatches "
+              f"{res['mismatches']}, divergence {res['divergence']}", flush=True)
+    with open(os.path.join(out_dir, f'gw2_p{size:02d}_summary.json'), 'w') as f:
+        json.dump(rows, f, indent=1, default=float)
+    return rows
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
+    ap.add_argument('--batch-traces', help="G-W2 batch: gw1_summary.py's traces JSON (with --blocks, --out-dir)")
+    ap.add_argument('--blocks', default='1', help="LW1's hidden blocks for the batch: '1-10' or '1,4'")
+    ap.add_argument('--out-dir')
     ap.add_argument('--size', type=int, default=5)
     ap.add_argument('--seed', type=int, default=0, help='random world seed, or the block index of --hidden-file')
     ap.add_argument('--hidden', help='one LW1 hidden block')
     ap.add_argument('--hidden-file', help='a file of LW1 instances; --seed picks the block')
-    ap.add_argument('--trace', required=True, help='JSON trace or a text file with one action per line')
+    ap.add_argument('--trace', help='JSON trace or a text file with one action per line')
     ap.add_argument('--rule-obs', action='store_true',
                     help="fill the trace's observations from the world's percept rule")
     ap.add_argument('--out')
     ap.add_argument('--vis', type=int, default=0)
     a = ap.parse_args(argv)
 
+    if a.batch_traces:
+        if not a.out_dir:
+            ap.error('--batch-traces needs --out-dir')
+        with open(a.batch_traces) as f:
+            rows = batch(a.size, _blocks(a.blocks), json.load(f), a.out_dir, vis=a.vis)
+        return 0 if rows and all(r['passed'] for r in rows) else 1
+    if not a.trace:
+        ap.error('--trace is required (or --batch-traces)')
     if a.hidden:
         world = WumpusWorld.from_hidden(a.size, a.hidden)
     elif a.hidden_file:
