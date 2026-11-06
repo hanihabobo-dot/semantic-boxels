@@ -1,0 +1,40 @@
+● Setting a_cups_ud down on a free spot …
+  ⎿ a_cups_ud is where I put it (2018 px)
+  ⎿ done  (1.8 s)
+● Moving to the space behind a_cups_ud … done  (0.5 s)
+● Looking into the space behind a_cups_ud for dice … nothing there, replanning  (0.3 s)
+✻ Thinking… how to get hold of dice … 11 steps in 4.3 s
+  ⎿ I will look closer at d_cups_ud, pick it up, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving in for a look at d_cups_ud … done  (0.4 s)
+● Taking a closer look at d_cups_ud … seen  (0.2 s)
+✻ Thinking… how to get hold of dice … 10 steps in 3.5 s
+  ⎿ I will pick up d_cups_ud, come home, set it down on a free spot, look behind it for dice, pick up dice, then come home
+● Moving over d_cups_ud … done  (0.4 s)
+● Picking up d_cups_ud …
+  ⎿ I have a firm grip on d_cups_ud: its half-width is 33.3 mm, I expected 35.1 mm
+  ⎿ done  (0.9 s)
+● Going home … done  (0.6 s)
+● Moving over a free spot … done  (0.6 s)
+● Setting d_cups_ud down on a free spot …
+  ⎿ d_cups_ud is where I put it (2563 px)
+  ⎿ done  (2.0 s)
+● Going home … done  (0.4 s)
+● Looking into the space behind d_cups_ud for dice … nothing there, replanning  (0.2 s)
+✻ Thinking… how to get hold of dice … nothing to plan
+⚠ ERROR: Searched all shadows but target not found!
+────────────────────────────────────────────
+✘ Failed. All 0 shadows searched — target not found  (all_searched)
+  ⎿ 6 plans · 29 steps, 29 done · planning 25.9 s · 60.5 s in all
+  ⎿ log and raw stream in /tmp/p4gen_5084295/O/solver_iters+force_hold+pose_radius_keep+grasp_wrist_home/seed100_r0/ours/run_2026-11-04_14-30-06
+  ledger   PASS  265 rows, complete
+  G3       PASS  29 steps over 6 plans, all as planned; 6 labelled early ends
+  G4       PASS  4 places at the planned centre
+  G5       PASS  planned_sense_render=8, sweep_render=2
+  G15      PASS  4 senses, each classified on its planned region
+  G10r     PASS  domain_pddlstream_m8.pddl as the switches require
+  G19      PASS  scene file matches the pinned map
+  G18      PASS  initialize return to rollout start 0.026 s (initialize_call +0.001 s, initialize_return +6.631 s, scene_map_asserted +0.014 s, schema_registered +0.000 s, policy_built +0.000 s, g13_checked +0.012 s, rollout_start +0.000 s)
+  G19h     PASS  seed 100, both RNGs untouched, PYTHONHASHSEED 0
+  G11      PASS  6 solve calls, 6 plan rows
+  G21      PASS  every runtime count 0; steps {'main_outside_dispatch': 50, 'main_in_dispatch': 7919}
+seed 100: outcome failure, their RolloutHistory rewards[-1] = 0.0; details in /tmp/p4gen_5084295/O/solver_iters+force_hold+pose_radius_keep+grasp_wrist_home/seed100_r0

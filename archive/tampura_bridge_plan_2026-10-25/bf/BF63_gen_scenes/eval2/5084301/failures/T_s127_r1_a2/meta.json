@@ -1,0 +1,33 @@
+{
+ "arm": "T",
+ "seed": 127,
+ "rep": 1,
+ "attempt": 2,
+ "scene": "find_dice_gen_s127.json",
+ "n_cups": 2,
+ "counts": false,
+ "why": "crashed: rc 1, no RolloutHistory ()",
+ "success": false,
+ "timed_out": false,
+ "wall_s": 289.648,
+ "loop_s": 900.0,
+ "host": "cn-110",
+ "finished": "2026-11-04 15:42:47",
+ "status": "crashed",
+ "returncode": 1,
+ "max_reward": null,
+ "n_actions": null,
+ "get_action_actions": [
+  "pick(o_ph_0, o_gr_12)",
+  "place(o_ph_0, o_gr_12, o_po_0)",
+  "look(o_ph_2, o_ph_0, o_co_6)"
+ ],
+ "scene_file": "find_dice_gen_s127.json",
+ "save_dir": "/tmp/p4gen_5084301/T_retry/rep1/T/seed127",
+ "note": "",
+ "error": "rc 1, no RolloutHistory ()",
+ "shots": {
+  "images": [],
+  "note": "no RolloutHistory (killed or crashed before it was written)"
+ }
+}

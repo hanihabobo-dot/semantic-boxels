@@ -1,0 +1,42 @@
+== the probe per job (s, median / maximum): open on $W; write 4 kB + fsync on $W; the same write locally
+5084295 cn-112 137 rows 14:22:16 to 15:07:54: open 0.008 / 0.009 (0 rows >= 1 s); write 0.024 / 0.375 (0 rows >= 1 s); local 0.011 / 0.012
+5084296 cn-111 133 rows 14:22:15 to 15:06:32: open 0.008 / 0.010 (0 rows >= 1 s); write 0.022 / 0.170 (0 rows >= 1 s); local 0.011 / 0.012
+5084297 cn-109  99 rows 14:22:16 to 14:55:09: open 0.008 / 0.009 (0 rows >= 1 s); write 0.023 / 0.229 (0 rows >= 1 s); local 0.011 / 0.012
+5084298 cn-115  64 rows 14:22:16 to 14:43:25: open 0.008 / 0.009 (0 rows >= 1 s); write 0.028 / 0.287 (0 rows >= 1 s); local 0.011 / 0.011
+5084299 cn-104 100 rows 14:22:16 to 14:55:30: open 0.008 / 0.009 (0 rows >= 1 s); write 0.028 / 0.256 (0 rows >= 1 s); local 0.011 / 0.013
+5084300 cn-103 131 rows 14:22:16 to 15:05:53: open 0.008 / 0.009 (0 rows >= 1 s); write 0.026 / 0.281 (0 rows >= 1 s); local 0.011 / 0.011
+5084301 cn-110 242 rows 14:22:16 to 15:43:08: open 0.008 / 0.010 (0 rows >= 1 s); write 0.025 / 0.408 (0 rows >= 1 s); local 0.011 / 0.014
+5084302 cn-114  87 rows 14:26:17 to 14:55:09: open 0.008 / 0.009 (0 rows >= 1 s); write 0.025 / 0.338 (0 rows >= 1 s); local 0.011 / 0.012
+5084303 cn-113  92 rows 15:08:16 to 15:38:48: open 0.008 / 0.009 (0 rows >= 1 s); write 0.017 / 0.751 (0 rows >= 1 s); local 0.011 / 0.018
+5084304 cn-107 138 rows 15:30:16 to 16:18:39: open 0.008 / 30.429 (6 rows >= 1 s); write 0.025 / 29.128 (12 rows >= 1 s); local 0.011 / 0.012
+
+== the declared rule: two or more consecutive rows with the open on $W at 1 s or more
+  job 5084304 (cn-107): 16:04:53 to 16:06:08, rows 16:05:17 open 1.912 write 1.054, 16:05:40 open 1.921 write 3.473
+  overlaps: T s138 r1 attempt 2 16:01:57 to 16:13:06 (668.9 s), no success, does not count
+  pairs flagged: 0 of 76 (none); not more than a tenth of the pairs
+  all pairs (the headline): 76 pairs
+    O: 55/76 = 0.72 [0.61, 0.81], timeouts 1
+    T: 46/76 = 0.61 [0.49, 0.71], timeouts 0
+    both 37, only O 18, only T 9, neither 12; exact McNemar p = 0.122
+  without the flagged pairs: 76 pairs
+    O: 55/76 = 0.72 [0.61, 0.81], timeouts 1
+    T: 46/76 = 0.61 [0.49, 0.71], timeouts 0
+    both 37, only O 18, only T 9, neither 12; exact McNemar p = 0.122
+
+== check of the rule only (not declared): any single row with the open or the write on $W at 1 s or more
+  job 5084304 (cn-107): 16:02:08 to 16:02:50, rows 16:02:29 open 0.009 write 1.778
+  job 5084304 (cn-107): 16:02:50 to 16:03:48, rows 16:03:11 open 14.939 write 1.575
+  job 5084304 (cn-107): 16:04:09 to 16:06:08, rows 16:04:30 open 1.927 write 1.113, 16:04:53 open 0.340 write 3.367, 16:05:17 open 1.912 write 1.054, 16:05:40 open 1.921 write 3.473
+  job 5084304 (cn-107): 16:06:08 to 16:07:42, rows 16:06:30 open 30.429 write 0.041, 16:07:20 open 0.008 write 1.459
+  job 5084304 (cn-107): 16:08:22 to 16:09:49, rows 16:08:43 open 0.009 write 1.191, 16:09:04 open 0.009 write 2.198, 16:09:27 open 0.009 write 1.740
+  job 5084304 (cn-107): 16:09:49 to 16:11:56, rows 16:10:10 open 0.420 write 6.145, 16:10:37 open 29.761 write 29.128
+  overlaps: T s138 r1 attempt 2 16:01:57 to 16:13:06 (668.9 s), no success, does not count
+  pairs flagged: 0 of 76 (none); not more than a tenth of the pairs
+  all pairs (the headline): 76 pairs
+    O: 55/76 = 0.72 [0.61, 0.81], timeouts 1
+    T: 46/76 = 0.61 [0.49, 0.71], timeouts 0
+    both 37, only O 18, only T 9, neither 12; exact McNemar p = 0.122
+  without the flagged pairs: 76 pairs
+    O: 55/76 = 0.72 [0.61, 0.81], timeouts 1
+    T: 46/76 = 0.61 [0.49, 0.71], timeouts 0
+    both 37, only O 18, only T 9, neither 12; exact McNemar p = 0.122

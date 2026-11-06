@@ -1,10 +1,12 @@
 """BF#63 extra tables from the pulled eval/<job>/ folders: the gates of
 every job, per cup count, timeouts, arm O's failure outcomes, arm T's
-crashes.  Usage: python -I bf63_tables.py <eval dir>"""
+crashes.  Usage: python -I bf63_tables.py <eval dir> [job glob: 50630* = run 1,
+the default; 5084* = run 2 in eval2]"""
 import collections, glob, json, math, os, statistics, sys
 
 ev = sys.argv[1]
-jobs = sorted(d for d in glob.glob(os.path.join(ev, '50630*')) if os.path.isdir(d))
+pat = sys.argv[2] if len(sys.argv) > 2 else '50630*'
+jobs = sorted(d for d in glob.glob(os.path.join(ev, pat)) if os.path.isdir(d))
 print('== gates and job ends')
 for d in jobs:
     j = os.path.basename(d)

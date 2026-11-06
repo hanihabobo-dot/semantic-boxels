@@ -1,0 +1,115 @@
+--------------------- Slurm Task Prolog ------------------------
+Job ID: 5084304
+Job name: p4-gen
+Host: cn-107
+Date: Wed Nov  4 15:30:15 CET 2026
+User: hani.alassiri.alhabboub
+Slurm account: rleap
+Slurm partition: rleap_cpu
+Work dir: 
+------------------
+Node usage:
+JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
+5084304 rleap_cpu   p4-gen hani.ala  R       0:02      1 cn-107
+5051350_86 rleap_cpu stages-g maximili  R 1-01:00:48      1 cn-107
+5051350_87 rleap_cpu stages-g maximili  R 1-01:00:48      1 cn-107
+5051350_88 rleap_cpu stages-g maximili  R 1-01:00:48      1 cn-107
+5051350_89 rleap_cpu stages-g maximili  R 1-01:00:48      1 cn-107
+5051350_90 rleap_cpu stages-g maximili  R 1-01:00:48      1 cn-107
+5051350_91 rleap_cpu stages-g maximili  R 1-01:00:48      1 cn-107
+5051350_9 rleap_cpu stages-g maximili  R 1-01:21:00      1 cn-107
+5051350_10 rleap_cpu stages-g maximili  R 1-01:21:00      1 cn-107
+5078027_9 rleap_cpu ao-rover martin.f  R    2:17:04      1 cn-107
+------------------
+Show launch script with:
+sacct -B -j 
+------------------
+--------------------- Slurm Task Prolog ------------------------
+P4_LOCAL: the job's folder is /tmp/p4gen_5084304 on cn-107 (14G free), then /work/rleap1/hani.alassiri.alhabboub/p4/results/gen_11744fd/5084304.tar.gz
+host cn-107  job 5084304  2026-11-04T15:30:16+01:00  snapshot /work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd  scenes 136-139  reps 2  out /tmp/p4gen_5084304
+model name	: Intel(R) Xeon(R) Platinum 8160 CPU @ 2.10GHz
+graph    INFO  36 modules; roots not present yet: none
+G1       PASS  83 hits, all reviewed
+G2       PASS  46 hits, all reviewed
+G7       PASS  no scene literal
+G11(i)   PASS  pddlstream imported only by pddlstream_planner.py and streams.py
+G17      PASS  clean
+G10      INFO  domain_pddlstream.pddl a21877fe170997c7  stream.pddl 9f767855831731a4
+G10      PASS  pddl/domain_pddlstream_m8.pddl e49e249bb03b7fdd = regenerated (live + M8 delta); an OFF run must load the live file, an ON run this one
+G13      PASS  tampura: HEAD cdddf14, tree fbc0cd060ddbb4af, 0 declared change(s) (BF#3), nothing else modified or stray
+G13      PASS  tampura_environments: HEAD 4167c35, tree e339e7b865a82c1b, 1 declared change(s) (BF#3), nothing else modified or stray
+G13      INFO  arm T pip freeze 0cdfcf0c5ae35ee4
+G13      PASS  arm T's installed tampura: 2502 of 2506 tracked files byte-equal to the checkout, the rest never installed and never read, build 5f75024e7c619d4f
+G13      PASS  T driver = run_planner.py line for line, plus the one import
+arm solver_iters+force_hold+pose_radius_keep+grasp_wrist_home: fixes ['force_hold', 'grasp_wrist_home', 'pose_radius_keep', 'solver_iters']
+[gen] rep 0 seed 136 (find_dice_gen_s136.json) arm T attempt 1 ... success, wall 110.079 s
+[gen] rep 0 seed 136 (find_dice_gen_s136.json) arm O attempt 1 ... success, wall 42.4 s
+[gen] rep 0 seed 137 (find_dice_gen_s137.json) arm T attempt 1 ... success, wall 57.685 s
+[gen] rep 0 seed 137 (find_dice_gen_s137.json) arm O attempt 1 ... success, wall 16.9 s
+[gen] rep 0 seed 138 (find_dice_gen_s138.json) arm T attempt 1 ... no success, wall 352.405 s, DOES NOT COUNT: crashed: rc 1, no RolloutHistory ()
+[gen] rep 0 seed 138 (find_dice_gen_s138.json) arm T attempt 2 ... no success, wall 347.387 s, DOES NOT COUNT: crashed: rc 1, no RolloutHistory ()
+[gen] rep 0 seed 138 (find_dice_gen_s138.json) arm O attempt 1 ... success, wall 21.2 s
+[gen] rep 0 seed 139 (find_dice_gen_s139.json) arm T attempt 1 ... no success, wall 173.846 s
+[gen] rep 0 seed 139 (find_dice_gen_s139.json) arm O attempt 1 ... success, wall 42.8 s
+[gen] rep 1 seed 136 (find_dice_gen_s136.json) arm T attempt 1 ... success, wall 107.691 s
+[gen] rep 1 seed 136 (find_dice_gen_s136.json) arm O attempt 1 ... success, wall 18.5 s
+[gen] rep 1 seed 137 (find_dice_gen_s137.json) arm T attempt 1 ... success, wall 57.454 s
+[gen] rep 1 seed 137 (find_dice_gen_s137.json) arm O attempt 1 ... success, wall 19.1 s
+[gen] rep 1 seed 138 (find_dice_gen_s138.json) arm T attempt 1 ... no success, wall 367.931 s, DOES NOT COUNT: crashed: rc 1, no RolloutHistory ()
+[gen] rep 1 seed 138 (find_dice_gen_s138.json) arm T attempt 2 ... no success, wall 668.927 s, DOES NOT COUNT: crashed: rc 1, no RolloutHistory ()
+[gen] rep 1 seed 138 (find_dice_gen_s138.json) arm O attempt 1 ... success, wall 19.3 s
+[gen] rep 1 seed 139 (find_dice_gen_s139.json) arm T attempt 1 ... no success, wall 174.91 s
+[gen] rep 1 seed 139 (find_dice_gen_s139.json) arm O attempt 1 ... success, wall 116.2 s
+18 episode runs, 16 final (arm, scene, repetition); scenes 4, repetitions 2
+
+first runs that did not count (each ran once more): 2
+  T seed 138 rep 0: crashed: rc 1, no RolloutHistory ()
+  T seed 138 rep 1: crashed: rc 1, no RolloutHistory ()
+
+arm   counted  success   rate    95 % Wilson timeouts not counted median wall s (successes)
+O           8        8   1.00 [0.68, 1.00]         0           0          20.2        20.2
+T           6        4   0.67 [0.30, 0.90]         0           2         108.9        82.7
+
+paired (both arms counted on the same scene and repetition): 6 pairs; both succeed 4, only O 2, only T 0, neither 0; exact McNemar p = 0.5
+left out of the pairs (an arm did not count twice): seed 138 rep 0, seed 138 rep 1
+
+per scene (successes / counted runs; cups from the manifest):
+  seed  cups      O      T   T's last actions when it failed
+   136     1    2/2    2/2   
+   137     1    2/2    2/2   
+   138     1    2/2    0/0   
+   139     2    2/2    0/2   look(o_ph_1, o_ph_0, o_co_12)|look(o_ph_1, o_ph_0, o_co_12)|look(o_ph_1, o_ph_0, o_co_12); look(o_ph_1, o_ph_0, o_co_12)|look(o_ph_1, o_ph_0, o_co_12)|look(o_ph_1, o_ph_0, o_co_12)
+
+arm O die carries 8, lost in the hand 0
+arm T median time to success 73.0 s (their loop clock)
+failure screenshots: 6 runs, 4 images under failures/ (no image: T s138 r0, T s138 r0, T s138 r1, T s138 r1)
+harness rc 0
+G13      PASS  tampura: HEAD cdddf14, tree fbc0cd060ddbb4af, 0 declared change(s) (BF#3), nothing else modified or stray
+G13      PASS  tampura_environments: HEAD 4167c35, tree e339e7b865a82c1b, 1 declared change(s) (BF#3), nothing else modified or stray
+G13      INFO  arm T pip freeze 0cdfcf0c5ae35ee4
+G13      PASS  arm T's installed tampura: 2502 of 2506 tracked files byte-equal to the checkout, the rest never installed and never read, build 5f75024e7c619d4f
+G13      PASS  unchanged since /tmp/p4gen_5084304/g13_before.json
+results in /work/rleap1/hani.alassiri.alhabboub/p4/results/gen_11744fd/5084304.tar.gz (512), /tmp/p4gen_5084304 removed
+prune_work 2026-11-04T16:18:55+01:00 apply=1 cap=1073741824 reserve=0 used=457420800 referenced=[sb_11744fd]
+--- usage (counted) ---
+512	/work/rleap1/hani.alassiri.alhabboub/p4/inbox
+5.3M	/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd
+432M	/work/rleap1/hani.alassiri.alhabboub/p4/results
+814K	/work/rleap1/hani.alassiri.alhabboub/p4/logs
+--- environment (not counted) ---
+5.4G	/work/rleap1/hani.alassiri.alhabboub/p4/armO-venvA
+6.8G	/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work
+297M	/work/rleap1/hani.alassiri.alhabboub/p4/pddlstream_lib
+97M	/work/rleap1/hani.alassiri.alhabboub/p4/python
+110M	/work/rleap1/hani.alassiri.alhabboub/p4/tools
+37K	/work/rleap1/hani.alassiri.alhabboub/p4/uv-cache
+counted total 458359808 bytes (437 MiB) of 1024 MiB, reserve 0 MiB
+GEN_DONE
+--------------------- Slurm Task Epilog ------------------------
+Job ID: 5084304
+Time: Wed Nov  4 16:21:00 CET 2026
+Elapsed Time: 00:50:46
+Billing per second for TRES: billing=256,cpu=8,mem=24G,node=1
+Show resource usage with e.g.:
+sacct -j 5084304 -o Elapsed,TotalCPU,UserCPU,SystemCPU,MaxRSS,ReqTRES%60,MaxDiskRead,MaxDiskWrite
+--------------------- Slurm Task Epilog ------------------------
