@@ -9357,7 +9357,16 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   planner, find_dice task model and config on the scenes `run boxels`
   builds, with every change to TAMPURA a numbered tweak T-n in every
   report; it fills the gap the thesis names (thesis/chapters/
-  results.tex:390-404).  The session "Go"
+  results.tex:390-404).  Path 6 (added about 15:42: "another path is to
+  do a cluster eval on the code as is vs tampura vs our code from the
+  thesis on all envoiroments where this coparison is possible", without
+  varying the auto cell; "an agent shold detetmin the eval starteegy and
+  time and report to user and to you and need a confirmation from both of
+  us") plans a cluster eval of our code now, our thesis code and TAMPURA
+  on every environment where two of them run on the same scenes, the way
+  the thesis ran its sweep; TAMPURA on our env joins once path 5 is done,
+  and nothing runs on the cluster before Hani and Go confirm the plan.
+  The session "Go"
   stays the main orchestrator; every path has one responsible session,
   which reports to its parent when its job is done, and the parent then
   archives that conversation (Hani: "aungagents shoouuld always update
@@ -9395,10 +9404,12 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   path 4 "Path 4: 3-D Wumpus with LW1" (Opus 5.5, local_05af7e92; its env
   and robot by a Sonnet sub-session it starts); at 14:45 path 5 "Path 5:
   TAMPURA on our env" (Sonnet 5.5, local_d255ee8f; branch track/reverse,
-  worktree ..\sb-reverse).
+  worktree ..\sb-reverse); at about 15:53 path 6 "Path 6: cluster eval,
+  ours now vs thesis vs TAMPURA" (Sonnet 5.5, local_247ba0ed; branch
+  track/eval, worktree ..\sb-eval).
   The class_uncertain plan (BF#67) stays held; its phase 1 is path 2's
   input.
-  EVIDENCE: tracks/STATE.md, the five briefs, tracks/stable_check/.
+  EVIDENCE: tracks/STATE.md, the six briefs, tracks/stable_check/.
   CLAIM EFFECT: none.  HONESTY CLASS: process decision, no pipeline
   change.
 
