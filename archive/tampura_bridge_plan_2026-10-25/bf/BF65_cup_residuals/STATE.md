@@ -53,9 +53,8 @@ bf2c4bc plus that fix).
 
 ## Open
 
-1. WSL /root/bf64_check (14 MB, handed to this session, DATA_LEDGER.md
-   Kept): garbage now.  The deletion by path was refused by the permission
-   check on 2026-11-06 10:05; it waits for Hani's OK, then
-   `wsl -e bash -c 'rm -rf -- /root/bf64_check'` and a ledger line.
+1. DONE 2026-11-06 11:11: WSL /root/bf64_check (14 MB) deleted by path on
+   Hani's OK by the session that made the TAMPURA tasks page, logged in
+   DATA_LEDGER.md under Deleted.
 2. Hani's choice among the fix options.  Option 1 or any fix is new work;
    the 40-scene comparison after a fix needs a cluster run, asked alone.
