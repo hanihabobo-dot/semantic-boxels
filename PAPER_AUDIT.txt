@@ -8869,8 +8869,10 @@ BF#62 [DONE]  USER DECISION: THE FOUR SWITCHES OF THE CHOSEN SET ARE ON BY
   change of physics and model switches whose effect BF#59 measured on
   TAMPURA's find_dice seeds; pipeline-wide; disclosed.
 
-BF#63 [DONE; FINDING OPEN]  GENERATED-SCENE EVAL: OURS 57 OF 80, TAMPURA 36
-  OF 78 ON 40 SCENES FROM THEIR OWN GENERATOR  (user request, 2026-11-03)
+BF#63 [DONE; FINDING OPEN]  GENERATED-SCENE EVAL ON 40 SCENES FROM THEIR OWN
+  GENERATOR: OURS 57 OF 80 IN BOTH RUNS, TAMPURA 46 OF 76 IN RUN 2 (36 OF 78
+  IN RUN 1'S SLOW HOUR); RUN 2'S PAIRS 18 TO 9, p = 0.12  (user request,
+  2026-11-03)
   WHAT: Hani asked for quick, reliable numbers of ours against TAMPURA on
   find_dice, at least 20 working seeds each and no incomparable results.
   TAMPURA's paper publishes no seeds and its released find_dice ships
@@ -8957,8 +8959,84 @@ BF#63 [DONE; FINDING OPEN]  GENERATED-SCENE EVAL: OURS 57 OF 80, TAMPURA 36
   nodes (--exclusive) would not have removed it: they reserve CPUs and
   memory, not the volume, and no rleap_cpu node was free (all 16 shared,
   221 jobs pending on 2026-11-04 at 11:40; BF#53 found an 11 h wait).  The
-  second run (STATE.md phase 8, planned) keeps each job's folder on the
-  node's own disk and logs the volume's latency every 20 s.
+  second run (RUN 2, below) kept each job's folder on the node's own disk
+  and logged the volume's latency every 20 s.
+  RUN 2 (declared before it ran: STATE.md phase 8; eval2/): the same 40
+  scenes, 2 repetitions, the 900 s cap, BF#62's four switches, the
+  validity rule, T then O per scene on one node, one job of 4 scenes per
+  node (8 CPUs, 24 GB).  What changed: each job's folder (the episode
+  folders where planning writes its PDDL and temp files, the records,
+  failures/) lay on the node's own /tmp and became one tarball on $W at
+  the end (gen_eval.sbatch P4_LOCAL=1), and a probe logged every 20 s the
+  time to open a file on $W, to write 4 kB there with fsync, and the same
+  write locally.  The code, 11744fd, is b2c6c5d's pipeline plus the final
+  overviews' die ring (811eda1, d344d17), drawn after the record.  Hani,
+  asked alone: "Yes, run it (Recommended)".  sb_11744fd, jobs 5084295 to
+  5084304 on cn-112, 111, 109, 115, 104, 103, 110, 114, 113, 107 (Xeon
+  Platinum 8160), 2026-11-04 14:22 to 16:21; 5084302, 5084303 and 5084304
+  waited for memory on their pinned nodes until 14:26, 15:08 and 15:30.
+  Every job's gates PASS before (the same lines in all ten), the TAMPURA
+  tree unchanged after, harness rc 0.  164 episode runs, 160 final.
+    arm O  57 of 80 counted = 0.71 [0.61, 0.80], 1 timeout (124 r1), 0 not
+           counted; median wall 29.5 s (successes 33.1 s); 57 die carries,
+           0 lost in the hand.
+    arm T  46 of 76 counted = 0.61 [0.49, 0.71], no timeout, 4 not counted
+           (scenes 127 and 138 in both repetitions: each crashed on both
+           attempts with run 1's ZeroDivisionError in print_F,
+           eval2/T_CRASHES.txt); median wall 158.4 s (successes 111.7 s;
+           their loop clock to success, median 98.9 s).
+    76 pairs: both succeed 37, only ours 18, only TAMPURA 9, neither 12;
+    exact McNemar p = 0.12.  Each repetition alone (eval2/REPS.txt, 38
+    pairs): 18 / 9 / 5 / 6, p = 0.42; 19 / 9 / 4 / 6, p = 0.27.
+    By cup count (successes of counted, ours vs TAMPURA; pairs both / only
+    ours / only TAMPURA / neither):
+      1 cup  (7 scenes)  14/14 vs 12/12   12 / 0 / 0 / 0
+      2 cups (9 scenes)  10/18 vs 10/16    6 / 4 / 4 / 2
+      3 cups (8 scenes)  10/16 vs 10/16    8 / 2 / 2 / 4
+      4 cups (8 scenes)  12/16 vs  6/16    4 / 8 / 2 / 2
+      5 cups (8 scenes)  11/16 vs  8/16    7 / 4 / 1 / 4
+  THE STALL RULE (declared in phase 8; eval2/IO.txt, bf63_io.py): the
+  probe's open on $W took a median 0.008 s on every node, at most 0.010 s
+  on nine; the write with fsync there 0.017 to 0.028 s median (local disk
+  0.011 s).  On cn-107 (5084304, by then the last job running) the volume
+  degraded from 16:02 to 16:12: single opens took up to 30.4 s and writes
+  up to 29.1 s, and the rule's one stall (two consecutive rows at 1.9 s)
+  lasted from 16:04:53 to 16:06:08.  It overlaps one run, TAMPURA's second
+  attempt at scene 138 r1 (668.9 s, against 347 to 368 s for 138's other
+  three attempts), which crashed like them and does not count.  No pair is
+  flagged, by the rule or by a looser check of every single slow row; the
+  headline stands as it is.
+  BESIDE RUN 1 (not pooled; eval2/COMPARE.txt, bf63_compare.py): with the
+  volume normal, both arms planned at least as fast as in run 1 outside
+  the slow hour.  Ours took 1.74 s per planning call (median; run 1 2.25 s
+  outside the hour and 35.1 s inside it; 0.82 of run 1's outside on the
+  same scene and repetition) and 0.55 s per execution step (0.54, 0.66);
+  TAMPURA's first get_action took 58.6 s (60.2 s, 259.8 s; 0.99 matched).
+  Ours ended the same way in both runs in 78 of 80 (arm, scene,
+  repetition), in all 54 that ran outside the slow hour; the two that
+  differ ran inside it (100 r1 success to failure, 101 r1 timeout to
+  success).  TAMPURA ended the same way in 51 of 76, 32 of 45 outside the
+  hour; 18 of the 25 changes went from failure or timeout to success.
+  Within run 2 its outcome is the same in both repetitions on 38 of 38
+  scenes (ours 39 of 40); within run 1 it differed on 16 of 39, and on 4
+  of the 7 scenes whose both repetitions ran outside the hour.  Both
+  repetitions use the scene's seed as the global seed, and their
+  find_dice.yml sets counts (200 samples, 10 skeletons), no time budget;
+  why its outcome repeats within run 2 and not across the runs is not
+  analysed.  For the test this means run 2's two repetitions of a scene
+  are close to one draw, so its 76 pairs carry about the information of
+  38 and the per-repetition p values are the fairer reading.  On the 44
+  scene-repetitions that were run 1's pairs outside the slow hour, run 2
+  splits 10 to 6 (p = 0.45; run 1 11 to 5).
+  RUN 2'S FAILURES: ours 23 counted, in the same 12 scenes as run 1, none
+  with a die carry (eval2/O_FAILURES.txt): 18 end all_searched with the
+  die under a cup that held no registered shadow (12 of those cups never
+  classed an occluder; run 1: 17), 4 planner_failed (104 twice, 101 r0,
+  103 r1), 1 timeout (124 r1); BF#65 gives the causes.  TAMPURA's 30
+  counted failures all ended below reward 1, most after repeated looks at
+  one object, 131 after repeated picks and 106 after no-ops (REPORT.txt's
+  per-scene table).  Screenshots: 61 runs kept failures/, 146 images; arm
+  O's overview_final.png now carries the die ring.
   OUR FAILURES (FINDING, OPEN; eval/O_FAILURES.txt, from the world eye's
   last record in each failures/ folder): 23 counted failures, none with a
   die carry (no slip); the same outcome in both repetitions on 39 of 40
@@ -9014,8 +9092,9 @@ BF#63 [DONE; FINDING OPEN]  GENERATED-SCENE EVAL: OURS 57 OF 80, TAMPURA 36
   validity, report, failure screenshots), tools/slip_eval.py (extra_args,
   extra_env), tools/bridge_gates.py (merge_scene_manifest), tools/cluster/
   gen_eval.sbatch, tampura_bridge/run_bridge_on_finddice.py (the
-  overviews).  Commits run: 6519b8e, 2dde3fa, 68e7434, 21226c8, b2c6c5d;
-  not run: 811eda1, d344d17 (the ring).
+  overviews).  Commits run: 6519b8e, 2dde3fa, 68e7434, 21226c8, b2c6c5d
+  (run 1); 11744fd (RUN 2, with 811eda1's and d344d17's ring and
+  gen_eval.sbatch's P4_LOCAL mode and probe).
   EVIDENCE: archive/tampura_bridge_plan_2026-10-25/bf/BF63_gen_scenes/
   (STATE.md; eval/<job>/ for the ten jobs: results.jsonl, metadata.json,
   gates_before.txt, gates_after.txt, g13_before.json, failures/, the job
@@ -9023,20 +9102,31 @@ BF#63 [DONE; FINDING OPEN]  GENERATED-SCENE EVAL: OURS 57 OF 80, TAMPURA 36
   scripts bf63_tables.py, bf63_why_o.py, bf63_reps.py; eval/
   failed_g13_68e7434/, the first submission's logs).  The episode
   directories: cluster $W/results/gen_b2c6c5d (324 MiB, prune_work's
+  retention).  RUN 2: eval2/<job>/ for its ten jobs (the same files and
+  io_probe.tsv); eval2/REPORT.txt, TABLES.txt, O_FAILURES.txt, REPS.txt
+  (eval/'s scripts with the job glob 5084*), T_CRASHES.txt, IO.txt with
+  bf63_io.py, COMPARE.txt with bf63_compare.py.  Its episode folders:
+  cluster $W/results/gen_11744fd/<job>.tar.gz (16 MiB, prune_work's
   retention).
-  CLAIM EFFECT: on 40 find_dice scenes from TAMPURA's own generator, ours
-  succeeds in 57 of 80 episodes and TAMPURA in 36 of 78, paired 25 to 6
-  (p = 0.0009), but the significance comes from the slow hour: outside it
-  the pairs split 11 to 5 (p = 0.21, 45 pairs), and all 14 of TAMPURA's
-  timeouts fall inside it.  This run is cited with the slow hour or not at
-  all; the second run decides the generated-scene comparison.  Our new
-  failure mode (the die under a cup the occlusion model does not register:
-  17 of our 23 failures, the same outcome in both repetitions on 39 of 40
-  scenes) does not depend on the hour.  The shipped-scene result stands,
-  scoped to the three shipped layouts.  HONESTY CLASS: measurement on scenes neither
-  side was tuned on (their generator, seeds fixed before any run, nothing
+  CLAIM EFFECT: run 2 decides the generated-scene comparison, as declared
+  before it ran: on 40 find_dice scenes from TAMPURA's own generator ours
+  succeeds in 57 of 80 episodes (0.71 [0.61, 0.80]) and TAMPURA in 46 of
+  76 (0.61 [0.49, 0.71]), paired 18 to 9, exact McNemar p = 0.12 (each
+  repetition alone p = 0.42 and 0.27).  Ours is ahead, not significantly:
+  the paper reports these numbers with the test and does not call ours
+  better on these scenes.  Described, not tested (a split after the run):
+  ahead on four and five cups (23 of 32 against 14 of 32), level on one
+  to three; the median wall of a success 33 s against 112 s (ours with
+  its screenshots).  Run 1 (TAMPURA 36 of 78, paired 25 to 6, p = 0.0009)
+  is cited with its slow hour or not at all.  Our failure mode (the die
+  under a cup with no registered shadow: 18 of our 23 failures in run 2,
+  17 in run 1, the same 12 scenes; its cause in BF#65) does not depend on
+  the volume.  The shipped-scene result stands, scoped to the three
+  shipped layouts.  HONESTY CLASS: measurement on scenes neither side was
+  tuned on (their generator, seeds fixed before any run, nothing
   filtered), the validity rule declared before any run and applied as
-  written, every run that did not count listed with its cause; disclosed.
+  written, run 2's changes and stall rule declared before it ran, every
+  run that did not count listed with its cause; disclosed.
 
 BF#65 [FINDING OPEN]  THE DIE UNDER A CUP LIES IN NONE OF OUR HIDING
   REGIONS: WE FIND IT ONLY BY LIFTING THE CUP  (BF#63's open finding; asked

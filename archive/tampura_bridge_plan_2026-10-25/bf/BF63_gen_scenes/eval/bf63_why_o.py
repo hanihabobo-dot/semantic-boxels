@@ -1,11 +1,13 @@
 """BF#63: for each arm O run that is not a counted success, where the die
 truly was (the world eye's last record) and what the pipeline believed
-about the object hiding it.  Usage: python -I bf63_why_o.py <eval dir>"""
+about the object hiding it.  Usage: python -I bf63_why_o.py <eval dir> [job glob:
+50630* = run 1, the default; 5084* = run 2 in eval2]"""
 import collections, glob, json, os, sys
 
 ev = sys.argv[1]
+pat = sys.argv[2] if len(sys.argv) > 2 else '50630*'
 tally = collections.Counter()
-for d in sorted(glob.glob(os.path.join(ev, '50630*', 'failures', 'O_s*'))):
+for d in sorted(glob.glob(os.path.join(ev, pat, 'failures', 'O_s*'))):
     meta = json.load(open(os.path.join(d, 'meta.json'), encoding='utf-8'))
     if meta.get('counts') is False:
         continue

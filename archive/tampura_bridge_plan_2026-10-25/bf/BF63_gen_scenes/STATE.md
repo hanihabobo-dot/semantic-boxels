@@ -229,7 +229,13 @@ cups and the die, the die hidden from the home camera) makes more.
    commit, HEAD moved from f07eef2 to 330e5e8 (README.md, run.ps1,
    tools/watch.ps1: laptop launcher files the cluster never runs).
    Committed 11744fd (with the BF#63 correction THE SLOW HOUR).
-9. RUNNING since 2026-11-04 14:22.  Hani, asked alone (the run as planned
+9. DONE 2026-11-04 14:22 to 16:21 (all ten COMPLETED, 23 min to 1 h 22;
+   every job's gates PASS before, tree unchanged after, harness rc 0, its
+   local folder removed and its tarball written).  Three jobs waited for
+   memory on their pinned nodes (reason Resources: other users' jobs held
+   176 to 188 GB of each node's 190 GB), kept pinned and at 24 GB as
+   declared: 5084302 until 14:26, 5084303 until 15:08, 5084304 until
+   15:30.  Hani, asked alone (the run as planned
    in phase 8: a code-only snapshot of 11744fd, 10 jobs of 4 scenes, 2
    repetitions, P4_LOCAL=1, 10 shared rleap_cpu nodes with 8 CPUs and 24
    GB each, about 70 min, about 324 MiB): "Yes, run it (Recommended)".
@@ -246,7 +252,24 @@ cups and the die, the die hidden from the home camera) makes more.
    cn-107 136-139.  OUT $W/results/gen_11744fd/<job>.tar.gz, logs
    $W/logs/p4-gen_<job>.txt.  The laptop polls sacct -X (scratchpad
    wait_jobs.ps1) and an early look reports the first finished scene
-   (early_look.ps1).  Next: on ALL DONE, the pull (scratchpad
-   pull_remote2.sh) into eval2/<job>/, REPORT.txt, the stall rule
-   (phase 8), the agreement with run 1, BF#63's RUN 2 section; delete
-   sb_11744fd (ledger).
+   (early_look.ps1).
+10. DONE 2026-11-06 10:07 to 10:40.  Pulled into eval2/<job>/
+   (results.jsonl, metadata.json, the gates, g13_before.json,
+   io_probe.tsv, failures/ with 61 runs and 146 images, the job log; 2.7
+   MB, tracked) through one tarball (sha256 equal at both ends, deleted
+   at both ends).  eval2/REPORT.txt (the harness's report); TABLES.txt,
+   O_FAILURES.txt, REPS.txt from eval/'s scripts, which now take a job
+   glob (run 1's three outputs regenerate byte for byte with the
+   default); T_CRASHES.txt (the 8 crashed TAMPURA runs' consoles, read
+   from the job tarballs: all run 1's ZeroDivisionError in print_F);
+   IO.txt (bf63_io.py, the stall rule as declared in phase 8: one stall,
+   on cn-107 from 16:04:53 to 16:06:08, overlapping only a TAMPURA
+   attempt that does not count; no pair flagged); COMPARE.txt
+   (bf63_compare.py, run 2 beside run 1).  Result: ours 57 of 80, TAMPURA
+   46 of 76, pairs 37 / 18 / 9 / 12, p = 0.12; the numbers and the
+   reading in BF#63 RUN 2 and its CLAIM EFFECT.  sb_11744fd deleted
+   (ledger); the job tarballs stay on $W under prune_work's retention.
+   Open for Hani: whether the paper cites run 2 as the generated-scene
+   result (BF#63 CLAIM EFFECT); why TAMPURA's outcome repeats within run
+   2 (38 of 38 scenes) but not across the runs (51 of 76) is not
+   analysed.

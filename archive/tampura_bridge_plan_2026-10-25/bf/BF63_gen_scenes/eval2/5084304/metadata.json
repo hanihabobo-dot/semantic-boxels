@@ -1,0 +1,21 @@
+{
+ "snapshot": "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd",
+ "scenes": "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tampura_bridge/gen_scenes/find_dice",
+ "seeds": [
+  136,
+  137,
+  138,
+  139
+ ],
+ "reps": 2,
+ "cap_s": 900.0,
+ "arm_o": "solver_iters+force_hold+pose_radius_keep+grasp_wrist_home",
+ "shots": "failures",
+ "python_o": "/work/rleap1/hani.alassiri.alhabboub/p4/armO-venvA/bin/python",
+ "venv_t": "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv",
+ "tampura_work": "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work",
+ "host": "cn-107",
+ "cpu": "Intel(R) Xeon(R) Platinum 8160 CPU @ 2.10GHz",
+ "job": "5084304",
+ "started": "2026-11-04 15:32:18"
+}

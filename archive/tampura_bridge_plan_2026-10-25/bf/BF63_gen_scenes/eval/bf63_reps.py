@@ -1,6 +1,8 @@
 """BF#63: the paired numbers per repetition, and without the pairs whose
-arm T run timed out (rep 1 ran on busier nodes: both arms slower on the
-same scenes, arm T's timeouts 3 -> 11).  Usage: python -I bf63_reps.py <eval dir>"""
+arm T run timed out (run 1: both arms slower on the same scenes in rep 1,
+arm T's timeouts 3 -> 11; the cause was the slow hour on the NFS volume,
+BF#63 THE SLOW HOUR, not busier nodes).  Usage: python -I bf63_reps.py
+<eval dir> [job glob: 50630* = run 1, the default; 5084* = run 2 in eval2]"""
 import glob, json, os, statistics, sys
 
 here = os.path.dirname(os.path.abspath(__file__))
@@ -10,8 +12,9 @@ while not os.path.isfile(os.path.join(root, 'tools', 'gen_scene_eval.py')):
 sys.path.insert(0, os.path.join(root, 'tools'))
 from gen_scene_eval import mcnemar_exact, wilson  # noqa: E402
 
+pat = sys.argv[2] if len(sys.argv) > 2 else '50630*'
 rows = []
-for p in sorted(glob.glob(os.path.join(sys.argv[1], '50630*', 'results.jsonl'))):
+for p in sorted(glob.glob(os.path.join(sys.argv[1], pat, 'results.jsonl'))):
     rows += [json.loads(l) for l in open(p, encoding='utf-8') if l.strip()]
 final = {}
 for r in rows:

@@ -1,0 +1,193 @@
+BF#63 run 2: arm T's runs that did not count (the console of each, from Traceback to the end), read from the job tarballs /work/rleap1/hani.alassiri.alhabboub/p4/results/gen_11744fd/<job>.tar.gz on 2026-11-06
+
+=== job 5084301 ./T/rep0/T/seed127/console.txt
+Traceback (most recent call last):
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tools/run_tampura_timed.py", line 145, in <module>
+    (_, _) = policy.rollout(env, b0, store)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/policy.py", line 120, in rollout
+    action, info, store = self.get_action(b, store)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tampura_bridge/timed_policy.py", line 39, in get_action
+    out = super().get_action(belief, store)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/tampura_policy.py", line 147, in get_action
+    self.problem_spec.print_F(self.F)
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/spec.py", line 98, in print_F
+    for bp, prob in bs.ab_probs.items():
+                    ^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in ab_probs
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in <dictcomp>
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+               ~~^~~~~~~~~~~~~~
+ZeroDivisionError: float division by zero
+
+=== job 5084301 ./T/rep1/T/seed127/console.txt
+Traceback (most recent call last):
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tools/run_tampura_timed.py", line 145, in <module>
+    (_, _) = policy.rollout(env, b0, store)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/policy.py", line 120, in rollout
+    action, info, store = self.get_action(b, store)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tampura_bridge/timed_policy.py", line 39, in get_action
+    out = super().get_action(belief, store)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/tampura_policy.py", line 147, in get_action
+    self.problem_spec.print_F(self.F)
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/spec.py", line 98, in print_F
+    for bp, prob in bs.ab_probs.items():
+                    ^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in ab_probs
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in <dictcomp>
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+               ~~^~~~~~~~~~~~~~
+ZeroDivisionError: float division by zero
+
+=== job 5084301 ./T_retry/rep0/T/seed127/console.txt
+Traceback (most recent call last):
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tools/run_tampura_timed.py", line 145, in <module>
+    (_, _) = policy.rollout(env, b0, store)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/policy.py", line 120, in rollout
+    action, info, store = self.get_action(b, store)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tampura_bridge/timed_policy.py", line 39, in get_action
+    out = super().get_action(belief, store)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/tampura_policy.py", line 147, in get_action
+    self.problem_spec.print_F(self.F)
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/spec.py", line 98, in print_F
+    for bp, prob in bs.ab_probs.items():
+                    ^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in ab_probs
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in <dictcomp>
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+               ~~^~~~~~~~~~~~~~
+ZeroDivisionError: float division by zero
+
+=== job 5084301 ./T_retry/rep1/T/seed127/console.txt
+Traceback (most recent call last):
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tools/run_tampura_timed.py", line 145, in <module>
+    (_, _) = policy.rollout(env, b0, store)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/policy.py", line 120, in rollout
+    action, info, store = self.get_action(b, store)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tampura_bridge/timed_policy.py", line 39, in get_action
+    out = super().get_action(belief, store)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/tampura_policy.py", line 147, in get_action
+    self.problem_spec.print_F(self.F)
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/spec.py", line 98, in print_F
+    for bp, prob in bs.ab_probs.items():
+                    ^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in ab_probs
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in <dictcomp>
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+               ~~^~~~~~~~~~~~~~
+ZeroDivisionError: float division by zero
+
+=== job 5084304 ./T/rep0/T/seed138/console.txt
+Traceback (most recent call last):
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tools/run_tampura_timed.py", line 145, in <module>
+    (_, _) = policy.rollout(env, b0, store)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/policy.py", line 120, in rollout
+    action, info, store = self.get_action(b, store)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tampura_bridge/timed_policy.py", line 39, in get_action
+    out = super().get_action(belief, store)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/tampura_policy.py", line 147, in get_action
+    self.problem_spec.print_F(self.F)
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/spec.py", line 98, in print_F
+    for bp, prob in bs.ab_probs.items():
+                    ^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in ab_probs
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in <dictcomp>
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+               ~~^~~~~~~~~~~~~~
+ZeroDivisionError: float division by zero
+
+=== job 5084304 ./T/rep1/T/seed138/console.txt
+Traceback (most recent call last):
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tools/run_tampura_timed.py", line 145, in <module>
+    (_, _) = policy.rollout(env, b0, store)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/policy.py", line 120, in rollout
+    action, info, store = self.get_action(b, store)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tampura_bridge/timed_policy.py", line 39, in get_action
+    out = super().get_action(belief, store)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/tampura_policy.py", line 147, in get_action
+    self.problem_spec.print_F(self.F)
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/spec.py", line 98, in print_F
+    for bp, prob in bs.ab_probs.items():
+                    ^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in ab_probs
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in <dictcomp>
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+               ~~^~~~~~~~~~~~~~
+ZeroDivisionError: float division by zero
+
+=== job 5084304 ./T_retry/rep0/T/seed138/console.txt
+Traceback (most recent call last):
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tools/run_tampura_timed.py", line 145, in <module>
+    (_, _) = policy.rollout(env, b0, store)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/policy.py", line 120, in rollout
+    action, info, store = self.get_action(b, store)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tampura_bridge/timed_policy.py", line 39, in get_action
+    out = super().get_action(belief, store)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/tampura_policy.py", line 147, in get_action
+    self.problem_spec.print_F(self.F)
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/spec.py", line 98, in print_F
+    for bp, prob in bs.ab_probs.items():
+                    ^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in ab_probs
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in <dictcomp>
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+               ~~^~~~~~~~~~~~~~
+ZeroDivisionError: float division by zero
+
+=== job 5084304 ./T_retry/rep1/T/seed138/console.txt
+Traceback (most recent call last):
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tools/run_tampura_timed.py", line 145, in <module>
+    (_, _) = policy.rollout(env, b0, store)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/policy.py", line 120, in rollout
+    action, info, store = self.get_action(b, store)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/sb_11744fd/tampura_bridge/timed_policy.py", line 39, in get_action
+    out = super().get_action(belief, store)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/policies/tampura_policy.py", line 147, in get_action
+    self.problem_spec.print_F(self.F)
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/spec.py", line 98, in print_F
+    for bp, prob in bs.ab_probs.items():
+                    ^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in ab_probs
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/.venv/lib/python3.11/site-packages/tampura/structs.py", line 257, in <dictcomp>
+    return {k: v / float(total) for k, v in self.ab_counts.items()}
+               ~~^~~~~~~~~~~~~~
+ZeroDivisionError: float division by zero
