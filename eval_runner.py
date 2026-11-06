@@ -463,30 +463,76 @@ def cell_to_argv(cell: Dict, extra_args: List[str]) -> List[str]:
 # Per-cell execution
 # ---------------------------------------------------------------------------
 
-def _find_latest_timing_summary(start_ts: float) -> Optional[Path]:
+def _run_dir_names() -> set:
+    """Names of the ``logs/run_*`` directories that exist right now."""
+    logs_dir = Path("logs")
+    if not logs_dir.is_dir():
+        return set()
+    return {d.name for d in logs_dir.iterdir()
+            if d.is_dir() and d.name.startswith("run_")}
+
+
+def _find_new_timing_summary(before: set) -> Optional[Path]:
     """Locate the timing_summary.json written by the just-finished cell.
 
     test_full_pipeline.py creates ``logs/run_<ts>/timing_summary.json``
-    via report_run_outcome.  We pick the most recent one whose mtime is
-    >= ``start_ts`` (epoch seconds, captured before the subprocess ran).
+    via report_run_outcome.  Only a run directory that did NOT exist
+    before the subprocess started can belong to this cell (``before`` is
+    _run_dir_names() captured just before launch).
+
+    The old rule took the newest summary whose mtime was within a 1 s
+    slack of the launch time.  A cell rejected by the pre-flight exits 1
+    before it creates any run directory, so that rule handed it the
+    PREVIOUS cell's summary whenever the previous cell had finished less
+    than a second earlier: CB#113 banked 10 of its 43 pre-flight-rejected
+    find-and-tray-stack cells as the preceding holding run's success.
     """
     logs_dir = Path("logs")
-    if not logs_dir.is_dir():
-        return None
     candidates = []
-    for run_dir in logs_dir.iterdir():
-        if not run_dir.is_dir() or not run_dir.name.startswith("run_"):
-            continue
-        summary = run_dir / "timing_summary.json"
-        if not summary.exists():
-            continue
-        # 1-second slack absorbs filesystem-mtime granularity differences.
-        if summary.stat().st_mtime + 1.0 >= start_ts:
+    for name in _run_dir_names() - before:
+        summary = logs_dir / name / "timing_summary.json"
+        if summary.exists():
             candidates.append((summary.stat().st_mtime, summary))
     if not candidates:
         return None
     candidates.sort()
     return candidates[-1][1]
+
+
+def _summary_mismatch(run_config: Optional[Dict], cell: Dict) -> Optional[str]:
+    """Why a summary's run_config cannot belong to ``cell``, or None.
+
+    Compares the knobs the runner passes on the command line, so a
+    summary from any other cell (a neighbouring goal, seed, baseline or
+    boxel size) is caught even if it lands in a new run directory.
+    """
+    if not isinstance(run_config, dict):
+        return "no run_config"
+    expected = {
+        "scene": cell["scene"],
+        "seed": cell["seed"],
+        "goal": cell["goal"],
+        "baseline": cell.get("baseline", "semantic"),
+        "unit_costs": bool(cell["unit_costs"]),
+    }
+    if cell.get("min_boxel_size") is not None:
+        expected["min_boxel_size"] = cell["min_boxel_size"]
+    diffs = [f"{k}={run_config.get(k)!r} (cell {v!r})"
+             for k, v in expected.items() if run_config.get(k) != v]
+    return ", ".join(diffs) or None
+
+
+def _preflight_rejection(output: str) -> Optional[str]:
+    """The pre-flight rejection line in a cell's output, or None.
+
+    test_full_pipeline.py prints ``[pre-flight] seed N rejected: ...``
+    to stderr when the scene cannot be built or the tray-stack goal
+    cannot be formed, then exits 1 without a run directory.
+    """
+    for line in output.splitlines():
+        if line.startswith("[pre-flight] seed ") and " rejected: " in line:
+            return line.strip()
+    return None
 
 
 def run_cell(
@@ -511,14 +557,26 @@ def run_cell(
 
     if skip_existing and summary_path.exists():
         try:
-            return {**cell, **json.loads(summary_path.read_text())}
+            existing = json.loads(summary_path.read_text())
         except Exception:
-            pass
+            existing = None
+        # A summary banked from another cell (the pre-fix runner, see
+        # _find_new_timing_summary) is not a result for this cell: run
+        # it again instead of resuming from it.  Runner stubs (timeout,
+        # crash, pre-flight) carry no run_config and are kept as is.
+        if existing is not None and (
+                "run_config" not in existing
+                or _summary_mismatch(existing["run_config"], cell) is None):
+            return {**cell, **existing}
+        if existing is not None:
+            print(f"[runner] {tag}: stored summary belongs to another cell "
+                  f"({_summary_mismatch(existing['run_config'], cell)}); "
+                  f"re-running")
 
     argv = cell_to_argv(cell, extra_args)
     print(f"[runner] {tag}: launching")
     t0 = time.perf_counter()
-    start_ts = time.time()
+    runs_before = _run_dir_names()
     try:
         proc = subprocess.run(
             argv,
@@ -558,16 +616,37 @@ def run_cell(
         print(f"[runner] {tag}: CRASH exit={proc.returncode}")
         return stub
 
-    ts_path = _find_latest_timing_summary(start_ts)
+    ts_path = _find_new_timing_summary(runs_before)
     if ts_path is None:
+        rejection = _preflight_rejection(proc.stderr or "")
         stub = {
             **cell,
             "success": False,
-            "exit_reason": "no_summary",
+            "exit_reason": ("preflight_rejected" if rejection
+                            else "no_summary"),
+            "wall_clock_s": round(wall, 3),
+        }
+        if rejection:
+            stub["preflight_message"] = rejection
+        summary_path.write_text(json.dumps(stub, indent=2))
+        print(f"[runner] {tag}: "
+              + (rejection or "NO timing_summary.json found"))
+        return stub
+
+    mismatch = _summary_mismatch(
+        json.loads(ts_path.read_text()).get("run_config"), cell)
+    if mismatch is not None:
+        stub = {
+            **cell,
+            "success": False,
+            "exit_reason": "summary_mismatch",
+            "summary_mismatch": mismatch,
+            "foreign_run_dir": str(ts_path.parent.absolute()),
             "wall_clock_s": round(wall, 3),
         }
         summary_path.write_text(json.dumps(stub, indent=2))
-        print(f"[runner] {tag}: NO timing_summary.json found")
+        print(f"[runner] {tag}: the new run's summary belongs to another "
+              f"cell ({mismatch}); not banked")
         return stub
 
     shutil.copy2(ts_path, summary_path)
@@ -621,9 +700,27 @@ LIST_VALUED = {
 
 def aggregate(sweep_dir: Path) -> Path:
     """Walk sweep_dir/cells/*/timing_summary.json into aggregated.csv +
-    aggregated.jsonl."""
+    aggregated.jsonl.
+
+    Cells are checked against sweep_dir/matrix.json, so sweeps run by the
+    pre-fix runner aggregate correctly without touching their cell files:
+    a summary banked from another cell becomes a ``preflight_rejected``
+    (or ``summary_mismatch``) row for this cell, and a ``no_summary`` stub
+    whose output shows a pre-flight rejection is relabelled the same way.
+    """
     cells_root = sweep_dir / "cells"
+    cells_by_tag: Dict[str, Dict] = {}
+    matrix_path = sweep_dir / "matrix.json"
+    if matrix_path.exists():
+        try:
+            cells_by_tag = {
+                cell_tag(c): c
+                for c in json.loads(matrix_path.read_text()).get("cells", [])
+            }
+        except Exception as e:
+            print(f"[aggregate] cannot read {matrix_path}: {e}")
     rows: List[dict] = []
+    n_relabelled = 0
     if cells_root.is_dir():
         for tag_dir in sorted(cells_root.iterdir()):
             if not tag_dir.is_dir():
@@ -636,6 +733,29 @@ def aggregate(sweep_dir: Path) -> Path:
             except Exception as e:
                 print(f"[aggregate] skipping {tag_dir.name}: {e}")
                 continue
+            cell = cells_by_tag.get(tag_dir.name)
+            mismatch = (_summary_mismatch(data["run_config"], cell)
+                        if cell is not None and "run_config" in data
+                        else None)
+            if mismatch is not None or data.get("exit_reason") == "no_summary":
+                stdout_log = tag_dir / "stdout.log"
+                rejection = (_preflight_rejection(stdout_log.read_text(
+                                 encoding="utf-8", errors="replace"))
+                             if stdout_log.exists() else None)
+                if mismatch is not None:
+                    data = {**cell, "success": False,
+                            "exit_reason": "summary_mismatch",
+                            "summary_mismatch": mismatch,
+                            "wall_clock_s": data.get("wall_clock_s")}
+                if rejection:
+                    data["exit_reason"] = "preflight_rejected"
+                    data["preflight_message"] = rejection
+                if mismatch is not None or rejection:
+                    n_relabelled += 1
+                    print(f"[aggregate] {tag_dir.name}: "
+                          f"{data['exit_reason']}"
+                          + (f" (banked summary of another cell: {mismatch})"
+                             if mismatch is not None else ""))
             rc = data.get("run_config")
             if isinstance(rc, dict):
                 for k, v in rc.items():
@@ -659,7 +779,8 @@ def aggregate(sweep_dir: Path) -> Path:
         for r in rows:
             f.write(json.dumps(r) + "\n")
 
-    print(f"[aggregate] wrote {csv_path} ({len(rows)} rows)")
+    print(f"[aggregate] wrote {csv_path} ({len(rows)} rows, "
+          f"{n_relabelled} relabelled)")
     print(f"[aggregate] wrote {jsonl_path}")
     return csv_path
 
