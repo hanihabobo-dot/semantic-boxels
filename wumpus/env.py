@@ -65,10 +65,16 @@ GRASP_QUAT_DOWN = p.getQuaternionFromEuler([0, math.pi, 0])
 
 class WumpusEnv:
     def __init__(self, world: WumpusWorld, gui: bool = False, cell_size: float = 1.0,
-                 save_dir: Optional[str] = None, real_time: Optional[bool] = None):
+                 save_dir: Optional[str] = None, real_time: Optional[bool] = None,
+                 paint: bool = False):
         self.world = world
         self.s = float(cell_size)
         self.gui = bool(gui)
+        # paint: colour the tiles by what the controller knows without the GUI
+        # too, for off-screen pictures of the painter (wumpus/paint_render.py,
+        # tracks rule 13).  Runs leave it off: a headless run paints nothing.
+        self.paint = bool(paint)
+        self.painted: Optional[Dict] = None     # the last knowledge painted, complete
         self.save_dir = save_dir
         self.realtime = self.gui if real_time is None else real_time
         self.dead: Optional[str] = None
@@ -538,9 +544,15 @@ class WumpusEnv:
                 'stench': w.stench(cell), 'breeze': w.breeze(cell), 'glitter': w.glitter(cell)}
 
     # ------------------------------------------------------------------ GUI
+    def label_anchor(self, cell: str) -> List[float]:
+        """Where a cell's knowledge label starts: the GUI's debug text, and the
+        label paint_render draws into its pictures."""
+        ctr = self.cell_center(cell)
+        return [float(ctr[0]) - 0.35, float(ctr[1]), 0.02]
+
     def show_knowledge(self, knowledge: Dict):
-        """GUI only: paint what the controller knows on the floor.  `knowledge`
-        is wumpus/knowledge.py's controller-neutral form, {cell: {'wumpus',
+        """GUI only (or paint=True): paint what the controller knows on the
+        floor.  `knowledge` is wumpus/knowledge.py's controller-neutral form, {cell: {'wumpus',
         'pit', 'gold': 'yes' | 'no' | 'maybe', 'visited': bool}} (left-out
         cells and keys: not known), or the older {cell: 'safe' | 'unknown' |
         'danger'}.  Every cell's tile gets the colour of its state (known
@@ -548,11 +560,15 @@ class WumpusEnv:
         amber, nothing known blue-grey; none of them the floor's grey) and a
         label with its name and W?, P?, G? (maybe) or W!, P!, G! (known
         present).  A pit has no tile (its shaft), only the label.  Tiles are
-        no percept: perceive() reads the segmentation by body id."""
-        if not self.gui:
+        no percept: perceive() reads the segmentation by body id.  The labels
+        are debug text, which only the GUI shows; with paint=True and no GUI
+        the tiles are painted and `painted` keeps the knowledge for
+        paint_render, which draws the labels into its picture."""
+        if not (self.gui or self.paint):
             return
         from wumpus import knowledge as kn
         view = kn.normalize(knowledge, self._cells)
+        self.painted = view
         for lid in self._label_ids:
             p.removeUserDebugItem(lid, physicsClientId=self.cid)
         self._label_ids = []
@@ -561,10 +577,10 @@ class WumpusEnv:
             if tile is not None:
                 p.changeVisualShape(tile, -1, rgbaColor=kn.TILE_RGBA[kn.tile_state(e)],
                                     physicsClientId=self.cid)
-            ctr = self.cell_center(cell)
-            self._label_ids.append(p.addUserDebugText(
-                kn.label(cell, e), [ctr[0] - 0.35, ctr[1], 0.02], textColorRGB=[0, 0, 0],
-                textSize=1.0, physicsClientId=self.cid))
+            if self.gui:
+                self._label_ids.append(p.addUserDebugText(
+                    kn.label(cell, e), self.label_anchor(cell), textColorRGB=[0, 0, 0],
+                    textSize=1.0, physicsClientId=self.cid))
 
     def close(self):
         if self.gui:
