@@ -576,15 +576,16 @@ def run_domain(report):
     # Path 9: the look domain is the same text plus the look delta, regenerated.
     if os.path.isfile(os.path.join(REPO, 'look_domain.py')):
         look = _look_domain()
-        want_l = look.generate(look.read(look.LIVE_FILE))
-        have_l = (look.read(look.GENERATED_FILE)
-                  if os.path.isfile(look.GENERATED_FILE) else None)
-        report.add('G10', 'PASS' if have_l == want_l else 'FAIL',
-                   f'{rel(look.GENERATED_FILE)} {look.sha(want_l)[:16]} = '
-                   f'regenerated (live + M8 delta + look delta); a --look on '
-                   f'run must load this one' if have_l == want_l else
-                   f'{rel(look.GENERATED_FILE)} is missing or not the '
-                   f'regenerated live domain plus the look delta')
+        for mode, path in look.GENERATED_FILES.items():
+            want_l = look.generate(look.read(look.LIVE_FILE), mode)
+            have_l = look.read(path) if os.path.isfile(path) else None
+            report.add('G10', 'PASS' if have_l == want_l else 'FAIL',
+                       f'{rel(path)} {look.sha(want_l)[:16]} = '
+                       f'regenerated (live + M8 delta + {mode} look delta); a '
+                       f'--look {mode} run must load this one'
+                       if have_l == want_l else
+                       f'{rel(path)} is missing or not the regenerated live '
+                       f'domain plus the {mode} look delta')
 
 
 def ledger_domain(report, rows):
@@ -600,9 +601,10 @@ def ledger_domain(report, rows):
         on = bool((r.get('switches') or {}).get('M8'))
         if (r.get('switches') or {}).get('look'):       # path 9
             look = _look_domain()
-            want = look.sha(look.generate(live))
+            mode = look.mode_of(r['switches']['look'])
+            want = look.sha(look.generate(live, mode))
             if r.get('sha') != want:
-                bad.append(f"look on: loaded {r.get('file')} "
+                bad.append(f"look {mode}: loaded {r.get('file')} "
                            f"{str(r.get('sha'))[:16]} != {want[:16]}")
             continue
         want = m8.sha(m8.generate(live) if on else live)

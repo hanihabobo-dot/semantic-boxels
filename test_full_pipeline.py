@@ -773,11 +773,12 @@ def main(gui=True, run_logger=None, scene_config=None,
     world_eye.SAVE_IMAGES = getattr(args, 'save_screenshots', 'off') == 'on'
     # Path 9: --look on loads the look domain (M8's plus the look delta) and
     # needs M8's pose machinery; off, nothing below differs from the tag.
-    look_on = getattr(args, 'look', 'off') == 'on'
+    look_mode = look_domain.mode_of(getattr(args, 'look', 'off'))   # off, boxel, centred
+    look_on = look_mode != 'off'
     if look_on and not pose_belief.SWITCHES['M8']:
-        raise ValueError("--look on needs --m8 on")
+        raise ValueError(f"--look {look_mode} needs --m8 on")
     if domain_file is None and look_on:
-        domain_file = look_domain.domain_file(True, True)
+        domain_file = look_domain.domain_file(look_mode, True)
     elif domain_file is None and pose_belief.SWITCHES['M8']:
         domain_file = m8_domain.domain_file(True)
     # BF#52: the fold (pddlstream_planner.over_region_facts) is offered
@@ -804,9 +805,11 @@ def main(gui=True, run_logger=None, scene_config=None,
             (_dom == m8_domain.GENERATED_FILE) != pose_belief.SWITCHES['M8']:
         raise ValueError(f"domain {os.path.basename(_dom)} does not match "
                          f"M8 {'on' if pose_belief.SWITCHES['M8'] else 'off'}")
-    if (_dom == os.path.abspath(look_domain.GENERATED_FILE)) != look_on:
+    _dom_look = {os.path.abspath(f): m
+                 for m, f in look_domain.GENERATED_FILES.items()}.get(_dom, 'off')
+    if _dom_look != look_mode:
         raise ValueError(f"domain {os.path.basename(_dom)} does not match "
-                         f"--look {'on' if look_on else 'off'}")
+                         f"--look {look_mode}")
     print(f"  model tweaks: {pose_belief.SWITCHES}; domain "
           f"{os.path.basename(domain_file or m8_domain.LIVE_FILE)}")
     # The curated console's header (a no-op without console_ui installed).
@@ -1367,7 +1370,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                                search_effort_weight=search_effort_weight,
                                search_initial_complexity=search_initial_complexity,
                                slip_fixes=slip_fixes.spec(),                  # BF#59
-                               **({'look': True} if look_on else {})))        # path 9
+                               **({'look': look_mode} if look_on else {})))   # path 9
     # #P4 B3(d): the scene's reach envelope (None: streams' constants),
     # and D7 (i) to (iii): the home joints, and with a declared goal
     # configuration its init facts and the goal conjunct.
@@ -1451,11 +1454,15 @@ def main(gui=True, run_logger=None, scene_config=None,
             env, planner.streams._robot_base_xy)
         # BF#52: the fold's switch (over_region_facts needs m8_views).
         planner.sense_over_region = sense_over_region
-        # Path 9: the look's viewpoints, from the same plan twin.
+        # Path 9: the look's viewpoints, from the same plan twin.  The boxel
+        # look chooses its own (look_views); the centred look takes the tag's
+        # observe rule from m8_views.
         if look_on:
-            planner.look_views = look_views.LookViews(
-                planner.m8_views, reachable=planner.streams.ee_reachable)
+            if look_mode == 'boxel':
+                planner.look_views = look_views.LookViews(
+                    planner.m8_views, reachable=planner.streams.ee_reachable)
             planner.look_on = True
+            planner.look_mode = look_mode
 
     boxel_centers = {b.id: b.center for b in registry.boxels.values()}
 
@@ -2351,10 +2358,14 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # loop's rules.  The plan goes on when the unconditional
                 # effects hold in the belief, else the loop replans.
                 look_count += 1
-                obj_str, look_q = str(params[0]), params[3]
-                _named = [str(f[2]) for f in planner.last_init
-                          if f[0] == 'reveals'
-                          and getattr(f[1], 'name', f[1]) == look_q.name]
+                obj_str = str(params[0])
+                look_q = params[2] if look_mode == 'centred' else params[3]
+                if look_mode == 'centred':
+                    _named = [str(params[1])]      # the plan names one hypothesis
+                else:
+                    _named = [str(f[2]) for f in planner.last_init
+                              if f[0] == 'reveals'
+                              and getattr(f[1], 'name', f[1]) == look_q.name]
                 look_result = handle_look_action(
                     action_params=params, named=_named, env=env,
                     registry=registry, belief=belief, viz=viz,
@@ -2371,12 +2382,13 @@ def main(gui=True, run_logger=None, scene_config=None,
                         bd, robot_model().finger_limits[0][1],
                         planner.streams.GRASP_MAX_SPAN,
                         planner.streams.GRASP_SQUARE_TOL),
-                    target_name=target_name)
+                    target_name=target_name, mode=look_mode)
                 ledger_event('look_reveals', config=look_q.name, named=_named)
                 ledger_event('look_result', reason=look_result.reason,
                              continue_=look_result.continue_, obj=obj_str,
                              region=str(params[1]), config=look_q.name,
                              outcomes=look_result.outcomes,
+                             hidden=look_result.hidden,
                              reposed=look_result.reposed,
                              found_in=look_result.found_in,
                              registered=look_result.registered,
@@ -2394,10 +2406,34 @@ def main(gui=True, run_logger=None, scene_config=None,
                         _n = observe_strikes.get(obj_str, (0,))[0] + 1
                         observe_strikes[obj_str] = (
                             _n, np.concatenate([_bd.min_corner, _bd.max_corner]), _bd)
-                        if _n >= 3:
+                        # The centred look's configurations are the tag's
+                        # observe ones: a look that did not give the pose
+                        # removes its own, as observe's strike did (the boxel
+                        # look's configurations have other names: no index).
+                        _k = observe_views.look_index(look_q.name, obj_str)
+                        if _k is not None:
+                            planner.m8_views.removed.add((obj_str, _k))
+                        _left = (len(observe_views.LOOK_STANDOFFS)
+                                 * len(observe_views.LOOK_WRIST_YAWS)
+                                 - sum(1 for r in planner.m8_views.removed
+                                       if r[0] == obj_str))
+                        _park = _n >= 3 or (_k is not None and _left <= 0)
+                        if _park:
                             planner.m8_views.parked.add(obj_str)
                         print(f"    [look] pose strike {_n}/3 for {obj_str}"
-                              f"{'; PARKED' if _n >= 3 else ''}")
+                              f"{'; PARKED' if _park else ''}")
+                    elif (look_mode == 'centred'
+                          and look_result.reason == 'look_blocked'):
+                        # The render still hid part of ?h (the twin said all of
+                        # it was in view): that configuration leaves the facts,
+                        # the next plan looks from another one, as observe's
+                        # strike did.  Three blocked looks park the fragment
+                        # (the handler's strike rule).
+                        _k = observe_views.look_index(look_q.name, str(params[1]))
+                        if _k is not None:
+                            planner.m8_views.removed.add((str(params[1]), _k))
+                            print(f"    [look] centred view {look_q.name} left "
+                                  f"{params[1]} blocked: configuration removed")
                     dispatch_end('look_outcome')
                     break
                 observe_strikes.pop(obj_str, None)
@@ -3304,7 +3340,8 @@ if __name__ == "__main__":
         "sense_gate":   args.sense_gate,
         "corridor_test": args.corridor_test,
         "m8": args.m8, "m9": args.m9, "m10": args.m10,
-        **({"look": "on"} if getattr(args, 'look', 'off') == 'on' else {}),  # path 9
+        **({"look": look_domain.mode_of(getattr(args, 'look', 'off'))}
+           if look_domain.mode_of(getattr(args, 'look', 'off')) != 'off' else {}),  # path 9
         "pick_aperture_from_pose": args.pick_aperture_from_pose,
         "grip_squeeze_mm": getattr(args, 'grip_squeeze_mm', '0.5'),
         "save_screenshots": getattr(args, 'save_screenshots', 'off'),   # BF#50

@@ -208,9 +208,10 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 nearVal=task_spec.EYE_NEAR, farVal=task_spec.EYE_FAR)
             # B4 / M8: the domain the planner loads (the generated one
             # with M8 on), the same path for main() and G10's runtime pin.
-            if cfg.switches.get('look', 'off') == 'on':
+            if look_domain.mode_of(cfg.switches.get('look', 'off')) != 'off':
                 domain_file = look_domain.domain_file(
-                    True, cfg.switches.get('m8', 'on') == 'on')   # path 9
+                    cfg.switches.get('look'),
+                    cfg.switches.get('m8', 'on') == 'on')         # path 9
             else:
                 domain_file = m8_domain.domain_file(cfg.switches.get('m8', 'on') == 'on')
             gate_hooks.install(gate_hooks.GateConfig(

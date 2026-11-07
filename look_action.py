@@ -19,6 +19,11 @@ compares its keys with the PDDL's precondition and effect atoms and runs the
 handler on a synthetic scene, comparing the whole before and after state with
 the writes the spec names.
 
+The object-centred look (--look centred, look_domain.LOOK_SECTION_CENTRED) is
+the same handler with params (?o ?h ?q): no viewpoint boxel to check, and the
+plan names the one hypothesis ?h and nothing else, so only ?h (a region or the
+object's own boxel) and ?o are written.  CENTRED_SPEC is its contract.
+
 What the action does NOT write (the sense and observe of the tag did): the
 other fragments a render clears beyond the named ones, the re-pose of bodies
 the plan did not name, the partial shrink of a blocked fragment, the free
@@ -88,12 +93,48 @@ LOOK_SPEC = {
 }
 
 
+CENTRED_SPEC = {
+    'parameters': ['?o', '?h', '?q'],
+    'pre': {
+        'look_for': ('static', "the plan's own init; nothing to check"),
+        'Config': ('static', "type"),
+        'handempty': ('check', "held_body_id is None, else stale_precondition"),
+        'at_config': ('check', f"the arm readback is within {AT_CONFIG_TOL_RAD} rad "
+                               "of ?q on every joint, else stale_precondition"),
+        'look_config': ('static', "planner side: at ?q the plan twin's wrist camera "
+                                  "is straight over ?h and shows all of ?h in view "
+                                  "and unblocked (ObserveViews.look_configs, the "
+                                  "tag's observe rule); the executor does not check "
+                                  "it, and a render that still hides part of ?h is "
+                                  "a strike"),
+    },
+    'eff': {
+        ('obj_at_boxel', True, False): (
+            'write', "?o found in ?h: register ?o's OBJECT boxel at its wrist "
+                     "detection (the audit #76 hook), belief.mark_sensed(?h, found)"),
+        ('obj_at_boxel_KIF', True, False): (
+            'write', "?h seen without ?o: belief.mark_sensed(?h, not found) and the "
+                     "fragment leaves the registry; a view that does not show all of "
+                     "?h writes nothing (a strike)"),
+        ('obj_pose_known', True, False): (
+            'write', "?o's wrist detection is complete: pose_belief.record_detection "
+                     "(wrist), the A rule; known when the commit margin holds"),
+    },
+    'eff_cond': set(),
+    'monitor': {'M-1': "register_new_detections for a body the render shows "
+                       "that has no boxel"},
+}
+
+SPECS = {'boxel': LOOK_SPEC, 'centred': CENTRED_SPEC}
+
+
 @dataclass
 class LookResult:
     """What the handler did; ``continue_`` and ``reason`` as ActionResult."""
     continue_: bool
     reason: str
     outcomes: Dict[str, str] = field(default_factory=dict)   # named region -> outcome
+    hidden: Dict[str, float] = field(default_factory=dict)   # named region -> blocked fraction
     reposed: List[str] = field(default_factory=list)         # named objects re-posed
     found_in: Optional[str] = None
     registered: List[str] = field(default_factory=list)      # M-1
@@ -108,10 +149,14 @@ def _stale(why: str) -> LookResult:
     return LookResult(False, 'look_stale_precondition', stale=why)
 
 
-def check_preconditions(*, env, registry, robot_id, held_body_id, params):
+def check_preconditions(*, env, registry, robot_id, held_body_id, params,
+                        mode='boxel'):
     """The checks the precondition names that Python can make; None when they
     all hold, else why not.  Writes nothing."""
-    obj, h, v, q = str(params[0]), str(params[1]), str(params[2]), params[3]
+    if mode == 'centred':
+        obj, h, q, v = str(params[0]), str(params[1]), params[2], None
+    else:
+        obj, h, v, q = str(params[0]), str(params[1]), str(params[2]), params[3]
     if held_body_id is not None:
         return "the hand is not empty (handempty)"
     if registry.get_boxel(h) is None:
@@ -123,6 +168,8 @@ def check_preconditions(*, env, registry, robot_id, held_body_id, params):
                              - np.asarray(q.joint_positions, dtype=float))))
     if dq > AT_CONFIG_TOL_RAD:
         return f"the arm is {dq:.3f} rad from {q.name} (at_config)"
+    if v is None:                       # the centred look has no viewpoint boxel
+        return None
     vb = registry.get_boxel(v)
     if vb is None:
         return f"viewpoint boxel {v} is not in the registry (config_for_boxel)"
@@ -224,17 +271,20 @@ def handle_look_action(*, action_params, named, env, registry, belief, viz,
                        robot_id, held_body_id, support_body_ids, shadows,
                        occluders, shadow_occluder_map, blocked_counts,
                        blocked_giveup_shadows, boxel_centers, boxel_to_pybullet,
-                       object_body_ids, pose_known, target_name) -> LookResult:
+                       object_body_ids, pose_known, target_name,
+                       mode='boxel') -> LookResult:
     """Execute one PDDL ``look`` (module docstring).
 
     ``named``: the region and object ids of the plan's own ``(reveals ?q r)``
-    facts for this ?q, the single source of what the render may write.
-    ``pose_known(boxel)``: the planner's commit rule.
+    facts for this ?q, the single source of what the render may write (the
+    centred look: just ?h).  ``pose_known(boxel)``: the planner's commit rule.
+    ``mode``: 'boxel' (params ?o ?h ?v ?q) or 'centred' (params ?o ?h ?q).
     """
     obj, h = str(action_params[0]), str(action_params[1])
-    q = action_params[3]
+    q = action_params[2] if mode == 'centred' else action_params[3]
     why = check_preconditions(env=env, registry=registry, robot_id=robot_id,
-                              held_body_id=held_body_id, params=action_params)
+                              held_body_id=held_body_id, params=action_params,
+                              mode=mode)
     if why is not None:
         return _stale(why)
 
@@ -266,6 +316,7 @@ def handle_look_action(*, action_params, named, env, registry, belief, viz,
             _occluder_ids(registry, region, env),
             robot_id=robot_id, support_body_ids=supports)
         res.outcomes[sid] = outcome
+        res.hidden[sid] = round(float(frac), 4)
         print(f"    look {sid}: {outcome}"
               f"{f' ({frac:.0%} hidden)' if outcome == 'still_blocked' else ''}")
         if outcome == 'still_blocked':

@@ -252,6 +252,7 @@ class PDDLStreamPlanner:
         # (look_views.LookViews, set by main() after the first export, like
         # m8_views) in place of the sense and observe facts.
         self.look_on = False
+        self.look_mode = 'off'           # 'boxel' or 'centred' when look_on
         self.look_views = None
         self.last_look_stats: Dict[str, Any] = {}
         # BF#53: further pddlstream solve() keyword arguments from main()'s
@@ -1071,7 +1072,9 @@ class PDDLStreamPlanner:
                   f"total {self.last_m8_stats['build_s']:.2f}s")
         self.last_look_stats = {}
         if look_on:
-            self.last_look_stats = self._look_facts(
+            _look_facts = (self._look_facts_centred
+                           if self.look_mode == 'centred' else self._look_facts)
+            self.last_look_stats = _look_facts(
                 init, target_objects, shadows, held_obj, current_config,
                 _pose_known)
         if held_obj is None:
@@ -1140,18 +1143,11 @@ class PDDLStreamPlanner:
         random.shuffle(init)
         return init
 
-    def _look_facts(self, init, target_objects, shadows, held_obj,
-                    current_config, pose_known) -> Dict[str, Any]:
-        """Path 9, --look on: the facts of the look action (look_domain.
-        LOOK_SECTION).  look_for names what a look may hypothesise: a hidden
-        target in each fragment that can hide it (the sense gate's test) and
-        not already known empty, and a registered body whose pose is not
-        known at its own boxel.  look_views.LookViews turns those regions and
-        bodies into certified viewpoints (free-space boxels) with the static
-        facts that go with them: Config, config_for_boxel, reveals,
-        blocks_look_at.  Appends to ``init``; returns the stats."""
-        if self.look_views is None or self.m8_views is None:
-            raise ValueError("--look on needs planner.look_views (main() sets it)")
+    def _look_for(self, init, target_objects, shadows, held_obj, pose_known):
+        """What a look may hypothesise (both looks): a hidden target in each
+        fragment that can hide it (the sense gate's test) and not already
+        known empty, and a registered body whose pose is not known at its own
+        boxel.  Returns (look_for pairs, the bodies of the pose looks)."""
         reg = self.registry
         kif = {(str(f[1]), str(f[2])) for f in init
                if len(f) == 3 and f[0] == 'obj_at_boxel_KIF'}
@@ -1177,6 +1173,67 @@ class PDDLStreamPlanner:
                      b, robot_model().finger_limits[0][1],
                      self.streams.GRASP_MAX_SPAN,
                      self.streams.GRASP_SQUARE_TOL) is not None]
+        return look_for, posed
+
+    def _look_facts_centred(self, init, target_objects, shadows, held_obj,
+                            current_config, pose_known) -> Dict[str, Any]:
+        """Path 9, --look centred: the facts of the object-centred look
+        (look_domain.LOOK_SECTION_CENTRED).  look_for as in the boxel look.
+        The camera goes straight over the centre of what the look is about,
+        ?h: the fragment's box for a search look, the object's box for a pose
+        look; the tag's own observe rule (ObserveViews.look_configs) applied
+        unchanged, so the twin certifies that all of ?h is in view and
+        unblocked from the configuration.  Nothing here asks the boxel model
+        about any other region, any other body, or free space.  Appends to
+        ``init``; returns the stats."""
+        if self.m8_views is None:
+            raise ValueError("--look centred needs planner.m8_views (main() sets it)")
+        t0 = time.perf_counter()
+        reg = self.registry
+        look_for, posed = self._look_for(init, target_objects, shadows,
+                                         held_obj, pose_known)
+        regions = sorted({s for _, s in look_for})
+        centres = sorted(set(regions) | {b.id for b in posed})
+        declared = [current_config] + (
+            [self.goal_config] if self.goal_config is not None else [])
+        facts, views = self.m8_views.init_facts(
+            current_config, self.home_config, [],
+            [reg.get_boxel(c) for c in centres], declared)
+        self.streams.view_boxel_ids = frozenset(views)
+        with_view = set()
+        for f in facts:
+            if f[0] == 'look_config':
+                with_view.add(str(f[2]))
+            if f[0] != 'is_view':               # the centred domain does not declare it
+                init.append(f)
+        init.extend(('look_for', o, s) for o, s in look_for)
+        init.extend(('look_for', b.id, b.id) for b in posed)
+        no_view = sorted(set(centres) - with_view)
+        stats = dict(self.m8_views.last_stats, regions=regions,
+                     pose_looks=[b.id for b in posed],
+                     look_for=len(look_for) + len(posed), no_view=no_view,
+                     build_s=time.perf_counter() - t0)
+        print(f"  [look] init (centred): {len(regions)} regions {regions}, "
+              f"{len(posed)} pose looks {stats['pose_looks']}, "
+              f"{stats['look_config']} look_config; no view: {no_view}; "
+              f"{stats['twin_renders']} twin renders "
+              f"{stats['twin_render_s']:.2f}s, {stats['look_ik']} IK, total "
+              f"{stats['build_s']:.2f}s")
+        return stats
+
+    def _look_facts(self, init, target_objects, shadows, held_obj,
+                    current_config, pose_known) -> Dict[str, Any]:
+        """Path 9, --look boxel: the facts of the look action (look_domain.
+        LOOK_SECTION).  look_for names what a look may hypothesise (_look_for).
+        look_views.LookViews turns those regions and
+        bodies into certified viewpoints (free-space boxels) with the static
+        facts that go with them: Config, config_for_boxel, reveals,
+        blocks_look_at.  Appends to ``init``; returns the stats."""
+        if self.look_views is None or self.m8_views is None:
+            raise ValueError("--look boxel needs planner.look_views (main() sets it)")
+        reg = self.registry
+        look_for, posed = self._look_for(init, target_objects, shadows,
+                                         held_obj, pose_known)
         regions = [reg.get_boxel(s) for s in sorted({s for _, s in look_for})]
         ext_classes: Dict[Tuple, List[str]] = {}
         for b in reg.boxels.values():

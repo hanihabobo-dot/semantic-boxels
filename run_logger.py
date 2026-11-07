@@ -845,14 +845,18 @@ def parse_pipeline_args(argv=None):
              "region when the arm there does not block the eye's view, then "
              'pick from there (on), or return to a static view spot before '
              'every sense as before (off).')
-    # Path 9 (BF#68, tracks/look): one look action from a free-space boxel
-    # replaces sense and observe (look_domain.py, look_views.py,
-    # look_action.py); off keeps both, as before.
+    # Path 9 (BF#68, tracks/look): one look action replaces sense and
+    # observe (look_domain.py, look_action.py); off keeps both, as before.
+    # boxel: the look from a free-space boxel (look_views.py); centred: the
+    # reference look that uses no boxel model (the camera straight over the
+    # object the look is about, the tag's observe rule).  `on` means boxel.
     parser.add_argument(
-        '--look', choices=['off', 'on'], default='off',
+        '--look', choices=['off', 'on', 'boxel', 'centred'], default='off',
         help="Path 9: replace the sense and observe actions by one look "
-             "action from a free-space boxel (the generated domain "
-             "pddl/domain_pddlstream_look.pddl); needs --m8 on.")
+             "action: boxel (a free-space boxel, the generated domain "
+             "pddl/domain_pddlstream_look.pddl; `on` is the same) or centred "
+             "(the object-centred look, pddl/domain_pddlstream_look_centred."
+             "pddl); needs --m8 on.")
     # BF#53 (2026-10-30), the optimistic search's settings.  pddlstream
     # weighs a stream result's effort into the search's costs only with
     # effort_weight set; without it every attempt of the adaptive loop may

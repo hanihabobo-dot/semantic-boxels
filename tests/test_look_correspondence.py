@@ -378,7 +378,8 @@ def test_without_look_the_command_is_the_tags(args):
 
 
 @needs_pwsh
-def test_the_look_switch_appends_one_flag():
+@pytest.mark.parametrize('value', ['boxel', 'centred'])
+def test_the_look_switch_appends_one_flag(value):
     off = _dry(ROOT / 'run.ps1', 'boxels -Seed 3 -Headless')
-    on = _dry(ROOT / 'run.ps1', 'boxels -Seed 3 -Headless -Look')
-    assert on == off + ' --look on'
+    on = _dry(ROOT / 'run.ps1', f'boxels -Seed 3 -Headless -Look {value}')
+    assert on == off + f' --look {value}'
