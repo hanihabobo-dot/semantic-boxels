@@ -93,6 +93,11 @@ def main(argv=None):
                     help='seconds each action, thought and percept stays on the console at least, so '
                          'that a human can follow it (default 1.0 with the GUI, 0 without; a pause of '
                          'the presentation only, never part of a decision)')
+    ap.add_argument('--paint-frames', metavar='DIR', default=None,
+                    help='off-screen pictures of the painter, no window (tracks rule 13): the tiles are '
+                         'painted without the GUI too, and after every knowledge update the board, seen '
+                         'from the GUI camera with the labels drawn in, goes to DIR/frame_NNN.png and '
+                         'DIR/frames.json (wumpus/paint_render.py); the moves stay the same')
     a = ap.parse_args(argv)
 
     if a.controller == 'lw1':
@@ -133,7 +138,13 @@ def _episode(a, world, logger):
     from wumpus.env import WumpusEnv
     console_ui.startup(f'Building the {a.size}x{a.size} world, seed {a.seed}')
     t0 = time.time()
-    env = WumpusEnv(world, gui=bool(a.vis), save_dir=a.save_dir)
+    if a.paint_frames:
+        from wumpus.paint_render import PaintedEnv
+        env = PaintedEnv(world, a.paint_frames,
+                         title=f'{a.controller}, {a.size}x{a.size}, {a.source} seed {a.seed}',
+                         gui=bool(a.vis), save_dir=a.save_dir)
+    else:
+        env = WumpusEnv(world, gui=bool(a.vis), save_dir=a.save_dir)
     build_s = time.time() - t0
     steps = []
     print(f'wumpus: N={a.size} seed={a.seed} source={a.source} controller={a.controller} '
@@ -169,6 +180,8 @@ def _episode(a, world, logger):
                     'action_s': sum(s['result'].get('wall_s', 0.0) for s in steps),
                     'pace_s': narrate.pace_s(), 'paced_s': narrate.paced_s()},
            'run_dir': str(logger.run_dir)}
+    if a.paint_frames:
+        rec['paint_frames'] = {'dir': a.paint_frames, 'frames': len(env.frames)}
     if a.save_dir:
         os.makedirs(a.save_dir, exist_ok=True)
         with open(os.path.join(a.save_dir, 'episode.json'), 'w') as f:
