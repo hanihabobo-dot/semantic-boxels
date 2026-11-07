@@ -19,7 +19,10 @@ runs under any Python 3 and only spawns the two drivers:
 
 Success is P4.6 G12: arm T's rewards[-1] == 1.0 from their RolloutHistory,
 arm O's the outcome field of its driver (rewards[-1], the error and the
-ledger gates).  A killed or crashed episode is a failure with every time
+ledger gates).  Arm T's record also carries the standard test of path 6
+(DV-1): the physical readings of its final world, written by the reviewed
+rollout wrapper into final_world.json, as 'final_world', 'standard_read' and
+'standard_success' beside their reward.  A killed or crashed episode is a failure with every time
 at the cap, flagged censored (D10).  A gate-failed episode keeps its times
 and its gate's name.  Per-run gates (G13, G19) and the HARNESS STOP RULE
 (three gate-failed episodes of one arm with the same gate) stop the
@@ -307,6 +310,13 @@ def episode_t(a, rep, seed, order, scene_map, others, stall_rerun=False):
                            and rec['pinned_scene'] in rec['scene_file'])
     g13 = read_json(os.path.join(save_dir, 'g13_runtime.json'))
     rec['g13_ok'] = None if g13 is None else bool(g13.get('ok'))
+    # DV-1 (path 6): the standard success test, read from their final world by
+    # the reviewed rollout wrapper (tampura_bridge/final_world.py); their own
+    # reward stays in 'status' and 'rewards'.  No file, or ok false = unread.
+    fwj = read_json(os.path.join(save_dir, 'final_world.json'))
+    rec['final_world'] = fwj
+    rec['standard_read'] = bool(fwj and fwj.get('ok'))
+    rec['standard_success'] = bool(rec['standard_read'] and fwj.get('standard_success'))
     spans = read_jsonl(os.path.join(save_dir, 'get_action_spans.jsonl'))
     rec['get_action_spans'] = [s.get('get_action_s') for s in spans]
     rec['get_action_actions'] = [s.get('action') for s in spans]
