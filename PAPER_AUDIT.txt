@@ -9461,6 +9461,21 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   alone misses its paper's Table 2 (fewer planner calls and shorter
   runs, likely the 2018 code against the 2014 runs); a question to the
   authors is drafted for Hani, not sent.
+  DECISIONS 2026-11-07 (Hani, about 10:55): "then implemnet both. even if
+  it is their precep, we need to still use boxeliztaion somehow." for
+  class_uncertain and slam_collect in mode S, and, for class_uncertain,
+  "so we change sb just a little bit to himor the setup, so we have a
+  modle of the die but lets pretend is not accurat or uncertain or
+  whatever. can you make a path that doest it this why?" (his words in
+  full: tracks/STATE.md).  To Go's three questions, the recommended
+  options: P5-Q6 yes (TAMPURA re-runs path 5's ten seeds with its own
+  hand camera, a declared deviation); their object models inside mode S
+  runs accepted and declared (Q41); the world-state test primary (Q43).
+  Path 7 (Sonnet 5.5, local_8332e7bd; tracks/modes/) builds both tasks in
+  mode S with boxels; path 8 (Opus 5.5, local_43621c9b;
+  tracks/lookalike/) brings class uncertainty into our own setup behind
+  a default-off flag.  Q42 and the slam_collect arm T pilot stay cluster
+  questions; Q45 is open.
   MERGES INTO THE TRUNK: TB-16 (run.ps1 runs the checkout it lives in) as
   564ff5b; track/draw as afd80a3 (`run tampura -Draw boxels`, a merge of
   b43f962).  -Draw boxels draws the registry as debug lines and labels
