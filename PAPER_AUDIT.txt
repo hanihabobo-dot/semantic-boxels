@@ -9528,7 +9528,27 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   actions take no position" (their inspect, pick and drop take symbols
   only, and every pose is computed inside their execute functions);
   P7-Q2 (the pose belief as boxes) "Not yet, ask again later
-  (Recommended)".
+  (Recommended)".  About 12:40: "i also want a report styled on my
+  theis, also build in letex the same way is the theis was build. it is
+  still an internal report. all of the lates knowledge and changes since
+  the thesis is reported there. that should be its own path. it should
+  also document the evals and what is currently being worked on.
+  everthing is cited just like before. use the citations in the thesis
+  where approperiate and make sure the agent in the opth doesnt make up
+  any. the paper should document everything that needs to be known to us
+  reasearchers, but almos  no code or supertechnical stuff or jargon."
+  Path 11 (Sonnet 5.5, local_0d087995; tracks/report/) writes it in a new
+  folder report/, built as the thesis is (LuaLaTeX, biber, the thesis's
+  preamble and its references.bib as they are); a new bib entry only
+  after its source was checked (tracks/report/CITATIONS.md); every number
+  of ours traced to its BF entry.  On path 1's camera viewer, which its
+  checks had opened on his desktop with test images: "what is this
+  garbage that has been popping up snese yesterday?"  Rule 13 of
+  tracks/STATE.md: tracks check GUI features off screen; a window opens
+  only in a run Hani starts.  On observe as the new look ("maybe thats
+  enough? so thats our new look?"): path 9 weighs in; Go's view is that
+  observe re-poses one known object and reveals nothing about unseen
+  boxels, so the look needs sense's knowledge effects as well.
   MERGES INTO THE TRUNK: TB-16 (run.ps1 runs the checkout it lives in) as
   564ff5b; track/draw as afd80a3 (`run tampura -Draw boxels`, a merge of
   b43f962).  -Draw boxels draws the registry as debug lines and labels
