@@ -9436,8 +9436,9 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   BF#64's fix and path 6's plan, each confirmed on its own.  Go folded
   the A/B into path 6's plan as its arm A' (the tag plus TB-1 on path 6's
   200 fresh find_dice scenes) and confirmed the plan (tracks/eval/
-  PLAN.md v1.3, about 53 node-hours); Hani's yes to the cluster run is
-  still open.
+  PLAN.md v1.3, about 53 node-hours); Hani's yes to the cluster run was
+  still open that evening (he gave it on 2026-11-07 at 11:08 in path 6's
+  session; rule 12 then held the run until DV-1 to DV-3, below).
   The class_uncertain plan (BF#67) stays held; its phase 1 is path 2's
   input.  Path 2's ranking is in (tracks/tasks/TRIAGE.md): with SB's
   planning layer on TAMPURA's execute layer, class_uncertain scores 18 of
@@ -9604,7 +9605,29 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   keeps the merges, the record and the other paths.  About 13:10: "if
   you need many submanagers thats also fine".  Sub-manager W (Sonnet
   5.5, local_6348a77e; tracks/sub_wumpus/) does the same for the Wumpus
-  paths 4 and 10.  The times in this
+  paths 4 and 10.
+  About 13:20: "we need to mkae sure to run anything on wsl until this
+  issue of why we are running out ofmemoryis resolved."  Rule 14: nothing
+  runs in WSL until the cause is found (commit charge 54.5 of 60.2 GB at
+  13:20; path 12 looks for the cause).  About 13:22: "whenever there is a
+  setup where it is some env and planner vs some other snv and planner,
+  before we run any eval i have to vizuallyconfirm that everything is
+  working by running at least 4 seeds two for each system under that
+  setup. after my approval we go ahead. we should check all current and
+  future evals n cluster whether they are conformant or not. the current
+  ones can stay if i confirm it is working out."  Rule 15: no comparison
+  eval, on the laptop or the cluster, before Hani has watched 2 seeds of
+  each system and approved.  About 13:28, on the sub-managers: "they
+  should not ask me for anything. i only talk to to and some time to some
+  paths"; their questions come to Go.  Path 6's success test and action
+  budget, answered in path 6's session: "no, mkae our test the standard
+  test." (12:46): our world-state test is the standard for both arms on
+  the fresh scenes, TAMPURA's reward beside it; "add the cap to us as
+  well and make sure it is documented. also some agetn that go decides
+  should run an eval of our apprioach with vs without that limit.": our
+  arm is held to TAMPURA's 20-action horizon as a cut-off on each
+  episode's own count, and the uncapped result from the same episodes,
+  recounted by an independent agent, sits beside it.  The times in this
   entry from 11:20 on were corrected on 2026-11-07 about 13:00 (Go's
   clock had run 20 to 30 min late).
   MERGES INTO THE TRUNK: TB-16 (run.ps1 runs the checkout it lives in) as
