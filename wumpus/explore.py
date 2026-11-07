@@ -27,6 +27,27 @@ def run_explore(env, max_steps=500, log=print, narrate=None):
     def safe(c):
         return c in visited or (c in no_pit and c in no_wumpus)
 
+    def known(gold_at=None):
+        """What it knows per cell, in wumpus/knowledge.py's form, for the GUI's
+        painter: hazards ruled out by its sets, the gold seen at `gold_at` (a
+        visited cell without glitter holds none); nothing read back."""
+        out = {}
+        for c in cells:
+            e = {}
+            if c in no_pit or c in visited:
+                e['pit'] = 'no'
+            if c in no_wumpus or c in visited:
+                e['wumpus'] = 'no'
+            if c == gold_at:
+                e['gold'] = 'yes'
+            elif c in visited:
+                e['gold'] = 'no'
+            if c in visited:
+                e['visited'] = True
+            if e:
+                out[c] = e
+        return out
+
     def thinking(gold=False):
         """The robot starts thinking and says what it knows; returns the start time."""
         if narrate is not None:
@@ -53,7 +74,7 @@ def run_explore(env, max_steps=500, log=print, narrate=None):
         no_pit.add(cell)
         no_wumpus.add(cell)
         if hasattr(env, 'show_knowledge'):
-            env.show_knowledge({c: ('safe' if safe(c) else 'unknown') for c in env.cells()})
+            env.show_knowledge(known(gold_at=cell if pc['glitter'] else None))
         return cell, pc
 
     t0 = thinking()

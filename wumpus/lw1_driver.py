@@ -62,16 +62,21 @@ STUCK = ('problem has no solution', 'reached time limit', 'reached limit of')
 
 
 # ------------------------------------------------------------ pure helpers
-def knowledge(belief, cells):
-    """LW1's K-literals (a BELIEF line) -> ({cell: 'safe' | 'danger' |
-    'unknown'}, the counts the console's thinking block shows).  Safe: K not
-    wumpus and K not pit; danger: K wumpus or K pit."""
+def knowledge(belief, cells, visited=()):
+    """LW1's K-literals (a BELIEF line) -> (per cell what LW1 knows, in
+    wumpus/knowledge.py's form, for the GUI's painter; the counts the
+    console's thinking block shows).  Per content: K <x>-at = 'yes', K not
+    <x>-at = 'no', neither = 'maybe'.  `visited`: the cells the robot has
+    perceived at (the driver's own record)."""
     k = {(p, v): set() for p in ('wumpus-at', 'pit-at', 'gold-at') for v in (True, False)}
     for neg, pred, cell in _K.findall(belief or ''):
         k[(pred, not neg)].add(cell)
     safe = {c for c in cells if c in k[('wumpus-at', False)] and c in k[('pit-at', False)]}
-    danger = {c for c in cells if c in k[('wumpus-at', True)] or c in k[('pit-at', True)]}
-    state = {c: 'safe' if c in safe else 'danger' if c in danger else 'unknown' for c in cells}
+
+    def v(pred, c):
+        return 'yes' if c in k[(pred, True)] else 'no' if c in k[(pred, False)] else 'maybe'
+    state = {c: {'wumpus': v('wumpus-at', c), 'pit': v('pit-at', c), 'gold': v('gold-at', c),
+                 'visited': c in visited} for c in cells}
     counts = {'safe': len(safe),
               'maybe_pit': sum(1 for c in cells if c not in k[('pit-at', False)]),
               'maybe_wumpus': sum(1 for c in cells if c not in k[('wumpus-at', False)]),
@@ -184,7 +189,7 @@ class _Episode:
         if tag == 'BELIEF':
             self.beliefs += 1
             self.belief_text = text
-            state, self.counts = knowledge(text, self.cells)
+            state, self.counts = knowledge(text, self.cells, self.visited)
             self.env.show_knowledge(state)
             return None
         if tag != 'EXEC':

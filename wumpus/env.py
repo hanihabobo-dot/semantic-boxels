@@ -538,24 +538,32 @@ class WumpusEnv:
                 'stench': w.stench(cell), 'breeze': w.breeze(cell), 'glitter': w.glitter(cell)}
 
     # ------------------------------------------------------------------ GUI
-    def show_knowledge(self, knowledge: Dict[str, str]):
-        """GUI only: colour the floor tiles (safe green, unknown grey, danger red)
-        and write the label over each cell.  Tiles are no percept."""
+    def show_knowledge(self, knowledge: Dict):
+        """GUI only: paint what the controller knows on the floor.  `knowledge`
+        is wumpus/knowledge.py's controller-neutral form, {cell: {'wumpus',
+        'pit', 'gold': 'yes' | 'no' | 'maybe', 'visited': bool}} (left-out
+        cells and keys: not known), or the older {cell: 'safe' | 'unknown' |
+        'danger'}.  Every cell's tile gets the colour of its state (known
+        danger red, visited green, safe light green, one hazard ruled out
+        amber, nothing known blue-grey; none of them the floor's grey) and a
+        label with its name and W?, P?, G? (maybe) or W!, P!, G! (known
+        present).  A pit has no tile (its shaft), only the label.  Tiles are
+        no percept: perceive() reads the segmentation by body id."""
         if not self.gui:
             return
-        col = {'safe': (0.3, 0.75, 0.3, 1), 'danger': (0.85, 0.2, 0.2, 1), 'unknown': None}
+        from wumpus import knowledge as kn
+        view = kn.normalize(knowledge, self._cells)
         for lid in self._label_ids:
             p.removeUserDebugItem(lid, physicsClientId=self.cid)
         self._label_ids = []
-        for cell, st in knowledge.items():
+        for cell, e in view.items():
             tile = self.floor_tile.get(cell)
             if tile is not None:
-                i, j = cell_ij(cell)
-                rgba = col.get(st) or ((0.62, 0.62, 0.62, 1) if (i + j) % 2 == 0 else (0.45, 0.45, 0.47, 1))
-                p.changeVisualShape(tile, -1, rgbaColor=rgba, physicsClientId=self.cid)
+                p.changeVisualShape(tile, -1, rgbaColor=kn.TILE_RGBA[kn.tile_state(e)],
+                                    physicsClientId=self.cid)
             ctr = self.cell_center(cell)
             self._label_ids.append(p.addUserDebugText(
-                f'{cell} {st}', [ctr[0] - 0.3, ctr[1], 0.02], textColorRGB=[0, 0, 0],
+                kn.label(cell, e), [ctr[0] - 0.35, ctr[1], 0.02], textColorRGB=[0, 0, 0],
                 textSize=1.0, physicsClientId=self.cid))
 
     def close(self):
