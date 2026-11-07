@@ -9518,7 +9518,17 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   look-alike design is dropped.  Rule 12 of tracks/STATE.md: every
   deviation from a TAMPURA task or setup is approved by Hani in writing in
   chat before anything that rests on it is run or merged (code may be
-  prepared on the track's own branch).
+  prepared on the track's own branch).  Path 7's PLAN.md v1 (06047d0,
+  tracks/modes/): class_uncertain with value boxels (a class cell per
+  object, table and bowl boxels, no geometry), slam_collect with map
+  boxels from the t = 0 map; deviations CU-1 to CU-20 and SL-1 to SL-18.
+  Hani about 12:30 (the labels he picked): CU-1 to CU-20 "Approve all
+  (Recommended)"; SL-1 to SL-18 "Hold, I'll read the plan"; on
+  geometry for class_uncertain's boxels (P7-Q1) "explain how their
+  actions take no position" (their inspect, pick and drop take symbols
+  only, and every pose is computed inside their execute functions);
+  P7-Q2 (the pose belief as boxes) "Not yet, ask again later
+  (Recommended)".
   MERGES INTO THE TRUNK: TB-16 (run.ps1 runs the checkout it lives in) as
   564ff5b; track/draw as afd80a3 (`run tampura -Draw boxels`, a merge of
   b43f962).  -Draw boxels draws the registry as debug lines and labels
