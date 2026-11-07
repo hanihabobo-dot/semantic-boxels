@@ -9489,6 +9489,33 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   default-off flag.  WSL was down from about 11:00 to 11:14 (start
   attempts timed out; Ubuntu stopped; one start attempt booted it again);
   what ran in WSL before is gone, and no counted run overlaps the gap.
+  About 11:45: "i dont know which path is responsible of this but i want
+  that wumpus sim to give us a viizual cue about not knowing where the
+  wumpus is and in what is in each cell. so just like the safe cells get
+  marked with green, the unknown cellls showed also get colored somehow.
+  also, mabye another path here, maybe a new one, we need to run our
+  setup in the woumpus world. the supposed problem with our setup, is that
+  we wont know how to conclude where it is safe to go. so lets test that.
+  if we can, then there might be something wrong with the system, mabye
+  the test we have been using is too trivial. maybe just walikng a
+  sttaight line solvs it every time."  A minute later: "and if we cant we
+  still need to report those numbers".  Path 4 colours the unknown cells
+  (its painter left them at the floor's grey) and shows per cell what may
+  be there.  Path 10 (Sonnet 5.5, local_88afd8c6; tracks/wumpus_sb/) runs
+  our setup in path 4's Wumpus world, path 4's WQ6 KIF arm ("not now" on
+  2026-11-06): first how many of LW1's instances straight-line and other
+  no-reasoning walks already win, then SB as at the tag (K0) and,
+  optionally, with the percept rules as derived predicates (K1); every
+  number is reported.  About 11:55, on path 8: "wait, im not sure thats
+  what i have meant with sensing. i wanna repeat their taks. the task is
+  not like that, right? basicly do thier task on their env as close as
+  possible. and again, if that means waeking or setup somehow than that is
+  fine. make sure all deavations are proved in writing in chat by me".
+  Path 8 now runs TAMPURA's own class_uncertain task on their env with our
+  setup, the goal of the parked class_uncertain plan (BF#67); the die and
+  look-alike design is dropped.  Rule 12 of tracks/STATE.md: every
+  deviation from a TAMPURA task or setup is approved by Hani in writing in
+  chat before anything that rests on it is built or run.
   MERGES INTO THE TRUNK: TB-16 (run.ps1 runs the checkout it lives in) as
   564ff5b; track/draw as afd80a3 (`run tampura -Draw boxels`, a merge of
   b43f962).  -Draw boxels draws the registry as debug lines and labels
@@ -9509,7 +9536,7 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   find-and-tray-stack) is the "timeout" share of the semantic,
   semantic+mbs0.05 and uniform arms (65 of 270 stack cells).  Path 6's
   report counts a timeout only for the runner's stub at the cap.
-  EVIDENCE: tracks/STATE.md, the six briefs, tracks/stable_check/,
+  EVIDENCE: tracks/STATE.md, the ten briefs, tracks/stable_check/,
   tracks/draw/evidence/, tracks/eval/PLAN.md.
   CLAIM EFFECT: none.  HONESTY CLASS: process decision, no pipeline
   change.
