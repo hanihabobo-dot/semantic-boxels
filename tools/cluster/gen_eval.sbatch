@@ -32,14 +32,21 @@
 #   arguments: snapshot, scene seeds, repetitions, OUT (optional: a results
 #   directory shared by the jobs; each job writes OUT/<job id>, or with
 #   P4_LOCAL=1 OUT/<job id>.tar.gz; read them together with
-#   tools/gen_scene_eval.py --report <the job folders>).
+#   tools/gen_scene_eval.py --report <the job folders>), and a second
+#   snapshot (optional, path 6's arm O2: arm O's snapshot plus TB-1 only; the
+#   job then runs T, O and O2 back to back on each scene, runs the gates on
+#   that tree too, and the harness stops unless the two snapshots hold the same
+#   scene files).  Pass OUT as '-' to keep its default when giving the fifth.
 set -uo pipefail
 W=${P4_WORK:-/work/rleap1/hani.alassiri.alhabboub/p4}
 SB=$W/${1:?snapshot dir, e.g. sb_1234567}
 SEEDS=${2:?scene seeds, e.g. 100-103}
 REPS=${3:-2}
 JOB=${SLURM_JOB_ID:-local}
-OUT=${4:-$W/results/gen_${SB##*/sb_}}/$JOB
+OUTBASE=${4:--}
+[ "$OUTBASE" = - ] && OUTBASE=$W/results/gen_${SB##*/sb_}
+OUT=$OUTBASE/$JOB
+SB2=${5:+$W/$5}
 TW=$W/tampura-work
 VA=$W/armO-venvA/bin
 P4_LOCAL=${P4_LOCAL:-0}
@@ -128,13 +135,30 @@ if [ $GRC -ne 0 ]; then
   echo "per-run gates FAILED before the eval: nothing run"
   exit 1
 fi
+ARMS_ARGS=
+if [ -n "$SB2" ]; then
+  [ -d $SB2 ] || { echo "no second snapshot $SB2: nothing run"; exit 1; }
+  (cd $SB2 && env -u PYTHONPATH $VA/python tools/bridge_gates.py all --save $OUT/g13_o2_before.json) > $OUT/gates_o2_before.txt 2>&1
+  GRC2=$?
+  cat $OUT/gates_o2_before.txt
+  if [ $GRC2 -ne 0 ]; then
+    echo "per-run gates FAILED on the second snapshot before the eval: nothing run"
+    exit 1
+  fi
+  ARMS_ARGS="--arms T,O,O2 --snapshot-o2 $SB2"
+  echo "arms T, O ($SB) and O2 ($SB2)"
+fi
 # The cap is B8's pre-registered 900 s (D10), the same for both arms: on
 # the new scenes (up to five cups) TAMPURA's loop may run past BF#59's 600 s.
 $VA/python -u $SB/tools/gen_scene_eval.py --snapshot $SB --out $OUT --seeds $SEEDS \
-  --reps $REPS --cap 900 --python-o $VA/python --venv-t $TW/.venv --tampura-work $TW
+  --reps $REPS --cap 900 --python-o $VA/python --venv-t $TW/.venv --tampura-work $TW $ARMS_ARGS
 echo "harness rc $?"
 (cd $SB && env -u PYTHONPATH $VA/python tools/bridge_gates.py tree --compare $OUT/g13_before.json) > $OUT/gates_after.txt 2>&1
 cat $OUT/gates_after.txt
+if [ -n "$SB2" ]; then
+  (cd $SB2 && env -u PYTHONPATH $VA/python tools/bridge_gates.py tree --compare $OUT/g13_o2_before.json) > $OUT/gates_o2_after.txt 2>&1
+  cat $OUT/gates_o2_after.txt
+fi
 finish
 # BF#49: the cluster's data hygiene after every run.
 bash $SB/tools/cluster/prune_work.sh --apply || echo "prune_work rc $?"
