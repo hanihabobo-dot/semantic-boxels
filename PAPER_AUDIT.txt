@@ -9475,7 +9475,20 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   mode S with boxels; path 8 (Opus 5.5, local_43621c9b;
   tracks/lookalike/) brings class uncertainty into our own setup behind
   a default-off flag.  Q42 and the slam_collect arm T pilot stay cluster
-  questions; Q45 is open.
+  questions; Q45 is open.  About 11:15: "yes. it should be able to run
+  exactly like it did in their env, and sense its standard anyway, i want
+  a path to start where it removes sense/observe and just keeps look(some
+  fleunts f1, f2, f3, ....). make sure that the pddl file is tight and
+  that the python code does what the pddl action says and nothing else.
+  but it should be something like look from boxel. and we need to then
+  find a clever way to find out where from that boxel unless you have
+  another suggetion."  TAMPURA's re-run on our scenes uses its own hand
+  camera and standard sensing, one declared deviation (path 5).  Path 9
+  (Sonnet 5.5, local_9a606d67; tracks/look/) replaces sense and observe
+  with one look from a boxel, knowledge fluents as its effects, behind a
+  default-off flag.  WSL was down from about 11:00 to 11:14 (start
+  attempts timed out; Ubuntu stopped; one start attempt booted it again);
+  what ran in WSL before is gone, and no counted run overlaps the gap.
   MERGES INTO THE TRUNK: TB-16 (run.ps1 runs the checkout it lives in) as
   564ff5b; track/draw as afd80a3 (`run tampura -Draw boxels`, a merge of
   b43f962).  -Draw boxels draws the registry as debug lines and labels
