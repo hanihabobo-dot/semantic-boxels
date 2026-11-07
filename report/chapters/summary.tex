@@ -34,7 +34,8 @@ wrong; LW1 alone makes fewer planner calls and shorter runs than its paper's
 Table 2 at 5x5 (\TK{4}). A straight-line walk wins 18 and 15 of 100 of LW1's
 states at 5x5, a walker that never refuses an unknown cell 34, so the test has a luck
 floor of about a third; no published number for these walkers appears in the papers
-read for this report (\TK{10}, \Cref{sec:published}).
+read for this report (\TK{10}, \Cref{sec:published}). Our own planner has no result
+there yet and must clear this floor, not zero (\Cref{tab:wumpus-bar}).
 
 \emph{The thesis's ``timeout'' share on stack needs correcting.} Of 29 rows
 labelled ``timeout'' in the thesis sweep's semantic stack cells, 25 ended after 8
@@ -45,5 +46,7 @@ to 21 seconds, a symbolic success that the end-of-run physics check rejected
 own execution reaches their reward in 18 of 20 \cuncert\ episodes and 17 of 25
 \slamcol\ episodes (\TK{2}); TAMPURA's planner on our scenes solves 6 of 10 where
 ours solves 10 of 10 (\TK{5}); no dev track has run anything on the cluster, and a
-list of decisions waits for Hani (\Cref{ch:open-questions}).
+list of decisions waits for Hani (\Cref{ch:open-questions}). Hani's visual check under
+rule 15 is on record for one run and for no approved comparison
+(\Cref{sec:visual-check}).
 \end{summary}
