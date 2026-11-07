@@ -3,4 +3,121 @@
 \chapter{Internal Sources}
 \label{ch:appendix-sources}
 
-Skeleton build: this chapter is written with version 1. \Cref{ch:appendix-sources}.
+Every tag of the text links to its row here. A row of the form BF\#$n$ names the
+entry of the audit file \texttt{PAPER\_AUDIT.txt} (at the root of the repository)
+with that number; \#P$n$ names the workstream entry; ``path $n$'' names the dev
+track of that number, whose files are under \texttt{tracks/} in the evidence
+folder. The evidence folders are under
+\texttt{archive/tampura\_bridge\_plan\_2026-10-25/} unless a full path is given;
+``the entry'' means that the entry's own text is the evidence. Two numbers, BF\#61
+and BF\#67, have no entry of their own; their rows say where they are named. The
+status column
+gives the marker in the entry's heading as written; where later text of the entry or
+a later entry changes it, \Cref{sec:disagreements} says so.
+
+\begin{footnotesize}
+\begin{longtable}{@{}P{1.35cm}P{6.0cm}P{2.5cm}P{3.5cm}@{}}
+\caption{The internal sources of the tags.}\label{tab:sources}\\
+\toprule
+tag & what it is & status in the entry & evidence \\
+\midrule
+\endfirsthead
+\toprule
+tag & what it is & status in the entry & evidence \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+
+\isrcrow{BF1}{BF\#1}{the deadline of 4 December 2026, the latest start of the evaluation campaign, first answers to the plan's questions}{DONE}{the entry}
+\isrcrow{BF2}{BF\#2}{automated honesty gates, runtime hooks and the run ledger}{DONE}{bf/BF2\_b0/}
+\isrcrow{BF3}{BF\#3}{TAMPURA's tree is not as shipped: one import fix, declared and pinned}{DONE, user may override}{the entry}
+\isrcrow{BF4}{BF\#4}{first measurement of TAMPURA's robot, meshes and physics}{DONE}{bf/BF4\_b1/}
+\isrcrow{BF5}{BF\#5}{evaluation runs move to the chair's cloud}{OPEN}{the entry}
+\isrcrow{BF6}{BF\#6}{both arms on the chair's cluster; set-up of the first runs}{OPEN}{bf/BF7\_b1j/}
+\isrcrow{BF7}{BF\#7}{tests of the arm's environment on the cluster; run-to-run noise of the unchanged pipeline (A/A)}{DONE}{bf/BF7\_b1j/}
+\isrcrow{BF8}{BF\#8}{the seed-to-scene map depends on the file system}{DONE, option (A)}{the entry}
+\isrcrow{BF9}{BF\#9}{TAMPURA as shipped on the cluster, seeds 0 to 19}{DONE}{bf/BF9\_b1g/}
+\isrcrow{BF10}{BF\#10}{main-pipeline parameterisation, every new behaviour off by default; its acceptance comparison}{DONE, accepted by the user}{bf/BF10\_b3/}
+\isrcrow{BF11}{BF\#11}{TAMPURA's eye, workspace, reach and the hold at home, measured}{DONE}{bf/BF11\_b1p2/}
+\isrcrow{BF12}{BF\#12}{the harness that runs our pipeline in TAMPURA's world}{DONE, corrected by BF\#14}{bf/BF12\_b2/}
+\isrcrow{BF13}{BF\#13}{the plan-count test of the later acceptances, fixed before any run}{DONE, pre-registered}{the entry}
+\isrcrow{BF14}{BF\#14}{first review gate: four adversarial lenses on the bridge code}{OPEN, closes when GF1 to GF9 land}{reviews/gate1\_*.json}
+\isrcrow{BF15}{BF\#15}{Hani's answers to four questions (M7 everywhere, the rule for the die-loss remedy)}{DONE, decisions}{the entry}
+\isrcrow{BF16}{BF\#16}{run-time check that TAMPURA's code is unmodified}{DONE}{bf/BF16\_gf1/}
+\isrcrow{BF17}{BF\#17}{no simulation screenshots on the cluster; local ones kept a week}{DONE}{the entry}
+\isrcrow{BF18}{BF\#18}{hash of arm T's installed TAMPURA}{DONE}{bf/BF18\_gf2/}
+\isrcrow{BF19}{BF\#19}{leak test of the write-only region and a wider scan}{PARTLY DONE}{bf/BF19\_gf3/}
+\isrcrow{BF20}{BF\#20}{controls of the scoring chain, the readback check, the pickle round trip}{DONE}{bf/BF20\_gf4/}
+\isrcrow{BF21}{BF\#21}{seed hygiene in the ledger; one outcome label per episode}{DONE}{bf/BF21\_gf5/}
+\isrcrow{BF24}{BF\#24}{the run directory of arm O; stray files in TAMPURA's trees}{DONE}{bf/BF24\_gf8/}
+\isrcrow{BF25}{BF\#25}{the gate hooks under the acceptance test and their cost}{DONE}{bf/BF25\_gf9/}
+\isrcrow{BF26}{BF\#26}{the pick floor for TAMPURA's Panda; the sense pose hides the die}{PARTLY DONE}{the entry}
+\isrcrow{BF27}{BF\#27}{our debug camera panes in TAMPURA's GUI}{OPEN, FOR LATER}{the entry}
+\isrcrow{BF30}{BF\#30}{M9, the object-fitted grasp}{DONE, SWITCH OFF}{the entry}
+\isrcrow{BF31}{BF\#31}{M10 and the pose writers}{DONE, SWITCHES OFF}{the entry}
+\isrcrow{BF32}{BF\#32}{delete the sense action, keep only observe}{OPEN, FOR LATER}{the entry}
+\isrcrow{BF33}{BF\#33}{M8, the planning domain, views and observe}{DONE, SWITCHES OFF}{the entry}
+\isrcrow{BF34}{BF\#34}{M8 to M10 on by default; the plan's default answers}{DONE, decisions}{the entry}
+\isrcrow{BF35}{BF\#35}{one environment and one success criterion; how TAMPURA carries and scores the die}{OPEN, decision}{bf/calib/tampura\_carry\_s0.json}
+\isrcrow{BF37}{BF\#37}{physical die carry first, then one success test on both arms}{OPEN, decision}{the entry}
+\isrcrow{BF38}{BF\#38}{the probe of the squeeze; 0.5\,mm qualifies}{DONE, measurement and decision}{bf/BF38\_q14/}
+\isrcrow{BF39}{BF\#39}{GUI runs go on past a scene-map mismatch, flagged}{DONE}{bf/gui\_runs/}
+\isrcrow{BF40}{BF\#40}{B8's harness: the campaign driver, its batch script and its report tool}{DONE}{the entry}
+\isrcrow{BF42}{BF\#42}{seed 10 GUI run: the planner failed after four of five places failed at the contact IK}{FINDING, not analysed}{bf/gui\_runs/}
+\isrcrow{BF44}{BF\#44}{the pick squeeze default is 0.5\,mm}{DONE}{the entry}
+\isrcrow{BF45}{BF\#45}{the planner certifies an approach only with its contact pose reachable}{DONE}{bf/BF45\_46/}
+\isrcrow{BF46}{BF\#46}{the pinch span reads the box's side along the nearest axis}{DONE}{the entry}
+\isrcrow{BF47}{BF\#47}{after the fixes the same episode loses the die on the move home}{FINDING, not analysed}{the entry}
+\isrcrow{BF48}{BF\#48}{the hold detector against the truth, live in the GUI}{DONE}{bf/carry\_watch/}
+\isrcrow{BF49}{BF\#49}{run data hygiene: compacted after a day, deleted after two weeks}{DONE}{the entry}
+\isrcrow{BF50}{BF\#50}{simulation screenshots off unless asked for}{DONE}{the entry}
+\isrcrow{BF51}{BF\#51}{closing the GUI window mid-episode leaves the process spinning at full CPU}{FIXED for run 2026-10-30, a66d95e; open for tools/watch.ps1}{the entry}
+\isrcrow{BF52}{BF\#52}{time cut 1: the baseline recorded; sensing from the pick configuration}{OPEN}{bf/BF52\_baseline/}
+\isrcrow{BF53}{BF\#53}{time cut 2: the fixes as switches and the per-fix evaluation}{DONE}{bf/BF53\_search/, bf/BF53\_eval\_cluster/}
+\isrcrow{BF54}{BF\#54}{both first campaigns' arm O crashed on every episode}{FIXED}{the entry}
+\isrcrow{BF55}{BF\#55}{the cluster's size cap counted apparent bytes}{FIXED}{the entry}
+\isrcrow{BF56}{BF\#56}{the gateway dropped snapshot uploads; snapshots are code only}{FIXED}{the entry}
+\isrcrow{BF57}{BF\#57}{decision: fix 4 alone stays}{DONE}{the entry}
+\isrcrow{BF58}{BF\#58}{the rule of a ledger of generated data and deletion of garbage}{DONE}{\texttt{DATA\_LEDGER.md}}
+\isrcrow{BF59}{BF\#59}{the die-slip campaign: six fixes, three repetitions, TAMPURA beside it}{DONE, decisions open}{bf/BF59\_slip/}
+\isrcrow{BF60}{BF\#60}{entropy search for the search order: not for this paper}{OPEN, FOR LATER}{the entry}
+\isrcrow{BF61}{BF\#61}{the cup release jam and its switch release\_retreat, unmerged}{no entry of its own; named in BF\#59 and on the bug board (TB-7)}{tracks/BUGS.md}
+\isrcrow{BF62}{BF\#62}{the four switches of the chosen set are on by default}{DONE}{the entry}
+\isrcrow{BF63}{BF\#63}{generated-scene evaluation on 40 scenes from TAMPURA's generator}{DONE; FINDING OPEN}{bf/BF63\_gen\_scenes/}
+\isrcrow{BF64}{BF\#64}{the shadow caster took the planning window for the table}{FIXED on track/fixes (51428d8); its A/B is path 6's arm A$'$}{bf/BF64\_shadow\_table/}
+\isrcrow{BF65}{BF\#65}{the die under a cup lies in none of our hiding regions}{FINDING OPEN}{the entry}
+\isrcrow{BF66}{BF\#66}{attribute boxelization, merging boxels by what the planner reads}{LOGGED, FAR FUTURE WORK}{\texttt{PROPOSAL\_\allowbreak ATTRIBUTE\_\allowbreak BOXELS.md}}
+\isrcrow{BF67}{BF\#67}{the class\_uncertain plan, held}{no entry of its own; named in BF\#66 and BF\#68}{tracks/STATE.md}
+\isrcrow{BF68}{BF\#68}{dev tracks from a stable base, one responsible session per path}{DECIDED; TRACKS RUNNING}{tracks/STATE.md}
+\midrule
+\isrcrow{P1}{\#P1}{remove the weld grasp and all oracle reads; build real perception and a real pose sampler; findings F1 to F32}{OPEN T0 in the heading; steps landed from 20 Aug to 19 Sept}{the entry}
+\isrcrow{P2}{\#P2}{prove the stacking drop is execution; detect physical failure; fail honestly}{OPEN T0 in the heading; (a), (c) and (d) landed 19 Sept, (b) answered 20 Sept}{the entry}
+\isrcrow{P3}{\#P3}{all objects must spawn within reachable range}{OPEN T1 in the heading; landed 19 Sept}{the entry}
+\isrcrow{P4}{\#P4}{run our pipeline inside TAMPURA's environment for a valid comparison; the restart plan, the honesty contract and the gates}{OPEN T0}{the entry; evidence folder as a whole}
+\isrcrow{P5}{\#P5}{consider adopting TAMPURA's controllers}{OPEN T2}{the entry}
+\isrcrow{P6}{\#P6}{real-robot experiment, nice to have}{REMARK}{the entry}
+\isrcrow{P7}{\#P7}{related work of 2024 to 2026}{OPEN T1}{the entry}
+\isrcrow{P8}{\#P8}{comparable results from other approaches in the same environment}{OPEN T1}{the entry}
+\isrcrow{P9}{\#P9}{full partially observable planning with LW1, a 3-D Wumpus world}{OPEN, STRETCH}{the entry}
+\isrcrow{P10}{\#P10}{division of labour and framing of the paper}{REMARK}{the entry}
+\midrule
+\isrcrow{TK1}{path 1}{drawing the boxels and the cameras in the GUI}{live file, read 13:29}{tracks/draw/}
+\isrcrow{TK2}{path 2}{which TAMPURA tasks give a quick result}{delivered 6 Nov}{tracks/tasks/ (TRIAGE.md)}
+\isrcrow{TK3}{path 3}{the bug board and the fix rollout}{live file, read 13:48}{tracks/fixes/, tracks/BUGS.md}
+\isrcrow{TK4}{path 4}{LW1 in a 3-D Wumpus world}{final report, 6 Nov}{tracks/wumpus/REPORT.md}
+\isrcrow{TK5}{path 5}{TAMPURA on our scenes}{live file, read 13:23}{tracks/reverse/ (batch1/summary.txt)}
+\isrcrow{TK6}{path 6}{the cluster evaluation plan and its deviations}{live file, read 13:17}{tracks/eval/ (PLAN.md, DEVIATIONS.md)}
+\isrcrow{TK7}{path 7}{our planning layer with boxels on TAMPURA's tasks}{live file, read 13:35 and, for the check of 14:22, about 17:00}{tracks/modes/}
+\isrcrow{TK8}{path 8}{TAMPURA's class\_uncertain task in our setup}{live file, read 14:00}{tracks/lookalike/}
+\isrcrow{TK9}{path 9}{one look action in place of sense and observe}{live file, read 13:53}{tracks/look/}
+\isrcrow{TK10}{path 10}{our setup in the Wumpus world; triviality numbers}{live file, read 13:56}{tracks/wumpus\_sb/ (evidence/triviality/)}
+\isrcrow{TK12}{path 12}{why WSL wedged on 7 November}{live}{tracks/wsl/}
+\midrule
+\isrcrow{bf63step}{step-count file}{arm O's actions by the step-equivalence convention and TAMPURA's actions to its first reward, run 2 of BF\#63}{a file}{wire\_sb\_into\_tampura/bf63\_step\_equiv.txt}
+\isrcrow{bf63review}{review file}{the review of the BF\#63 step counts; like for like over the 76 pairs: ours 0.592, TAMPURA 0.530}{a file}{wire\_sb\_into\_tampura/REVIEW.md}
+\isrcrow{citations}{citation record}{every published number and every new bibliography entry, with the place and the date it was checked}{a file}{tracks/report/CITATIONS.md}
+\isrcrow{verify}{verification record}{a second read of this version: the added bibliography entries against their sources, every published number against its paper, every number of ours against its internal source, and the corrections that followed}{a file}{tracks/report/VERIFY\_v1.md}
+\isrcrow{tracksstate}{tracks state file}{the rules of the tracks, their table, merges and open questions}{live file, read 13:48}{tracks/STATE.md}
+\end{longtable}
+\end{footnotesize}
