@@ -9486,9 +9486,11 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   camera and standard sensing, one declared deviation (path 5).  Path 9
   (Sonnet 5.5, local_9a606d67; tracks/look/) replaces sense and observe
   with one look from a boxel, knowledge fluents as its effects, behind a
-  default-off flag.  WSL was down from about 11:00 to 11:14 (start
-  attempts timed out; Ubuntu stopped; one start attempt booted it again);
-  what ran in WSL before is gone, and no counted run overlaps the gap.
+  default-off flag.  WSL was down from about 11:00 to 11:09: starts timed
+  out while Ubuntu showed "Stopped" with its VM still alive, and path 1's
+  `wsl --shutdown` at 11:09:29 ended it (corrected 12:20 from path 1's
+  transcript; Go had first written that nobody ran it); what ran in WSL
+  before is gone, and no counted run overlaps the gap.
   About 11:45: "i dont know which path is responsible of this but i want
   that wumpus sim to give us a viizual cue about not knowing where the
   wumpus is and in what is in each cell. so just like the safe cells get
@@ -9515,7 +9517,8 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   setup, the goal of the parked class_uncertain plan (BF#67); the die and
   look-alike design is dropped.  Rule 12 of tracks/STATE.md: every
   deviation from a TAMPURA task or setup is approved by Hani in writing in
-  chat before anything that rests on it is built or run.
+  chat before anything that rests on it is run or merged (code may be
+  prepared on the track's own branch).
   MERGES INTO THE TRUNK: TB-16 (run.ps1 runs the checkout it lives in) as
   564ff5b; track/draw as afd80a3 (`run tampura -Draw boxels`, a merge of
   b43f962).  -Draw boxels draws the registry as debug lines and labels
