@@ -59,10 +59,11 @@ def test_counts():
 
 
 class _Env:
-    """A 2x2 board for the explore controller, no physics: breeze at p1-1 only,
-    the gold at p2-2."""
-    def __init__(self):
+    """A 2x2 board for the explore controller, no physics: a breeze in the
+    cells of `breeze` (no pit is needed for one here), the gold at `gold`."""
+    def __init__(self, breeze=('p1-1',), gold='p2-2'):
         self.cell, self.known = 'p1-1', []
+        self.breeze, self.gold = tuple(breeze), gold
 
     def cells(self):
         return ['p1-1', 'p1-2', 'p2-1', 'p2-2']
@@ -79,18 +80,18 @@ class _Env:
 
     def perceive(self):
         return {'ok': True, 'why': '', 'cell': self.cell, 'stench': False,
-                'breeze': self.cell == 'p1-1', 'glitter': self.cell == 'p2-2'}
+                'breeze': self.cell in self.breeze, 'glitter': self.cell == self.gold}
 
     def move(self, cell):
         self.cell = cell
         return {'ok': True, 'why': '', 'dead': None}
 
     def grab(self):
-        return {'ok': self.cell == 'p2-2', 'held': self.cell == 'p2-2', 'why': ''}
+        return {'ok': self.cell == self.gold, 'held': self.cell == self.gold, 'why': ''}
 
 
 def test_explore_feeds_the_painter():
-    env = _Env()
+    env = _Env(breeze=('p1-1',), gold='p2-2')
     res = run_explore(env, log=lambda *a: None)
     # a breeze at the start: nothing is safe but p1-1, so the explore controller is stuck,
     # and what it painted says exactly what it knew: p1-1 visited, its neighbours wumpus-free
@@ -99,3 +100,15 @@ def test_explore_feeds_the_painter():
                           'p1-2': {'wumpus': 'no'}, 'p2-1': {'wumpus': 'no'}}]
     view = kn.normalize(env.known[0], env.cells())
     assert [kn.tile_state(view[c]) for c in env.cells()] == ['visited', 'possible', 'possible', 'unknown']
+
+
+def test_explore_paints_the_gold_where_it_sees_glitter():
+    env = _Env(breeze=(), gold='p1-2')
+    res = run_explore(env, log=lambda *a: None)
+    # no breeze: p1-1's neighbours are safe, the nearest is p1-2, where the glitter is
+    assert res['outcome'] == 'success', res
+    last = env.known[-1]
+    assert last['p1-2'] == {'pit': 'no', 'wumpus': 'no', 'gold': 'yes', 'visited': True}
+    # a visited cell without glitter holds no gold
+    assert last['p1-1']['gold'] == 'no' and last['p1-1']['visited'] is True
+    assert kn.label('p1-2', kn.normalize(last, env.cells())['p1-2']) == 'p1-2 G!'
