@@ -171,6 +171,10 @@ def main():
     for flag in ('--m8', '--m9', '--m10', '--pick-aperture-from-pose',
                  '--sense-over-region'):
         ap.add_argument(flag, choices=('off', 'on'), default='on')
+    # Path 9 (BF#68): one look action from a free-space boxel in place of
+    # sense and observe; passed through only when on, so an off run's switches
+    # (and its record) are those of before.
+    ap.add_argument('--look', choices=('off', 'on'), default='off')
     # GF10 (BF#38): the pick close's squeeze (0.5 mm since BF#44), passed through like the switches.
     ap.add_argument('--grip-squeeze-mm', type=float, default=0.5)
     # BF#53: the optimistic search's settings (run_logger's flags of the
@@ -267,7 +271,8 @@ def main():
                   'search_effort_weight': a.search_effort_weight,
                   'search_initial_complexity': str(a.search_initial_complexity),
                   'slip_fixes': slip_fixes.resolve(a.slip_fixes),
-                  'save_screenshots': a.save_screenshots})
+                  'save_screenshots': a.save_screenshots,
+                  **({'look': 'on'} if a.look == 'on' else {})})
     cfg.driver = {'events': events, 'seed': config['global_seed'],
                   'rng_untouched': rng_untouched,
                   'pythonhashseed': os.environ.get('PYTHONHASHSEED')}

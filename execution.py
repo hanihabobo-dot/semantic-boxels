@@ -2500,7 +2500,8 @@ def register_new_detections(*, env, registry, belief, viz, detections,
                             target_name, shadows, occluders,
                             shadow_occluder_map, boxel_centers,
                             boxel_to_pybullet, object_body_ids, render=None,
-                            skip_names=frozenset(), held_body_id=None):
+                            skip_names=frozenset(), held_body_id=None,
+                            camera='eye'):
     """Register every detected object that has no registry boxel (#P1 F20).
 
     The sense action observes the WHOLE workspace: its render detects
@@ -2528,7 +2529,9 @@ def register_new_detections(*, env, registry, belief, viz, detections,
     the loop's all-searched exit consults the registry instead.
 
     ``skip_names``: bodies never to register here (the held object, which
-    a sense cannot see resting anywhere).  Returns the registered names.
+    a sense cannot see resting anywhere).  ``camera``: the detections'
+    source for the pose belief ('eye', or 'wrist' for a look's render).
+    Returns the registered names.
     """
     registered = []
     table_z = env.table_surface_height
@@ -2581,7 +2584,7 @@ def register_new_detections(*, env, registry, belief, viz, detections,
         # M8 A: first registration, formula if complete, else plus half
         # its completion.
         pose_belief.record_detection(
-            obj_bd, det, 'eye',
+            obj_bd, det, camera,
             detection_complete(env, aabb_min, aabb_max, det, render),
             first=True)
         boxel_centers[name] = obj_bd.center

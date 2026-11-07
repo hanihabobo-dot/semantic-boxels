@@ -117,6 +117,9 @@ from execution import carry_hold_begin, carry_hold_end
 import pose_belief
 import m8_domain
 import observe_views
+import look_domain
+import look_views
+from look_action import handle_look_action
 from streams import HOME_PSEUDO_BOXEL
 import logging
 import math
@@ -768,7 +771,14 @@ def main(gui=True, run_logger=None, scene_config=None,
     robot_utils.GRIP_SQUEEZE = float(getattr(args, 'grip_squeeze_mm', '0.5')) / 1000.0
     # BF#50: the eye images are saved only when this run asks for them.
     world_eye.SAVE_IMAGES = getattr(args, 'save_screenshots', 'off') == 'on'
-    if domain_file is None and pose_belief.SWITCHES['M8']:
+    # Path 9: --look on loads the look domain (M8's plus the look delta) and
+    # needs M8's pose machinery; off, nothing below differs from the tag.
+    look_on = getattr(args, 'look', 'off') == 'on'
+    if look_on and not pose_belief.SWITCHES['M8']:
+        raise ValueError("--look on needs --m8 on")
+    if domain_file is None and look_on:
+        domain_file = look_domain.domain_file(True, True)
+    elif domain_file is None and pose_belief.SWITCHES['M8']:
         domain_file = m8_domain.domain_file(True)
     # BF#52: the fold (pddlstream_planner.over_region_facts) is offered
     # unless --sense-over-region off (the A/B).  Not a pose_belief switch:
@@ -794,6 +804,9 @@ def main(gui=True, run_logger=None, scene_config=None,
             (_dom == m8_domain.GENERATED_FILE) != pose_belief.SWITCHES['M8']:
         raise ValueError(f"domain {os.path.basename(_dom)} does not match "
                          f"M8 {'on' if pose_belief.SWITCHES['M8'] else 'off'}")
+    if (_dom == os.path.abspath(look_domain.GENERATED_FILE)) != look_on:
+        raise ValueError(f"domain {os.path.basename(_dom)} does not match "
+                         f"--look {'on' if look_on else 'off'}")
     print(f"  model tweaks: {pose_belief.SWITCHES}; domain "
           f"{os.path.basename(domain_file or m8_domain.LIVE_FILE)}")
     # The curated console's header (a no-op without console_ui installed).
@@ -1353,7 +1366,8 @@ def main(gui=True, run_logger=None, scene_config=None,
                                sense_over_region=sense_over_region,
                                search_effort_weight=search_effort_weight,
                                search_initial_complexity=search_initial_complexity,
-                               slip_fixes=slip_fixes.spec()))                 # BF#59
+                               slip_fixes=slip_fixes.spec(),                  # BF#59
+                               **({'look': True} if look_on else {})))        # path 9
     # #P4 B3(d): the scene's reach envelope (None: streams' constants),
     # and D7 (i) to (iii): the home joints, and with a declared goal
     # configuration its init facts and the goal conjunct.
@@ -1437,6 +1451,11 @@ def main(gui=True, run_logger=None, scene_config=None,
             env, planner.streams._robot_base_xy)
         # BF#52: the fold's switch (over_region_facts needs m8_views).
         planner.sense_over_region = sense_over_region
+        # Path 9: the look's viewpoints, from the same plan twin.
+        if look_on:
+            planner.look_views = look_views.LookViews(
+                planner.m8_views, reachable=planner.streams.ee_reachable)
+            planner.look_on = True
 
     boxel_centers = {b.id: b.center for b in registry.boxels.values()}
 
@@ -1451,6 +1470,8 @@ def main(gui=True, run_logger=None, scene_config=None,
     observe_count = 0
     observe_strikes: Dict[str, tuple] = {}
     m8_per_plan: list = []
+    look_count = 0                   # path 9: executed looks, and the stats
+    look_per_plan: list = []         # of each plan call's look facts
     # Per-call planner.plan() durations.  Captured originally for
     # audit #30 baseline timing; now consumed by the eval runner
     # (audit #9) for scalability plots.
@@ -1850,6 +1871,8 @@ def main(gui=True, run_logger=None, scene_config=None,
         plan_dt = time.perf_counter() - plan_t0
         if planner.last_m8_stats:
             m8_per_plan.append(dict(planner.last_m8_stats, plan=plan_count))
+        if planner.last_look_stats:
+            look_per_plan.append(dict(planner.last_look_stats, plan=plan_count))
         # #P4 B0: every plan() call and its result go to the run ledger
         # (gates G3, G10, G11).
         ledger_event('plan', plan_id=plan_count, call='mission', goal=goal,
@@ -2021,7 +2044,7 @@ def main(gui=True, run_logger=None, scene_config=None,
             # #P4 B3(d), D7 (vi): any action but a sense or an observe
             # (M8 C2: one render, no motion) may move the arm, so the
             # at-home state holds only until the next one.
-            if action_name not in ('sense', 'observe'):
+            if action_name not in ('sense', 'observe', 'look'):
                 at_home_ok = False
             # #P1 F17: segment the telemetry stream by dispatched action,
             # so every frame, event and summary is attributable to the
@@ -2319,6 +2342,65 @@ def main(gui=True, run_logger=None, scene_config=None,
                              lost=lost, config=look_q.name)
                 dispatch_end(status)
                 break
+
+            elif action_name == 'look':
+                # LOOK (path 9, --look on): one wrist render from a viewpoint
+                # boxel.  handle_look_action checks what the PDDL
+                # precondition names and writes what its effects name and
+                # nothing else (look_action.LOOK_SPEC); the strikes are this
+                # loop's rules.  The plan goes on when the unconditional
+                # effects hold in the belief, else the loop replans.
+                look_count += 1
+                obj_str, look_q = str(params[0]), params[3]
+                _named = [str(f[2]) for f in planner.last_init
+                          if f[0] == 'reveals'
+                          and getattr(f[1], 'name', f[1]) == look_q.name]
+                look_result = handle_look_action(
+                    action_params=params, named=_named, env=env,
+                    registry=registry, belief=belief, viz=viz,
+                    robot_id=robot_id, held_body_id=held_body_id,
+                    support_body_ids=support_body_ids, shadows=shadows,
+                    occluders=occluders,
+                    shadow_occluder_map=shadow_occluder_map,
+                    blocked_counts=blocked_counts,
+                    blocked_giveup_shadows=blocked_giveup_shadows,
+                    boxel_centers=boxel_centers,
+                    boxel_to_pybullet=boxel_to_pybullet,
+                    object_body_ids=object_body_ids,
+                    pose_known=lambda bd: pose_belief.pose_known(
+                        bd, robot_model().finger_limits[0][1],
+                        planner.streams.GRASP_MAX_SPAN,
+                        planner.streams.GRASP_SQUARE_TOL),
+                    target_name=target_name)
+                ledger_event('look_reveals', config=look_q.name, named=_named)
+                ledger_event('look_result', reason=look_result.reason,
+                             continue_=look_result.continue_, obj=obj_str,
+                             region=str(params[1]), config=look_q.name,
+                             outcomes=look_result.outcomes,
+                             reposed=look_result.reposed,
+                             found_in=look_result.found_in,
+                             registered=look_result.registered,
+                             blocked=look_result.blocked,
+                             parked=look_result.parked)
+                if look_result.stale:
+                    dispatch_end('stale_precondition')
+                    break
+                if not look_result.continue_:
+                    _bd = registry.get_boxel(obj_str)
+                    if (look_result.reason == 'look_pose_incomplete'
+                            and _bd is not None):
+                        # The observe bound's rule: three looks that do not
+                        # give the pose park the object until its box moves.
+                        _n = observe_strikes.get(obj_str, (0,))[0] + 1
+                        observe_strikes[obj_str] = (
+                            _n, np.concatenate([_bd.min_corner, _bd.max_corner]), _bd)
+                        if _n >= 3:
+                            planner.m8_views.parked.add(obj_str)
+                        print(f"    [look] pose strike {_n}/3 for {obj_str}"
+                              f"{'; PARKED' if _n >= 3 else ''}")
+                    dispatch_end('look_outcome')
+                    break
+                observe_strikes.pop(obj_str, None)
 
             elif action_name == 'pick':
                 # PICK: approach → open gripper → lower to contact →
@@ -3109,7 +3191,9 @@ def main(gui=True, run_logger=None, scene_config=None,
         m8_stats=({"n_observe_actions": observe_count,
                    "parked": sorted(planner.m8_views.parked),
                    "view_kin_skips": planner.streams.view_kin_skips,
-                   "per_plan": m8_per_plan}
+                   "per_plan": m8_per_plan,
+                   **({"n_look_actions": look_count,
+                       "look_per_plan": look_per_plan} if look_on else {})}
                   if planner.m8_views is not None else None),
         shadows=shadows,
         blocked_giveup_shadows=blocked_giveup_shadows,
@@ -3220,6 +3304,7 @@ if __name__ == "__main__":
         "sense_gate":   args.sense_gate,
         "corridor_test": args.corridor_test,
         "m8": args.m8, "m9": args.m9, "m10": args.m10,
+        **({"look": "on"} if getattr(args, 'look', 'off') == 'on' else {}),  # path 9
         "pick_aperture_from_pose": args.pick_aperture_from_pose,
         "grip_squeeze_mm": getattr(args, 'grip_squeeze_mm', '0.5'),
         "save_screenshots": getattr(args, 'save_screenshots', 'off'),   # BF#50

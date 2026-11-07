@@ -248,6 +248,12 @@ class PDDLStreamPlanner:
         # BF#52: the fold (over_region_facts) is offered unless main()'s
         # --sense-over-region off; it needs m8_views.
         self.sense_over_region = True
+        # Path 9 (--look on): _build_init emits the look domain's facts
+        # (look_views.LookViews, set by main() after the first export, like
+        # m8_views) in place of the sense and observe facts.
+        self.look_on = False
+        self.look_views = None
+        self.last_look_stats: Dict[str, Any] = {}
         # BF#53: further pddlstream solve() keyword arguments from main()'s
         # --search-effort-weight and --search-initial-complexity (see
         # run_logger); empty is pddlstream's own default for each.
@@ -717,6 +723,7 @@ class PDDLStreamPlanner:
         init = []
         shadows = []
         m8 = pose_belief.SWITCHES['M8']
+        look_on = bool(self.look_on)
 
         def _pose_known(bd) -> bool:
             return pose_belief.pose_known(
@@ -727,7 +734,8 @@ class PDDLStreamPlanner:
             init.append(('Boxel', boxel.id))
 
             if boxel.boxel_type == BoxelType.SHADOW:
-                init.append(('is_shadow', boxel.id))
+                if not look_on:
+                    init.append(('is_shadow', boxel.id))
                 shadows.append(boxel.id)
 
                 if boxel.id in known_empty_shadows:
@@ -735,7 +743,8 @@ class PDDLStreamPlanner:
                         init.append(('obj_at_boxel_KIF', obj, boxel.id))
 
             elif boxel.boxel_type == BoxelType.OBJECT:
-                init.append(('is_object', boxel.id))
+                if not look_on:
+                    init.append(('is_object', boxel.id))
                 init.append(('Obj', boxel.id))
                 # F7 ROOT CAUSE (2026-09-19, analyst over four binding-death
                 # logs): an object relocated in an EARLIER plan used to be
@@ -806,7 +815,9 @@ class PDDLStreamPlanner:
         # shadow_occluder_map is Dict[shadow_id, List[blocker_ids]] — includes
         # ALL objects that block the camera's LOS to each shadow, not just the
         # creating occluder (audit #78).
-        if self.shadow_occluder_map:
+        if look_on:
+            pass        # look mode: what hides a view is named per configuration below
+        elif self.shadow_occluder_map:
             for shadow_id, blocker_ids in self.shadow_occluder_map.items():
                 if isinstance(blocker_ids, str):
                     blocker_ids = [blocker_ids]
@@ -843,7 +854,7 @@ class PDDLStreamPlanner:
         # triples — placements whose OWN volume (taller/wider than the
         # cell) would blind the corridor even though the cell AABB does
         # not (see _compute_placement_view_blocks).
-        if self.camera_pos is not None and shadows:
+        if self.camera_pos is not None and shadows and not look_on:
             free_boxels = [
                 b for b in self.registry.boxels.values()
                 if b.boxel_type == BoxelType.FREE_SPACE
@@ -900,7 +911,8 @@ class PDDLStreamPlanner:
         if self.tray_name is not None:
             init.append(('Obj', self.tray_name))
             init.append(('Boxel', self.tray_name))
-            init.append(('is_tray', self.tray_name))
+            if not look_on:
+                init.append(('is_tray', self.tray_name))
 
         for tgt, boxel_id in visible_target_locations.items():
             init.append(('obj_at_boxel', tgt, boxel_id))
@@ -981,7 +993,7 @@ class PDDLStreamPlanner:
                     continue
                 if self.streams.test_boxel_fits(o, bid):
                     init.append(('boxel_fits', o, bid))
-            for bid in shadow_ids:
+            for bid in ([] if look_on else shadow_ids):
                 if self.sense_gate == 'off' or \
                         self.streams.test_target_can_hide_in_shadow(
                             o, bid, self.camera_pos):
@@ -1007,7 +1019,7 @@ class PDDLStreamPlanner:
         # compute_kin returns at once on these ids).
         self.streams.view_boxel_ids = frozenset()
         self.last_m8_stats = {}
-        if m8 and self.m8_views is not None:
+        if m8 and self.m8_views is not None and not look_on:
             _clash = [b for b in self.registry.boxels if str(b).startswith(VIEW_PREFIX)]
             if _clash:
                 raise ValueError(f"registry boxels carry the view prefix: {_clash}")
@@ -1057,6 +1069,11 @@ class PDDLStreamPlanner:
                   f"{_over_stats.get('over_region_pairs', 0)} over-region folds "
                   f"{_over_stats.get('over_region_s', 0.0):.2f}s; "
                   f"total {self.last_m8_stats['build_s']:.2f}s")
+        self.last_look_stats = {}
+        if look_on:
+            self.last_look_stats = self._look_facts(
+                init, target_objects, shadows, held_obj, current_config,
+                _pose_known)
         if held_obj is None:
             init.append(('handempty',))
         else:
@@ -1110,8 +1127,91 @@ class PDDLStreamPlanner:
                 'Boxel', 'config_for_boxel'], (
                 f"the home pseudo-boxel appears in other facts: {_named}")
 
+        if look_on:
+            # The look domain declares what it uses and nothing else; an
+            # emission it does not declare is a bug here, not data.
+            import look_domain
+            declared = set(look_domain.declared_predicates(self.domain_pddl))
+            undeclared = sorted({str(f[0]) for f in init} - declared)
+            if undeclared:
+                raise ValueError(f"look mode: init facts for predicates the "
+                                 f"look domain does not declare: {undeclared}")
+
         random.shuffle(init)
         return init
+
+    def _look_facts(self, init, target_objects, shadows, held_obj,
+                    current_config, pose_known) -> Dict[str, Any]:
+        """Path 9, --look on: the facts of the look action (look_domain.
+        LOOK_SECTION).  look_for names what a look may hypothesise: a hidden
+        target in each fragment that can hide it (the sense gate's test) and
+        not already known empty, and a registered body whose pose is not
+        known at its own boxel.  look_views.LookViews turns those regions and
+        bodies into certified viewpoints (free-space boxels) with the static
+        facts that go with them: Config, config_for_boxel, reveals,
+        blocks_look_at.  Appends to ``init``; returns the stats."""
+        if self.look_views is None or self.m8_views is None:
+            raise ValueError("--look on needs planner.look_views (main() sets it)")
+        reg = self.registry
+        kif = {(str(f[1]), str(f[2])) for f in init
+               if len(f) == 3 and f[0] == 'obj_at_boxel_KIF'}
+        hidden = [o for o in target_objects
+                  if reg.get_boxel(o) is None
+                  or reg.get_boxel(o).boxel_type != BoxelType.OBJECT]
+        look_for = []
+        for o in hidden:
+            for sid in shadows:
+                if (o, sid) in kif:
+                    continue
+                if self.sense_gate == 'off' or \
+                        self.streams.test_target_can_hide_in_shadow(
+                            o, sid, self.camera_pos):
+                    look_for.append((o, sid))
+        parked = self.m8_views.parked
+        posed = [b for b in reg.boxels.values()
+                 if b.boxel_type == BoxelType.OBJECT and b.id != held_obj
+                 and b.id not in self.streams.ungraspable_objects
+                 and b.id not in parked
+                 and not pose_known(b)
+                 and pose_belief.believed_margin(
+                     b, robot_model().finger_limits[0][1],
+                     self.streams.GRASP_MAX_SPAN,
+                     self.streams.GRASP_SQUARE_TOL) is not None]
+        regions = [reg.get_boxel(s) for s in sorted({s for _, s in look_for})]
+        ext_classes: Dict[Tuple, List[str]] = {}
+        for b in reg.boxels.values():
+            if b.boxel_type != BoxelType.OBJECT or b.id == self.tray_name:
+                continue
+            key = tuple(int(v) for v in np.round(
+                (np.asarray(b.max_corner, dtype=float)
+                 - np.asarray(b.min_corner, dtype=float)) * 1000.0))
+            ext_classes.setdefault(key, []).append(b.id)
+        cells = [b for b in reg.boxels.values()
+                 if b.boxel_type == BoxelType.FREE_SPACE
+                 and b.on_surface is not None
+                 and float(np.linalg.norm(
+                     np.asarray(b.center[:2], dtype=float)
+                     - self.streams._robot_base_xy)) <= self.streams.reach_limit_m]
+        facts, stats = self.look_views.facts(
+            reg, regions, posed, current_config, ext_classes, cells)
+        init.extend(facts)
+        init.extend(('look_for', o, s) for o, s in look_for)
+        init.extend(('look_for', b.id, b.id) for b in posed)
+        stats = dict(stats, regions=[b.id for b in regions],
+                     pose_looks=[b.id for b in posed],
+                     look_for=len(look_for) + len(posed))
+        print(f"  [look] init: {len(regions)} regions {stats['regions']}, "
+              f"{len(posed)} pose looks {stats['pose_looks']}, "
+              f"{stats['certified']} viewpoints, "
+              f"{sum(1 for f in facts if f[0] == 'reveals')} reveals, "
+              f"{sum(1 for f in facts if f[0] == 'blocks_look_at')} blocks_look_at "
+              f"({stats['placement_facts']} placement); no view: "
+              f"{stats['no_view']}; {stats['twin_renders']} twin renders "
+              f"{stats['twin_render_s']:.2f}s, {stats['look_ik']} IK "
+              f"({stats['ik_fail']} failed, {stats['collide']} in collision, "
+              f"{stats['unreachable']} unreachable), total "
+              f"{stats['build_s']:.2f}s")
+        return stats
 
     def plan(self,
              target_objects: List[str],

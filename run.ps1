@@ -14,6 +14,7 @@
 #   run boxels -Seed 3 -Headless
 #   run boxels -Scene stack -Goal stack -Occluders 0
 #   run tampura -Off           without M8-M10 (the old pipeline);  -Squeeze 1   a pick squeeze in mm
+#   run boxels -Look           one look action from a free-space boxel instead of sense and observe (path 9)
 #   run tampura -Screenshots   also save the eye PNGs at every snapshot (debugging only; off since BF#50)
 #   run tampura -Music         8-bit music and effects that follow the run (Windows plays them);
 #                              -Sfx   the effects only;  -Voice   Windows' voice reads the narration too
@@ -36,6 +37,7 @@ param(
     [string]$Goal = 'holding',
     [int]$Occluders = 2,
     [switch]$Off,
+    [switch]$Look,
     [double]$Squeeze = 0,
     [switch]$Screenshots,
     [switch]$Music,
@@ -55,7 +57,7 @@ $PY = '/root/armO-venvA/bin/python'
 $PROCS = "tr -d '\r' < $S/tools/run_procs.sh | bash -s --"
 
 if ($What -in 'help', '-h', '--help', '/?', '?') {
-    Get-Content $PSCommandPath | Select-Object -First 22 | ForEach-Object { $_ -replace '^# ?', '' }
+    Get-Content $PSCommandPath | Select-Object -First 23 | ForEach-Object { $_ -replace '^# ?', '' }
     return
 }
 if ($What -in 'ps', 'status') {
@@ -99,6 +101,7 @@ if ($What -eq 'tampura' -and $Gen) {
 }
 
 $sw = if ($Off) { ' --m8 off --m9 off --m10 off --pick-aperture-from-pose off' } else { '' }
+if ($Look) { $sw += ' --look on' }
 if ($Squeeze -gt 0) {
     $sw += ' --grip-squeeze-mm ' + $Squeeze.ToString([cultureinfo]::InvariantCulture)
 }

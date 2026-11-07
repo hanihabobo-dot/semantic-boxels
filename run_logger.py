@@ -249,7 +249,7 @@ STEP_END_STATUSES = (
     'ok', 'sense_outcome', 'integrity_replan', 'motion_resolve_failed',
     'pick_failure', 'place_failure', 'stack_failure', 'empty_hand',
     'stale_precondition', 'home_not_reached', 'observe_ok',
-    'observe_incomplete', 'unlabelled',
+    'observe_incomplete', 'look_outcome', 'unlabelled',
 )
 
 
@@ -845,6 +845,14 @@ def parse_pipeline_args(argv=None):
              "region when the arm there does not block the eye's view, then "
              'pick from there (on), or return to a static view spot before '
              'every sense as before (off).')
+    # Path 9 (BF#68, tracks/look): one look action from a free-space boxel
+    # replaces sense and observe (look_domain.py, look_views.py,
+    # look_action.py); off keeps both, as before.
+    parser.add_argument(
+        '--look', choices=['off', 'on'], default='off',
+        help="Path 9: replace the sense and observe actions by one look "
+             "action from a free-space boxel (the generated domain "
+             "pddl/domain_pddlstream_look.pddl); needs --m8 on.")
     # BF#53 (2026-10-30), the optimistic search's settings.  pddlstream
     # weighs a stream result's effort into the search's costs only with
     # effort_weight set; without it every attempt of the adaptive loop may
