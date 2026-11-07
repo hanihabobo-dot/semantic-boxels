@@ -9453,6 +9453,14 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   physical, as in BF#63.  Three of TAMPURA's four failures are look
   loops: our fixed camera (P5-Q1 A) gives its look no new viewpoint.
   P5-Q6 (TAMPURA with its own hand camera on the same seeds) is open.
+  PATH 4'S RESULT (tracks/wumpus/REPORT.md): LW1 (their code, FF v2.3
+  with two capacity changes) drove our robot in a 3-D Wumpus world to the
+  gold in 18 of 18 episodes (5x5, 7x7, 10x10), with our perception as its
+  observations: 0 of 369 percepts wrong, every episode equal to LW1's own
+  run action for action (G-W3), 108 of 108 replays equal (G-W2).  LW1
+  alone misses its paper's Table 2 (fewer planner calls and shorter
+  runs, likely the 2018 code against the 2014 runs); a question to the
+  authors is drafted for Hani, not sent.
   MERGES INTO THE TRUNK: TB-16 (run.ps1 runs the checkout it lives in) as
   564ff5b; track/draw as afd80a3 (`run tampura -Draw boxels`, a merge of
   b43f962).  -Draw boxels draws the registry as debug lines and labels
