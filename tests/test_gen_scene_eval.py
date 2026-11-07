@@ -61,12 +61,22 @@ def test_committed_scenes_match_their_manifest():
 
 
 def test_validity_rule_arm_t():
-    assert gse.classify_t({'scene_ok': True, 'status': 'success'}) == (True, '')
-    assert gse.classify_t({'scene_ok': True, 'status': 'failure'}) == (True, '')
-    assert gse.classify_t({'scene_ok': True, 'status': 'killed'}) == (True, 'timeout')
+    read = {'scene_ok': True, 'standard_read': True}
+    assert gse.classify_t(dict(read, status='success')) == (True, '')
+    assert gse.classify_t(dict(read, status='failure')) == (True, '')
+    assert gse.classify_t({'scene_ok': True, 'status': 'killed'}) == (True, 'timeout')   # no read needed
     assert not gse.classify_t({'scene_ok': True, 'status': 'crashed', 'error': 'rc 1'})[0]
     assert not gse.classify_t({'scene_ok': True, 'status': 'gate_failed'})[0]
-    assert not gse.classify_t({'scene_ok': False, 'status': 'success'})[0]
+    assert not gse.classify_t({'scene_ok': False, 'status': 'success', 'standard_read': True})[0]
+
+
+def test_validity_rule_arm_t_needs_the_final_world_read():
+    # DV-1: an outcome without a readable final world does not count (it runs once more)
+    counts, why = gse.classify_t({'scene_ok': True, 'status': 'success'})
+    assert not counts and why == 'final world unreadable: no final_world.json'
+    counts, why = gse.classify_t({'scene_ok': True, 'status': 'failure', 'standard_read': False,
+                                  'final_world': {'ok': False, 'error': 'AttributeError: x'}})
+    assert not counts and why == 'final world unreadable: AttributeError: x'
 
 
 def test_validity_rule_arm_o(tmp_path):
@@ -245,3 +255,162 @@ def test_run_one_o2_runs_arm_o_from_the_second_snapshot(tmp_path, monkeypatch):
     assert (row_o['arm'], row_o2['arm']) == ('O', 'O2')
     assert row_o['success'] and row_o2['success'] and row_o2['counts']
     assert row_o2_retry['attempt'] == 2
+
+
+# ---------------------------------------------------------------------------
+# Path 6: DV-1 (the standard success test) and DV-2 (the 20-action cap)
+# ---------------------------------------------------------------------------
+import re  # noqa: E402
+
+
+def test_t_equiv_is_the_dv2_proxy():
+    m = {'picks': 3, 'places': 2, 'senses': 4, 'observes': 6, 'moves': 30}
+    assert gse.t_equiv(m, True) == 16                 # picks + places + senses + observes + 1 go-home
+    assert gse.t_equiv(m, False) == 15                # no go-home without a success
+    assert gse.t_equiv({'picks': 1, 'places': 1}, True) is None
+    assert gse.t_equiv(None, True) is None
+    assert gse.CAP_ACTIONS == 20
+
+
+def _plain_setup(tmp_path, monkeypatch):
+    monkeypatch.setattr(os, 'uname', lambda: SimpleNamespace(nodename='testnode'), raising=False)
+
+    def plain_cwd(a, arm, seed, rep, attempt, scene):
+        d = tmp_path / 'cwd' / f'{arm}_s{seed}_r{rep}_a{attempt}'
+        d.mkdir(parents=True, exist_ok=True)
+        return str(d)
+    monkeypatch.setattr(gse, 'episode_cwd', plain_cwd)
+    monkeypatch.setattr(gse.bc, 'machine_check', lambda: [])
+    return SimpleNamespace(out=str(tmp_path / 'out'), snapshot='/w/sb_a2', snapshot_o2='/w/sb_aprime',
+                           python_o='/w/venv/bin/python', venv_t='/w/tw/.venv', tampura_work='/w/tw',
+                           cap=900.0, shots='none', cups={'140': 3})
+
+
+def _fake_t(status, standard_read=True, standard_success=False, **extra):
+    def fake(ns, rep, seed, order, scene_map, others):
+        rec = {'arm': 'T', 'status': status, 'scene_ok': True, 'standard_read': standard_read,
+               'standard_success': standard_success, 'save_dir': ns.out, 'wall_s': 5.0, 'loop_s': 4.0,
+               'history_read': {}}
+        rec.update(extra)
+        return rec
+    return fake
+
+
+@pytest.mark.parametrize('status,read,standard,counts,success,reward', [
+    ('success', True, True, True, True, True),        # both tests agree
+    ('success', True, False, True, False, True),      # their reward says success, the world does not
+    ('failure', True, True, True, True, False),       # the world says success, their reward does not
+    ('failure', True, False, True, False, False),
+    ('success', False, False, False, False, True),    # unreadable: does not count, runs once more
+    ('killed', False, False, True, False, False),     # the cap: a failure of the arm
+])
+def test_run_one_arm_t_scores_the_standard_test(tmp_path, monkeypatch, status, read, standard,
+                                                counts, success, reward):
+    a = _plain_setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(gse.bc, 'episode_t', _fake_t(status, read, standard))
+    row = gse.run_one(a, 'T', 140, 0, 1, 'find_dice_gen_s140.json', 0)
+    assert (row['counts'], row['success'], row['t_reward_success']) == (counts, success, reward)
+    assert row['capped_success'] == success            # T keeps its own 20 steps
+    assert row['t_equiv'] is None
+
+
+def _fake_o(**metrics):
+    base = {'outcome': 'success', 'wall_s': 1.0, 'picks': 3, 'places': 2, 'senses': 5, 'observes': 9}
+    base.update(metrics)
+
+    def fake(ns, arm, seed, rep, extra_args=(), extra_env=None):
+        save_dir = os.path.join(ns.out, arm, f'seed{seed:02d}_r{rep}')
+        os.makedirs(save_dir, exist_ok=True)
+        ok = base.get('outcome') == 'success'
+        return {'arm': arm, 'seed': seed, 'rep': rep, 'rc': 0, 'timed_out': False, 'process_wall_s': 1.0,
+                'save_dir': save_dir, 'bridge_status': 'success' if ok else 'failure',
+                'scene_file': f'find_dice_gen_s{seed}.json', 'metrics': base,
+                'carries': 1, 'losses': 0, 'pick_tries': 1}
+    return fake
+
+
+@pytest.mark.parametrize('metrics,success,capped,t', [
+    ({}, True, True, 20),                                     # 3 + 2 + 5 + 9 + 1: on the cap, within it
+    ({'observes': 10}, True, False, 21),                      # one over: a success the cap turns into a failure
+    ({'outcome': 'failure'}, False, False, 19),               # no go-home on a failure
+    ({'outcome': 'failure', 'observes': 40}, False, False, 50),
+    ({'picks': None}, True, False, None),                     # no count: not a capped success
+])
+def test_run_one_arm_o_cut_off_at_twenty_actions(tmp_path, monkeypatch, metrics, success, capped, t):
+    a = _plain_setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(gse.se, 'run_episode', _fake_o(**metrics))
+    for arm in ('O', 'O2'):
+        row = gse.run_one(a, arm, 140, 0, 1, 'find_dice_gen_s140.json', 0)
+        assert row['success'] is success                      # the uncapped result is kept
+        assert row['capped_success'] is capped and row['t_equiv'] == t
+        assert row['t_reward_success'] is None
+
+
+def _crow(arm, seed, success, capped=None, t=None, reward=None, **kw):
+    r = _row(arm, seed, success, **kw)
+    r.update(capped_success=success if capped is None else capped, t_equiv=t, t_reward_success=reward)
+    return r
+
+
+def _views(text):
+    head, rest = text.split('== headline: success within 20 actions ==\n')
+    capped, rest = rest.split('\n== the same episodes without the action limit ==\n')
+    uncapped, tail = rest.split('\nwith against without the 20-action limit', 1)
+    return head, capped, uncapped, 'with against without the 20-action limit' + tail
+
+
+def test_report_prints_the_capped_headline_and_the_uncapped_view(tmp_path):
+    # O: five successes without the limit (t 12, 18, 20, 21, 30), three within it; seed 6 fails
+    o = {1: (True, True, 12), 2: (True, True, 18), 3: (True, True, 20),
+         4: (True, False, 21), 5: (True, False, 30), 6: (False, False, 25)}
+    # T: standard test on seeds 1, 2, 6; their reward on seeds 1, 3
+    t = {1: (True, True), 2: (True, False), 3: (False, True), 4: (False, False),
+         5: (False, False), 6: (True, False)}
+    rows = []
+    for s in range(1, 7):
+        rows.append(_crow('O', s, o[s][0], capped=o[s][1], t=o[s][2], carries=1, losses=0))
+        rows.append(_crow('T', s, t[s][0], reward=t[s][1]))
+    _write_rows(tmp_path / 'j1', rows)
+    text = gse.report([str(tmp_path / 'j1')])
+    head, capped, uncapped, tail = _views(text)
+    assert 'success = the standard test (DV-1)' in head and "T's 20-action horizon" in head
+    # headline: O 3 of 6 within the limit, T 3 of 6; pairs 2 both, 1 each way, 2 neither
+    assert re.search(r'^O\s+6\s+3\s', capped, re.M) and re.search(r'^T\s+6\s+3\s', capped, re.M)
+    assert ("paired (both arms counted on the same scene and repetition): 6 pairs; "
+            "both succeed 2, only O 1, only T 1, neither 2; exact McNemar p = 1") in capped
+    # the same episodes without the limit: O 5 of 6; the pairs move to 2, 3 and 1
+    assert re.search(r'^O\s+6\s+5\s', uncapped, re.M) and re.search(r'^T\s+6\s+3\s', uncapped, re.M)
+    assert ("paired (both arms counted on the same scene and repetition): 6 pairs; "
+            "both succeed 2, only O 3, only T 1, neither 0; exact McNemar p = 0.625") in uncapped
+    assert 'per scene' in capped and 'per scene' not in uncapped
+    # with against without: 5 against 3, two lost (t 21 and 30), the proxy's median 20 and maximum 30
+    line = next(l for l in tail.splitlines() if l.startswith('O '))
+    assert line.split() == ['O', '6', '5', '3', '2', '2/5', '20.0', '30', '2']
+    assert 'O seed 4 rep 0 (t 21), O seed 5 rep 0 (t 30)' in tail
+    assert 'not printed' in tail
+    # T: the standard test against their reward
+    assert ("arm T, the standard test against their own reward (6 counted episodes): "
+            "both say success 1, only the standard test 2, only their reward 1") in text
+
+
+def test_report_of_rows_without_cap_fields_is_the_old_uncapped_block(tmp_path):
+    rows = [_row('T', 1, True), _row('O', 1, True, carries=1, losses=0)]
+    _write_rows(tmp_path / 'j1', rows)
+    text = gse.report([str(tmp_path / 'j1')])
+    assert 'headline' not in text and 'DV-2' not in text
+    assert 'paired (both arms counted on the same scene and repetition): 1 pairs;' in text
+
+
+def test_report_with_arm_o2_prints_its_pairs_in_both_views(tmp_path):
+    rows = []
+    for s, (t, o, o2, o2c) in {1: (False, True, True, True), 2: (False, False, True, False)}.items():
+        rows += [_crow('T', s, t, reward=t), _crow('O', s, o, t=10, carries=1, losses=0),
+                 _crow('O2', s, o2, capped=o2c, t=30 if o2 and not o2c else 10, carries=1, losses=0)]
+    _write_rows(tmp_path / 'j1', rows)
+    text = gse.report([str(tmp_path / 'j1')])
+    _, capped, uncapped, tail = _views(text)
+    assert 'paired O2 against T (both counted on the same scene and repetition): 2 pairs; ' \
+           'both succeed 0, only O2 1, only T 0, neither 1' in capped
+    assert 'paired O2 against T (both counted on the same scene and repetition): 2 pairs; ' \
+           'both succeed 0, only O2 2, only T 0, neither 0' in uncapped
+    assert 'O2 seed 2 rep 0 (t 30)' in tail
