@@ -21,7 +21,9 @@ watches: the window on (no --no-gui) and the curated console (no
 (its default 2), which the stack scene does not read.  The thesis code (arm B)
 has no launcher, so its line comes after the recipe that makes its code tree
 beside the other checkouts, with run.ps1 and tools/run_procs.sh copied in
-(A' needs the recipe too, without the copies).  Arm T's line is the command
+(A' needs the recipe too, without the copies); the export leaves out
+eval_results, thesis, archive and notes, which no run reads (about 4 MiB for the
+thesis commit instead of 305).  Arm T's line is the command
 that tools/_bridge_campaign.py's episode_t runs, with --vis 1 for the window.
 """
 import argparse
@@ -44,6 +46,8 @@ WAVE2_SEEDS = (113, 102)
 RUN_PS1_FLAGS = {'--scene': '-Scene', '--seed': '-Seed', '--goal': '-Goal', '--n-occluders': '-Occluders'}
 TAMPURA_WORK = '/root/tampura-work'
 T_DIR = '/root/p6_view'
+# the export leaves out what no run reads (the thesis commit's tree is 305 MiB, 300 of them these folders; the code is 4 MiB)
+EXPORT_LEAVE_OUT = ('eval_results', 'thesis', 'archive', 'notes')
 
 
 def git_show(commit, path):
@@ -115,7 +119,8 @@ def wsl_path(path):
 def export_recipe(commit, dest, copy_launcher):
     """Windows PowerShell lines (no wsl) that make a code tree of a commit beside the other checkouts."""
     zip_path = os.path.join('$env:TEMP', f'p6_view_{commit}.zip')
-    lines = [f"git -C {REPO} -c core.autocrlf=false archive --format=zip -o {zip_path} {commit}",
+    leave_out = ' '.join(f"':(exclude){d}'" for d in EXPORT_LEAVE_OUT)
+    lines = [f"git -C {REPO} -c core.autocrlf=false archive --format=zip -o {zip_path} {commit} -- . {leave_out}",
              f"Expand-Archive -LiteralPath {zip_path} -DestinationPath {dest}"]
     if copy_launcher:
         lines += [f"Copy-Item -LiteralPath {os.path.join(REPO, 'run.ps1')} -Destination {os.path.join(dest, 'run.ps1')}",
