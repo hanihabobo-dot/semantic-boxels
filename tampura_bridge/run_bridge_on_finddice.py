@@ -187,7 +187,8 @@ def main():
     ap.add_argument('--save-screenshots', choices=('off', 'on'), default='off')
     # BF#68 (run tampura -Draw): what the GUI shows besides the scene, a comma
     # list of policy.DRAW_KINDS.  Nothing here reaches the executing world or
-    # a camera render; it is ignored without --vis 1.
+    # the result of a camera render (cameras only reads it); it is ignored
+    # without --vis 1.
     ap.add_argument('--draw', default='',
                     help='comma list of what the GUI draws: '
                          + ', '.join(bridge_policy.DRAW_KINDS))
@@ -276,6 +277,10 @@ def main():
         seed=a.global_seed, scene_file=scene.name_seen,
         log_dir=os.path.join(config['save_dir'], 'ours'), vis=bool(a.vis),
         draw=frozenset(draw),
+        # BF#68, --draw cameras: the observer's pictures go here (absolute:
+        # execute_fn changes into the run's work directory).
+        camera_dir=(os.path.abspath(os.path.join(config['save_dir'], 'cameras'))
+                    if 'cameras' in draw else ''),
         stop_before_planning=bool(a.stop_before_planning),
         log_level=a.log_level, max_plan_time=a.max_plan_time,
         switches={'m8': a.m8, 'm9': a.m9, 'm10': a.m10,

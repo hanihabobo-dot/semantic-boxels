@@ -58,13 +58,18 @@ def _write(path, rows):
 
 
 def make_run(root, name, ledger, text=0, lines=100, eye_tags=None, bodies=12,
-             renders=None, outcome='success', skip=(), problem=None):
+             renders=None, outcome='success', skip=(), problem=None,
+             rng=('n', 'r'), log=None):
     run = os.path.join(root, name)
     ours = os.path.join(run, 'ep', 'ours', 'run_2026-11-06_10-00-00')
     os.makedirs(ours)
     if problem is not None:
         with open(os.path.join(ours, 'problem_initial.pddl'), 'w', encoding='utf-8') as f:
             f.write(problem)
+    if log is not None:
+        with open(os.path.join(ours, 'run_2026-11-06_10-00-00.log'), 'w',
+                  encoding='utf-8') as f:
+            f.write(log)
     if 'ledger' not in skip:
         _write(os.path.join(ours, 'ledger.jsonl'), ledger)
     if 'eye' not in skip:
@@ -88,7 +93,7 @@ def make_run(root, name, ledger, text=0, lines=100, eye_tags=None, bodies=12,
                    'readback_identical': True}, f)
     with open(os.path.join(run, 'probe_final.json'), 'w', encoding='utf-8') as f:
         json.dump({'clients': {'0': {'bodies': bodies}}, 'exit_code': 0,
-                   'numpy_state': 'n', 'random_state': 'r', 'renders': len(clients),
+                   'numpy_state': rng[0], 'random_state': rng[1], 'renders': len(clients),
                    'debug_calls': {'line': lines, 'text': text, 'remove': 0,
                                    'remove_all': 1}}, f)
     return run
@@ -115,7 +120,8 @@ def test_a_planner_that_answers_differently_is_reported_and_not_judged(tmp_path)
     assert v['diverge'][0] == 'info' and 'planner' in v['diverge'][1], v['diverge']
     # everything before the planner's answer agrees, and the checks that do
     # not depend on the plan still run
-    for name in ('plans', 'steps', 'ledger', 'eye', 'renders', 'gates', 'bodies', 'final'):
+    for name in ('plans', 'steps', 'ledger', 'eye', 'renders', 'gates', 'bodies', 'final',
+                 'rng'):
         assert v[name][0] == 'SAME', (name, v[name])
     assert v['drew'][0] == 'ok'
     assert not [n for n, (s, _) in v.items() if s in cmp.BAD], v
@@ -164,6 +170,62 @@ def test_a_missing_file_does_not_compare_as_empty_and_equal(tmp_path):
     b = make_run(str(tmp_path), 'b', _ledger(), skip=('ledger',))
     v = verdict(a, b)
     assert v['floor'][0] == 'FAIL' and 'ledger.jsonl' in v['floor'][1]
+
+
+# What streams.plan_motion logs, in the planner's own wording (its em dash too): a
+# move that is clear, and one that needs the RRT-Connect search (which draws from
+# the global RNG).
+_CLEAR = ("10:00:01 [DEBUG  ] streams: plan_motion: q_home -> q_a  endpoint_ignored=[0] held={}\n"
+          "10:00:01 [INFO   ] streams: plan_motion: direct path clear — linear trajectory\n")
+_SEARCH = ("10:00:02 [DEBUG  ] streams: plan_motion: q_a -> q_b  endpoint_ignored=[0] held=[13]\n"
+           "10:00:02 [INFO   ] streams: plan_motion: direct path blocked — running RRT-Connect\n"
+           "10:00:02 [INFO   ] streams: plan_motion: RRT path 7 wps -> smoothed 3 wps\n")
+
+
+def test_the_planners_rrt_searches_are_read_from_the_run_log():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, 'run.log')
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(_CLEAR + _SEARCH + _CLEAR
+                    + "11:00:00 [DEBUG  ] streams: plan_motion: q_b -> q_c  endpoint_ignored=[0] held={}\n"
+                      "11:00:00 [INFO   ] streams: plan_motion: direct path blocked — running RRT-Connect\n"
+                      "11:00:09 [WARNING] streams: plan_motion: RRT-Connect failed (2000 iters)\n")
+        assert cmp.rrt_runs(path) == [('q_a -> q_b', 'RRT path 7 wps -> smoothed 3 wps'),
+                                      ('q_b -> q_c', 'RRT-Connect failed (2000 iters)')]
+
+
+def test_the_global_rng_states_are_judged_when_the_planners_searched_alike(tmp_path):
+    a = make_run(str(tmp_path), 'a', _ledger(), rng=('n1', 'r1'), log=_CLEAR + _SEARCH)
+    b = make_run(str(tmp_path), 'b', _ledger(), rng=('n1', 'r1'), log=_CLEAR + _SEARCH)
+    c = make_run(str(tmp_path), 'c', _ledger(), rng=('n2', 'r1'), log=_CLEAR + _SEARCH)
+    assert verdict(a, b)['rng'][0] == 'SAME'
+    # the same searches and another state: something else drew a random number
+    assert verdict(a, c)['rng'][0] == 'DIFF'
+    # no search in either run: the same
+    d = make_run(str(tmp_path), 'd', _ledger(), rng=('n1', 'r1'), log=_CLEAR)
+    e = make_run(str(tmp_path), 'e', _ledger(), rng=('n2', 'r1'), log=_CLEAR)
+    assert verdict(d, e)['rng'][0] == 'DIFF'
+    # no run log to read the searches from: judged, as before
+    f = make_run(str(tmp_path), 'f', _ledger(), rng=('n1', 'r1'))
+    g = make_run(str(tmp_path), 'g', _ledger(), rng=('n2', 'r1'))
+    assert verdict(f, g)['rng'][0] == 'DIFF'
+
+
+def test_a_different_rrt_search_explains_a_different_rng_state(tmp_path):
+    # seed 106 of BF#68: the planner of one run searched round a blocked path, the
+    # other's went by direct moves; the states differ, and that is reported
+    a = make_run(str(tmp_path), 'a', _ledger('q_kin_8'), rng=('n1', 'r1'), log=_CLEAR + _SEARCH)
+    b = make_run(str(tmp_path), 'b', _ledger('q_kin_6'), rng=('n2', 'r2'), log=_CLEAR)
+    v = verdict(a, b)
+    assert v['rng'][0] == 'info' and 'RRT-Connect' in v['rng'][1] and 'q_a -> q_b' in v['rng'][1]
+    assert not [n for n, (s, _) in v.items() if s in cmp.BAD], v
+    # the world is still judged: another body count fails whatever the searches were
+    c = make_run(str(tmp_path), 'c', _ledger('q_kin_6'), rng=('n2', 'r2'), log=_CLEAR, bodies=13)
+    assert verdict(a, c)['final'][0] == 'DIFF'
+    # and equal states after different searches are fine
+    d = make_run(str(tmp_path), 'd', _ledger('q_kin_6'), rng=('n1', 'r1'), log=_CLEAR)
+    assert verdict(a, d)['rng'][0] == 'SAME'
 
 
 def test_a_pair_in_which_nothing_was_drawn_cannot_pass(tmp_path):
