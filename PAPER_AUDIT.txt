@@ -9488,10 +9488,10 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   with one look from a boxel, knowledge fluents as its effects, behind a
   default-off flag.  WSL was down from about 11:00 to 11:09: starts timed
   out while Ubuntu showed "Stopped" with its VM still alive, and path 1's
-  `wsl --shutdown` at 11:09:29 ended it (corrected 12:20 from path 1's
+  `wsl --shutdown` at 11:09:29 ended it (corrected about 11:48 from path 1's
   transcript; Go had first written that nobody ran it); what ran in WSL
   before is gone, and no counted run overlaps the gap.
-  About 11:45: "i dont know which path is responsible of this but i want
+  At 11:22: "i dont know which path is responsible of this but i want
   that wumpus sim to give us a viizual cue about not knowing where the
   wumpus is and in what is in each cell. so just like the safe cells get
   marked with green, the unknown cellls showed also get colored somehow.
@@ -9508,7 +9508,7 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   2026-11-06): first how many of LW1's instances straight-line and other
   no-reasoning walks already win, then SB as at the tag (K0) and,
   optionally, with the percept rules as derived predicates (K1); every
-  number is reported.  About 11:55, on path 8: "wait, im not sure thats
+  number is reported.  At 11:30, on path 8: "wait, im not sure thats
   what i have meant with sensing. i wanna repeat their taks. the task is
   not like that, right? basicly do thier task on their env as close as
   possible. and again, if that means waeking or setup somehow than that is
@@ -9522,13 +9522,13 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   tracks/modes/): class_uncertain with value boxels (a class cell per
   object, table and bowl boxels, no geometry), slam_collect with map
   boxels from the t = 0 map; deviations CU-1 to CU-20 and SL-1 to SL-18.
-  Hani about 12:30 (the labels he picked): CU-1 to CU-20 "Approve all
+  Hani at 12:06 (the labels he picked): CU-1 to CU-20 "Approve all
   (Recommended)"; SL-1 to SL-18 "Hold, I'll read the plan"; on
   geometry for class_uncertain's boxels (P7-Q1) "explain how their
   actions take no position" (their inspect, pick and drop take symbols
   only, and every pose is computed inside their execute functions);
   P7-Q2 (the pose belief as boxes) "Not yet, ask again later
-  (Recommended)".  About 12:40: "i also want a report styled on my
+  (Recommended)".  At 12:08: "i also want a report styled on my
   theis, also build in letex the same way is the theis was build. it is
   still an internal report. all of the lates knowledge and changes since
   the thesis is reported there. that should be its own path. it should
@@ -9549,6 +9549,61 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   enough? so thats our new look?"): path 9 weighs in; Go's view is that
   observe re-poses one known object and reveals nothing about unseen
   boxels, so the look needs sense's knowledge effects as well.
+  At 12:13, quoting Go's note on the WSL outage: "start a path that looks
+  into that".  Path 12 (Sonnet 5.5, local_902e84cf; tracks/wsl/) finds,
+  read only, why WSL wedged: a timeline from the event logs, WSL's logs
+  and the distro's journal, causes ranked, prevention as proposals for
+  Hani.  At 12:18, on path 11's report: "the theis style report path
+  should include a check and a citaion on what are the reported numbers
+  of those approches on thoses tasks."  Wherever the report gives a
+  number for an approach on a task, it gives the published numbers on the
+  same task beside it, cited and checked, and says whether our run
+  reproduces them; nothing estimated or recalled.  At 12:25, answering
+  Go's view that observe as it is is not enough for the look: "hey, so
+  lests use that as a baseline. but baseline in paranetestis, actually
+  call it somthing else in code and ou descreption of it in the paper. so
+  the baseline is not using boxles at all in the look action and we try
+  to improve on that somehow by using boxels or at least test if that is
+  possibe".  Path 9 adds a look with no boxels in the action (named, not
+  "baseline"; proposed: object-centred look) beside the boxel look, which
+  tries to improve on it, on the same seeds as the tag; a null result is
+  reported.  About 12:33, on the report: "it shouldnt have any rwth logo
+  on it. it is just an intrernal report for now."  Its title page shows
+  the title, "Internal report", Hani's name and the date of its state.
+  Plans in (tracks/<name>/PLAN.md): path 9 (one look(?o ?h ?v ?q) in
+  place of sense and observe, the viewpoint from a lattice of camera
+  poses inside the free boxel scored by ray casts, flag --look, default
+  off; its find_dice batch held under rule 12 for three deviation items);
+  path 8 (route R1: our renders, boxels, planner and loop decide and our
+  arm executes physically, their inspect label and ball-break coin as
+  their code runs them; 34 deviations in three rounds for Hani; 9 of
+  seeds 0 to 19 hold a 75.4 mm apple that our pinch cannot take today);
+  path 10 (K0 = SB as at the tag, a cautious control K0c, K1 with the
+  percept rules as derived predicates; predictions fixed before the
+  runs).  Path 10's step 1 answers the straight-line question on LW1's
+  instances (pure grid, no robot): false, the two straight lines win 18
+  and 15 of 100 at 5x5 and 8 and 2 at 10x10; but walkers with no
+  deduction win by luck (a frontier walker 34, 21 and 24 of 100 at 5x5,
+  7x7 and 10x10; a random walk 39.5, 26 and 22 %), and path 4's explore
+  rule wins 100 of 100 up to 15x15.  Path 7's class_uncertain arm A1
+  (value boxels, mode S): their reward 18 of 20, the world-state test 17
+  of 20, the same actions as path 2's probe on every seed.  Path 6 listed
+  the deviations of its cluster eval (tracks/eval/DEVIATIONS.md: DV-1 the
+  success test, DV-2 the action budget, DV-3 arm B's conditions) and
+  holds the cluster phase Hani approved at 11:08 until he answers them in
+  writing; a world state for TAMPURA's arm needs a live read inside its
+  process (a G13 amendment), since its pickle keeps only the final grasp.
+  A 12:31 screenshot showed a PyBullet window: path 1's GUI check run,
+  against rule 13; path 1 was told to end it and check headless.  Go's
+  commit e292323 swept in path 8's two staged files (content correct);
+  Go now commits through a private index.  About 12:58: "add a
+  submanager agent if you can and think that it can help".  Sub-manager
+  T (Sonnet 5.5, local_2ee96869; tracks/sub_tampura/) takes the reports,
+  checks and questions for Hani of paths 5 to 8, the paths that repeat
+  TAMPURA's tasks or setups and share rule 12's deviation rounds; Go
+  keeps the merges, the record and the other paths.  The times in this
+  entry from 11:20 on were corrected on 2026-11-07 about 13:00 (Go's
+  clock had run 20 to 30 min late).
   MERGES INTO THE TRUNK: TB-16 (run.ps1 runs the checkout it lives in) as
   564ff5b; track/draw as afd80a3 (`run tampura -Draw boxels`, a merge of
   b43f962).  -Draw boxels draws the registry as debug lines and labels
@@ -9569,7 +9624,7 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   find-and-tray-stack) is the "timeout" share of the semantic,
   semantic+mbs0.05 and uniform arms (65 of 270 stack cells).  Path 6's
   report counts a timeout only for the runner's stub at the cap.
-  EVIDENCE: tracks/STATE.md, the ten briefs, tracks/stable_check/,
+  EVIDENCE: tracks/STATE.md, the briefs tracks/<name>/BRIEF.md, tracks/stable_check/,
   tracks/draw/evidence/, tracks/eval/PLAN.md.
   CLAIM EFFECT: none.  HONESTY CLASS: process decision, no pipeline
   change.
