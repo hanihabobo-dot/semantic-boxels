@@ -5,10 +5,12 @@ the argv of the arm's own eval_runner, and the line to watch it passes the same
 flags through run.ps1.  Windows Python; the one test that runs run.ps1 needs
 PowerShell 7 and skips without it.
 """
+import io
 import os
 import shutil
 import subprocess
 import sys
+import tarfile
 
 import pytest
 
@@ -94,12 +96,30 @@ def test_run_ps1_passes_exactly_the_cells_flags(arm):
 
 def test_recipes():
     b = pv.export_recipe(pv.THESIS, pv.B_DIR, True)
-    assert len(b) == 5 and b[0].endswith(f'archive --format=zip -o $env:TEMP\\p6_view_{pv.THESIS}.zip {pv.THESIS}')
+    leave_out = "-- . ':(exclude)eval_results' ':(exclude)thesis' ':(exclude)archive' ':(exclude)notes'"
+    assert len(b) == 5 and b[0].endswith(
+        f'archive --format=zip -o $env:TEMP\\p6_view_{pv.THESIS}.zip {pv.THESIS} {leave_out}')
     assert b[1].startswith('Expand-Archive -LiteralPath') and b[1].endswith(pv.B_DIR)
     assert 'run.ps1' in b[2] and 'run_procs.sh' in b[3] and b[4].startswith('Remove-Item -LiteralPath')
     a = pv.export_recipe(pv.APRIME, pv.APRIME_DIR, False)
     assert len(a) == 3 and a[2].startswith('Remove-Item -LiteralPath') and pv.APRIME in a[0]
     assert os.path.dirname(pv.B_DIR) == os.path.dirname(REPO)       # beside the checkouts: ..\pddlstream_lib is found
+
+
+@pytest.mark.parametrize('commit,has_launcher', [(pv.THESIS, False), (pv.APRIME, True)])
+def test_the_export_leaves_out_the_result_folders_and_keeps_the_code(commit, has_launcher):
+    """The recipe's pathspecs, run for real on the commit (as a tar): the big folders are gone, the pipeline is there."""
+    cmd = ['git', '-C', REPO, '-c', 'core.autocrlf=false', 'archive', '--format=tar', commit, '--', '.'] + \
+          [f':(exclude){d}' for d in pv.EXPORT_LEAVE_OUT]
+    out = subprocess.run(cmd, capture_output=True, check=True).stdout
+    with tarfile.open(fileobj=io.BytesIO(out)) as t:
+        members = [m for m in t.getmembers() if m.isfile()]
+    names = {m.name for m in members}
+    assert 'test_full_pipeline.py' in names and 'pddl' in {n.split('/')[0] for n in names}
+    assert not [n for n in names if n.split('/')[0] in pv.EXPORT_LEAVE_OUT]
+    assert sum(m.size for m in members) < 20 * 1024 * 1024
+    # A' carries its launcher and the process guard; the thesis commit has neither (the recipe copies them in)
+    assert ('run.ps1' in names) is has_launcher and ('tools/run_procs.sh' in names) is has_launcher
 
 
 def test_wsl_path():
