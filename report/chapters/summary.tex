@@ -1,7 +1,49 @@
 % !TEX root = ../main.tex
 
 \begin{summary}
-Skeleton build: the summary is written with version 1. A test citation of the
-thesis \cite{alassiri2026thesis} and of TAMPURA \cite{curtis2024partially}
-proves that both bibliography files are read.
+Since the thesis \cite{alassiri2026thesis} was handed in on 10 June 2026 the work has
+removed its simplifications, put the system into the environment of TAMPURA
+\cite{curtis2024partially}, and opened a set of parallel tracks. Six points sum up
+the state of 7 November.
+
+\emph{The system no longer cheats in grasping and perception.} The weld that held
+every object is gone and the gripper holds by friction; detection reads rendered
+images instead of the simulator's exact poses; failures of the physics are
+detected and reported as failures (\PW{1}, \PW{2}). Thirty-two field findings were
+fixed or recorded on the way (\PW{1}).
+
+\emph{The comparison with TAMPURA now runs inside its environment, with our own
+perception, belief, planner and physical execution.} On the three scenes that
+TAMPURA ships, the pipeline with four die-slip fixes solved 120 of 120 episodes over
+two jobs, against 209 of 300 without them over five jobs and 40 of 60 for TAMPURA
+(\BF{59}). On 40 scenes from TAMPURA's own generator, ours solved 57 of 80 and
+TAMPURA 46 of 76, with pairs 18 to 9 and exact McNemar $p = 0.12$: ours is ahead and
+the lead is not significant (\BF{63}). Our run of TAMPURA lands within 1.4
+standard errors of its published return: a mean discounted return of 0.530
+against the paper's 0.63 $\pm$ 0.07 (\Cref{sec:published-fd}).
+
+\emph{Our occlusion model does not model where the die hides on TAMPURA's task.}
+The die lies in none of our hiding regions, which begin at the back face of the
+object that casts them; we find it only by lifting the cup over it, which we do
+because the space behind the cup is unknown. The paper must not claim more
+(\BF{65}).
+
+\emph{The classical planner LW1 drives our robot in a 3-D Wumpus world.} It won 18
+of 18 episodes with our perception as its observations, none of the 369 percepts
+wrong; LW1 alone makes fewer planner calls and shorter runs than its paper's
+Table 2 at 5x5 (\TK{4}). A straight-line walk wins 18 and 15 of 100 of LW1's
+states at 5x5, a walker that never refuses an unknown cell 34, so the test has a luck
+floor of about a third; no published number for these walkers appears in the papers
+read for this report (\TK{10}, \Cref{sec:published}).
+
+\emph{The thesis's ``timeout'' share on stack needs correcting.} Of 29 rows
+labelled ``timeout'' in the thesis sweep's semantic stack cells, 25 ended after 8
+to 21 seconds, a symbolic success that the end-of-run physics check rejected
+(\BF{68}).
+
+\emph{Twelve dev tracks run from a stable base.} Our planning layer on TAMPURA's
+own execution reaches their reward in 18 of 20 \cuncert\ episodes and 17 of 25
+\slamcol\ episodes (\TK{2}); TAMPURA's planner on our scenes solves 6 of 10 where
+ours solves 10 of 10 (\TK{5}); no dev track has run anything on the cluster, and a
+list of decisions waits for Hani (\Cref{ch:open-questions}).
 \end{summary}

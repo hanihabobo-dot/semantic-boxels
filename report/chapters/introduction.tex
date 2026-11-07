@@ -3,4 +3,90 @@
 \chapter{Introduction}
 \label{ch:introduction}
 
-Skeleton build: this chapter is written with version 1. \Cref{ch:introduction}.
+This report collects what the project has learned and changed since the thesis
+\cite{alassiri2026thesis} was handed in on 10 June 2026, every evaluation run
+since then, and the work that is in progress now. It is an internal report for
+Hani and the supervisors of the project. It is written to be read without the code: where the
+record uses internal names, the report says in plain words what they mean, and
+where a number comes from, a tag says where.
+
+The thesis showed that a classical planner can reason about hidden objects when
+the space the robot cannot see is cut into named cells, and it measured the
+idea in a simulator that was kind to it: perception was an oracle, the grasp was
+a rigid link between gripper and object, and the comparison with TAMPURA
+\cite{curtis2024partially} was indirect. The months since have removed those
+kindnesses one by one, put the system inside TAMPURA's own environment, and
+started a set of parallel tracks that test it on other tasks. The report follows
+that line. \Cref{ch:thesis-recap} recalls the thesis and the list of missing
+pieces the supervisors drew up from it. \Cref{ch:system} describes the system
+as it is now. \Cref{ch:comparison} reports the comparison with TAMPURA.
+\Cref{ch:evaluations} catalogues every evaluation and sets the numbers against
+the numbers the literature publishes for the same tasks. \Cref{ch:findings}
+lists the findings and fixes by theme and says which statements of the thesis
+they qualify. \Cref{ch:progress} describes the dev tracks, and
+\Cref{ch:open-questions} lists what waits for a decision. Two appendices list
+the deviations from the published setups (\appref{ch:appendix-deviations}) and the
+internal sources behind every tag (\appref{ch:appendix-sources}).
+
+\section{The Record This Report Draws On}
+\label{sec:record}
+
+The live record is one audit file, \texttt{PAPER\_AUDIT.txt}. It has one entry
+per workstream, numbered \#P1 to \#P10, and one entry per decision, fix,
+measurement or abort of workstream \#P4, which runs our pipeline inside TAMPURA's
+environment, numbered BF\#1 to BF\#68 when the report was read. Since 6 November the
+work also runs as parallel dev tracks (\BF{68}), each with a folder of plans, state
+files and evidence. The record is long, more than 9\,700 lines, and it is still being
+written while this report is made: the entries BF\#69 and BF\#70 came after the
+reading and are left for the next version. The report states the time of the files it
+read where that matters (\Cref{ch:progress}).
+
+\section{Source Tags}
+\label{sec:tags}
+
+A tag in the text names the entry a number or finding comes from. \BF{63} is entry
+BF\#63; \PW{1} is workstream \#P1; \TK{5} is the dev track of that number. Each
+tag links to its row in \appref{ch:appendix-sources}, which gives the entry's
+heading, its status as the entry states it, and the evidence folder or file.
+Numbers are copied as the entry states them, with the entry's own rounding.
+Where the record disagrees with itself, the report says so
+(\Cref{sec:disagreements}). A statement about TAMPURA's released code is our own
+reading of that code and cites the entry or track document that records the
+reading, never the paper.
+
+\section{Reading the Numbers}
+\label{sec:reading}
+
+Most results are counts of successful episodes. A count such as 57 of 80 is
+accompanied where the record gives it by a 95\,\% Wilson interval
+\cite{wilson1927probable}, the range in which the true success rate plausibly
+lies; 57 of 80 is 0.71 with an interval from 0.61 to 0.80 (\BF{63}). When two
+systems run on the same scenes, the scenes where both succeed or both fail
+carry no information about which is better. The scenes where exactly one succeeds
+do. The exact McNemar test \cite{mcnemar1947note} asks whether the split of
+those scenes is lopsided: 18 against 9 gives a p value of 0.12 (\BF{63}). A p value
+above 0.05 means the data do not rule out that the two systems are equal; it
+does not show that they are. ``Standard error'' is the usual spread of an average
+and is quoted only where a paper quotes it.
+
+\section{Published Numbers and Our Check}
+\label{sec:check}
+
+Hani asked that the report include, for every approach and task where we give a
+number, a check against the numbers that the literature reports for that approach
+and for the other approaches on the same task, each with its citation. The report
+does this in \Cref{sec:published-fd} and \Cref{sec:published}: one table per task, with the published numbers read from
+the paper itself in this session (each cited, and recorded with the place where
+it was checked), our run with its source tag, and a stated check. The check says
+whether our run reproduces the published number, by how much it differs, and for
+what known reasons. Where the literature gives no number for an approach, the
+report says so and does not estimate one.
+
+\section{What This Report Does Not Do}
+\label{sec:limits-of-report}
+
+It runs no experiment, edits neither the thesis nor the audit file, and decides
+nothing. The dev tracks are live, so numbers of a track are as of the time
+named in \Cref{ch:progress}. Several decisions belong to Hani and are listed in
+\Cref{ch:open-questions} with the options and recommendations the tracks
+recorded.

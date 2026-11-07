@@ -3,4 +3,587 @@
 \chapter{Evaluations Since the Thesis}
 \label{ch:evaluations}
 
-Skeleton build: this chapter is written with version 1. \Cref{ch:evaluations}.
+This chapter lists every evaluation run since the thesis, reports in detail the
+ones that \Cref{ch:comparison} does not cover, and sets our numbers beside the
+numbers the literature publishes for the same approaches and tasks
+(\Cref{sec:published}).
+
+\section{The Catalogue}
+\label{sec:catalogue}
+
+The evaluations ran in four settings: on our own tabletop scenes in the laptop
+simulator, on the three scenes that TAMPURA ships, on scenes from TAMPURA's own
+generator, and in worlds that other planners define (the Wumpus world and TAMPURA's
+other tasks). \Cref{tab:catalogue} has one row per evaluation. The caveat column
+repeats what the entry itself warns about.
+
+\begin{small}
+\begin{longtable}{@{}P{0.30\textwidth}P{0.36\textwidth}P{0.28\textwidth}@{}}
+\caption{Every evaluation since the thesis. Counts are successes of counted
+episodes.}\label{tab:catalogue}\\
+\toprule
+when and what & headline & caveat \\
+\midrule
+\endfirsthead
+\toprule
+when and what & headline & caveat \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+18 Sept 2026. Our tabletop, goal holding, random pairs. The fixes for re-detecting
+newly visible objects (F20) and for the shadow carve (F21) against the baseline,
+seed for seed, seeds 0 to 19 and 100 to 119. &
+27 of 40 for both; 15 against 13 on seeds 0 to 19, 12 against 14 on seeds 100 to
+119. The fixes buy correctness, not a headline gain, and raised mean planning time
+and plans per episode (\PW{1}). &
+Five seeds fail the pre-flight on both arms; success is within the noise of
+$n = 20$. \\
+27 Oct. Our holding scene, the unchanged pipeline run twice on the cluster (A/A),
+seeds 0 to 19 and 100 to 119. &
+31 of 40 and 30 of 40, three outcome flips, plan counts differ on 16 of 35 seeds
+(\BF{7}). The main-pipeline change B3 then scored 31 of 40 and was accepted on
+this evidence (\BF{10}). &
+The noise floor for every later A/B claim. \\
+27 Oct. TAMPURA as shipped on the cluster, seeds 0 to 19, 900\,s per episode. &
+13 of 20 (Wilson 0.43 to 0.82); the thesis's laptop run had 11 of 20 (\BF{9}). &
+One TAMPURA crash counted as a failure; the entry calls it no difference at
+$n = 20$; seeds load different scenes on laptop and cluster (\BF{8}). \\
+30 Oct. First two campaigns of our arm against TAMPURA (B8). &
+TAMPURA 14 of 20 in each repetition; our arm crashed on every episode (\BF{54}). &
+Our arm's results are void (a write into a read-only folder); no comparison
+exists from these. \\
+30 to 31 Oct. Four time cuts alone and together, 24 seeds in 8 arms (192
+episodes), cluster. &
+Only the planner's search settings shortened episodes: median wall time 34.6\,s
+against 23.2\,s (\BF{53}). &
+A shared node; 11 to 15 seeds in each pairwise set, short of the 20 asked; our arm
+alone. \\
+31 Oct to 2 Nov. The die-slip campaign: six fixes alone and in sets, three
+repetitions of seeds 0 to 19, cluster, TAMPURA beside it. &
+The chosen four-fix set: 120 of 120 episodes over two jobs, no die lost in 120
+carries; our base 209 of 300 over five jobs; TAMPURA 40 of 60 (\BF{59}). &
+Only three scenes; TAMPURA's physics runs 50 solver iterations, ours 200. \\
+3 and 4 Nov. 40 scenes from TAMPURA's generator, two repetitions, ours against
+TAMPURA, cluster (\Cref{sec:generated}). &
+Run 2: ours 57 of 80, TAMPURA 46 of 76, pairs 18 to 9, exact McNemar $p = 0.12$
+(\BF{63}). &
+Run 1 had a one-hour slowdown of the cluster that hit TAMPURA. \\
+6 and 7 Nov. The fix for the shadow caster's table (\BF{64}), 18 local seeds
+against the tag. &
+No regression (\TK{3}). &
+A local check; the cluster A/B of this fix is planned (\Cref{sec:planned-cluster}). \\
+6 Nov. TAMPURA's planner on our scenes, ten seeds (path 5). &
+Ours 10 of 10, TAMPURA 6 of 10, pairs 4 to 0, $p = 0.125$ (\TK{5}). &
+TAMPURA's execution is kinematic; our fixed camera gives its look action no new
+view; a re-run with its own hand camera was cut after two seeds by the stop order
+for WSL. \\
+6 Nov. LW1 driving our robot in a 3-D Wumpus world (path 4). &
+18 of 18 episodes won, 0 of 369 percepts wrong; LW1 alone solves all 100 states at
+5x5 with fewer calls and shorter runs than its paper's Table 2 (\TK{4}). &
+Three states at 10x10 and one at 15x15 only. \\
+6 Nov. Our planning layer on TAMPURA's own execution functions, two other tasks
+(path 2). &
+class\_uncertain: their reward in 18 of 20, world test in 17 of 20;
+slam\_collect: 17 of 25 and 21 of 25 (\TK{2}). &
+The decision layer only: no perception or physical execution of ours; TAMPURA
+itself was not run on these tasks by the track. \\
+7 Nov. Simple walkers on LW1's Wumpus states (path 10, step 1). &
+A straight line wins 18 and 15 of 100 states at 5x5, a random walk 39.5\,\%, a
+rule-based explorer 100 of 100 up to 15x15 (\TK{10}). &
+Pure grid code with no robot; none of these walkers is ours. \\
+\end{longtable}
+\end{small}
+
+Four tracks have no counted result yet. Path 6's cluster evaluation has not
+started (\Cref{sec:planned-cluster}). Path 7 has run one class\_uncertain arm whose
+rows the track holds back until Hani has answered the new items that a completeness
+check of its deviation list found at 14:22; the entry records the arm's numbers as the same as path 2's (\BF{68}, \TK{7}). Paths 8
+and 9 have built code and run no episode (\TK{8}, \TK{9}).
+
+\section{The Time Cuts}
+\label{sec:time-cuts}
+
+On 30 October Hani asked for cuts in the time an episode takes. Four changes were
+built as switches and run one at a time and together on 24 seeds of \fdice, 192
+episodes in all, on the chair's cluster (\BF{53}). The first lets the eye sense
+from the pick configuration instead of returning home before every sense (the
+fold of the sense into the approach to the pick); the second reuses renders
+between two plans when no body has moved; the third lets a plan go on to its pick
+when an observation confirmed what the plan assumed, instead of forcing a replan;
+the fourth sets two arguments of the planner's search (its weight on search effort
+and its initial complexity) (\BF{53}). \Cref{tab:timecuts} gives the results.
+
+\begin{table}[tbp]
+\centering
+\small
+\begin{tabular}{lrrr}
+\toprule
+arm & successes of 24 & median wall (s) & median planning (s) \\
+\midrule
+none (base)                       & 18 & 34.6 & 19.4 \\
+fold (1)                          & 18 & 51.6 & 36.3 \\
+cache (2)                         & 17 & 40.2 & 23.2 \\
+folds and cache (1, 2)            & 15 & 52.3 & 36.6 \\
+continuation (3)                  & 16 & 38.5 & 20.0 \\
+(1, 2, 3)                         & 21 & 53.6 & 34.8 \\
+search settings (4)               & 19 & 23.2 & 10.5 \\
+all four (1, 2, 3, 4)             & 14 & 26.6 & 11.9 \\
+\bottomrule
+\end{tabular}
+\caption[The per-fix evaluation: successes of 24 seeds and median times.]{The
+per-fix evaluation: successes of 24 seeds, and medians over the 18
+seeds that every arm ran to the close (\BF{53}). The times come from a shared node,
+so the comparison between arms holds and the absolute values carry the node.}
+\label{tab:timecuts}
+\end{table}
+
+The search settings alone cut the per-seed wall time to 0.89 of the base's at the
+median (planning 20.4 to 13.0\,s, successes 18 to 19). The fold made episodes
+slower: 1.11 of the base's wall time at the median, slower on 12 of 20 seeds and
+faster on one; its planning median is 36.3\,s against 19.4\,s. The cache
+and the continuation changed nothing measurable (0.99 each). Added to the other
+three cuts, the search settings brought the wall time to 0.55 of that arm's and
+the successes from 21 to 14 on 20 seeds; all four together gave 0.78 of the base's
+wall time and 14 successes against 18. The entry's own conclusion is that the
+search settings are the time cut, that the fold costs planning time and, with the
+others, successes, and that the cache and the continuation do nothing measurable
+(\BF{53}). The slow episodes are replan loops of observe, replan, observe, one
+with 208 planner calls and 102 observes (seed 6, cache arm) and one with 160 calls
+and 78 observes (seed 19, base); the entry calls this a finding of its own that
+none of the four cuts addresses and that it does not analyse (\BF{53}).
+
+Hani's decision on 31 October: ``okay, i want only fix four applied; the other
+fixes stay on some branch for reference'' (\BF{57}). The pipeline keeps the search
+settings; the other three cuts sit on a reference branch. At Hani's request the
+fold came back the same day as a switch of its own (\BF{57}, \BF{52}).
+
+\section{The Die-Slip Campaign}
+\label{sec:slip-campaign}
+
+The campaign of 31 October to 2 November took on the die that slips out of the
+pads on the move home (\Cref{sec:holding-findings} gives the diagnosis). It ran six
+fixes as switches, each alone and in sets, plus a set chosen and written down
+before any result, on three repetitions of TAMPURA's seeds 0 to 19, with TAMPURA
+on the same seeds beside it (\BF{59}). \Cref{tab:slip} gives the results.
+
+\begin{table}[tbp]
+\centering
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+arm & successes of 60 & timeouts & dice lost, per carries \\
+\midrule
+our base, job A                                 & 44 & 8  & 8 of 52 \\
+more solver iterations alone                    & 26 & 4  & 31 of 57 \\
+more solver iterations and force hold           & 54 & 5  & 0 of 54 \\
+our base, job B                                 & 40 & 8  & 11 of 51 \\
+pose uncertainty kept alone                     & 39 & 1  & 20 of 59 \\
+pose uncertainty kept and grasp yaw near home   & 49 & 10 & 1 of 50 \\
+our base, job C                                 & 42 & 6  & 12 of 54 \\
+hold check alone                                & 42 & 10 & 9 of 51 \\
+pose kept, yaw near home, limited acceleration  & 54 & 5  & 0 of 54 \\
+our base, job D                                 & 42 & 9  & 9 of 51 \\
+\textbf{the chosen set of four}                 & \textbf{60} & \textbf{0} & \textbf{0 of 60} \\
+\midrule
+our base, pooled over 240 episodes              & 168 & 31 & 40 of 208 \\
+TAMPURA, 60 episodes                            & 40  & one crash & not applicable \\
+\bottomrule
+\end{tabular}
+\caption[The die-slip campaign: successes of 60 episodes, timeouts, and dice lost
+per carries.]{The die-slip campaign (\BF{59}): successes of 60 episodes (3 scenes, 3
+repetitions), episodes that ran to the 600\,s cap, and dice lost in the hand per
+carries home. Each fix row is paired with the base of its own job. The chosen set
+is more solver iterations, force hold, pose uncertainty kept, and grasp yaw near
+home. In the record the switches are named \texttt{solver\_iters},
+\texttt{force\_hold}, \texttt{pose\_radius\_keep}, \texttt{grasp\_wrist\_home},
+\texttt{carry\_trapezoid} and \texttt{carry\_hold\_check}.}
+\label{tab:slip}
+\end{table}
+
+The entry's findings, in order (\BF{59}): more solver iterations alone made the
+carry worse (0.54 lost per carry against the base's 0.15); together with a position
+hold at 10\,N per finger they cured it (0 of 54 and 0 of 60 carries lost against 8
+of 52 and 9 of 51). Keeping the pose uncertainty cured the cup loop (one timeout
+against eight) but the die was then lost in 0.34 of the carries, which the entry
+notes as not significant alone; adding the grasp yaw nearer the wrist's home cured
+the hold almost alone (1 of 50) but opened a new cup loop on one scene (ten
+timeouts), and the entry leaves open why the chosen set avoids it. Limiting the carry's acceleration added nothing (0 of 54 against 1
+of 50) and cost execution time (a factor 1.22); the hold check gave no safer carry
+(0.18 against 0.22 per carry), which the entry calls ``an honest ending, not a
+fix''. The chosen set held the die in all 60 carries, with no timeout and no seed
+whose three repetitions disagree; ``the prediction stated before the eval held''
+(\BF{59}).
+
+A second job on 2 November replicated the result with the base, the chosen set
+and all six fixes together, three repetitions each: the chosen set again 60 of 60
+with no die lost in 60 carries; the base 41 of 60 with 13 dice lost in 54 carries
+(0.24); all six 60 of 60. Pooled over five jobs the base reads 209 of 300, with 53
+dice lost in 262 carries (0.20, interval 0.16 to 0.26) and 37 timeouts (\BF{59}).
+Our base disagrees with itself on 13 of 20 seeds over its 240 episodes (a seed's
+three repetitions do not all end the same way), TAMPURA on 9 of 20, and the chosen
+set on none (\BF{59}). The entry adds three limits. All numbers are from three
+scenes, because TAMPURA's seeds load only three. The p values it reports are
+descriptive for the same reason. And the comparison is planner against planner,
+each in its own simulation: TAMPURA runs PyBullet's 50 solver iterations, ours 200
+(\BF{59}). On 2 November Hani decided that the four switches of the chosen set are
+on by default; ``base'' in earlier comparisons means all switches off (\BF{62}).
+
+\section{Reading the Thesis Sweep Again}
+\label{sec:timeout-reading}
+
+While reviewing the plan of path 6, the orchestrator found that the run logger
+labels every failed run without a give-up reason ``timeout'' (\BF{68}). In the
+thesis sweep's stack cells with the adaptive partition, 29 rows carry that label.
+Of these, 25 ended after 8 to 21 seconds, a symbolic stack success that the
+end-of-run physics check rejected (the case recorded as CB\#122), and 4 reached
+the 1\,800\,s budget (\BF{68}). The thesis counts all of them as cells that reached
+the budget: its 24\,\% on stack (16\,\% on holding, 31\,\% on find-and-tray-stack)
+is the share of rows labelled ``timeout'' across the three variants, 65 of 270
+stack cells (\BF{68}). Path 6's report counts a timeout only for the runner's
+stub at the cap (\BF{68}). The statement of the thesis that qualifies is listed in
+\Cref{tab:qualify}.
+
+\section{The Planned Cluster Evaluation}
+\label{sec:planned-cluster}
+
+Path 6 has planned, and not run, a cluster comparison of our code now (arm A, the
+stable tag plus a fix of the sweep runner), the thesis commit (arm B, 6b00cd7)
+and TAMPURA as shipped (arm T), plus arm A$'$, which is A plus the fix for the
+shadow caster's table (\TK{6}). Phase 1a is our tabletop, as in the thesis: random
+pairs for holding and find-and-tray-stack at 2, 3 and 4 occluders, and stack at
+heights 2, 3 and 4, 30 seeds per goal and level, one episode per cell, 1\,800\,s
+per cell, so arms A and B run 270 cells each. Phase 1b is \fdice, A against T on 200
+fresh scenes (seeds 140 to 339), one repetition, 900\,s (\TK{6}). The plan puts the
+cost at about 53 node-hours in all, with an upper figure of 63, and 9 to 13 hours from
+the go to the numbers (\TK{6}).
+
+The plan states four facts to know before saying yes (\TK{6}). The thesis sweep ran
+13 days in the live checkout, so the commit stands for it. The benchmark has moved:
+no random-pairs layout of 104 buildable pairs is identical to the thesis's, and 50
+of 141 stack layouts are, so arm A against arm B is unpaired and measures code and
+benchmark together. The goal holding was scored by two different physical tests,
+the weld and the pads at 0.5\,N. And the four switches of \BF{62} were never run on
+our tabletop scenes. Hani answered yes to phase 1 on 7 November at 11:08, before
+rule 12 of the tracks required Hani's written approval of every deviation. All
+three deviations are answered: our physical world-state test is the standard
+success test for both arms, with TAMPURA's reward beside it; arm A is held to
+TAMPURA's 20-action horizon by a cut-off applied to each episode's own action
+count, with the numbers with and without the cap recounted from the same records;
+and the run conditions of arm B on the cluster were accepted with checks on 7
+November about 14:20. Hani's yes to the cluster run of 11:08 stands unless the
+node-hours change; nothing has been pushed or run on the cluster, and the run waits
+for Hani's visual check under rule 15 (\TK{6}).
+
+\section{Published Numbers and Our Check, by Task}
+\label{sec:published}
+
+Each table below sets what the paper for a task publishes beside what our runs of
+the same approach, or of ours, measured, and states whether our run reproduces the
+published number. The published values were read from the papers in the course
+of writing this report; the citation record (\ID{citations}{citation record}) gives
+for each value the paper, the table, the setting the paper states and the date it
+was read. Success counts are ours; the TAMPURA paper reports a discounted
+return with a discount of 0.98 per step. The paper states the goal as a set of
+belief states and not the reward value; read with a reward of 1 on reaching the
+goal, a success at step $t$ counts $0.98^t$, so a return of $r$ means a success
+rate of at least $r$.
+
+\subsection{Find the Hidden Die (\fdice)}
+
+The table and its check are in \Cref{sec:published-fd}
+(\Cref{tab:published-fd}). One more measurement beside them: in path 5's run of
+TAMPURA on our scenes the median number of actions to the first reward of 1 was 6.5
+(published 5.40 $\pm$ 2.33) and the median wall time 250.2\,s (\TK{5}); those
+scenes are ours, so no published number applies to them.
+
+\subsection{Class Uncertainty (\cuncert)}
+
+TAMPURA's paper calls this task Class Uncertainty (task A) and reports it with
+the other five tasks \cite{curtis2024partially}. The identification of the
+released task with the paper's is path 2's reading of the released code
+(\TK{2}). In mode S, the setting of these runs, our planning layer decides and
+TAMPURA's own execution functions act, so the runs test planning and not
+perception or physical execution.
+
+\begin{table}[tbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}P{3.1cm}YY@{}}
+\toprule
+approach & published \cite{curtis2024partially}, task A & our run \\
+\midrule
+TAMPURA &
+return 0.87 $\pm$ 0.01 (Table I); 28 $\pm$ 26\,s per step (Table II); 6.44
+$\pm$ 1.21 executed steps (Table III) &
+laptop probe, seeds 0 to 2 only: succeeded on 2 of 3 with 6 and 8 actions
+on seeds 0 and 1; 66.5 to 139.8\,s of planning per real step and 445 to 754\,s per
+episode (\TK{2}) \\
+Bayes-optimistic, MLO &  0.66 $\pm$ 0.09 & not run \\
+Bayes-optimistic, WAO &  0.78 $\pm$ 0.06 & not run \\
+$\epsilon$-greedy, LAO* & 0.69 $\pm$ 0.08 & not run \\
+no model learning, LAO* & 0.00 $\pm$ 0.00 & not run \\
+Q-learning & 0.42 $\pm$ 0.08 & not run \\
+MCTS & 0.00 $\pm$ 0.00 & not run \\
+DQN & 0.00 $\pm$ 0.00 & not run \\
+our planning layer in mode S &
+none published &
+their reward in 18 of 20 (Wilson 0.70 to 0.97), mean return 0.788; world-state
+test in 17 of 20 (0.64 to 0.95), mean return 0.744 (\TK{2}) \\
+baseline policies, same task &
+none published &
+their random policy: 0 of 5 on seeds 0 to 4; no action: 0; pick and drop
+everything without inspecting: mean success 0.39, mean return 0.346; inspect all,
+then move each fruit: mean return 0.872 (\TK{2}) \\
+\bottomrule
+\end{tabularx}
+\caption[Published numbers for Class Uncertainty and our runs.]{Published numbers
+for Class Uncertainty and our runs. The ranges after
+published values are the paper's standard errors for returns, its standard
+deviations for times, and a $\pm$ that it does not explain for steps. Our mean returns are the track's own, computed
+with its reading of the task's reward.}
+\label{tab:published-cu}
+\end{table}
+
+The check has three parts. First, our planning layer does not reproduce
+TAMPURA's 0.87 and is not meant to: it is a different system on the same task. Its
+mean return is 0.788 under the task's own reward. Its success rate of 18 of 20
+(0.90, interval 0.70 to 0.97) is compatible with the success rate of at least 0.87
+that TAMPURA's published return implies. Second, the published return is the
+task's ceiling: a scripted policy that inspects every fruit and then moves each
+one reaches 0.872 (\TK{2}), and the track's reading is that only time and steps can
+differ between approaches that reach it; every other approach of the paper's
+Table I falls below it. Our two lost episodes under the task's reward were a crash
+inside TAMPURA's own inspect function on seed 5 and a drop that ran 17 times to the
+end of the episode on seed 15 (\TK{2}). Third, our probe of TAMPURA itself, three
+seeds on the laptop, is a sign and not a comparison: its per-step planning time
+was 2.4 to 5.0 times the published 28\,s (laptop against the paper's single Xeon
+Gold 6248 processor), and its actions on seeds 0 and 1 are around the published
+6.44.
+
+\subsection{SLAM Collection (\slamcol)}
+
+The paper's task E-M is a two-dimensional mobile manipulation task with SLAM
+uncertainty; its variant without manipulation, E-MF, is the paper's check on the
+baselines' implementations \cite{curtis2024partially}. The released task
+\slamcol\ is path 2's reading of E-M (\TK{2}). Our runs, again in mode S, are 25
+episodes (seeds 0 to 4 twice, 5 to 19 once), and each is scored by two tests that
+disagree in 10 of the 25: the task's own reward, and a world-state test that reads
+the simulated world instead of the belief (\TK{2}).
+
+\begin{table}[tbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}P{3.6cm}YY@{}}
+\toprule
+approach & published \cite{curtis2024partially}, task E-M & our run, 25 episodes \\
+\midrule
+TAMPURA & return 0.81 $\pm$ 0.02 (Table I); 129 $\pm$ 55\,s per step (Table II); 9.22 $\pm$ 3.84 executed steps (Table III) & not run \\
+Bayes-optimistic, MLO & 0.41 $\pm$ 0.09 & not run \\
+Bayes-optimistic, WAO & 0.56 $\pm$ 0.08 & not run \\
+$\epsilon$-greedy, LAO* & 0.74 $\pm$ 0.06 & not run \\
+no model learning, LAO* & 0.00 $\pm$ 0.00 & not run \\
+Q-learning & 0.00 $\pm$ 0.00 & not run \\
+MCTS & 0.03 $\pm$ 0.03 & not run \\
+DQN & 0.00 $\pm$ 0.00 & not run \\
+\midrule
+our planning layer, reactive gate &
+none published &
+their reward 17 of 25 (0.48 to 0.83), mean return 0.567; world test 21 of 25
+(0.65 to 0.94), 0.693 (\TK{2}) \\
+scripted rules, reactive &
+none published &
+their reward 17 of 25, 0.573; world test 18 of 25, 0.612 (\TK{2}) \\
+scripted rules, predictive &
+none published &
+their reward 19 of 25 (0.57 to 0.89), 0.618; world test 22 of 25 (0.70 to 0.96),
+0.713 (\TK{2}) \\
+their random policy, 60 episodes &
+none published &
+0 of 60 under both tests (\TK{2}) \\
+never look &
+none published &
+mean return 0.34 under their reward, 0.38 by the world test (\TK{2}) \\
+\bottomrule
+\end{tabularx}
+\caption[Published numbers for SLAM Collection and our runs.]{Published numbers for
+SLAM Collection and our runs. Our planning layer
+looked 2.44 times and acted 9.5 times per episode, in 18 to 96\,s of wall time
+(median 30\,s); the two scripted rule sets were written by the track as controls
+(\TK{2}).}
+\label{tab:published-sl}
+\end{table}
+
+The check: under the task's own reward our planning layer's mean return of 0.567
+sits at the paper's WAO row (0.56 $\pm$ 0.08) and 0.24 below TAMPURA's published
+0.81; by the world-state test it is 0.693, still 0.12 below. Which of the two tests
+is the standard moves the number by 0.13, which is why the track reports both;
+Hani decided that the world-state test is primary (\TK{2}, \BF{68}). The paper's
+weakest approaches score 0.00 to 0.03, and their random policy scores 0 of 60 in
+our runs, so the task is not one that chance solves. No TAMPURA run on this task
+exists in our tracks: the pilot is a cluster question that is still open
+(\TK{2}); the paper's per-step time of 129 s over 9.22 steps is about 20 minutes
+per episode (our arithmetic). Nothing of ours is set against the paper's time,
+steps or other approaches.
+
+\subsection{Wumpus}
+
+The Wumpus world is a grid of cells that may hold pits and a monster, with a gold
+bar to reach, in which the agent perceives a breeze next to a pit and a stench next
+to the monster. Hani asked path 10 to test whether the problem is too easy, since
+walking in a straight line might already solve it every time (\TK{10}).
+
+\paragraph{LW1, the planner of path 4.} \Cref{tab:published-lw1} sets the published
+Table 2 of the LW1 paper \cite{bonet2014flexible} beside what path 4 measured. The
+paper's setting is a richer version of Wumpus, 100 random hidden initial states
+per size, with 1 monster and 1 pit at 5x5, 2 and 2 at 10x10 and 4 and 4 at 15x15
+\cite{bonet2014flexible}. Path 4 uses the 100 hidden states per size that LW1's own
+benchmark files provide (\TK{4}); the paper does not name its files, so whether
+these are the very states of its Table 2 is not established.
+
+\begin{table}[tbp]
+\centering
+\small
+\begin{tabular}{llrrrr}
+\toprule
+size & source & solved & calls & length & time \\
+\midrule
+5x5, 100 states & published \cite{bonet2014flexible} & 100 of 100 & 12.2 & 15.2 & 1.4\,s \\
+ & LW1 alone, our run (\TK{4}) & 100 of 100 & 9.95 & 13.65 & 1.10\,s \\
+10x10, 100 states & published \cite{bonet2014flexible} & 100 of 100 & 54.1 & 60.5 & 182.5\,s \\
+ & LW1 alone, states 1 to 3 (\TK{4}) & 3 of 3 & 33.7 & 38.7 & 21.3\,s \\
+15x15, 100 states & published \cite{bonet2014flexible} & 100 of 100 & 109.7 & 121.0 & 3210.3\,s \\
+ & LW1 alone, state 1 (\TK{4}) & 1 of 1 & 123 & 143 & 732\,s \\
+\bottomrule
+\end{tabular}
+\caption{LW1 on the richer Wumpus: published Table 2 and path 4's runs of LW1
+alone. Calls are planner calls per instance, length the number of actions.}
+\label{tab:published-lw1}
+\end{table}
+
+The check for 5x5 is a miss. Solved matches. The number of planner calls is 18\,\%
+below the paper's and the length 10\,\% below, about 4 and 2 standard errors of
+our mean, and two domain files give the same counts on every state (\TK{4}). Times
+are not comparable across machines; the paper's include 0.9\,s of preparation at
+5x5 and 173.2\,s at 10x10, ours spend 20.8\,s of 21.3\,s at 10x10 in the planner
+loading LW1's files at each call (\TK{4}). Path 4's likely cause is the code: path
+4 runs the 2018 version of the planner and the paper's runs are from 2014, and the
+code they ran is not tagged (\TK{4}). At 10x10 three states are only an indication,
+and again below the paper's means; the one state at 15x15 is above them, which one
+state does not make a finding about a mean. Under Hani's answer to path 4's
+question 9, a miss means asking the authors; a draft question exists, and sending
+it is Hani's own action (\TK{4}). LW1 driving our robot solved all 18 episodes
+(5x5, 7x7 and 10x10) with 369 percepts of the camera and of our perception, none
+wrong, and each episode equal to LW1's own run, action for action and observation
+for observation (\TK{4}).
+
+\paragraph{Other published approaches on Wumpus.} We ran none of the planners of
+\Cref{tab:published-others}. They are listed because Hani asked for the numbers the
+literature gives for the other approaches on the same task, and to show what the
+variants are: the papers use different Wumpus worlds, so none of these numbers
+is comparable with ours.
+
+\begin{table}[tbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.0cm}>{\raggedright\arraybackslash}p{3.1cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+source & variant and sizes & published result \\
+\midrule
+CLG, contingent planning \cite{albore2009translation}, Table 1 &
+wumpus-n, ``a variation of the Wumpus world''; full contingent plans &
+wumpus-5: CLG 1.76\,s and 732 actions, Pond 5.58\,s and 587, Contingent-FF a
+buggy response; wumpus-7: CLG 89.32\,s and 10\,681 actions, Pond 703.54\,s and 11\,673;
+wumpus-10: CLG time out, Pond memory out \\
+CLG, execution mode \cite{albore2009translation}, Table 2 &
+averages over 50 samples &
+wumpus-7: search 0.42\,s, 38.5 actions; wumpus-10: 3.26\,s, 57.5 actions;
+wumpus-15: memory out \\
+K-replanner \cite{bonet2011planning}, Table 1 &
+wumpus, 70 instances: ``deadly'' wumpuses to avoid; kill-wumpus, 30 instances &
+wumpus: 70 solved, mean online plan length 34.60, 2.39 planner calls, 1.11\,s of
+search time; kill-wumpus: 30 solved, 49.20, 31.10 calls, 1.92\,s of search time \\
+K-replanner against LW1 \cite{bonet2014flexible}, Table 1 &
+``wumpus 5d'' to ``25d'', up to 1\,000 hidden states &
+25d: LW1 1\,000 solved, 5.4 calls, length 67.3, 729.7\,s in total (724.5\,s of
+preparation, 5.1\,s of execution); K-replanner 1\,000 solved, 6.1 calls, length 80.9,
+73.5\,s in total (68.4\,s of preparation, 5.1\,s of execution) \\
+SDR \cite{shani2011replanning}, Table 1 &
+Wumpus05 to Wumpus20, 25 iterations, standard errors in brackets; the plain SDR
+columns, without the observation bias &
+Wumpus05: SDR 20.1 actions (0.76), 2.7\,s; CLG 24 (0.58), 1.5\,s.
+Wumpus10: SDR 50.8 (4.1), 10.9\,s; CLG 57.4 (1.29), 28.3\,s.
+Wumpus15: SDR 92.5 (8.05), 42\,s; CLG 103 (3.87), 240.7\,s.
+Wumpus20: SDR 115.9 (9.88), 156.1\,s; CLG 160 (3.49), 1\,224.8\,s \\
+Greedy policy over beam tracking \cite{bonet2013causal}, Table 3 &
+averages over 1\,000 runs; pits and wumpuses 1 and 1 at 5x5, 2 and 2 at 10x10,
+4 and 4 at 15x15, 8 and 8 at 20x20, 16 and 16 at 25x25 &
+share of games won: 5x5 93.6\,\%, 10x10 98.3\,\%, 15x15 97.9\,\%, 20x20
+97.8\,\%, 25x25 94.0\,\%, 30x30 89.0\,\%, 40x40 7.3\,\%, 50x50 0.1\,\%; the
+unsolved instances were all proven unsolvable from the information gathered \\
+\bottomrule
+\end{tabularx}
+\caption{Published results of other planners on Wumpus worlds. The sizes, the
+rules of the worlds and the machines differ between the papers and from LW1's.}
+\label{tab:published-others}
+\end{table}
+
+\paragraph{Simple walkers on LW1's states.} Path 10's first step measured how
+often policies that do no reasoning win LW1's own 100 hidden states
+(\Cref{tab:walkers}). A straight line along one axis, a walker that goes to the
+nearest unvisited cell and never refuses a move into an unknown cell (the optimistic
+frontier walker), and a random walk are the policies; the rule-based explorer E of
+path 4 is the reference that does reason: a visited cell without a breeze makes its
+neighbours pit-free, without a stench monster-free, and it moves only over visited
+or provably safe cells (\TK{10}).
+
+\begin{table}[tbp]
+\centering
+\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+LW1's states & straight line, & either & frontier & random & rule \\
+(pits and monsters) & two axes & axis & walker & walk & explorer \\
+\midrule
+5x5 (1+1)    & 18, 15 & 33 & 34 & 39.5\,\% & 100 \\
+7x7 (2+2)    & 8, 12  & 20 & 21 & 26.1\,\% & 100 \\
+10x10 (2+2)  & 8, 2   & 10 & 24 & 21.9\,\% & 100 \\
+15x15 (4+4)  & 7, 4   & 11 & 15 & 12.9\,\% & 100 \\
+20x20 (8+8)  & 5, 3   & 8  & 9  & 6.6\,\%  & 64 \\
+25x25 (16+16) & 2, 2  & 4  & 2  & 4.2\,\%  & 43 \\
+\bottomrule
+\end{tabular}
+\caption[Games won of 100 states by policies that do not reason and by the rule
+explorer.]{Games won of 100 states by policies that do not reason and by the rule
+explorer (\TK{10}). ``Either axis'' counts a state as won if a straight line along
+one of the two axes wins it, with the direction chosen after the fact. The random
+walk's value is its share of 10\,000 walks (100 per state).}
+\label{tab:walkers}
+\end{table}
+
+The track's reading is that the suspicion that a straight line solves every
+instance is false by a wide margin, and that the test has a luck floor of a third of the
+states at 5x5 and a fifth at 7x7 and 10x10: a walker that never refuses an unknown
+cell and never looks at a percept still wins 34 of 100 at 5x5 (\TK{10}). It also found no percept at the
+start and no hazard in a start neighbour in any of the 1\,000 instances measured,
+and a hazard-free path to the gold in each of them, with median length 4, 6, 9 and
+13 moves at 5x5, 7x7, 10x10 and 15x15 (\TK{10}). At 20x20 and 25x25 the one-step
+rule alone stops in 36 and 57 of the 100 states (\TK{10}).
+
+\paragraph{The check against the published numbers.} \emph{For the simple walkers
+no published number exists among the papers read for this report}: neither the LW1,
+CLG, K-replanner and SDR papers nor the beam-tracking paper report a straight-line
+walk, a frontier or sweep walk, a random walk or a rule-based explorer without
+belief tracking on LW1's Wumpus instances, and three further searches for such a
+baseline found none (\ID{citations}{citation record}). The luck floor of
+\Cref{tab:walkers} is therefore our own measurement, not a check against a
+published one. The explorer E is the nearest published analogue of the beam-tracking
+policy: both reason about safe cells. E wins all 100 states up
+to 15x15 where the published policy wins 93.6 to 98.3\,\% of its 1\,000 runs, and 64
+and 43 of 100 at 20x20 and 25x25 where the published policy wins 97.8 and
+94.0\,\% \cite{bonet2013causal}. The two sets of instances differ (LW1's 100 hidden
+states per size against the paper's 1\,000 runs, of which some cannot be solved
+from the information the policy gathers), so the comparison shows only that the
+belief-tracking policy is far ahead at the larger sizes and that a one-step rule
+suffices where the instances have a hazard-free route. No Wumpus run of ours with
+the Semantic Boxels planner has a result yet (\Cref{ch:progress}).
