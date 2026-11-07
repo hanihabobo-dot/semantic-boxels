@@ -9649,7 +9649,18 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   should run an eval of our apprioach with vs without that limit.": our
   arm is held to TAMPURA's 20-action horizon as a cut-off on each
   episode's own count, and the uncapped result from the same episodes,
-  recounted by an independent agent, sits beside it.  The times in this
+  recounted by an independent agent, sits beside it.
+  About 13:30, on path 8's class_uncertain actions: "okay, thier inspect
+  is our new look that we are working on. for pick: it should also break
+  85% of the time. physics or not. would actually be quite cool if you can
+  make it break in physicy pretty quckily. for that a test for when that
+  will hape with our pick has to be done. also a coin flip alternative has
+  to be implemeted and we actualy start with that before wsitching to the
+  physical one. drop is just our drop for now".  Inspect becomes path 9's
+  look; a picked ball breaks by their 85 % coin first, by physics later,
+  after a test of when our pick would break a ball and a rule calibrated
+  to 85 %; drop stays ours.
+  The times in this
   entry from 11:20 on were corrected on 2026-11-07 about 13:00 (Go's
   clock had run 20 to 30 min late).
   MERGES INTO THE TRUNK: TB-16 (run.ps1 runs the checkout it lives in) as
