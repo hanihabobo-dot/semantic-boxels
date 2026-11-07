@@ -145,8 +145,13 @@ def test_success_through_the_pipes(setup):
     out = open(os.path.join(res['lw1']['run_dir'], 'lw1_out.txt')).read()
     assert 'ANSWERS OBS stench p1-1 0 | OBS breeze p1-1 1 | OBS glitter p1-1 0 | OBS stench p1-2 0 | ' \
            'OBS breeze p1-2 0 | OBS glitter p1-2 1' in out
-    # the overlay: p1-2 known safe, p2-2 known wumpus, the _UNUSED atom ignored
-    assert env.known[0] == {'p1-1': 'unknown', 'p1-2': 'safe', 'p2-1': 'unknown', 'p2-2': 'danger'}
+    # the overlay (wumpus/knowledge.py's form): p1-2 known safe, p2-2 known wumpus, the
+    # _UNUSED atom ignored, p1-1 visited (the robot perceived there before the BELIEF)
+    m = {'wumpus': 'maybe', 'pit': 'maybe', 'gold': 'maybe'}
+    assert env.known[0] == {'p1-1': {**m, 'visited': True},
+                            'p1-2': {**m, 'wumpus': 'no', 'pit': 'no', 'visited': False},
+                            'p2-1': {**m, 'visited': False},
+                            'p2-2': {**m, 'wumpus': 'yes', 'visited': False}}
     assert nar.calls[0][0] == 'thinking' and nar.calls[0][1]['plan_no'] == 1
     assert nar.calls[1] == ('plan', [('perceive', 'p1-1'), ('move', 'p1-2'), ('perceive', 'p1-2'),
                                      ('grab', 'p1-2')], 1)
@@ -172,7 +177,9 @@ def test_pure_helpers():
     cells = ['p1-1', 'p1-2', 'p1-12']
     state, counts = drv.knowledge('(K_not_wumpus-at_p1-12),(K_not_pit-at_p1-12),(K_not_pit-at_p1-1),'
                                   '(K_gold-at_p1-2),(K_wumpus-at_p1-2_UNUSED)', cells)
-    assert state == {'p1-1': 'unknown', 'p1-2': 'unknown', 'p1-12': 'safe'}
+    assert state == {'p1-1': {'wumpus': 'maybe', 'pit': 'no', 'gold': 'maybe', 'visited': False},
+                     'p1-2': {'wumpus': 'maybe', 'pit': 'maybe', 'gold': 'yes', 'visited': False},
+                     'p1-12': {'wumpus': 'no', 'pit': 'no', 'gold': 'maybe', 'visited': False}}
     assert counts == {'safe': 1, 'maybe_pit': 1, 'maybe_wumpus': 2, 'gold_known': True}
     assert drv.our_calls([('start', 'p1-1'), ('move', 'p1-1', 'p2-1')]) == [
         ('perceive', 'p1-1'), ('move', 'p2-1'), ('perceive', 'p2-1')]
