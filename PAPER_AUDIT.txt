@@ -9966,6 +9966,102 @@ BF#69 [FINDING; CAUSE OPEN; PROPOSALS WAIT FOR HANI]  THE WSL WEDGE OF
   infrastructure finding with the cause open, Windows-side read-only
   evidence, every claim marked; no pipeline change.
 
+BF#70 [BUILT, REVIEWED, CHECKED; NOT RUN]  THE G13 AMENDMENT: ARM T'S FINAL
+      WORLD IS READ AFTER THEIR ROLLOUT, SO THAT OUR TEST IS THE STANDARD
+      TEST  (path 6; Hani's DV-1 answer, 2026-11-07 about 12:46; a protocol
+      change under P4.6)
+  WHAT: Hani, DV-1: "no, mkae our test the standard test."  On the fresh
+  find_dice scenes the standard success test is ours on both arms (the die
+  between both finger pads, the arm at home).  For arm T that needs its final
+  world, read live: their reward comes from the abstract belief (holding of
+  the target and at-home, and their go-home reports home even when its motion
+  plan failed), their executor carries the die kinematically (enforce_grasp
+  while state.grasp is set), and their pickle keeps only state.grasp, so the
+  poses and joints exist only inside their process after the rollout
+  (tracks/eval/G13_AMENDMENT.md, "Why", with the lines of find_dice/env.py
+  and panda_env_utils.py).  G13 forbade that read: it required
+  `type(policy).rollout is Policy.rollout` on both arms and a timed subclass
+  whose __dict__ holds only __init__ and get_action.  P4.6 says any later
+  change is itself a BF entry; this is it.  The number came from Go (about
+  16:39).
+  THE CHANGE (97ff3b2 and 6328d88 on track/eval in sb-eval; not merged, not
+  pushed):
+  (1) tampura_bridge/final_world.py (new): the raw readings of the final
+      world (the held body, each finger pad's nearest point to it through
+      client.getClosestPoints, the seven arm joints against DEFAULT_ARM_POS)
+      and the verdict.  record_after_rollout writes save_dir/final_world.json
+      and never raises: a failed read is written as ok false with its error, a
+      failed write leaves no file (1fbfa4a made that every Exception, R3).
+      Reads only, no write call, no pose read by name: the static gates have
+      no new hit.
+  (2) tampura_bridge/timed_policy.py: one added method, `rollout`, which calls
+      their rollout through super(), then record_after_rollout, and returns
+      their result unchanged.  Their Policy.rollout runs unmodified and has
+      finished (history pickled, wrapup done) before the read.
+  (3) tampura_bridge/g13_runtime.py: arm T's check is now (a) their
+      TampuraPolicy.rollout is Policy.rollout, (b) the timed class defines
+      exactly __init__, get_action and rollout, (c) rollout equals the
+      reviewed text through the syntax tree (comments, docstring and layout
+      may change; any other statement, argument, decorator or call fails the
+      run).  Arm O's check is unchanged.
+  (4) tools/_bridge_campaign.py episode_t carries final_world, standard_read
+      and standard_success; their reward stays in status and rewards.
+  (5) tools/gen_scene_eval.py: arm T's row `success` is the standard test and
+      their reward is `t_reward_success`; an outcome whose final world could
+      not be read does not count and runs once more.  The report opens with
+      the caveat that T's test is geometric and ours physical.
+  THE TEST FOR T: the target body attached (state.grasp.body is a body of the
+  target category), both pads within 2 mm of it, the arm joints at home under
+  numpy's allclose (1e-4).  The 2 mm is the session's reading, not Hani's
+  words: their get_grasp closes the fingers to (1 + 0.05) times the contact
+  position, so each pad sits up to about 2 mm off the body by construction.
+  The raw gaps and joints are in each record, so another bound can be judged
+  from the records.
+  REVIEW (tracks/sub_tampura/G13_REVIEW.md, Sub-manager T (2), 2026-11-07
+  15:05 to 15:12): accepted, with R1 to R5, all built in 1fbfa4a (16:03).
+  R1: the report prints in how many T episodes the target was attached, the
+  largest pad gap and the median, and lists every episode that was attached
+  and at home and fails by the bound alone ("reported to Sub-manager T and Go
+  before a wave counts").  R2: a stop rule in gen_scene_eval: three episodes
+  of one arm under one gate (G13, G19, or FINAL_WORLD for an unread final
+  world) stop the JOB (a STOPPED line, metadata status "stopped", exit code
+  2, a resumed run refuses); a wave-wide stop when one job stops is by hand.
+  R3: above.  R4: a column "t unknown" apart from "t > 20" in the with against
+  without table.  R5: the caveat.  Go's check of 97ff3b2, 6328d88 and 1fbfa4a
+  passed (about 16:39).
+  CORRECTION OF DV-2 (tracks/eval/DEVIATIONS.md): McNemar's test of capped
+  against uncapped within one arm is a formality (a capped success is always
+  an uncapped success), so the report prints the counts, and the tests are
+  each view against T and A' against A under each view.
+  CHECKS (Windows Python 3.12, no WSL; MEASURED): 72 unit tests pass at
+  09ebc43 (Sub-manager T (2)'s re-run of test_gen_scene_eval.py,
+  test_final_world.py and test_g13_rollout_pin.py); `bridge_gates.py static`,
+  read whole, exits 0 (37 modules, G1 PASS 83 hits, G2 PASS 46 hits, G7,
+  G11(i) and G17 PASS); the check against fake `tampura` packages passes (6
+  cases).
+  NOT RUN: nothing has run against their real world: no episode, no cluster
+  step, no `wsl` call (rule 14).  Three tests that need their packages
+  (test_g13_runtime.py) are written and not run.  The facts the read relies
+  on (world.client is a BulletClient, get_finger_links returns the two pads,
+  current_q, grasp.body equal to the real body id) are read from the pinned
+  sources (tampura_environments 4167c35, tampura cdddf14), not executed.
+  BEFORE WAVE 2 COUNTS: one local arm T episode, headless, under the lock,
+  after rule 14 is lifted and on Go's word.  final_world.json must exist with
+  ok true, both pad gaps should be near 0.45 mm (Sub-manager T (2)'s
+  expectation), on a success of their reward the verdict should agree, and
+  their outcome should equal a run without the wrapper on the same seed up to
+  the usual run-to-run difference; then rule 15's visual check.
+  STATE (2026-11-07 16:57): built, reviewed and checked, not run.
+  EVIDENCE: tracks/eval/G13_AMENDMENT.md, tracks/eval/DEVIATIONS.md (DV-1,
+  DV-2), tracks/sub_tampura/G13_REVIEW.md, the commits 97ff3b2, 6328d88 and
+  1fbfa4a on track/eval (sb-eval).
+  CLAIM EFFECT: none yet.  BF#63's results use their reward and stand as they
+  are.  Any number that uses T's standard test comes only after the local
+  episode above; if the read is wrong, T's successes move both ways.
+  HONESTY CLASS: protocol change to the measurement of arm T, made at Hani's
+  word, reviewed and checked, built and not run; the 2 mm bound is the
+  session's reading and is disclosed as such.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
