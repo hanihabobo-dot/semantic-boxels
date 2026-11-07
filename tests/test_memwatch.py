@@ -329,14 +329,26 @@ def main(argv=None):
 '''
 
 
-def test_p6_run_stops_with_exit_4_aggregates_and_leaves_the_stop_file(tmp_path, monkeypatch, avail):
-    import p6_run
+@pytest.fixture
+def isolated_runner(tmp_path, monkeypatch):
+    """A code directory holding the fake eval_runner, as the working directory.  p6_run imports `eval_runner` from
+    the working directory, so the fake module must not outlive the test: another test file may import the real
+    one afterwards (tests/test_p6_view.py runs p6_run's dry run).  Whatever `eval_runner` was in sys.modules before
+    is put back at the end; the path entry p6_run adds goes with the copy of sys.path."""
     code = tmp_path / 'codeB'
     code.mkdir()
     (code / 'eval_runner.py').write_text(FAKE_LOOP_RUNNER)
     monkeypatch.chdir(code)
     monkeypatch.setattr(sys, 'path', list(sys.path))
-    monkeypatch.delitem(sys.modules, 'eval_runner', raising=False)
+    before = sys.modules.pop('eval_runner', None)
+    yield code
+    sys.modules.pop('eval_runner', None)
+    if before is not None:
+        sys.modules['eval_runner'] = before
+
+
+def test_p6_run_stops_with_exit_4_aggregates_and_leaves_the_stop_file(tmp_path, monkeypatch, avail, isolated_runner):
+    import p6_run
     monkeypatch.setattr(mw, 'DROP', [False], raising=False)
     monkeypatch.setattr(mw, 'mem_available_kb',
                         lambda path='/proc/meminfo': 3 * GB if mw.DROP[0] else 8 * GB)
@@ -353,14 +365,8 @@ def test_p6_run_stops_with_exit_4_aggregates_and_leaves_the_stop_file(tmp_path, 
     assert len(recs) == 2 and recs[1]['mem']['avail_end_kb'] == 3 * GB
 
 
-def test_p6_run_with_the_limits_at_zero_only_records(tmp_path, monkeypatch):
+def test_p6_run_with_the_limits_at_zero_only_records(tmp_path, monkeypatch, isolated_runner):
     import p6_run
-    code = tmp_path / 'codeB'
-    code.mkdir()
-    (code / 'eval_runner.py').write_text(FAKE_LOOP_RUNNER)
-    monkeypatch.chdir(code)
-    monkeypatch.setattr(sys, 'path', list(sys.path))
-    monkeypatch.delitem(sys.modules, 'eval_runner', raising=False)
     monkeypatch.setattr(mw, 'DROP', [True], raising=False)
     monkeypatch.setattr(mw, 'mem_available_kb', lambda path='/proc/meminfo': 1 * GB)
     out = tmp_path / 'out'
@@ -368,3 +374,11 @@ def test_p6_run_with_the_limits_at_zero_only_records(tmp_path, monkeypatch):
                         '--min-avail-gb', '0', '--peak-report-gb', '0']) == 0
     assert len(sys.modules['eval_runner'].RAN) == 9 and not (out / mw.STOP_FILE).exists()
     assert len(mw.read_jsonl(str(out / 'mem_cells.jsonl'))) == 9
+
+
+def test_the_fake_runner_does_not_outlive_the_p6_run_tests():
+    """The two tests above leave no `eval_runner` in sys.modules and no fake directory on sys.path (the order
+    test_memwatch, then test_p6_view failed on this at fdd77ab)."""
+    leaked = sys.modules.get('eval_runner')
+    assert leaked is None or 'codeB' not in os.path.dirname(os.path.realpath(leaked.__file__))
+    assert not [p for p in sys.path if 'codeB' in p]
