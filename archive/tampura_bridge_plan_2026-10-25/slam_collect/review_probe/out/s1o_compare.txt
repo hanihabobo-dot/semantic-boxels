@@ -1,0 +1,6 @@
+S4o: replica 44, world end 52, looks 285, replica return 0.597, world return (held to the end) 0.703
+S1o: replica 43, world end 53, looks 433, replica return 0.558, world return (held to the end) 0.686
+world_success_end: S4o only 4, S1o only 5, exact McNemar p 1.000
+replica_success: S4o only 5, S1o only 4, exact McNemar p 1.000
+replica return, S4o minus S1o: +0.038, se over 60 episodes 0.040, se over 20 seeds 0.046
+world return, S4o minus S1o: +0.017, se over 60 episodes 0.040, se over 20 seeds 0.035
