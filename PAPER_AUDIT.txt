@@ -9771,6 +9771,39 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   look; a picked ball breaks by their 85 % coin first, by physics later,
   after a test of when our pick would break a ball and a rule calibrated
   to 85 %; drop stays ours.
+  About 14:10 Hani reorganised the sessions, since moving them into
+  sidebar sections had detached them from Go and the app pauses a
+  session's messages after 10 sends until he types in it: "should you
+  start over? like you start new manasures with the compact handoff of
+  thier last state and they they start new paths with the handoff as
+  well? oreniniize that. its fine if some agnets need some thimes to be
+  ready for a copact."; at 14:23: "start new suagents whenever you can.
+  not the entire thing needs to be ready for you to start a new one".
+  The first sub-managers and paths 4, 5, 6, 7, 8 and 10 wrote hand-overs
+  (W 82cf09e, path 8 a1e2361, path 10 864b969, path 7 7c6e947, path 4
+  0b2abf9, T d176271; paths 5 and 6 to follow); the second Sub-managers
+  T and W started at 14:41 on Opus and start their paths' successors
+  from the hand-overs; the first T and W were archived.  In the first
+  T's session Hani answered path 8's Round 1 (about 14:08, all as
+  recommended: route R1; D-14, D-17, D-16 and D-27 as path 7's CU-4,
+  CU-8, CU-12 and CU-18; D-26 (a), D-1, D-5 (a), D-28, D-13 and the cover
+  seeds; the P1b and P0 diagnostics once runs are allowed) and path 6's
+  DV-3 (about 14:20, "Accept, with the checks (Recommended)"), and wrote
+  "just one remark. make sure runs dont lead to massive memory buildup
+  anyhwhere.", which Go made rule 16 for every track (peak RSS and
+  MemAvailable per episode, a stop under 4 GB available, nothing left
+  behind).  In the first W's session (about 13:55) he answered path 10's
+  Q1 to Q4 as recommended.  Both first managers made read-only wsl calls
+  before rule 14 reached them (W about 13:25 and 13:55, T 14:11 and
+  14:15; each booted the idle VM); nothing ran.  T's reading at 14:11:
+  WSL used 488 MB of its 15.4 GB while Windows had 4.5 of 30.8 GB free,
+  so the memory pressure sat on the Windows side (for path 12).  At 14:18
+  Hani asked that the compact hook's cost images go every day ("make sure
+  that the autmatcly genrated copact cost images are delted everyday"):
+  the Windows task Claude-prune-compact-cards runs
+  ~/.claude/hooks/prune-compact-cards.ps1 daily at 12:10 and deletes by
+  path every compact-cost-<date>-<time>.png older than 2 hours in all
+  session scratchpads; its first run deleted 74 cards (10.8 MB).
   The times in this
   entry from 11:20 on were corrected on 2026-11-07 about 13:00 (Go's
   clock had run 20 to 30 min late).
