@@ -14,11 +14,32 @@ untouched.  The global seed of an episode is its scene's seed.
 Per repetition the scenes are the outer loop and the arms run back to back
 on each scene (T, then O), so both arms of a scene meet the same machine.
 The episodes are the BF#59 ones: arm T is tools/_bridge_campaign.py's
-episode_t (their planner as shipped; success is their rewards[-1] == 1.0),
-arm O is tools/slip_eval.py's run_episode with BF#62's four switches named
-(success is the bridge's outcome 'success' and the pipeline's own goal
-check), both under the same wall cap (900 s in tools/cluster/
-gen_eval.sbatch, B8's D10 value).
+episode_t (their planner as shipped), arm O is tools/slip_eval.py's
+run_episode with BF#62's four switches named, both under the same wall cap
+(900 s in tools/cluster/gen_eval.sbatch, B8's D10 value).
+
+SUCCESS (path 6, DV-1, Hani 2026-11-07: "no, mkae our test the standard
+test."): the standard test is ours on both arms.  Arm O: the bridge's outcome
+'success' and the pipeline's own goal check, as BF#63 (the die between both
+pads at 0.5 N, the arm at home).  Arm T: the physical facts of its final
+world, read after their rollout by the reviewed wrapper in
+tampura_bridge/timed_policy.py (tampura_bridge/final_world.py: the target
+body attached, both finger pads within 2 mm of it, the arm at home); their
+own reward stays in the record and in the row's 't_reward_success'.  An arm-T
+episode whose final world could not be read does not count (it runs once
+more, as any episode that does not count).
+
+ACTION CAP (DV-2, Hani 2026-11-07: "add the cap to us as well and make sure it
+is documented."): arm O is held to T's 20-step horizon on a proxy, the
+episode's picks + places + senses + observes plus 1 go-home on a success
+(t_equiv; their actions include the motion, so ours are absorbed).  The
+episodes run uncapped and the cap is a cut-off on each episode's own count:
+'success' is the uncapped result, 'capped_success' is success with
+t_equiv <= 20 (arm T keeps its own 20 steps: capped = uncapped).  The report
+prints the capped view as the headline and the uncapped view beside it from
+the same episodes, which is also the evaluation of our approach with against
+without the limit.  Rows without the cap fields (BF#63 run 2) are an uncapped
+block and print as before.
 
 ARM O2 (path 6, PLAN.md P6-Q9): arm O's episode again, from a second snapshot
 (--snapshot-o2: arm O's snapshot plus one fix, TB-1, and nothing else; the
@@ -83,6 +104,19 @@ SCENE_RE = re.compile(r'Loading scene from (\S+)')
 SHOTS_KEPT = 2
 ARMS_ALL = ('T', 'O', 'O2')          # the order they run and print in
 ARMS_DEFAULT = ('T', 'O')
+CAP_ACTIONS = 20                     # T's horizon (its config's 20 steps); DV-2 holds arm O to it too
+
+
+def t_equiv(metrics, success):
+    """DV-2's proxy of T's steps for one arm-O episode: picks + places + senses
+    + observes from the run's own metrics (tools/episode_metrics.py), plus 1
+    go-home on a success.  None when the run has no such counts."""
+    if not metrics:
+        return None
+    parts = [metrics.get(k) for k in ('picks', 'places', 'senses', 'observes')]
+    if any(p is None for p in parts):
+        return None
+    return int(sum(parts)) + (1 if success else 0)
 
 
 def parse_arms(spec, snapshot_o2=None):
@@ -233,11 +267,16 @@ def episode_cwd(a, arm, seed, rep, attempt, scene):
 
 
 def classify_t(rec):
-    """(counts, why) of an arm T record (_bridge_campaign's statuses)."""
+    """(counts, why) of an arm T record (_bridge_campaign's statuses).  Under
+    DV-1 an episode that ended with an outcome counts only when its final
+    world was read (the standard test); a kill at the cap needs no read."""
     if not rec.get('scene_ok'):
         return False, f"scene {rec.get('scene_file')}"
     st = rec.get('status')
     if st in ('success', 'failure'):
+        if not rec.get('standard_read'):
+            err = (rec.get('final_world') or {}).get('error') or 'no final_world.json'
+            return False, f"final world unreadable: {err}"
         return True, ''
     if st == 'killed':
         return True, 'timeout'
@@ -279,7 +318,8 @@ def run_one(a, arm, seed, rep, attempt, scene, order):
                              tampura_work=a.tampura_work, drop_t_history=False)
         rec = bc.episode_t(ns, rep, seed, order, {seed: scene}, bc.machine_check())
         ok, why = classify_t(rec)
-        success = rec.get('status') == 'success'
+        # DV-1: the standard test; their own reward is kept as t_reward_success
+        success = bool(rec.get('standard_success'))
         keep = keep_shots(a, ok, success)
         if keep:
             try:                          # a screenshot never ends the eval
@@ -313,9 +353,20 @@ def run_one(a, arm, seed, rep, attempt, scene, order):
         wall, loop = rec.get('process_wall_s'), m.get('wall_s')
         timed_out = bool(rec.get('timed_out'))
     shutil.rmtree(cwd)
+    row_success = bool(ok and success and not timed_out)
+    if arm == 'T':
+        # DV-2: T keeps its own 20 steps, so its capped view is its result;
+        # their reward beside the standard test (DV-1)
+        te, capped = None, row_success
+        t_reward = rec.get('status') == 'success'
+    else:
+        te = t_equiv(rec.get('metrics'), success)
+        capped = bool(row_success and te is not None and te <= CAP_ACTIONS)
+        t_reward = None
     row = {'arm': arm, 'seed': seed, 'rep': rep, 'attempt': attempt, 'scene': scene,
            'n_cups': a.cups.get(str(seed)), 'counts': ok, 'why': why,
-           'success': bool(ok and success and not timed_out), 'timed_out': timed_out,
+           'success': row_success, 'capped_success': capped, 't_equiv': te,
+           't_reward_success': t_reward, 'timed_out': timed_out,
            'wall_s': wall, 'loop_s': loop, 'host': os.uname().nodename,
            'finished': time.strftime('%Y-%m-%d %H:%M:%S'), 'rec': rec}
     if keep:
@@ -323,7 +374,8 @@ def run_one(a, arm, seed, rep, attempt, scene, order):
         meta = {k: v for k, v in row.items() if k != 'rec'}
         for k in ('status', 'returncode', 'max_reward', 'n_actions', 'get_action_actions',
                   'bridge_status', 'reward', 'carries', 'losses', 'pick_tries', 'scene_file',
-                  'save_dir', 'note', 'error', 'bridge_error', 'shots'):
+                  'save_dir', 'note', 'error', 'bridge_error', 'shots',
+                  'standard_read', 'standard_success', 'final_world'):
             if k in rec:
                 meta[k] = rec[k]
         if rec.get('metrics'):
@@ -447,19 +499,21 @@ def pair_stats(final, keys, x, y):
     return pairs, both, x_only, y_only, len(pairs) - both - x_only - y_only
 
 
-def report(dirs):
-    rows, final = final_rows(dirs)
-    if not final:
-        return 'no episodes'
+def report_tables(rows, final, brief=False):
+    """The tables of one view of the final rows (success = each row's
+    'success'); brief leaves out the run counts, the per-scene table and the
+    tail, for the second view of the same episodes."""
     has_o2 = any(arm == 'O2' for (arm, _, _) in final)      # path 6's arm A' (TB-1), see the docstring
     keys = sorted({(s, rep) for (_, s, rep) in final})
-    lines = [f"{len(rows)} episode runs, {len(final)} final (arm, scene, repetition); "
-             f"scenes {len({s for s, _ in keys})}, repetitions {len({r for _, r in keys})}", '']
-    retried = [r for r in rows if r['attempt'] == 1 and not r['counts']]
-    lines.append(f"first runs that did not count (each ran once more): {len(retried)}"
-                 + ''.join(f"\n  {r['arm']} seed {r['seed']} rep {r['rep']}: {r['why'][:160]}"
-                           for r in retried))
-    lines.append('')
+    lines = []
+    if not brief:
+        lines = [f"{len(rows)} episode runs, {len(final)} final (arm, scene, repetition); "
+                 f"scenes {len({s for s, _ in keys})}, repetitions {len({r for _, r in keys})}", '']
+        retried = [r for r in rows if r['attempt'] == 1 and not r['counts']]
+        lines.append(f"first runs that did not count (each ran once more): {len(retried)}"
+                     + ''.join(f"\n  {r['arm']} seed {r['seed']} rep {r['rep']}: {r['why'][:160]}"
+                               for r in retried))
+        lines.append('')
     lines.append(f"{'arm':4} {'counted':>8} {'success':>8} {'rate':>6} {'95 % Wilson':>14} "
                  f"{'timeouts':>8} {'not counted':>11} {'median wall s':>13} {'(successes)':>11}")
     cols = ['O'] + (['O2'] if has_o2 else []) + ['T']
@@ -485,6 +539,8 @@ def report(dirs):
             lines.append(f"left out of the pairs{'' if (x, y) == ('O', 'T') else f' of {x} and {y}'} "
                          "(an arm did not count twice): "
                          + ', '.join(f"seed {s} rep {r}" for s, r in dropped))
+    if brief:
+        return '\n'.join(lines)
     lines.append('')
     lines.append('per scene (successes / counted runs; cups from the manifest):')
     lines.append(f"{'seed':>6} {'cups':>5} " + ' '.join(f"{c:>6}" for c in cols)
@@ -517,6 +573,62 @@ def report(dirs):
                  f"(no image: " + (', '.join(f"{r['arm']} s{r['seed']} r{r['rep']}" for r in shot_rows
                                              if not r['rec']['shots']['images']) or 'none') + ')')
     return '\n'.join(lines)
+
+
+def with_vs_without(final):
+    """DV-2's evaluation of our approach with against without the 20-action
+    limit, from the same episodes (arms O and O2; T keeps its own 20 steps)."""
+    lines = ["with against without the 20-action limit (the same episodes, success = the standard test; "
+             "t = the proxy picks + places + senses + observes + 1 on a success):",
+             f"{'arm':4} {'counted':>8} {'without':>8} {'with':>6} {'lost':>5} "
+             f"{'share of the successes':>23} {'t median':>9} {'t max':>6} {'t > 20':>7}"]
+    lost_scenes = []
+    for arm in ('O', 'O2'):
+        cnt = [r for (x, _, _), r in final.items() if x == arm and r['counts']]
+        if not cnt:
+            continue
+        wo = [r for r in cnt if r['success']]
+        wi = [r for r in cnt if r['capped_success']]
+        ts = [r['t_equiv'] for r in wo if r.get('t_equiv') is not None]
+        over = [r for r in wo if not r['capped_success']]
+        share = f"{len(over)}/{len(wo)}" if wo else '-'
+        lines.append(f"{arm:4} {len(cnt):8} {len(wo):8} {len(wi):6} {len(over):5} {share:>23} "
+                     f"{_f(_med(ts)):>9} {(str(max(ts)) if ts else '-'):>6} {len(over):7}")
+        lost_scenes += [f"{arm} seed {r['seed']} rep {r['rep']} (t {r.get('t_equiv')})" for r in over]
+    if lost_scenes:
+        lines.append("the limit turns these successes into failures: " + ', '.join(lost_scenes))
+    lines.append("(a capped success is always an uncapped success, so a McNemar test of capped against "
+                 "uncapped has no discordant pair on one side and is not printed; the tests are each "
+                 "view against T, above)")
+    return '\n'.join(lines)
+
+
+def report(dirs):
+    rows, final = final_rows(dirs)
+    if not final:
+        return 'no episodes'
+    if not all('capped_success' in r for r in final.values()):
+        # no cap fields (BF#63 run 2 and earlier): an uncapped block, printed as before
+        return report_tables(rows, final)
+    capped = {k: dict(r, success=r['capped_success']) for k, r in final.items()}
+    out = [f"success = the standard test (DV-1). Arms O and O2 are held to T's {CAP_ACTIONS}-action horizon "
+           f"(DV-2): the headline view counts as a failure every episode whose proxy count exceeds "
+           f"{CAP_ACTIONS}; the second view is the same episodes without the limit.",
+           '',
+           f"== headline: success within {CAP_ACTIONS} actions ==",
+           report_tables(rows, capped),
+           '',
+           '== the same episodes without the action limit ==',
+           report_tables(rows, final, brief=True),
+           '',
+           with_vs_without(final)]
+    t_rows = [r for (x, _, _), r in final.items() if x == 'T' and r['counts']]
+    both = sum(1 for r in t_rows if r['success'] and r.get('t_reward_success'))
+    t_only = sum(1 for r in t_rows if r['success'] and not r.get('t_reward_success'))
+    r_only = sum(1 for r in t_rows if not r['success'] and r.get('t_reward_success'))
+    out += ['', f"arm T, the standard test against their own reward ({len(t_rows)} counted episodes): "
+                f"both say success {both}, only the standard test {t_only}, only their reward {r_only}"]
+    return '\n'.join(out)
 
 
 def main(argv=None):
