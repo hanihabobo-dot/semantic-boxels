@@ -1,0 +1,67 @@
+=== A. scripted rules on their belief (3.5 table) ===
+policies_S0_none.json: n 60 success 24/60 return 0.340 se_pop 0.054 se_samp 0.054 | world_end 18/60 | median steps 7.0 | in_collision episodes 27 (true at first 5, particle only 22) | true collision at end 5 | belief only 8 world only 2 | seeds never won (belief) [2, 5, 6, 8, 10, 11, 13, 14] | seeds never won (world) [2, 4, 5, 6, 8, 10, 13, 14, 15, 19] | errors 0
+policies_S1_always.json: n 60 success 43/60 return 0.556 se_pop 0.045 se_samp 0.046 | world_end 45/60 | median steps 12 | in_collision episodes 16 (true at first 5, particle only 11) | true collision at end 5 | belief only 2 world only 4 | seeds never won (belief) [5, 6, 10] | seeds never won (world) [5, 6, 10] | errors 0
+policies_S2_when_unknown.json: n 60 success 37/60 return 0.524 se_pop 0.053 se_samp 0.054 | world_end 31/60 | median steps 8 | in_collision episodes 21 (true at first 5, particle only 16) | true collision at end 5 | belief only 9 world only 3 | seeds never won (belief) [5, 6, 8, 10, 17] | seeds never won (world) [4, 5, 6, 8, 10, 14] | errors 0
+policies_S2_when_unknown_seeds100.json: n 40 success 28/40 return 0.583 se_pop 0.061 se_samp 0.061 | world_end 23/40 | median steps 8.5 | in_collision episodes 12 (true at first 1, particle only 11) | true collision at end 1 | belief only 5 world only 0 | seeds never won (belief) [102, 106, 112, 115] | seeds never won (world) [102, 106, 112, 115] | errors 0
+policies_S3_predictive.json: n 60 success 43/60 return 0.583 se_pop 0.047 se_samp 0.048 | world_end 40/60 | median steps 10 | in_collision episodes 17 (true at first 3, particle only 14) | true collision at end 3 | belief only 4 world only 1 | seeds never won (belief) [5, 6, 10, 14] | seeds never won (world) [5, 6, 9, 10, 14] | errors 0
+policies_S4_risk.json: n 60 success 43/60 return 0.584 se_pop 0.047 se_samp 0.048 | world_end 42/60 | median steps 10 | in_collision episodes 17 (true at first 2, particle only 15) | true collision at end 3 | belief only 3 world only 2 | seeds never won (belief) [5, 6, 8, 10] | seeds never won (world) [5, 6, 10, 14] | errors 0
+policies_S4_risk_seeds100.json: n 40 success 31/40 return 0.626 se_pop 0.054 se_samp 0.054 | world_end 32/40 | median steps 10 | in_collision episodes 8 (true at first 1, particle only 7) | true collision at end 1 | belief only 0 world only 1 | seeds never won (belief) [102, 106, 112] | seeds never won (world) [102, 106] | errors 0
+policies_S5_unknown_near.json: n 60 success 36/60 return 0.508 se_pop 0.054 se_samp 0.054 | world_end 30/60 | median steps 8.0 | in_collision episodes 22 (true at first 4, particle only 18) | true collision at end 4 | belief only 9 world only 3 | seeds never won (belief) [5, 6, 8, 10, 14, 17] | seeds never won (world) [4, 5, 6, 8, 10, 14] | errors 0
+policies_S5_unknown_near_seeds100.json: n 40 success 27/40 return 0.561 se_pop 0.062 se_samp 0.063 | world_end 22/40 | median steps 8 | in_collision episodes 13 (true at first 1, particle only 12) | true collision at end 1 | belief only 5 world only 0 | seeds never won (belief) [102, 106, 112, 115] | seeds never won (world) [102, 106, 112, 115] | errors 0
+
+=== B. two beliefs (3.6 table) ===
+twobelief_S0o.json: n 60 | replica success 16/60 return 0.231 se_pop 0.049 | world ever 29 end 26 return(first) 0.420 se_pop 0.056 return(stable) 0.378 | median world steps 6 | true collisions 6 | world only 15 (end-based 13) replica only 2 | held then lost 3 | world failures 34 of which agent stopped (false stop) 12 | stopped 38 (world true 26); never stopped 22 (true collision 6) | replica in_collision at end 17 (true collision 5) | world wins on tight seeds {5: 3, 6: 0, 10: 1} | errors 0
+twobelief_S1o.json: n 60 | replica success 43/60 return 0.558 se_pop 0.045 | world ever 53 end 53 return(first) 0.686 se_pop 0.032 return(stable) 0.686 | median world steps 12 | true collisions 5 | world only 12 (end-based 12) replica only 2 | held then lost 0 | world failures 7 of which agent stopped (false stop) 2 | stopped 54 (world true 52); never stopped 6 (true collision 5) | replica in_collision at end 16 (true collision 5) | world wins on tight seeds {5: 1, 6: 1, 10: 2} | errors 0
+twobelief_S2o.json: n 60 | replica success 37/60 return 0.524 se_pop 0.053 | world ever 40 end 40 return(first) 0.568 se_pop 0.052 return(stable) 0.568 | median world steps 8.0 | true collisions 6 | world only 9 (end-based 9) replica only 6 | held then lost 0 | world failures 20 of which agent stopped (false stop) 10 | stopped 50 (world true 40); never stopped 10 (true collision 6) | replica in_collision at end 14 (true collision 6) | world wins on tight seeds {5: 2, 6: 0, 10: 1} | errors 0
+twobelief_S2o_seeds100.json: n 40 | replica success 28/40 return 0.591 se_pop 0.061 | world ever 31 end 31 return(first) 0.655 se_pop 0.056 return(stable) 0.653 | median world steps 8 | true collisions 2 | world only 9 (end-based 9) replica only 6 | held then lost 0 | world failures 9 of which agent stopped (false stop) 6 | stopped 37 (world true 31); never stopped 3 (true collision 2) | replica in_collision at end 8 (true collision 1) | world wins on tight seeds {102: 2, 106: 1, 112: 2} | errors 0
+twobelief_S2x.json: n 60 | replica success 40/60 return 0.562 se_pop 0.051 | world ever 42 end 42 return(first) 0.594 se_pop 0.050 return(stable) 0.594 | median world steps 8.0 | true collisions 6 | world only 10 (end-based 10) replica only 8 | held then lost 0 | world failures 18 of which agent stopped (false stop) 10 | stopped 52 (world true 42); never stopped 8 (true collision 6) | replica in_collision at end 14 (true collision 6) | world wins on tight seeds {5: 2, 6: 0, 10: 1} | errors 0
+twobelief_S2x_seeds100.json: n 40 | replica success 26/40 return 0.552 se_pop 0.064 | world ever 32 end 31 return(first) 0.676 se_pop 0.053 return(stable) 0.654 | median world steps 8.0 | true collisions 2 | world only 9 (end-based 9) replica only 3 | held then lost 1 | world failures 9 of which agent stopped (false stop) 5 | stopped 36 (world true 31); never stopped 4 (true collision 2) | replica in_collision at end 8 (true collision 1) | world wins on tight seeds {102: 2, 106: 1, 112: 2} | errors 0
+twobelief_S4o.json: n 60 | replica success 44/60 return 0.597 se_pop 0.046 | world ever 52 end 52 return(first) 0.703 se_pop 0.036 return(stable) 0.703 | median world steps 10.0 | true collisions 5 | world only 10 (end-based 10) replica only 2 | held then lost 0 | world failures 8 of which agent stopped (false stop) 2 | stopped 54 (world true 52); never stopped 6 (true collision 5) | replica in_collision at end 14 (true collision 5) | world wins on tight seeds {5: 2, 6: 1, 10: 2} | errors 0
+twobelief_S4o_seeds100.json: n 40 | replica success 30/40 return 0.611 se_pop 0.056 | world ever 37 end 37 return(first) 0.752 se_pop 0.034 return(stable) 0.752 | median world steps 10 | true collisions 2 | world only 8 (end-based 8) replica only 1 | held then lost 0 | world failures 3 of which agent stopped (false stop) 0 | stopped 37 (world true 37); never stopped 3 (true collision 2) | replica in_collision at end 9 (true collision 1) | world wins on tight seeds {102: 1, 106: 2, 112: 2} | errors 0
+twobelief_S4x.json: n 60 | replica success 44/60 return 0.597 se_pop 0.047 | world ever 52 end 52 return(first) 0.704 se_pop 0.036 return(stable) 0.704 | median world steps 10.0 | true collisions 5 | world only 10 (end-based 10) replica only 2 | held then lost 0 | world failures 8 of which agent stopped (false stop) 2 | stopped 54 (world true 52); never stopped 6 (true collision 5) | replica in_collision at end 14 (true collision 5) | world wins on tight seeds {5: 2, 6: 1, 10: 2} | errors 0
+twobelief_S4x_seeds100.json: n 40 | replica success 31/40 return 0.632 se_pop 0.054 | world ever 37 end 37 return(first) 0.752 se_pop 0.034 return(stable) 0.752 | median world steps 10 | true collisions 2 | world only 7 (end-based 7) replica only 1 | held then lost 0 | world failures 3 of which agent stopped (false stop) 0 | stopped 37 (world true 37); never stopped 3 (true collision 2) | replica in_collision at end 8 (true collision 1) | world wins on tight seeds {102: 1, 106: 2, 112: 2} | errors 0
+
+=== C. controllers (ctrl.json) ===
+pick from start: median 30.0 min 4 max 57 n 60
+place target->goal: median 32.0 min 4 max 45 n 60
+look from start: median 33.0 min 10 max 54 n 100 rrt failures 0
+move_to goal from start: median 41.0 min 35 max 55 n 20
+controller seconds pick/place: median 0.05
+move_corner from start in corner: 0 of 800 primitive counts [101]
+  corner (0, 0) distinct noise-free ends over 20 seeds: [(1.0, 10.0)] count 1
+  corner (0, 10) distinct noise-free ends over 20 seeds: [(1.2, 10.0), (1.4, 10.0), (1.6, 10.0)] count 3
+  corner (10, 0) distinct noise-free ends over 20 seeds: [(1.0, 0.476)] count 1
+  corner (10, 10) distinct noise-free ends over 20 seeds: [(1.0, 0.785)] count 1
+
+=== D. corner.json ===
+noise-free 30 noisy 21 of 4000
+
+=== E. maps.json (slam_collect) ===
+target d_start median 5.7490000000000006 min 0.667 max 12.25
+target d_goal median 6.3065 min 0.92 max 10.668
+target to nearest beacon median 2.4225 min 0.563 max 6.685
+goal to nearest beacon median 3.057 min 1.639 max 5.102
+seeds with a target_in atom at t=0: 13 [0, 3, 4, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+regions per seed: [11] names seed 0: ['o_beacon_0', 'o_beacon_1', 'o_beacon_2', 'o_beacon_3', 'o_beacon_4', 'o_corner_5', 'o_corner_6', 'o_corner_7', 'o_corner_8', 'o_goal_9', 'o_start_10']
+slam_collect signatures 22 33 components 23 37 obstacles [5] regions [11] targets [3]
+slam_collect_simple signatures 47 60 components 51 70 obstacles [20] regions [11] targets [3]
+slam_collect_custom signatures 4 4 components 4 4 obstacles [0] regions [3] targets [0]
+clearances (centre to nearest obstacle rectangle):
+  seed 5 goal 5.1 targets [2.688, 2.851, 0.311]
+  seed 6 goal 0.452 targets [1.491, 1.018, 1.72]
+  seed 10 goal 1.443 targets [1.644, 0.376, 3.616]
+seeds with goal or a target within 0.7 m of an obstacle: 10 [(2, 2.71, [0.58, 0.91, 2.63]), (5, 5.1, [2.69, 2.85, 0.31]), (6, 0.45, [1.49, 1.02, 1.72]), (7, 3.38, [4.67, 4.36, 0.67]), (8, 0.67, [0.91, 3.13, 1.62]), (9, 2.58, [0.69, 5.24, 2.68]), (10, 1.44, [1.64, 0.38, 3.62]), (14, 3.99, [2.86, 2.88, 0.52]), (15, 0.71, [0.67, 2.6, 3.19]), (17, 0.67, [0.98, 3.61, 3.8])]
+
+=== F. boxes.json ===
+arrangement_cells min 840 median 929.0 max 1056
+merged_boxes min 68 median 77.0 max 95
+free_boxes min 60 median 65.0 max 83
+plain_free_boxes min 30 median 36.5 max 41
+distinct_signatures min 24 median 28.0 max 41
+
+=== G. variance.json ===
+diagonal [(1, 1.0), (5, 1.0), (10, 1.0), (15, 0.99), (20, 0.95), (25, 0.713), (30, 0.432), (32, 0.305), (35, 0.203), (40, 0.095)]
+axis [(1, 1.0), (5, 1.0), (10, 1.0), (15, 0.993), (20, 0.907), (25, 0.7), (30, 0.46), (32, 0.347), (35, 0.23), (40, 0.11)]
+
+=== H. primitives per executed move in the scripted logs (S0..S5, seeds 0..19) ===
+n 3294 median 17.0 mean 18.13

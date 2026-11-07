@@ -1,0 +1,32 @@
+diff --git a/tampura_bridge/env_adapter.py b/tampura_bridge/env_adapter.py
+index b7280c6..db4fded 100644
+--- a/tampura_bridge/env_adapter.py
++++ b/tampura_bridge/env_adapter.py
+@@ -89,15 +89,21 @@ class TampuraWorldEnv(BoxelTestEnv):
+ 
+     def _adopt_scene(self):
+         from tampura_environments.panda_utils.panda_env_utils import (
+-            create_default_env, create_ycb)
++            create_default_env, create_ycb, get_shortened_table_dims)
+         from tampura_environments.panda_utils.robot import PANDA_PATH
+         w = self._world
+-        # D8: the window W bounds free space, placement and the shadow
+-        # caster (lateral shadows are clipped to it as ours are to the
+-        # table ranges); their table top is z = 0.
++        # D8: the window W bounds free space and placement; their table top
++        # is z = 0.  The shadow caster takes their shortened table (their
++        # place sampler's region, read from their module) as ours takes
++        # the logical table while free space keeps the safe ranges
++        # (BoxelTestEnv.__init__).  BF#64: their generator puts cups, and
++        # the die under one, outside W, and a shadow clipped to W came out
++        # empty or reversed, so those hiding places left the model.
+         self.table_surface_height = task_spec.TABLE_TOP_Z
+-        self.table_x_range = tuple(task_spec.WINDOW_X)
+-        self.table_y_range = tuple(task_spec.WINDOW_Y)
++        pose, width, length, _ = get_shortened_table_dims()
++        cx, cy = pose[0][0], pose[0][1]
++        self.table_x_range = (cx - width / 2.0, cx + width / 2.0)
++        self.table_y_range = (cy - length / 2.0, cy + length / 2.0)
+         self._SAFE_TABLE_X_RANGE = tuple(task_spec.WINDOW_X)
+         self._SAFE_TABLE_Y_RANGE = tuple(task_spec.WINDOW_Y)
+         self._tray_xy = None
