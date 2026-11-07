@@ -46,6 +46,41 @@ def test_paint_colours_the_tiles_as_the_gui_does():
         env.close()
 
 
+def test_gui_labels_are_what_the_painter_writes(monkeypatch):
+    """The GUI's labels without a window (rule 13): with env.gui set (the flag
+    only, no GUI is connected) show_knowledge writes one debug text per cell,
+    kn.label at env.label_anchor, black, size 1, and the next call replaces
+    them all."""
+    import wumpus.env as we
+    calls, removed = [], []
+
+    def add(text, pos, **kw):
+        calls.append((text, [round(float(v), 6) for v in pos], kw))
+        return len(calls)
+
+    monkeypatch.setattr(we.p, 'addUserDebugText', add)
+    monkeypatch.setattr(we.p, 'removeUserDebugItem', lambda i, **kw: removed.append(i))
+    env = WumpusEnv(WumpusWorld.random(5, 0))
+    try:
+        env.gui = True
+        env.show_knowledge(KNOWN)
+        view = kn.normalize(KNOWN, env.cells())
+        want = [(kn.label(c, view[c]), [round(float(v), 6) for v in env.label_anchor(c)])
+                for c in env.cells()]
+        assert [(t, pos) for t, pos, _ in calls] == want
+        assert all(kw['textColorRGB'] == [0, 0, 0] and kw['textSize'] == 1.0 for _, _, kw in calls)
+        text = {c: t for c, (t, _, _) in zip(env.cells(), calls)}
+        assert text['p1-1'] == 'p1-1' and text['p1-2'] == 'p1-2 G?'
+        assert text['p2-1'] == 'p2-1 P? G?' and text['p2-2'] == 'p2-2 W? P? G?'
+        assert env.painted == view
+        first = list(env._label_ids)
+        env.show_knowledge({})
+        assert removed == first and len(calls) == 2 * len(env.cells())
+    finally:
+        env.gui = False                      # so close() disconnects the DIRECT client
+        env.close()
+
+
 def test_painted_env_writes_a_picture(tmp_path):
     from PIL import Image
     from wumpus import paint_render as pr
