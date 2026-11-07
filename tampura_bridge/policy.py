@@ -43,6 +43,8 @@ from tampura_bridge import gate_hooks, scoring, task_spec
 from tampura_bridge.env_adapter import TampuraWorldEnv, symbol_names
 
 SCHEMA_NAME = 'boxel_episode'
+# BF#68: the values of run tampura -Draw (the driver's --draw).
+DRAW_KINDS = ('boxels',)
 
 
 @dataclass
@@ -60,6 +62,11 @@ class EpisodeConfig:
     # The driver's clock stamps and RNG record (G18, G19's seed hygiene),
     # written to the ledger as its driver_clock row.
     driver: dict = field(default_factory=dict)
+    # BF#68, run tampura -Draw: what the GUI shows besides the scene, a set
+    # of DRAW_KINDS.  'boxels' draws the registry's boxels as debug lines and
+    # labels (never as bodies); drawing only ever reads our own registry.
+    # Ignored without the GUI.
+    draw: frozenset = frozenset()
 
 
 def d9_setup(world, model):
@@ -241,9 +248,15 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 + [x for k, v in sorted(cfg.switches.items())
                    for x in (f"--{k.replace('_', '-')}", v)])
             from tampura_environments.panda_utils.robot import DEFAULT_ARM_POS
+            # BF#68: with -Draw boxels the GUI shows the registry's boxels
+            # as debug lines and labels.  overlay_bodies=False, always: a
+            # phantom body is a createMultiBody on the executing client (a
+            # G14 violation, R4.2), and lines are neither bodies nor in any
+            # TinyRenderer image.
             test_full_pipeline.main(
                 gui=cfg.vis, run_logger=logger, goal_kind='holding',
-                draw_boxel_overlays=False, env=env, target_name=target[0],
+                draw_boxel_overlays='boxels' in cfg.draw, overlay_bodies=False,
+                env=env, target_name=target[0],
                 oracle_phases=False,
                 after_settle=make_after_settle(world, before, cfg.out),
                 stop_before_planning=cfg.stop_before_planning, gui_hold_s=0,

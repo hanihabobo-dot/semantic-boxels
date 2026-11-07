@@ -185,7 +185,18 @@ def main():
     # BF#50 (user rule, 2026-10-30): the eye images are for debugging only,
     # off unless asked; passed through like the switches.
     ap.add_argument('--save-screenshots', choices=('off', 'on'), default='off')
+    # BF#68 (run tampura -Draw): what the GUI shows besides the scene, a comma
+    # list of policy.DRAW_KINDS.  Nothing here reaches the executing world or
+    # a camera render; it is ignored without --vis 1.
+    ap.add_argument('--draw', default='',
+                    help='comma list of what the GUI draws: '
+                         + ', '.join(bridge_policy.DRAW_KINDS))
     a = ap.parse_args()
+    draw = [d.strip() for d in a.draw.split(',') if d.strip()]
+    unknown = [d for d in draw if d not in bridge_policy.DRAW_KINDS]
+    if unknown:
+        ap.error(f"--draw takes {', '.join(bridge_policy.DRAW_KINDS)} "
+                 f"(a comma list), not {', '.join(unknown)}")
     arg_dict = {'config': a.config, 'global_seed': a.global_seed,
                 'vis': bool(a.vis), 'save_dir': a.save_dir}
     config = tconfig.load_config(config_file=a.config, arg_dict=arg_dict)
@@ -253,11 +264,18 @@ def main():
                     f"(the ledger's G19 gate records the mismatch)")
         print(g19_note, flush=True)
         console_ui.warn(g19_note)       # verbatim on the console as well
+    if draw and not a.vis:
+        draw_note = (f"--draw {','.join(draw)} is ignored without the GUI "
+                     f"(--vis 0): nothing is drawn")
+        print(draw_note, flush=True)
+        console_ui.warn(draw_note)
+        draw = []
     console_ui.set_context(scene=f"find_dice seed {a.global_seed}")
     stamp('scene_map_asserted')
     cfg = bridge_policy.EpisodeConfig(
         seed=a.global_seed, scene_file=scene.name_seen,
         log_dir=os.path.join(config['save_dir'], 'ours'), vis=bool(a.vis),
+        draw=frozenset(draw),
         stop_before_planning=bool(a.stop_before_planning),
         log_level=a.log_level, max_plan_time=a.max_plan_time,
         switches={'m8': a.m8, 'm9': a.m9, 'm10': a.m10,

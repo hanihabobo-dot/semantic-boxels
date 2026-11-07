@@ -1,0 +1,44 @@
+pybullet build time: Jan 29 2025 23:17:20
+/root/tampura-work/tampura_environments/tampura_environments/__init__.py:20: UserWarning: tampura_environments: skipping subpackage 'toy_discrete': No module named 'tampura_environments.toy_discrete'
+  _warnings.warn(f"tampura_environments: skipping subpackage '{_name}': {_e}")
+S4n 100 0 replica True 9 world_first 9 world_end True looks 3 replica_coll_end False s 14.6
+S4n 100 1 replica True 10 world_first 10 world_end True looks 4 replica_coll_end False s 15.68
+S4n 101 0 replica True 9 world_first 9 world_end True looks 3 replica_coll_end False s 13.79
+S4n 101 1 replica True 10 world_first None world_end False looks 11 replica_coll_end False s 18.68
+S4n 102 0 replica False None world_first None world_end False looks 18 replica_coll_end True s 19.78
+S4n 102 1 replica False None world_first 11 world_end True looks 4 replica_coll_end True s 16.1
+S4n 103 0 replica True 12 world_first 12 world_end True looks 4 replica_coll_end False s 17.16
+S4n 103 1 replica True 11 world_first 11 world_end True looks 5 replica_coll_end False s 14.77
+S4n 104 0 replica True 8 world_first 8 world_end True looks 2 replica_coll_end False s 12.11
+S4n 104 1 replica False None world_first None world_end False looks 2 replica_coll_end False s 25.17
+S4n 105 0 replica True 11 world_first 11 world_end True looks 5 replica_coll_end False s 14.42
+S4n 105 1 replica True 11 world_first 11 world_end True looks 5 replica_coll_end False s 15.31
+S4n 106 0 replica False None world_first 8 world_end True looks 2 replica_coll_end True s 11.21
+S4n 106 1 replica False None world_first None world_end False looks 19 replica_coll_end True s 4.95
+S4n 107 0 replica False None world_first 12 world_end True looks 5 replica_coll_end True s 18.74
+S4n 107 1 replica False None world_first 13 world_end True looks 6 replica_coll_end True s 19.11
+S4n 108 0 replica True 8 world_first 8 world_end True looks 2 replica_coll_end False s 11.75
+S4n 108 1 replica True 8 world_first 8 world_end True looks 2 replica_coll_end False s 10.86
+S4n 109 0 replica True 9 world_first 9 world_end True looks 3 replica_coll_end False s 12.19
+S4n 109 1 replica True 10 world_first 10 world_end True looks 3 replica_coll_end False s 12.57
+S4n 110 0 replica True 11 world_first 11 world_end True looks 4 replica_coll_end False s 15.3
+S4n 110 1 replica True 12 world_first 12 world_end True looks 7 replica_coll_end False s 18.38
+S4n 111 0 replica True 11 world_first 11 world_end True looks 4 replica_coll_end False s 15.05
+S4n 111 1 replica True 10 world_first 10 world_end True looks 4 replica_coll_end False s 13.64
+S4n 112 0 replica False None world_first 12 world_end True looks 6 replica_coll_end True s 15.32
+S4n 112 1 replica False None world_first 12 world_end True looks 5 replica_coll_end True s 15.59
+S4n 113 0 replica True 8 world_first 8 world_end True looks 2 replica_coll_end False s 11.55
+S4n 113 1 replica True 8 world_first 8 world_end True looks 2 replica_coll_end False s 11.92
+S4n 114 0 replica True 10 world_first 10 world_end True looks 4 replica_coll_end False s 13.64
+S4n 114 1 replica True 11 world_first 11 world_end True looks 3 replica_coll_end False s 14.0
+S4n 115 0 replica True 10 world_first 10 world_end True looks 4 replica_coll_end False s 13.42
+S4n 115 1 replica False None world_first 10 world_end True looks 4 replica_coll_end True s 13.49
+S4n 116 0 replica True 9 world_first 9 world_end True looks 3 replica_coll_end False s 12.8
+S4n 116 1 replica True 9 world_first 9 world_end True looks 3 replica_coll_end False s 14.72
+S4n 117 0 replica True 8 world_first 8 world_end True looks 2 replica_coll_end False s 11.62
+S4n 117 1 replica True 9 world_first 9 world_end True looks 2 replica_coll_end False s 12.38
+S4n 118 0 replica True 11 world_first 11 world_end True looks 5 replica_coll_end False s 14.36
+S4n 118 1 replica True 13 world_first 13 world_end True looks 5 replica_coll_end False s 15.97
+S4n 119 0 replica True 10 world_first 10 world_end True looks 4 replica_coll_end False s 14.89
+S4n 119 1 replica False None world_first 11 world_end True looks 4 replica_coll_end True s 14.84
+SUMMARY S4n n 40 replica success 29 return 0.594 | world first 36 return 0.734 world end 36

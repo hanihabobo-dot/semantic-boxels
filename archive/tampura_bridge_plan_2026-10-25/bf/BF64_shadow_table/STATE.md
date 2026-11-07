@@ -4,6 +4,18 @@ Started 2026-11-04 by Hani: "fix the seed 118 issue. theres two object but
 it only looks behind one."  BF#64 checked free on 2026-11-04 (no match in
 the checkout); the BF#63 eval session was told this number.
 
+## Taken over by the dev tracks' path 3 (2026-11-06)
+
+Hani, 2026-11-06 15:10: "i also approve path 3s plan" (the dev tracks'
+`tracks/STATE.md`, Log). Path 3 ("Path 3: bug board and fix rollout")
+owns the fix as TB-1 of `tracks/BUGS.md`, where its state is kept: the
+same ranges redone on branch track/fixes (51428d8, with
+tampura_bridge/tests/test_bf64_shadow_table.py), its checks and the 18
+seeds of "Next steps" 1 running from 16:17 into
+`tracks/fixes/ab/tb1_fix/`. The trunk's uncommitted hunk is saved here as
+`trunk_env_adapter_hunk.patch` (16:30); Go drops it from the main checkout
+only when it merges track/fixes. Path 3 writes the BF#64 entry.
+
 ## Status: stopped and handed over (2026-11-04 14:50)
 
 Hani, 14:50: "you dont need to fix it. some other agents are working on
