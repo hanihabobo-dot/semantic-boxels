@@ -117,11 +117,16 @@ PROBE=$!
 hdr() { echo "$@" | tee -a $OUT/header.txt; }
 hdr "host $(hostname)  job ${SLURM_JOB_ID:-none}  $(date -Is)  mode $MODE  A $SNAP_A  B $SNAP_B  cap ${CAP}s  out $OUT"
 hdr "cpu $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//')  threads $(nproc --all)  allowed $(nproc)  load $(cut -d' ' -f1-3 /proc/loadavg)"
+# rule 16 (PLAN section 17): the memory at the start, the kind of file system under $LD (tmpfs is RAM) and the job's --mem
+hdr "memory at the start: $(awk '/^(MemTotal|MemAvailable):/ {printf "%s %s kB  ", $1, $2}' /proc/meminfo)local fs $LD $(df -PT $LD | awk 'NR == 2 {print $2}') (tmpfs is RAM), Slurm --mem ${SLURM_MEM_PER_NODE:-?} MB"
 hdr "python $($VA/python -c 'import sys, numpy, pybullet; print(sys.version.split()[0], "numpy", numpy.__version__, "pybullet", pybullet.getAPIVersion())' 2>&1 | tail -1)"
 $VA/python -m pip freeze > $OUT/pip_freeze.txt 2>&1
 hdr "pip freeze sha256 $(sha256sum < $OUT/pip_freeze.txt | cut -c1-16)"
 export PYTHONHASHSEED=0 BOXEL_EYE_IMAGES=0 PYTHONDONTWRITEBYTECODE=1 PDDLSTREAM_PATH=$W/pddlstream_lib
 unset PYTHONPATH
+if [ "$MODE" != smoke ] && [ "$MODE" != redo ]; then     # a job number outside 0-14 runs nothing
+  $VA/python $SNAP_A/tools/p6_slots.py job-slots $MODE > /dev/null 2>&1 || { hdr "bad job number $MODE: nothing run"; exit 1; }
+fi
 
 # The reference: the sha256 of every file of each read-only snapshot.
 for X in A B; do
@@ -150,10 +155,13 @@ run_p6() {   # run_p6 <A|B> <label> <p6_run.py arguments>: one arm's cells into 
   shift 2
   echo "[p6] $(date -Is) start arm $arm $label"
   ( cd $OUT/code$arm && $VA/python -u $SNAP_A/tools/cluster/p6_run.py --arm $arm "$@" \
-      --out $OUT/$arm/$label --timeout $CAP ) > $OUT/log_${arm}_$label.txt 2>&1
+      --out $OUT/$arm/$label --timeout $CAP ) < /dev/null > $OUT/log_${arm}_$label.txt 2>&1
   rc=$?
   tail -n 4 $OUT/log_${arm}_$label.txt
   echo "[p6] $(date -Is) end arm $arm $label rc $rc"
+  # rule 16: p6_run.py's exit code 4 is memwatch's stop (MemAvailable under 4 GB after a cell); the caller's
+  # "|| ... break" then ends the job's remaining runs
+  [ $rc = 4 ] && hdr "STOPPED_LOW_MEMORY arm $arm $label (rc 4): MemAvailable under 4 GB, the job stops after this run, see $arm/$label/STOPPED_LOW_MEMORY.txt"
   # informational: processes of ours still alive after a run (a cell cut at the cap
   # may leave its planner's children behind; they end with the job)
   { echo "after arm $arm $label $(date -Is):"; ps -u "$(id -un)" -o pid,ppid,etimes,args \
@@ -187,6 +195,9 @@ done
 if [ "$MODE" = smoke ]; then
   $VA/python $SNAP_A/tools/p6_smoke_check.py $OUT 2>&1 | tee $OUT/smoke_check.txt
 fi
+# rule 16: after the job nothing of ours alive and nothing in /dev/shm (counted here, listed in strays.txt; a stray
+# is reported, never ended by name)
+hdr "memory after the job: $(ps -u "$(id -un)" -o pid,args | grep -E 'downward|translate|test_full_pipeline' | grep -vc grep) pipeline processes of ours alive, $(ls /dev/shm | wc -l) names in /dev/shm, MemAvailable $(awk '/^MemAvailable:/ {print $2}' /proc/meminfo) kB"
 hdr "job end $(date -Is) void=$VOID"
 finish
 # BF#49: the cluster's data hygiene after every run.

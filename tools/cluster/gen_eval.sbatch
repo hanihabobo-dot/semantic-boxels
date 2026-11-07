@@ -123,6 +123,8 @@ export BRIDGE_SCENE_MANIFEST=$SB/tampura_bridge/gen_scenes/find_dice/manifest.js
 export PYTHONPATH=$SB:$W/pddlstream_lib:$TW/tampura:$TW/tampura_environments
 echo "host $(hostname)  job ${SLURM_JOB_ID:-none}  $(date -Is)  snapshot $SB  scenes $SEEDS  reps $REPS  out $OUT"
 grep -m1 'model name' /proc/cpuinfo
+# rule 16 (PLAN section 17): the memory at the start, the kind of file system under $LD (tmpfs is RAM) and the job's --mem
+echo "memory at the start: $(awk '/^(MemTotal|MemAvailable):/ {printf "%s %s kB  ", $1, $2}' /proc/meminfo)local fs $LD $(df -PT $LD | awk 'NR == 2 {print $2}') (tmpfs is RAM), Slurm --mem ${SLURM_MEM_PER_NODE:-?} MB" | tee -a $OUT/memory_lines.txt
 # The gates run without arm O's PYTHONPATH, as in slip_t.sbatch: with
 # $TW/tampura on it, G13's import check finds the checkout instead of arm
 # T's install and fails (it failed jobs 5061712 to 5061721), and pip freeze
@@ -152,13 +154,19 @@ fi
 # the new scenes (up to five cups) TAMPURA's loop may run past BF#59's 600 s.
 $VA/python -u $SB/tools/gen_scene_eval.py --snapshot $SB --out $OUT --seeds $SEEDS \
   --reps $REPS --cap 900 --python-o $VA/python --venv-t $TW/.venv --tampura-work $TW $ARMS_ARGS
-echo "harness rc $?"
+HRC=$?
+echo "harness rc $HRC"
+# rule 16: exit code 4 is memwatch's stop (MemAvailable under 4 GB after an episode, STOPPED_LOW_MEMORY.txt in OUT)
+[ $HRC = 4 ] && echo "STOPPED_LOW_MEMORY: the harness stopped on MemAvailable under 4 GB (rc 4), see $OUT/STOPPED_LOW_MEMORY.txt"
 (cd $SB && env -u PYTHONPATH $VA/python tools/bridge_gates.py tree --compare $OUT/g13_before.json) > $OUT/gates_after.txt 2>&1
 cat $OUT/gates_after.txt
 if [ -n "$SB2" ]; then
   (cd $SB2 && env -u PYTHONPATH $VA/python tools/bridge_gates.py tree --compare $OUT/g13_o2_before.json) > $OUT/gates_o2_after.txt 2>&1
   cat $OUT/gates_o2_after.txt
 fi
+# rule 16: after the job nothing of ours alive and nothing in /dev/shm (counted here; a stray is reported, never
+# ended by name)
+echo "memory after the job: $(ps -u "$(id -un)" -o pid,args | grep -E 'downward|translate|test_full_pipeline|run_tampura_timed' | grep -vc grep) pipeline processes of ours alive, $(ls /dev/shm | wc -l) names in /dev/shm, MemAvailable $(awk '/^MemAvailable:/ {print $2}' /proc/meminfo) kB" | tee -a $OUT/memory_lines.txt
 finish
 # BF#49: the cluster's data hygiene after every run.
 bash $SB/tools/cluster/prune_work.sh --apply || echo "prune_work rc $?"

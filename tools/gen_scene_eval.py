@@ -48,6 +48,20 @@ the same episodes, which is also the evaluation of our approach with against
 without the limit.  Rows without the cap fields (BF#63 run 2) are an uncapped
 block and print as before.
 
+MEMORY (rule 16, PLAN section 17, tools/memwatch.py): every episode runs in a
+process of its own (the arms' runners start one child per episode) and the harness
+measures around it: MemAvailable at its start, at every 2 s poll and at its end,
+the biggest resident set of one process of the episode (exact when the children's
+high-water mark rose, else the largest seen at a poll) and the highest sum over
+its processes, new /dev/shm names and pipeline processes left behind (reported,
+never ended).  The row carries them as `mem` (kB) and the flag `peak_over_6gb`;
+the log prints them after the row.  MemAvailable under 4 GB at any reading of an
+episode stops the job after that episode's row (nothing starts under it): the
+STOPPED_LOW_MEMORY line, OUT/STOPPED_LOW_MEMORY.txt, metadata.json's stop, exit
+code 4.  --min-avail-gb and --peak-report-gb change the limits (0 only records).
+The report prints the memory lines and, from each job folder, the job script's
+own memory_lines.txt.
+
 ARM O2 (path 6, PLAN.md P6-Q9): arm O's episode again, from a second snapshot
 (--snapshot-o2: arm O's snapshot plus one fix, TB-1, and nothing else; the
 runner prints the two snapshots' scene files and manifest equal or stops), run
@@ -101,6 +115,7 @@ from types import SimpleNamespace
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import _bridge_campaign as bc  # noqa: E402
+import memwatch as mw  # noqa: E402
 import slip_eval as se  # noqa: E402
 
 # Arm O: BF#62's default set, named so the record says what ran.
@@ -476,6 +491,11 @@ def run(a):
         print('[gen] STOPPED before any episode, the stop rule is met by the rows of an earlier run: '
               + json.dumps(stop))
         return 2
+    # rule 16 (tools/memwatch.py): MemAvailable and peak RSS around every episode, in its row and in the log;
+    # MemAvailable under the limit stops the job after that episode's row (nothing starts under it)
+    min_kb = mw.limit_kb(mw.MIN_AVAIL_GB if getattr(a, 'min_avail_gb', None) is None else a.min_avail_gb)
+    peak_kb = mw.limit_kb(mw.PEAK_REPORT_GB if getattr(a, 'peak_report_gb', None) is None else a.peak_report_gb)
+    low = None
     try:
         for rep in range(a.reps):
             for seed in seeds:
@@ -485,29 +505,44 @@ def run(a):
                     if any(r['counts'] for r in tries) or len(tries) >= 2:
                         continue
                     for attempt in range(len(tries) + 1, 3):
-                        print(f"[gen] rep {rep} seed {seed} ({scene}) arm {arm} attempt {attempt} ...",
-                              end=' ', flush=True)
-                        row = run_one(a, arm, seed, rep, attempt, scene, order)
+                        label = f"{arm} seed {seed} rep {rep} attempt {attempt}"
+                        avail = mw.mem_available_kb()
+                        if mw.low_memory(avail, min_kb):
+                            raise mw.LowMemory('start', avail, min_kb, label)
+                        print(f"[gen] rep {rep} seed {seed} ({scene}) arm {arm} attempt {attempt} "
+                              f"(MemAvailable {mw.fmt_gb(avail)}) ...", end=' ', flush=True)
+                        with mw.EpisodeWatch(min_kb, peak_kb) as w:
+                            row = run_one(a, arm, seed, rep, attempt, scene, order)
+                        row.update(mw.row_fields(w.as_row()))
                         order += 1
                         bc.append_jsonl(path, row)
                         rows.append(row)
                         print(f"{'success' if row['success'] else 'no success'}"
                               f"{' (timeout)' if row['timed_out'] else ''}, wall {row['wall_s']} s"
                               f"{'' if row['counts'] else ', DOES NOT COUNT: ' + row['why']}", flush=True)
+                        for line in w.end_lines(label):
+                            print('[gen] ' + line, flush=True)
                         for g in gate_names(row):
                             counts[(arm, g)] = counts.get((arm, g), 0) + 1
                         stop = stop_reached(counts)
                         if stop:
                             raise HarnessStop(stop)
+                        if w.low():
+                            raise mw.LowMemory('end', w.avail_min_kb, min_kb, label)
                         if row['counts']:
                             break
     except HarnessStop as e:
         stop = e.args[0]
+    except mw.LowMemory as e:
+        low = e
+        stop = {'rule': 'STOPPED_LOW_MEMORY', 'where': e.where, 'label': e.label,
+                'avail_kb': e.avail_kb, 'limit_kb': e.min_kb}
+        mw.write_stop(a.out, e)
     finish_metadata(md_path, stop, counts)
-    if stop:
+    if stop and not low:
         print('[gen] STOPPED: ' + json.dumps(stop))
     print(report([a.out]))
-    return 2 if stop else 0
+    return mw.EXIT_LOW_MEMORY if low else (2 if stop else 0)
 
 
 # ----- the tables -------------------------------------------------------
@@ -664,7 +699,21 @@ def stop_lines(dirs):
                             + glob.glob(os.path.join(d, '*', 'metadata.json')))):
             md = bc.read_json(p) or {}
             if md.get('stop'):
-                out.append(f"STOPPED by the harness stop rule ({os.path.dirname(p)}): {json.dumps(md['stop'])}")
+                low = md['stop'].get('rule') == 'STOPPED_LOW_MEMORY'
+                out.append(f"{'STOPPED_LOW_MEMORY' if low else 'STOPPED by the harness stop rule'} "
+                           f"({os.path.dirname(p)}): {json.dumps(md['stop'])}")
+    return out
+
+
+def job_memory_lines(dirs):
+    """The job script's own memory lines (tools/cluster/gen_eval.sbatch writes OUT/memory_lines.txt: the memory at the
+    start and the file system under the job's folder, then what is left alive and in /dev/shm after the job)."""
+    out = []
+    for d in dirs:
+        for p in sorted(set(glob.glob(os.path.join(d, 'memory_lines.txt'))
+                            + glob.glob(os.path.join(d, '*', 'memory_lines.txt')))):
+            with open(p, encoding='utf-8', errors='replace') as f:
+                out += [f"memory ({os.path.dirname(p)}): {ln.strip()}" for ln in f if ln.strip()]
     return out
 
 
@@ -759,6 +808,11 @@ def report(dirs):
     out += ['', f"arm T, the standard test against their own reward ({len(t_rows)} counted episodes): "
                 f"both say success {both}, only the standard test {t_only}, only their reward {r_only}"]
     out += t_pad_lines(final)
+    mem = [{'label': f"{r['arm']} seed {r['seed']} rep {r['rep']} attempt {r['attempt']}", 'mem': r['mem'],
+            'peak_over_6gb': r.get('peak_over_6gb')} for r in rows if r.get('mem')]
+    memory = (mw.summary_lines(mem) if mem else []) + job_memory_lines(dirs)
+    if memory:
+        out += [''] + memory
     return '\n'.join(out)
 
 
@@ -779,6 +833,10 @@ def main(argv=None):
                     help="the arms, e.g. T,O (default), T,O,O2 or O2 (see ARM O2)")
     ap.add_argument('--snapshot-o2', default=None,
                     help="arm O2's snapshot: arm O's plus TB-1 only (needed for O2)")
+    ap.add_argument('--min-avail-gb', type=float, default=None,
+                    help="rule 16: MemAvailable under this stops the job after the episode (default 4; 0 only records)")
+    ap.add_argument('--peak-report-gb', type=float, default=None,
+                    help="rule 16: a peak RSS over this is flagged peak_over_6gb (default 6; 0 only records)")
     a = ap.parse_args(argv)
     if a.report:
         print(report(a.report))
