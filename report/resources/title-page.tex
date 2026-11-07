@@ -1,0 +1,55 @@
+% !TEX root = ../main.tex
+
+% Adapted from the thesis's title page (thesis/resources/title-page.tex): no
+% logo, no student number, no examiner fields; the kind of document and the
+% date of its state take their place.
+
+\makeatletter
+\begin{titlepage}
+  \thispagestyle{title}
+
+  \vspace{13mm-\baselineskip-\parskip}
+
+  \begin{flushleft}
+
+    \textbf{\color{darkgray}\reportkind}
+
+    For the researchers of the project (\institute). Not for publication.
+
+    \vfill
+
+    \begin{singlespace}
+      \LARGE\textbf{\@title}
+    \end{singlespace}
+
+  \end{flushleft}
+
+  \vspace{10mm}
+
+  {\large \reportkind, \reportversion}\\
+  State of \@date
+
+  \vfill
+
+  \textbf{\color{darkgray}Written by}
+
+  {\large\@author}
+
+  \vspace{20mm}
+
+  \begin{tabbing}
+
+    \textbf{\color{darkgray}Supervised by}\quad
+    \=\supervisor
+
+    \\[3\parskip]
+
+    \textbf{\color{darkgray}Covers}
+    \>The work since the thesis of \formatdate{10}{06}{2026}
+
+  \end{tabbing}
+
+\end{titlepage}
+\makeatother
+
+\newpage\thispagestyle{empty}\null
