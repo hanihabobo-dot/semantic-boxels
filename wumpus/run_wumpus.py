@@ -96,8 +96,10 @@ def main(argv=None):
     ap.add_argument('--paint-frames', metavar='DIR', default=None,
                     help='off-screen pictures of the painter, no window (tracks rule 13): the tiles are '
                          'painted without the GUI too, and after every knowledge update the board, seen '
-                         'from the GUI camera with the labels drawn in, goes to DIR/frame_NNN.png and '
-                         'DIR/frames.json (wumpus/paint_render.py); the moves stay the same')
+                         "from the GUI camera's viewpoint through our own lens with the labels drawn in, "
+                         'goes to DIR/frame_NNN.png and DIR/frames.json (wumpus/paint_render.py); DIR must '
+                         'be new or hold no frames. The moves stay the same; the wall times and LW1\'s '
+                         'plan times include the rendering (render_s in the record)')
     a = ap.parse_args(argv)
 
     if a.controller == 'lw1':
@@ -181,7 +183,10 @@ def _episode(a, world, logger):
                     'pace_s': narrate.pace_s(), 'paced_s': narrate.paced_s()},
            'run_dir': str(logger.run_dir)}
     if a.paint_frames:
-        rec['paint_frames'] = {'dir': a.paint_frames, 'frames': len(env.frames)}
+        # render_s: the pictures' time, which run_s includes (and LW1's plan times, for a
+        # BELIEF painted while LW1 plans)
+        rec['paint_frames'] = {'dir': a.paint_frames, 'frames': len(env.frames),
+                               'render_s': env.render_s}
     if a.save_dir:
         os.makedirs(a.save_dir, exist_ok=True)
         with open(os.path.join(a.save_dir, 'episode.json'), 'w') as f:

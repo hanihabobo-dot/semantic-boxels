@@ -122,7 +122,8 @@ if ($badDraw.Count -gt 0) {
     exit 2
 }
 if ($draws.Count -gt 0 -and $What -ne 'tampura') {
-    Write-Host "run: -Draw is for run tampura; run boxels draws its boxels in the GUI as it is" -ForegroundColor Yellow
+    $own = if ($What -eq 'wumpus') { 'run wumpus paints what the robot knows' } else { 'run boxels draws its boxels' }
+    Write-Host "run: -Draw is for run tampura; $own in the GUI as it is" -ForegroundColor Yellow
     $draws = @()
 } elseif ($draws.Count -gt 0 -and $Headless) {
     Write-Host "run: -Draw is ignored with -Headless (there is no GUI), nothing is drawn" -ForegroundColor Yellow

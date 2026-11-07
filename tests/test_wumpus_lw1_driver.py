@@ -146,7 +146,12 @@ def test_success_through_the_pipes(setup):
     assert 'ANSWERS OBS stench p1-1 0 | OBS breeze p1-1 1 | OBS glitter p1-1 0 | OBS stench p1-2 0 | ' \
            'OBS breeze p1-2 0 | OBS glitter p1-2 1' in out
     # the overlay (wumpus/knowledge.py's form): p1-2 known safe, p2-2 known wumpus, the
-    # _UNUSED atom ignored, p1-1 visited (the robot perceived there before the BELIEF)
+    # _UNUSED atom ignored, p1-1 visited (the robot perceived there before the BELIEF).
+    # This fake belief holds no K-literal of p1-1, so p1-1 goes out visited with both
+    # hazards 'maybe' and is painted an unknown tile: the painter shows a belief as it
+    # is, with no rule of its own.  Real LW1 moves only into cells it knows are safe, so
+    # its visited cells are 'visited' tiles; the lw1 render's frames.json is checked for
+    # that (tracks/wumpus/HANDOFF.md, step 5).
     m = {'wumpus': 'maybe', 'pit': 'maybe', 'gold': 'maybe'}
     assert env.known[0] == {'p1-1': {**m, 'visited': True},
                             'p1-2': {**m, 'wumpus': 'no', 'pit': 'no', 'visited': False},
@@ -176,8 +181,9 @@ def test_lw1_failing_before_any_action(setup):
 def test_pure_helpers():
     cells = ['p1-1', 'p1-2', 'p1-12']
     state, counts = drv.knowledge('(K_not_wumpus-at_p1-12),(K_not_pit-at_p1-12),(K_not_pit-at_p1-1),'
-                                  '(K_gold-at_p1-2),(K_wumpus-at_p1-2_UNUSED)', cells)
-    assert state == {'p1-1': {'wumpus': 'maybe', 'pit': 'no', 'gold': 'maybe', 'visited': False},
+                                  '(K_not_gold-at_p1-1),(K_gold-at_p1-2),(K_wumpus-at_p1-2_UNUSED)',
+                                  cells)
+    assert state == {'p1-1': {'wumpus': 'maybe', 'pit': 'no', 'gold': 'no', 'visited': False},
                      'p1-2': {'wumpus': 'maybe', 'pit': 'maybe', 'gold': 'yes', 'visited': False},
                      'p1-12': {'wumpus': 'no', 'pit': 'no', 'gold': 'maybe', 'visited': False}}
     assert counts == {'safe': 1, 'maybe_pit': 1, 'maybe_wumpus': 2, 'gold_known': True}
