@@ -165,6 +165,14 @@ def test_an_unwritable_folder_is_swallowed(tmp_path, monkeypatch):
     assert not (tmp_path / fw.FILE).exists()
 
 
+@pytest.mark.parametrize('save_dir', [None, 7])
+def test_a_write_that_fails_with_anything_but_oserror_is_swallowed(save_dir):
+    # R3 of the G13 review: "never raises" holds for the write too (os.makedirs(None) is a TypeError)
+    env, _ = make_env(held=5, gaps={(5, 9): [0.0], (5, 10): [0.0]})
+    rec = fw.record_after_rollout(env, save_dir, target_category=CAT, home=HOME, gripper_group=GROUP)
+    assert rec['ok'] and rec['standard_success']
+
+
 def test_their_defaults_are_imported_only_when_a_constant_is_missing(monkeypatch):
     called = []
     monkeypatch.setattr(fw, '_their_defaults',

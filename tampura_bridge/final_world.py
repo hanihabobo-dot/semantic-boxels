@@ -133,6 +133,6 @@ def record_after_rollout(env, save_dir, **kwargs):
         with open(path + '.tmp', 'w') as f:
             json.dump(rec, f, indent=1, default=str)
         os.replace(path + '.tmp', path)
-    except OSError:
+    except Exception:               # whatever fails here (a None folder included): no file, never a raise
         pass                         # no file = unreadable; the harness does not count it
     return rec

@@ -27,7 +27,14 @@ tampura_bridge/timed_policy.py (tampura_bridge/final_world.py: the target
 body attached, both finger pads within 2 mm of it, the arm at home); their
 own reward stays in the record and in the row's 't_reward_success'.  An arm-T
 episode whose final world could not be read does not count (it runs once
-more, as any episode that does not count).
+more, as any episode that does not count) and counts like a gate failure in
+the harness stop rule (P4.6, R2 of the G13 review): three episodes of one arm
+under the same gate (G13, G19, or FINAL_WORLD for an unread world) stop the
+job, which writes the stop to metadata.json, prints STOPPED and exits 2; the
+report lists the unread worlds apart with their errors, prints the largest pad
+gap of arm T's attached episodes and the episodes the 2 mm bound alone fails
+(R1), and opens with the caveat that T's test is geometric and ours physical
+(R5).
 
 ACTION CAP (DV-2, Hani 2026-11-07: "add the cap to us as well and make sure it
 is documented."): arm O is held to T's 20-step horizon on a proxy, the
@@ -105,6 +112,9 @@ SHOTS_KEPT = 2
 ARMS_ALL = ('T', 'O', 'O2')          # the order they run and print in
 ARMS_DEFAULT = ('T', 'O')
 CAP_ACTIONS = 20                     # T's horizon (its config's 20 steps); DV-2 holds arm O to it too
+STOP_RULE_COUNT = bc.STOP_RULE_COUNT  # P4.6 HARNESS STOP RULE: three episodes of one arm under the same gate
+UNREAD_WHY = 'final world unreadable'  # classify_t's reason; the stop rule and the report read it
+FINAL_WORLD_GATE = 'FINAL_WORLD'     # an arm T outcome without a readable final world counts like a gate failure
 
 
 def t_equiv(metrics, success):
@@ -276,7 +286,7 @@ def classify_t(rec):
     if st in ('success', 'failure'):
         if not rec.get('standard_read'):
             err = (rec.get('final_world') or {}).get('error') or 'no final_world.json'
-            return False, f"final world unreadable: {err}"
+            return False, f"{UNREAD_WHY}: {err}"
         return True, ''
     if st == 'killed':
         return True, 'timeout'
@@ -385,6 +395,46 @@ def run_one(a, arm, seed, rep, attempt, scene, order):
     return row
 
 
+class HarnessStop(Exception):
+    """The harness stop rule tripped; args[0] is the stop record."""
+
+
+def gate_names(row):
+    """What a row counts under in the harness stop rule (P4.6): the per-run gates its
+    record names (G13, G19) and, for arm T, FINAL_WORLD when an outcome's final world
+    could not be read (R2 of the G13 review: an unread world counts like a gate failure)."""
+    names = list(((row.get('rec') or {}).get('gate_failures')) or {})
+    if row.get('arm') == 'T' and str(row.get('why') or '').startswith(UNREAD_WHY):
+        names.append(FINAL_WORLD_GATE)
+    return names
+
+
+def stop_counts(rows):
+    """{(arm, gate): episodes} over every run in the rows (retries included)."""
+    counts = {}
+    for r in rows:
+        for g in gate_names(r):
+            counts[(r['arm'], g)] = counts.get((r['arm'], g), 0) + 1
+    return counts
+
+
+def stop_reached(counts):
+    """The stop record for the first (arm, gate) at STOP_RULE_COUNT, else None."""
+    for (arm, g), n in sorted(counts.items()):
+        if n >= STOP_RULE_COUNT:
+            return {'rule': 'HARNESS_STOP', 'arm': arm, 'gate': g, 'count': n}
+    return None
+
+
+def finish_metadata(md_path, stop, counts):
+    md = bc.read_json(md_path) or {}
+    md['finished'] = time.strftime('%Y-%m-%d %H:%M:%S')
+    md['status'] = 'stopped' if stop else 'finished'
+    md['stop'] = stop
+    md['stop_counts'] = {f'{arm}:{g}': n for (arm, g), n in sorted(counts.items())}
+    bc.write_json(md_path, md)
+
+
 def run(a):
     manifest = bc.read_json(os.path.join(a.scenes, 'manifest.json'))
     if not manifest:
@@ -420,27 +470,44 @@ def run(a):
     path = os.path.join(a.out, 'results.jsonl')
     rows = load_rows(path)
     order = len(rows)
-    for rep in range(a.reps):
-        for seed in seeds:
-            scene = manifest['scenes'][str(seed)]
-            for arm in arms:
-                tries = [r for r in rows if (r['arm'], r['seed'], r['rep']) == (arm, seed, rep)]
-                if any(r['counts'] for r in tries) or len(tries) >= 2:
-                    continue
-                for attempt in range(len(tries) + 1, 3):
-                    print(f"[gen] rep {rep} seed {seed} ({scene}) arm {arm} attempt {attempt} ...",
-                          end=' ', flush=True)
-                    row = run_one(a, arm, seed, rep, attempt, scene, order)
-                    order += 1
-                    bc.append_jsonl(path, row)
-                    rows.append(row)
-                    print(f"{'success' if row['success'] else 'no success'}"
-                          f"{' (timeout)' if row['timed_out'] else ''}, wall {row['wall_s']} s"
-                          f"{'' if row['counts'] else ', DOES NOT COUNT: ' + row['why']}", flush=True)
-                    if row['counts']:
-                        break
+    counts = stop_counts(rows)
+    stop = stop_reached(counts)
+    if stop:
+        print('[gen] STOPPED before any episode, the stop rule is met by the rows of an earlier run: '
+              + json.dumps(stop))
+        return 2
+    try:
+        for rep in range(a.reps):
+            for seed in seeds:
+                scene = manifest['scenes'][str(seed)]
+                for arm in arms:
+                    tries = [r for r in rows if (r['arm'], r['seed'], r['rep']) == (arm, seed, rep)]
+                    if any(r['counts'] for r in tries) or len(tries) >= 2:
+                        continue
+                    for attempt in range(len(tries) + 1, 3):
+                        print(f"[gen] rep {rep} seed {seed} ({scene}) arm {arm} attempt {attempt} ...",
+                              end=' ', flush=True)
+                        row = run_one(a, arm, seed, rep, attempt, scene, order)
+                        order += 1
+                        bc.append_jsonl(path, row)
+                        rows.append(row)
+                        print(f"{'success' if row['success'] else 'no success'}"
+                              f"{' (timeout)' if row['timed_out'] else ''}, wall {row['wall_s']} s"
+                              f"{'' if row['counts'] else ', DOES NOT COUNT: ' + row['why']}", flush=True)
+                        for g in gate_names(row):
+                            counts[(arm, g)] = counts.get((arm, g), 0) + 1
+                        stop = stop_reached(counts)
+                        if stop:
+                            raise HarnessStop(stop)
+                        if row['counts']:
+                            break
+    except HarnessStop as e:
+        stop = e.args[0]
+    finish_metadata(md_path, stop, counts)
+    if stop:
+        print('[gen] STOPPED: ' + json.dumps(stop))
     print(report([a.out]))
-    return 0
+    return 2 if stop else 0
 
 
 # ----- the tables -------------------------------------------------------
@@ -514,6 +581,13 @@ def report_tables(rows, final, brief=False):
                      + ''.join(f"\n  {r['arm']} seed {r['seed']} rep {r['rep']}: {r['why'][:160]}"
                                for r in retried))
         lines.append('')
+        unread = [r for r in rows if r['arm'] == 'T' and str(r.get('why') or '').startswith(UNREAD_WHY)]
+        if unread:
+            lines.append("arm T outcomes whose final world could not be read (they do not count and ran once "
+                         f"more; {STOP_RULE_COUNT} stop the job, R2 of the G13 review): {len(unread)}"
+                         + ''.join(f"\n  T seed {r['seed']} rep {r['rep']} attempt {r['attempt']}: "
+                                   f"{r['why'][len(UNREAD_WHY) + 2:][:300]}" for r in unread))
+            lines.append('')
     lines.append(f"{'arm':4} {'counted':>8} {'success':>8} {'rate':>6} {'95 % Wilson':>14} "
                  f"{'timeouts':>8} {'not counted':>11} {'median wall s':>13} {'(successes)':>11}")
     cols = ['O'] + (['O2'] if has_o2 else []) + ['T']
@@ -575,14 +649,61 @@ def report_tables(rows, final, brief=False):
     return '\n'.join(lines)
 
 
+T_CAVEAT = ("Caveat first: TAMPURA carries the die kinematically (their Attachment), so arm T's standard test is "
+            "read geometrically from its final world (the target attached, both finger pads within 2 mm of it, "
+            "the arm at home), while arm O's is physical (both pads in contact at 0.5 N, the pipeline's own goal "
+            "check). The same facts are read in two forms; they are not one measurement. Their own reward is "
+            "printed beside the standard test.")
+
+
+def stop_lines(dirs):
+    """A job that the harness stop rule ended says so in its metadata.json; the report repeats it."""
+    out = []
+    for d in dirs:
+        for p in sorted(set(glob.glob(os.path.join(d, 'metadata.json'))
+                            + glob.glob(os.path.join(d, '*', 'metadata.json')))):
+            md = bc.read_json(p) or {}
+            if md.get('stop'):
+                out.append(f"STOPPED by the harness stop rule ({os.path.dirname(p)}): {json.dumps(md['stop'])}")
+    return out
+
+
+def t_pad_lines(final):
+    """R1 of the G13 review: how far arm T's finger pads end from the held body in its final world (the raw
+    readings), and the episodes that the pad bound alone fails."""
+    reads = []
+    for (arm, seed, rep), r in sorted(final.items()):
+        fw = (r.get('rec') or {}).get('final_world') or {}
+        if arm == 'T' and r['counts'] and fw.get('ok') and fw.get('attached'):
+            gaps = [abs(g) for g in (fw.get('pad_gaps_m') or []) if g is not None]
+            reads.append((seed, rep, r, fw, max(gaps) if gaps else None))
+    if not reads:
+        return []
+    worst = [(w, s, rep) for s, rep, _, _, w in reads if w is not None]
+    alone = [(s, rep, r, fw) for s, rep, r, fw, _ in reads if fw.get('at_home') and not fw.get('pads_on_target')]
+    head = (f"arm T pad gaps in the final world (R1 of the G13 review; the raw readings are in each row's "
+            f"final_world): target attached in {len(reads)} counted episodes")
+    if worst:
+        big = max(worst)
+        head += (f"; largest pad gap {big[0] * 1000:.2f} mm (seed {big[1]} rep {big[2]}), median of the larger "
+                 f"gap per episode {statistics.median(w for w, _, _ in worst) * 1000:.2f} mm")
+    lines = [head + f"; attached and at home but failed by the pad bound alone: {len(alone)}"]
+    for s, rep, r, fw in alone:
+        gaps = ' and '.join('unseen' if g is None else f"{abs(g) * 1000:.2f} mm" for g in (fw.get('pad_gaps_m') or []))
+        lines.append(f"  T seed {s} rep {rep}: pad gaps {gaps}, bound {fw.get('pad_gap_max_m', 0.002) * 1000:g} mm, "
+                     f"their reward {'success' if r.get('t_reward_success') else 'failure'}; "
+                     "reported to Sub-manager T and Go before a wave counts")
+    return lines
+
+
 def with_vs_without(final):
     """DV-2's evaluation of our approach with against without the 20-action
     limit, from the same episodes (arms O and O2; T keeps its own 20 steps)."""
     lines = ["with against without the 20-action limit (the same episodes, success = the standard test; "
              "t = the proxy picks + places + senses + observes + 1 on a success):",
              f"{'arm':4} {'counted':>8} {'without':>8} {'with':>6} {'lost':>5} "
-             f"{'share of the successes':>23} {'t median':>9} {'t max':>6} {'t > 20':>7}"]
-    lost_scenes = []
+             f"{'share of the successes':>23} {'t median':>9} {'t max':>6} {'t > 20':>7} {'t unknown':>9}"]
+    lost_scenes, unknown_scenes = [], []
     for arm in ('O', 'O2'):
         cnt = [r for (x, _, _), r in final.items() if x == arm and r['counts']]
         if not cnt:
@@ -590,13 +711,19 @@ def with_vs_without(final):
         wo = [r for r in cnt if r['success']]
         wi = [r for r in cnt if r['capped_success']]
         ts = [r['t_equiv'] for r in wo if r.get('t_equiv') is not None]
-        over = [r for r in wo if not r['capped_success']]
-        share = f"{len(over)}/{len(wo)}" if wo else '-'
-        lines.append(f"{arm:4} {len(cnt):8} {len(wo):8} {len(wi):6} {len(over):5} {share:>23} "
-                     f"{_f(_med(ts)):>9} {(str(max(ts)) if ts else '-'):>6} {len(over):7}")
+        lost = [r for r in wo if not r['capped_success']]
+        over = [r for r in lost if r.get('t_equiv') is not None]      # the proxy is known and above the limit
+        unknown = [r for r in lost if r.get('t_equiv') is None]       # no proxy count: a missing count
+        share = f"{len(lost)}/{len(wo)}" if wo else '-'
+        lines.append(f"{arm:4} {len(cnt):8} {len(wo):8} {len(wi):6} {len(lost):5} {share:>23} "
+                     f"{_f(_med(ts)):>9} {(str(max(ts)) if ts else '-'):>6} {len(over):7} {len(unknown):9}")
         lost_scenes += [f"{arm} seed {r['seed']} rep {r['rep']} (t {r.get('t_equiv')})" for r in over]
+        unknown_scenes += [f"{arm} seed {r['seed']} rep {r['rep']}" for r in unknown]
     if lost_scenes:
         lines.append("the limit turns these successes into failures: " + ', '.join(lost_scenes))
+    if unknown_scenes:
+        lines.append("successes without a proxy count (a missing count, not an action-limit failure; the "
+                     "headline view counts them as not within the limit): " + ', '.join(unknown_scenes))
     lines.append("(a capped success is always an uncapped success, so a McNemar test of capped against "
                  "uncapped has no discordant pair on one side and is not printed; the tests are each "
                  "view against T, above)")
@@ -607,27 +734,31 @@ def report(dirs):
     rows, final = final_rows(dirs)
     if not final:
         return 'no episodes'
+    stops = stop_lines(dirs)
+    stops = stops + [''] if stops else []
     if not all('capped_success' in r for r in final.values()):
         # no cap fields (BF#63 run 2 and earlier): an uncapped block, printed as before
-        return report_tables(rows, final)
+        return '\n'.join(stops + [report_tables(rows, final)])
     capped = {k: dict(r, success=r['capped_success']) for k, r in final.items()}
-    out = [f"success = the standard test (DV-1). Arms O and O2 are held to T's {CAP_ACTIONS}-action horizon "
-           f"(DV-2): the headline view counts as a failure every episode whose proxy count exceeds "
-           f"{CAP_ACTIONS}; the second view is the same episodes without the limit.",
-           '',
-           f"== headline: success within {CAP_ACTIONS} actions ==",
-           report_tables(rows, capped),
-           '',
-           '== the same episodes without the action limit ==',
-           report_tables(rows, final, brief=True),
-           '',
-           with_vs_without(final)]
+    out = [T_CAVEAT, ''] + stops
+    out += [f"success = the standard test (DV-1). Arms O and O2 are held to T's {CAP_ACTIONS}-action horizon "
+            f"(DV-2): the headline view counts as a failure every episode whose proxy count exceeds "
+            f"{CAP_ACTIONS}; the second view is the same episodes without the limit.",
+            '',
+            f"== headline: success within {CAP_ACTIONS} actions ==",
+            report_tables(rows, capped),
+            '',
+            '== the same episodes without the action limit ==',
+            report_tables(rows, final, brief=True),
+            '',
+            with_vs_without(final)]
     t_rows = [r for (x, _, _), r in final.items() if x == 'T' and r['counts']]
     both = sum(1 for r in t_rows if r['success'] and r.get('t_reward_success'))
     t_only = sum(1 for r in t_rows if r['success'] and not r.get('t_reward_success'))
     r_only = sum(1 for r in t_rows if not r['success'] and r.get('t_reward_success'))
     out += ['', f"arm T, the standard test against their own reward ({len(t_rows)} counted episodes): "
                 f"both say success {both}, only the standard test {t_only}, only their reward {r_only}"]
+    out += t_pad_lines(final)
     return '\n'.join(out)
 
 

@@ -385,7 +385,7 @@ def test_report_prints_the_capped_headline_and_the_uncapped_view(tmp_path):
     assert 'per scene' in capped and 'per scene' not in uncapped
     # with against without: 5 against 3, two lost (t 21 and 30), the proxy's median 20 and maximum 30
     line = next(l for l in tail.splitlines() if l.startswith('O '))
-    assert line.split() == ['O', '6', '5', '3', '2', '2/5', '20.0', '30', '2']
+    assert line.split() == ['O', '6', '5', '3', '2', '2/5', '20.0', '30', '2', '0']
     assert 'O seed 4 rep 0 (t 21), O seed 5 rep 0 (t 30)' in tail
     assert 'not printed' in tail
     # T: the standard test against their reward
@@ -397,7 +397,7 @@ def test_report_of_rows_without_cap_fields_is_the_old_uncapped_block(tmp_path):
     rows = [_row('T', 1, True), _row('O', 1, True, carries=1, losses=0)]
     _write_rows(tmp_path / 'j1', rows)
     text = gse.report([str(tmp_path / 'j1')])
-    assert 'headline' not in text and 'DV-2' not in text
+    assert 'headline' not in text and 'DV-2' not in text and 'Caveat' not in text
     assert 'paired (both arms counted on the same scene and repetition): 1 pairs;' in text
 
 
@@ -414,3 +414,155 @@ def test_report_with_arm_o2_prints_its_pairs_in_both_views(tmp_path):
     assert 'paired O2 against T (both counted on the same scene and repetition): 2 pairs; ' \
            'both succeed 0, only O2 2, only T 0, neither 0' in uncapped
     assert 'O2 seed 2 rep 0 (t 30)' in tail
+
+
+# ---------------------------------------------------------------------------
+# the review of the G13 amendment (Sub-manager T (2), R1 to R5)
+
+def _unread_row(seed, attempt=1, rep=0, err='AttributeError: x'):
+    return _crow('T', seed, False, counts=False, rep=rep, attempt=attempt,
+                 why=f'{gse.UNREAD_WHY}: {err}', final_world={'ok': False, 'error': err})
+
+
+def test_an_unread_final_world_counts_like_a_gate_failure():
+    unread = _unread_row(140)
+    assert gse.gate_names(unread) == ['FINAL_WORLD']
+    assert gse.gate_names(dict(unread, arm='O')) == []          # only arm T has a final world to read
+    g13 = _crow('T', 141, False, counts=False, why='gate_failed: pin', gate_failures={'G13': 'pin'})
+    assert gse.gate_names(g13) == ['G13']
+    assert gse.gate_names(_crow('T', 142, True)) == []
+
+
+def test_the_stop_rule_is_three_of_one_arm_under_one_gate():
+    rows = [_unread_row(140), _unread_row(140, attempt=2)]
+    assert gse.stop_reached(gse.stop_counts(rows)) is None
+    # a third unread world on another arm is not the same arm
+    assert gse.stop_reached(gse.stop_counts(rows + [dict(_unread_row(141), arm='O')])) is None
+    rows.append(_unread_row(141))
+    assert gse.stop_reached(gse.stop_counts(rows)) == {'rule': 'HARNESS_STOP', 'arm': 'T',
+                                                       'gate': 'FINAL_WORLD', 'count': 3}
+    # an unread world and a G13 failure are two gates: two and two do not stop
+    mixed = [_unread_row(1), _unread_row(2)] + [
+        _crow('T', s, False, counts=False, why='gate_failed: pin', gate_failures={'G13': 'pin'}) for s in (3, 4)]
+    assert gse.stop_reached(gse.stop_counts(mixed)) is None
+
+
+def _run_setup(tmp_path, monkeypatch, seeds):
+    scenes = tmp_path / 'scenes'
+    scenes.mkdir()
+    (scenes / 'manifest.json').write_text(json.dumps({
+        'scenes': {str(s): f'find_dice_gen_s{s}.json' for s in seeds},
+        'details': {str(s): {'n_cups': 3} for s in seeds}}))
+    monkeypatch.setenv('BRIDGE_SCENE_MANIFEST', str(scenes / 'manifest.json'))
+    monkeypatch.setattr(os, 'uname', lambda: SimpleNamespace(nodename='testnode'), raising=False)
+    monkeypatch.setattr(gse.se, 'pipeline_alive', lambda pid: [])
+    monkeypatch.setattr(gse.se, 'check_arms', lambda *a, **k: None)
+    monkeypatch.setattr(gse.bc, 'cpu_model', lambda: 'cpu')
+    return SimpleNamespace(scenes=str(scenes), out=str(tmp_path / 'out'), seeds=f'{seeds[0]}-{seeds[-1]}',
+                           reps=1, arms='T,O', snapshot='/w/sb', snapshot_o2=None, python_o='py',
+                           venv_t='vt', tampura_work='/w/tw', cap=900.0, shots='none')
+
+
+def test_run_stops_after_three_unread_worlds_and_says_so(tmp_path, monkeypatch, capsys):
+    a = _run_setup(tmp_path, monkeypatch, [140, 141, 142, 143])
+    calls = []
+
+    def fake(a_, arm, seed, rep, attempt, scene, order):
+        calls.append((arm, seed, attempt))
+        if arm == 'T':
+            return _unread_row(seed, attempt=attempt, rep=rep)
+        return _crow('O', seed, True, attempt=attempt, rep=rep, t=10, carries=1, losses=0)
+    monkeypatch.setattr(gse, 'run_one', fake)
+    assert gse.run(a) == 2
+    # T seed 140 twice (the retry), O seed 140, then T seed 141: the third unread world stops the job
+    assert calls == [('T', 140, 1), ('T', 140, 2), ('O', 140, 1), ('T', 141, 1)]
+    out = capsys.readouterr().out
+    assert '[gen] STOPPED: ' in out and '"gate": "FINAL_WORLD"' in out
+    assert 'STOPPED by the harness stop rule' in out                      # the report repeats it
+    assert 'arm T outcomes whose final world could not be read' in out
+    md = json.loads((tmp_path / 'out' / 'metadata.json').read_text())
+    assert md['status'] == 'stopped' and md['stop']['count'] == 3
+    assert md['stop_counts'] == {'T:FINAL_WORLD': 3}
+    # a resumed run does not go on past a rule the rows already meet
+    calls.clear()
+    assert gse.run(a) == 2 and calls == []
+
+
+def test_run_without_a_stop_finishes_with_exit_zero(tmp_path, monkeypatch, capsys):
+    a = _run_setup(tmp_path, monkeypatch, [140, 141])
+    monkeypatch.setattr(gse, 'run_one', lambda a_, arm, seed, rep, attempt, scene, order:
+                        _crow(arm, seed, True, attempt=attempt, rep=rep, t=10, carries=1, losses=0))
+    assert gse.run(a) == 0
+    md = json.loads((tmp_path / 'out' / 'metadata.json').read_text())
+    assert md['status'] == 'finished' and md['stop'] is None and md['stop_counts'] == {}
+    assert 'STOPPED' not in capsys.readouterr().out
+
+
+def test_report_lists_the_unread_worlds_apart_with_their_errors(tmp_path):
+    rows = [_unread_row(140, err='AttributeError: robot'), _crow('T', 140, True, attempt=2, reward=True),
+            _crow('O', 140, True, t=10, carries=1, losses=0)]
+    _write_rows(tmp_path / 'j1', rows)
+    text = gse.report([str(tmp_path / 'j1')])
+    assert ('arm T outcomes whose final world could not be read (they do not count and ran once more; '
+            '3 stop the job, R2 of the G13 review): 1\n'
+            '  T seed 140 rep 0 attempt 1: AttributeError: robot') in text
+
+
+def test_report_repeats_a_stop_from_a_jobs_metadata(tmp_path):
+    _write_rows(tmp_path / 'j1', [_crow('T', 1, True, reward=True), _crow('O', 1, True, t=10, carries=1, losses=0)])
+    (tmp_path / 'j1' / 'metadata.json').write_text(json.dumps(
+        {'stop': {'rule': 'HARNESS_STOP', 'arm': 'T', 'gate': 'FINAL_WORLD', 'count': 3}}))
+    text = gse.report([str(tmp_path / 'j1')])
+    assert 'STOPPED by the harness stop rule' in text and '"gate": "FINAL_WORLD"' in text
+
+
+def test_report_opens_with_the_caveat_on_the_two_forms_of_the_test(tmp_path):
+    _write_rows(tmp_path / 'j1', [_crow('T', 1, True, reward=True), _crow('O', 1, True, t=10, carries=1, losses=0)])
+    text = gse.report([str(tmp_path / 'j1')])
+    assert text.startswith('Caveat first: TAMPURA carries the die kinematically')
+    assert 'geometrically' in text.split('\n\n')[0] and 'physical' in text.split('\n\n')[0]
+    assert text.index('Caveat first') < text.index('== headline')
+
+
+def _fw(gaps, attached=True, at_home=True):
+    pads = len(gaps) == 2 and all(g is not None and abs(g) <= 0.002 for g in gaps)
+    return {'ok': True, 'attached': attached, 'at_home': at_home, 'pad_gaps_m': gaps,
+            'pad_gap_max_m': 0.002, 'pads_on_target': pads}
+
+
+def test_report_prints_arm_ts_pad_gaps_and_the_episodes_the_bound_alone_fails(tmp_path):
+    rows = [_crow('T', 1, True, reward=True, final_world=_fw([0.00045, 0.00045])),
+            _crow('T', 2, True, reward=True, final_world=_fw([0.0006, -0.0008])),     # the larger gap is 0.8 mm
+            _crow('T', 3, False, reward=True, final_world=_fw([0.0004, 0.0031])),     # attached, home, 3.1 mm: the bound alone
+            _crow('T', 4, False, reward=False, final_world=_fw([0.0004, 0.0004], at_home=False)),   # not at home
+            _crow('T', 5, False, reward=False, final_world=_fw([None, None], attached=False)),      # nothing held
+            _crow('T', 6, True, reward=True, final_world=_fw([0.0005, 0.0005])),
+            _crow('O', 1, True, t=10, carries=1, losses=0)]
+    _write_rows(tmp_path / 'j1', rows)
+    text = gse.report([str(tmp_path / 'j1')])
+    assert ("final_world): target attached in 5 counted episodes; largest pad gap 3.10 mm (seed 3 rep 0), "
+            "median of the larger gap per episode 0.50 mm; attached and at home but failed by the pad "
+            "bound alone: 1") in text
+    assert ("  T seed 3 rep 0: pad gaps 0.40 mm and 3.10 mm, bound 2 mm, their reward success; "
+            "reported to Sub-manager T and Go before a wave counts") in text
+    assert 'T seed 4 rep 0: pad gaps' not in text and 'T seed 5 rep 0: pad gaps' not in text
+
+
+def test_report_without_final_worlds_prints_no_pad_lines(tmp_path):
+    _write_rows(tmp_path / 'j1', [_crow('T', 1, True, reward=True), _crow('O', 1, True, t=10, carries=1, losses=0)])
+    assert 'pad gaps' not in gse.report([str(tmp_path / 'j1')])
+
+
+def test_with_vs_without_counts_an_unknown_proxy_apart(tmp_path):
+    rows = [_crow('O', 1, True, t=10, carries=1, losses=0),
+            _crow('O', 2, True, capped=False, t=25, carries=1, losses=0),
+            _crow('O', 3, True, capped=False, t=None, carries=1, losses=0),
+            _crow('T', 1, True, reward=True), _crow('T', 2, True, reward=True), _crow('T', 3, True, reward=True)]
+    _write_rows(tmp_path / 'j1', rows)
+    _, _, _, tail = _views(gse.report([str(tmp_path / 'j1')]))
+    assert 't unknown' in tail
+    line = next(l for l in tail.splitlines() if l.startswith('O '))
+    # counted 3, without 3, with 1, lost 2 (one above the limit, one without a proxy count)
+    assert line.split() == ['O', '3', '3', '1', '2', '2/3', '17.5', '25', '1', '1']
+    assert 'the limit turns these successes into failures: O seed 2 rep 0 (t 25)' in tail
+    assert 'a missing count, not an action-limit failure' in tail and 'O seed 3 rep 0' in tail
