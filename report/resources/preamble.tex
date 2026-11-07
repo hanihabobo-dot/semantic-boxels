@@ -159,7 +159,8 @@
 }
 \fancypagestyle{title}{
   \fancyhf{}
-  \fancyfoot[R]{\place, \@date}
+  % report: no footer on the title page (the thesis prints place and date here);
+  % the date of the state is the "State of ..." line of the title page itself
   \renewcommand{\headrulewidth}{0pt}
 }
 \makeatother
