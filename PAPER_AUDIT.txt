@@ -9601,7 +9601,10 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   T (Sonnet 5.5, local_2ee96869; tracks/sub_tampura/) takes the reports,
   checks and questions for Hani of paths 5 to 8, the paths that repeat
   TAMPURA's tasks or setups and share rule 12's deviation rounds; Go
-  keeps the merges, the record and the other paths.  The times in this
+  keeps the merges, the record and the other paths.  About 13:10: "if
+  you need many submanagers thats also fine".  Sub-manager W (Sonnet
+  5.5, local_6348a77e; tracks/sub_wumpus/) does the same for the Wumpus
+  paths 4 and 10.  The times in this
   entry from 11:20 on were corrected on 2026-11-07 about 13:00 (Go's
   clock had run 20 to 30 min late).
   MERGES INTO THE TRUNK: TB-16 (run.ps1 runs the checkout it lives in) as
