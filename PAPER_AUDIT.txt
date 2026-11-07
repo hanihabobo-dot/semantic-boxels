@@ -9832,6 +9832,140 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   CLAIM EFFECT: none.  HONESTY CLASS: process decision, no pipeline
   change.
 
+BF#69 [FINDING; CAUSE OPEN; PROPOSALS WAIT FOR HANI]  THE WSL WEDGE OF
+      2026-11-07 AND WHERE THE WINDOWS MEMORY GOES  (path 12 of BF#68;
+      Hani's rule 14, 2026-11-07 13:20)
+  WHAT: on 2026-11-07 `wsl -d Ubuntu` ended in Wsl/Service/CreateInstance/
+  ERROR_TIMEOUT for every session that tried (first call 11:02:34, last
+  failure returned 11:08:25).  The brief (tracks/wsl/BRIEF.md) took path 1's
+  `wsl --shutdown` at 11:09:29 for what ended it and gave path 12, read
+  only, the cause.  At about 13:20 Hani made it rule 14 (no WSL work and no
+  `wsl` call at all until we know why the machine runs out of memory), and
+  Go's 13:25 message made that question path 12's too: who commits the
+  memory, how it grew, and whether the 11:00 wedge was the same thing.
+  Windows-side evidence only; nothing on the machine was changed.  Every
+  number below carries a mark: MEASURED (a record on this machine, cited by
+  evidence file in REPORT.md), READ (a page or another session's message) or
+  UNVERIFIED (my reading, no proof).  The BF number came from Go (14:56).
+  FINDING A, THE WEDGE (REPORT.md sections 1 to 4):
+  (1) The cause is NOT established.  One WSL VM (44A0C6AC, created 11-02
+      14:10:47, 117.0 h old) stopped answering as a whole at or before 10:34
+      and stayed so until 11:09:55; only the Podman distro ran in it.
+      Starting an instance (ERROR_TIMEOUT after 31 to 58 s), the dev app's
+      connections to the Postgres in the Podman machine (Npgsql timeouts
+      from 10:34:11 at the latest) and the VM's own teardown (30.06 s,
+      against 0.31 to 1.17 s for nine healthy VMs) all failed.  The
+      circular Application log had wrapped, so the onset is not recorded.
+      MEASURED.
+  (2) Best-supported class: a fault around Modern Standby.  The VM was
+      paused for 48.2 of its 117.0 h (41 %, 37 standby periods; guest clock
+      lag 37.08 h against 37.40 h of host standby), and the failure was
+      there at most 63 min after the last resume (09:31:12).  Against it: 36
+      earlier resumes did no harm, and no record at or after 09:31 stands
+      out.  A probable class, the trigger unproven.  MEASURED; four upstream
+      issues report WSL broken after sleep or hibernate, none with a
+      confirmed cause (READ).
+  (3) Two readings fail.  No session's call started it: none called `wsl`
+      between 09:00 and 11:02:34, and that first call already failed.
+      `wsl --shutdown` did not end it, contrary to the brief: WSL's own 60 s
+      idle teardown began at 11:09:25.466, 60.0 s after the last failed
+      attempt and 3.5 s or more before path 1's call could run (stamped
+      11:09:29, first output 11:09:41).  MEASURED.  That the retries reset
+      the idle timer and so kept the wedged VM alive is UNVERIFIED (one
+      observation); it is why REPORT section 9 asks for no new start
+      attempt for 70 s after an ERROR_TIMEOUT.
+  (4) What the outage took: only the Podman machine (the dev app's
+      Postgres, down since 11:09:55).  Ubuntu had no instance from 11-06
+      20:15:01 to 11-07 11:10:10, so jobs reported lost at 11:09 were gone
+      by 20:15 on 11-06 at the latest (which jobs the tracks meant is
+      UNVERIFIED).  MEASURED.
+  (5) Ruled out or unlikely (MEASURED): the track sessions, `wsl --shutdown`,
+      Windows Update, Store updates, Defender, disk space and disk IO, a
+      reboot or crash, a service restart, a network change.  A stall inside
+      the guest, host memory pressure as a contributor, Podman Desktop and a
+      fault in wslservice's instance tracking stay as lower-ranked causes
+      (UNVERIFIED; REPORT section 4).
+  FINDING B, THE MEMORY (REPORT.md section 5, evidence/11):
+  (6) No record shows Windows running out of memory (no low-memory event
+      since 11-02, Resource-Exhaustion-Detector Ids 2003 and 2004: none; no
+      application-failure record), but it sat at 81 to 94 % of its commit
+      limit: 56.4 of 60.2 GB (94 %, the highest reading; path 3 at 13:27,
+      READ), 55.2 of 60.2 at 13:35 (92 %), 48.6 of 58.3 at 14:27 (83 %) and
+      47.3 of 58.3 at 14:36 (81 %) with no VM running.  The limit is RAM
+      (30.8 GB) plus a system-managed page file (28 to 30 GB).  MEASURED.
+  (7) The base is about 47 GB with no VM, and mostly Claude: 22 Claude Code
+      session processes hold 13.3 GB (0.44 to 0.79 GB each, 17 started
+      today) and the desktop app 3.9 GB, together 36 %.  Browsers and web
+      views hold 7.6 GB, node 3.4 GB, Defender 2.1 GB; about 9 GB belongs to
+      no process (kernel pools 4.2 GB, shared sections).  MEASURED.
+  (8) The swing is the WSL VM: 13.3 GB committed at 12:24 (during runs), 5.1
+      GB at 13:35, 0.85 to 1.1 GB when fresh.  There is no .wslconfig, so it
+      may take half the RAM (15.0 GiB inside).  47 GB plus 13.3 GB is 60.6
+      GB, above the 58 to 60 GB limit: arithmetic only, since no commit was
+      read at 12:24.  MEASURED; the sum UNVERIFIED.
+  (9) The 11:00 wedge was probably not this (UNVERIFIED): 9.5 GB of RAM was
+      free at 11:06 with a 251 MB VM, no low-memory record exists, and it
+      looks like a stuck VM, not starvation.  The commit at 11:00 was not
+      read; none of today's 17 Claude Code processes started before 11:08:45.
+  PROPOSALS, for Hani through Go, none applied (REPORT sections 5.7, 7, 9):
+  (a) A memory cap, `.wslconfig` [wsl2] memory=8GB (or 10GB): 47 GB plus 8
+      GB stays under the limit.  A job above the cap is killed inside the
+      VM, and the guest's real peak is unmeasured (13.3 GB included cache),
+      so test with one batch; it takes effect at the next VM start.  Go put
+      the 8 GB cap to Hani as the step before rule 14 is lifted (message of
+      14:56, READ); the restart waits for his watch runs to end
+      (tracks/STATE.md, 16:08 to 16:28, READ).
+  (b) Give memory back: end the VM when a batch ends (Go's `wsl --shutdown`
+      with `wsl --list --running` empty, rule 11), close sessions that have
+      reported (10 finished ones are about 6 GB; whether archiving ends the
+      process is UNVERIFIED), restart the desktop app daily (its largest
+      process, 1.7 GB, has run since 11-03 23:10).
+  (c) Evidence for the next wedge: `debugConsoleLogFile` in .wslconfig, the
+      Application log at 100 MB (elevated), and before any restart,
+      elevated, `collect-wsl-logs.ps1 -Dump` (READ: microsoft/WSL).
+  (d) Rules for the tracks (REPORT section 9, for tracks/STATE.md once rule
+      14 is lifted): after an ERROR_TIMEOUT no new start attempt for 70 s
+      and tell Go; wsl_health_check.ps1 before a batch and mem_log.ps1
+      during it; no time-budgeted run across a laptop sleep (the guest clock
+      stops while the wall clock jumps; which clock the budgets use is
+      UNVERIFIED); one commit reading before a VM-heavy batch, no new batch
+      above 85 % with no VM running; rule 14 should name `\\wsl.localhost\
+      Ubuntu\...` reads, which start the distro too.
+  RULE 14 AND THIS SESSION (REPORT section 0): Go's 13:25 message was held
+  by the app's message pause; I read it in Go's transcript at about 14:25
+  and it reached me at about 14:52.  Before that, two `-Probe` tests of
+  wsl_health_check.ps1 (about 14:02 and 14:04) started a VM (B4EC2889,
+  14:02:18.7 to 14:10:06.9) and two Ubuntu instances; no job or data was
+  affected, and I have made no `wsl` call since 14:07.  Six VMs started
+  between 13:52 and 14:24, during the freeze, one of them mine; the others'
+  starters are UNVERIFIED (their times fit other sessions' `wsl` calls and
+  `\\wsl.localhost\Ubuntu\...` file reads).  MEASURED for the times.
+  TOOLS (tracks/wsl/, read only, PowerShell 7): wsl_health_check.ps1 and
+  wsl_wedge_snapshot.ps1 (both call `wsl --list`: not under rule 14) and
+  mem_log.ps1 (one CSV line per sample, no `wsl` call: safe under rule 14).
+  OPEN FOR HANI (REPORT section 11; Go relays his answers): what he saw when
+  he says we run out of memory; whether he used Podman Desktop between 11:04
+  and 11:06 (it would explain the Podman distro going to Stopped); whether
+  the dev app ran after the 09:31 resume and its database worked before
+  10:30; whether the Podman machine should start at login and be started
+  again now.
+  NOT READ (needs elevation, or is gone): the Security log, SRUM, WER
+  Report.wer contents, LiveKernelReports, hcsdiag, WSL ETW traces, the
+  Podman distro's journal, the Application log before 10:34:11, commands
+  typed in Hani's own terminals.
+  STATE (2026-11-07 16:43): WSL has been up since 16:24, started by
+  Hani's own seed 3 watch run (vmmemWSL 5.6 GB private at 16:27; READ,
+  tracks/STATE.md), and rule 14 still holds for the tracks.  Path 12 makes
+  no `wsl` call and waits for Go to lift rule 14, put REPORT section 9 into
+  tracks/STATE.md and relay Hani's answers.
+  EVIDENCE: tracks/wsl/REPORT.md (committed 8cf3dbd at 14:49, updated in
+  3c7aab5 at 14:53), tracks/wsl/evidence/01 to 12, tracks/wsl/STATE.md, the
+  three scripts beside them, DATA_LEDGER.md (the Kept row).
+  CLAIM EFFECT: none known; the records show nothing of ours ran in the
+  wedged VM besides the Podman machine (finding 4).  HONESTY CLASS:
+  infrastructure finding with the cause open, Windows-side read-only
+  evidence, every claim marked; no pipeline change.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================
