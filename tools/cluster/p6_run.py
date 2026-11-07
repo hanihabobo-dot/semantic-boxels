@@ -13,6 +13,13 @@ tag's with TB-8 and TB-20; arm B: the thesis commit's, with its seed retry).
   ... --set smoke ...                                       the smoke's 3 cells
   ... --set all --only-tags TAG[,TAG...] ...                a final pass
   ... --dry-run                                             print, run nothing
+  ... [--min-avail-gb 4] [--peak-report-gb 6]               rule 16's limits, GB (0: only record)
+
+Rule 16 (tools/memwatch.py): the runner's run_cell is wrapped at run time (the arm's own
+file stays unedited) so that each cell's MemAvailable at its start and end, its peak RSS
+and its process sum are recorded in OUT/mem_cells.jsonl (`mem`, `peak_over_6gb`) and in the
+log; MemAvailable under the limit stops the batch after that cell: STOPPED_LOW_MEMORY in
+the log and in OUT/STOPPED_LOW_MEMORY.txt, the cells so far aggregated, exit code 4.
 
 The cells are injected into the runner's MATRIX_PRESETS as the preset
 'p6-slot' (tools/p6_slots.py names them); nothing else of the runner is touched
@@ -28,6 +35,7 @@ import os
 import platform
 import sys
 import time
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOOLS = os.path.dirname(HERE)
@@ -82,6 +90,10 @@ def main(argv=None):
     ap.add_argument('--timeout', type=float, default=1800.0, help='per-cell wall cap, s')
     ap.add_argument('--only-tags', default=None)
     ap.add_argument('--dry-run', action='store_true')
+    ap.add_argument('--min-avail-gb', type=float, default=None,
+                    help="rule 16: MemAvailable under this stops the batch after the cell (default 4; 0 only records)")
+    ap.add_argument('--peak-report-gb', type=float, default=None,
+                    help="rule 16: a peak RSS over this is flagged peak_over_6gb (default 6; 0 only records)")
     a = ap.parse_args(argv)
 
     code = os.getcwd()
@@ -89,6 +101,7 @@ def main(argv=None):
     if TOOLS not in sys.path:
         sys.path.append(TOOLS)
     import eval_runner as er
+    import memwatch
     import p6_slots as ps
 
     er_dir = os.path.dirname(os.path.realpath(er.__file__))
@@ -129,8 +142,27 @@ def main(argv=None):
     meta_path = os.path.join(out, 'p6_run.json')
     with open(meta_path, 'w', encoding='utf-8') as f:
         json.dump(meta, f, indent=1)
+    min_kb = memwatch.limit_kb(memwatch.MIN_AVAIL_GB if a.min_avail_gb is None else a.min_avail_gb)
+    peak_kb = memwatch.limit_kb(memwatch.PEAK_REPORT_GB if a.peak_report_gb is None else a.peak_report_gb)
+    meta.update(min_avail_limit_kb=min_kb, peak_limit_kb=peak_kb)
+    if hasattr(er, 'run_cell'):
+        memwatch.install_run_cell_guard(er, out, min_kb, peak_kb, log=lambda s: print('[mem] ' + s, flush=True))
     t0 = time.time()
-    rc = er.main(runner_argv)
+    try:
+        rc = er.main(runner_argv)
+    except memwatch.LowMemory as e:
+        # the cells that ran have their summaries on disk; the runner's own end-of-run aggregation did not run
+        if hasattr(er, 'aggregate'):
+            try:
+                er.aggregate(Path(out))
+            except Exception as err:      # the stop is the verdict, not the aggregation
+                print(f"[mem] aggregation after the stop failed: {err!r}", flush=True)
+        memwatch.write_stop(out, e)
+        meta.update(finished=time.strftime('%Y-%m-%d %H:%M:%S'), wall_s=round(time.time() - t0, 1),
+                    runner_rc=None, stopped='STOPPED_LOW_MEMORY', stopped_at=str(e))
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, indent=1)
+        return memwatch.EXIT_LOW_MEMORY
     meta.update(finished=time.strftime('%Y-%m-%d %H:%M:%S'), wall_s=round(time.time() - t0, 1),
                 runner_rc=rc)
     with open(meta_path, 'w', encoding='utf-8') as f:

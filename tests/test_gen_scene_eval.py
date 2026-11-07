@@ -566,3 +566,90 @@ def test_with_vs_without_counts_an_unknown_proxy_apart(tmp_path):
     assert line.split() == ['O', '3', '3', '1', '2', '2/3', '17.5', '25', '1', '1']
     assert 'the limit turns these successes into failures: O seed 2 rep 0 (t 25)' in tail
     assert 'a missing count, not an action-limit failure' in tail and 'O seed 3 rep 0' in tail
+
+# ---------------------------------------------------------------------------
+# rule 16: memory around every episode, and the stop (tools/memwatch.py)
+
+GB = 1024 * 1024        # kB
+
+
+def _mem_rows(tmp_path):
+    return [json.loads(ln) for ln in (tmp_path / 'out' / 'results.jsonl').read_text().splitlines()]
+
+
+def test_run_records_mem_in_every_row_and_logs_it(tmp_path, monkeypatch, capsys):
+    a = _run_setup(tmp_path, monkeypatch, [140, 141])
+    monkeypatch.setattr(gse.mw, 'mem_available_kb', lambda path='/proc/meminfo': 8 * GB)
+    monkeypatch.setattr(gse, 'run_one', lambda a_, arm, seed, rep, attempt, scene, order:
+                        _crow(arm, seed, True, attempt=attempt, rep=rep, t=10, carries=1, losses=0))
+    assert gse.run(a) == 0
+    rows = _mem_rows(tmp_path)
+    assert len(rows) == 4
+    for r in rows:
+        assert r['mem']['avail_start_kb'] == r['mem']['avail_end_kb'] == 8 * GB
+        assert r['mem']['min_avail_limit_kb'] == 4 * GB and r['mem']['peak_limit_kb'] == 6 * GB
+        assert r['peak_over_6gb'] is False
+    out = capsys.readouterr().out
+    assert 'mem T seed 140 rep 0 attempt 1 end: MemAvailable 8.00 GB' in out
+    assert 'memory: 4 episodes recorded; lowest MemAvailable 8.00 GB' in out
+
+
+def test_run_stops_with_exit_4_after_the_episode_that_drops_memory(tmp_path, monkeypatch, capsys):
+    a = _run_setup(tmp_path, monkeypatch, [140, 141, 142])
+    state = {'avail': 8 * GB}
+    monkeypatch.setattr(gse.mw, 'mem_available_kb', lambda path='/proc/meminfo': state['avail'])
+    calls = []
+
+    def fake(a_, arm, seed, rep, attempt, scene, order):
+        calls.append((arm, seed))
+        if (arm, seed) == ('O', 140):
+            state['avail'] = 3 * GB                      # memory falls during this episode
+        return _crow(arm, seed, True, attempt=attempt, rep=rep, t=10, carries=1, losses=0)
+    monkeypatch.setattr(gse, 'run_one', fake)
+    assert gse.run(a) == 4
+    assert calls == [('T', 140), ('O', 140)]            # the stop comes after the row of the episode that dropped it
+    out = capsys.readouterr().out
+    assert '[mem] STOPPED_LOW_MEMORY: O seed 140 rep 0 attempt 1 end: MemAvailable 3.00 GB under the limit 4.00 GB' in out
+    assert 'STOPPED_LOW_MEMORY (' in out                 # the report repeats it
+    assert (tmp_path / 'out' / 'STOPPED_LOW_MEMORY.txt').read_text().startswith('STOPPED_LOW_MEMORY')
+    md = json.loads((tmp_path / 'out' / 'metadata.json').read_text())
+    assert md['status'] == 'stopped' and md['stop']['rule'] == 'STOPPED_LOW_MEMORY' and md['stop']['where'] == 'end'
+    rows = _mem_rows(tmp_path)
+    assert len(rows) == 2 and rows[1]['mem']['avail_end_kb'] == 3 * GB
+    # nothing starts while memory stays low
+    calls.clear()
+    assert gse.run(a) == 4 and calls == []
+    assert json.loads((tmp_path / 'out' / 'metadata.json').read_text())['stop']['where'] == 'start'
+    # a limit of 0 only records: the job goes on to the end
+    a.min_avail_gb = 0
+    assert gse.run(a) == 0 and len(calls) == 4          # T 141, O 141, T 142, O 142
+
+
+def test_a_peak_over_the_limit_is_flagged_in_the_row_and_the_report(tmp_path, monkeypatch, capsys):
+    a = _run_setup(tmp_path, monkeypatch, [140])
+    monkeypatch.setattr(gse.mw, 'mem_available_kb', lambda path='/proc/meminfo': 8 * GB)
+    marks = iter([1_000_000, 7 * GB, 7 * GB, 7 * GB])           # the children's high-water mark before and after each of the
+    real = gse.mw.EpisodeWatch                                  # two episodes: it rises past 6 GB in the first one only
+    monkeypatch.setattr(gse.mw, 'EpisodeWatch', lambda *args, **kw: real(*args, rusage=lambda: next(marks), **kw))
+    monkeypatch.setattr(gse, 'run_one', lambda a_, arm, seed, rep, attempt, scene, order:
+                        _crow(arm, seed, True, attempt=attempt, rep=rep, t=10, carries=1, losses=0))
+    assert gse.run(a) == 0
+    rows = _mem_rows(tmp_path)
+    assert [r['peak_over_6gb'] for r in rows] == [True, False] and rows[0]['mem']['peak_exact'] is True
+    out = capsys.readouterr().out
+    assert 'OVER 6 GB (report it)' in out and 'memory: OVER the peak limit: T seed 140 rep 0 attempt 1' in out
+
+def test_report_prints_the_job_scripts_memory_lines(tmp_path):
+    rows = [_crow('T', 1, True, reward=True), _crow('O', 1, True, t=10, carries=1, losses=0)]
+    _write_rows(tmp_path / 'j1', rows)
+    (tmp_path / 'j1' / 'memory_lines.txt').write_text(
+        'memory at the start: MemTotal: 196000000 kB  MemAvailable: 150000000 kB  local fs /tmp xfs '
+        '(tmpfs is RAM), Slurm --mem 24576 MB\n'
+        'memory after the job: 0 pipeline processes of ours alive, 0 names in /dev/shm, MemAvailable 149000000 kB\n')
+    text = gse.report([str(tmp_path / 'j1')])
+    assert f"memory ({tmp_path / 'j1'}): memory at the start: MemTotal: 196000000 kB" in text
+    assert f"memory ({tmp_path / 'j1'}): memory after the job: 0 pipeline processes of ours alive, " \
+           "0 names in /dev/shm" in text
+    # no mem in the rows and no such file: no memory block at all
+    _write_rows(tmp_path / 'j2', rows)
+    assert '\nmemory' not in gse.report([str(tmp_path / 'j2')])
