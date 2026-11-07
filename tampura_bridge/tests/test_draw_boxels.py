@@ -90,10 +90,10 @@ def test_the_phantom_overlay_trips_g14_on_the_executing_client(w):
     assert gh.counts().get('G14', 0) == 1
 
 
-def test_drawing_is_off_by_default_and_boxels_is_the_one_kind():
+def test_drawing_is_off_by_default_and_the_kinds_are_boxels_and_cameras():
     cfg = policy.EpisodeConfig(seed=0, scene_file='f.json', log_dir='x')
-    assert cfg.draw == frozenset()
-    assert policy.DRAW_KINDS == ('boxels',)
+    assert cfg.draw == frozenset() and cfg.camera_dir == ''
+    assert policy.DRAW_KINDS == ('boxels', 'cameras')
 
 
 def test_the_driver_refuses_a_kind_it_does_not_know(tmp_path):
