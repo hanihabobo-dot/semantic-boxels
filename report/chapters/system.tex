@@ -1,0 +1,236 @@
+% !TEX root = ../main.tex
+
+\chapter{The System Now}
+\label{ch:system}
+
+This chapter describes what changed in the system and why. Nearly all of it is
+workstream \PW{1}, with the stacking and reach work of \PW{2} and \PW{3}. The
+changes alter every scene, every grasp and every observation, so the numbers of
+the thesis do not carry over to the system as it is now
+(\Cref{sec:numbers-carry}). Findings of \PW{1} carry the labels F1 to F32 in the
+audit file; the report names them where it helps.
+
+\section{Grasping and Release Without the Weld}
+\label{sec:grasp}
+
+In the thesis the gripper closed for show and a fixed constraint then attached
+the object to it, and release teleported the fingers open (\PW{1}). Both are
+gone. The fingers now close on the object, advancing in steps of
+0.5\,mm under a close force of 60\,N until both finger pads touch it, and the
+object is held by friction; the pads have a friction coefficient of 1.2
+(\PW{1}, \BF{35}). Release opens the fingers through the motor, and the planner
+judges the result from two renders taken twenty simulation steps apart. The one
+hard-coded motion that stays is the short vertical lift after a pick or a place,
+which the supervisors allowed (\PW{1}).
+
+Running it with a real grasp found problems that the weld had hidden. Four are
+worth knowing.
+\begin{itemize}
+  \item \emph{The first pick of every episode was a phantom} (F1). The fingers
+  spawned closed, the first descent ground the fingertips into the object, and the
+  grip check passed on which link touched, not on how it touched. The phantom hold
+  survived until a place that released nothing. The fingers now start open and the
+  aperture is checked (\PW{1}).
+  \item \emph{The simulated arm moved far faster than the real one could} (F14).
+  Smoothed paths ran up to 4.2 times a joint's velocity limit in one hop, and a
+  cargo was thrown off the table. The step count per waypoint pair is now stretched
+  until no joint exceeds its datasheet limit. Three verification runs had no lost
+  grip; the cost is that simulated motion time roughly doubles (\PW{1}).
+  \item \emph{A transit could knock a bystander flat and the episode still reported
+  success} (F18). The planner's collision check sampled a fixed eight
+  configurations per edge, so a 63.4\,cm move was checked every 9.1\,cm against a
+  3.3\,cm cargo, and the path smoother certified its shortcuts with the gripper
+  relaxed along the whole edge. Of 55 recorded
+  runs, 13 (24\,\%) had a bystander event. The smoother is fixed. The finer check
+  was measured and left off by default, and the entry states that the coarse check
+  is unsound on long edges (\PW{1}).
+  \item \emph{The swept volume of the held cargo was never collision-checked} (F10),
+  because of a pose bug that placed the cargo about 10\,cm too high. It is fixed
+  (\PW{1}).
+\end{itemize}
+
+\section{Perception Without the Oracle}
+\label{sec:perception}
+
+The thesis read exact poses and visibility straight from the simulator. Now the
+camera's depth and segmentation images are turned into a point cloud per object,
+and a box is estimated from each cloud. On the tested seeds every axis of the
+estimated box was within 1.3\,mm of the simulator's own box; a render takes about
+180\,ms and the detection about 7\,ms (\PW{1}). Sensing is classified from one
+rendered image instead of from simulator body numbers: on 20 comparison seeds plus
+one, 96.8\,\% of raw ray endpoints agreed and no shadow cell got a different
+outcome (\PW{1}). The planner's collision world is the belief, not the simulator.
+The pick aims at the estimate after one more look just before the descent; the
+horizontal centre error of the estimate was at most 2.3\,mm over 66 detections
+(1.0\,mm on average along the worse axis), so the expected loss of pick success was not
+visible at spawn (\PW{1}).
+
+Some reads of the simulator remain on purpose: the verifiers that score an
+episode and a log that records the true pose next to the believed one (\PW{1}).
+The first scope decision of August also accepted the execution servo's live re-aim
+and the planner's collision world as reads of the simulator; the pick now aims at
+the estimate and the collision world is the belief, both since 19 September
+(\PW{1}).
+
+One bug is worth a sentence because it was invisible to every headless test. In
+graphical runs the debug overlay was drawn into the camera image, so the system
+sensed its own visualization (F19). The overlay is now hidden around every
+perception render, and a probe finds no overlay pixel in the observation
+(\PW{1}).
+
+\section{Scenes and Reach}
+\label{sec:scenes}
+
+The scene presets changed. Hidden targets are now 3 to 4\,cm (F5) and occluders are
+narrow and tall, 6\,cm wide and 7.5\,cm tall in the default scene, so that a
+two-finger grasp can take them; the
+minimum centre-to-centre separation between spawned objects grew from 10 to
+15\,cm (\PW{1}). The scalability scenes did not constrain objects to the robot's reach in
+the thesis, although the thesis text says positions are reachable; this
+is now set, and the reach was measured with the arm's inverse kinematics: a sphere
+of radius about 0.823\,m centred 1.6\,cm above the robot's base frame (world height
+0.066\,m; the table top is at 0.325\,m), with a reach of 0.765\,m at 4.5\,cm above
+the table that shrinks to 0.604\,m at 30\,cm (\PW{3}).
+Every seeded scene is different from the thesis's scene of the same seed. A
+consequence of the scene change is that the old evaluation corpus is stale: of 300
+candidate seeds 192 still build a valid scene, and eight of the 30 seeds of the
+thesis sweep no longer do (\PW{1}). The seed re-roll that used to hide such
+failures was removed on Hani's instruction: the seed on the command line is
+always the seed that ran, or the run did not happen (\PW{1}).
+
+\section{Stacking and Execution Accuracy}
+\label{sec:stacking}
+
+The thesis measured stacking success of 100\,\%, 80\,\% and 13.3\,\% at heights
+2, 3 and 4 and attributed the collapse to the simulated arm knocking the tower
+over, a manipulation failure and not a planning failure, which it neither fixed
+nor fully instrumented (\PW{2}). Workstream \PW{2} added a world-integrity monitor.
+After every move, pick, place and stack, one render classifies each registered
+object as knocked off the table, lost, disturbed (moved more than 15\,mm),
+toppled, or off its support (more than 2\,cm from the support's top). An episode
+whose goal object has left the table now ends honestly with the exit reason
+``knocked off table'' and no blind retry; a third failure of the same stack ends
+it with ``stack give-up''; a stack whose symbolic success the end-of-run physics
+rejected is labelled a physics mismatch, where it was an unlabelled timeout before;
+and a success with integrity events prints that it is not a clean success
+(\PW{2}, \PW{1}). The height-4 collapse has a root cause for the first time: in
+three runs with fine telemetry the outcomes differed, and in the clearest one the
+carried cube, still descending at 0.67 to 0.70\,m/s, reached the top of the tower
+before the planned release, so that the cargo and not an arm link hit the tower
+(\PW{2}). The supervisor's long-standing position, that the simulated arm knocks the
+tower over, is therefore essentially supported, with one refinement: it was the
+cargo, not an arm link (\PW{2}). After the other fixes, the height-3 arm scored 18 of
+20 seeds on 20 September (\PW{1}).
+
+\section{The Representation and the Planning Model}
+\label{sec:model}
+
+\paragraph{Shadow geometry.} Three corrections changed how shadows are built. For
+a tall occluder close to the camera, the shadow collapsed or inverted when the
+camera direction was taken in three dimensions, which made a target behind it
+structurally unfindable; the direction is now horizontal, with a guard against
+degenerate boxes (F3). A carve step deleted a whole slab that contained the
+target when a 5\,mm sliver touched it; with the fix, 44 of 44 hidden target
+centres over 22 buildable seeds lie inside a shadow cell (F21). An occluder seen
+only partly got a floating estimate and cast no shadow; before the fix there were
+3 floating slices in 66 bodies, after it none (F22) (all \PW{1}). Two limits remain
+and are stated as costs the paper must report: a shadow cell misses the side lobes
+of an off-axis occluder (a single 5\,cm cube occludes 253\,cm$^3$, its cell
+claims 224\,cm$^3$), and 54 to 69\,\% of the volume of every shadow cell is
+visible to the camera, so a shadow cell is not simply ``the occluded space'' (F27,
+\PW{1}).
+
+\paragraph{The observation model.} The thesis says a blocked shadow yields no
+observation and that moving an object cannot create new shadows; the audit file
+records that these sentences no longer describe the code (\PW{1}, notes for
+\PW{10}). Now one sensing action classifies every shadow cell against the same
+render and removes those seen empty; any newly visible body is registered, so a
+relocated object can reveal bodies with new shadow cells (F16, F20); a cell the
+planner gave up on is parked as ``unresolved'' and not eliminated (F15); and the
+belief collapses when an object is localized. One finding changed what can be
+won at all: after the scene resize and until 21 August, no holding episode was
+winnable, because every sensing ray ended above the 3 to 4\,cm targets (F5,
+\PW{1}). Sensing tolerates up to 5\,\% blocked rays, with a
+disclosed cost: a target hiding exactly behind those rays is missed (\PW{1}).
+
+\paragraph{A rediscovery cleanup that was unsound.} In the thesis pipeline,
+when an object was rediscovered the cleanup removed its old shadow cells
+without a render and gave the area to the planner as free space with a
+``not here'' fact. That is a write to the belief with nothing observed
+behind it. The plan review of 25 and 26 October recorded it as a finding not
+previously in the audit (\PW{4}). The remedy, called M7, is that a superseded
+cell is removed only if its grid renders empty. Hani decided on 28 October that it
+is on by default everywhere, with an A/B test and a re-run of the thesis sweep
+after it lands (\BF{15}); the work package that builds it is still marked open in
+the plan (\PW{4}).
+
+\paragraph{Model tweaks for TAMPURA's environment.} Three further changes were
+made so that the pipeline can run in TAMPURA's world, each declared with what it
+was before, what it is after, and what it changes for a claim (\PW{4}). The pick
+now needs the object's pose to be known, sensing takes place from a configuration
+in which the arm is out of the way, and a new wrist-camera action looks at one
+object (M8, \BF{33}); the grasp is fitted to the estimated rotation of the object's
+top face (M9, \BF{30}); and a failed touch makes the object's pose unknown again
+(M10, \BF{31}). Hani decided on 28 October that M8 to M10 are on by default on our
+scenes as well, so that every thesis number produced before is labelled as
+produced without them (\BF{34}).
+
+\paragraph{Planner settings.} The pddlstream search is run with a sample ratio of
+0.25 instead of the library default of 1; an isolated comparison gave 31 of 40
+successes against 30 of 40 for the default, and the setting bounds a busy-wait in
+pddlstream that had doubled wall-clock time on some episodes (F7, \PW{1}). One rule is absolute: nothing edits a plan between the
+planner and the executor. A rewrite that removed redundant relocations was reverted
+on Hani's instruction, ``never do that. this is cheating'' (F30, \PW{1}).
+
+\section{How the System Is Kept Honest}
+\label{sec:honest}
+
+The comparison with TAMPURA is held to an explicit contract written down before
+any code ran and binding on every change (\PW{4}). In plain words: no welds,
+constraints or teleports of task objects or the robot, and no ground truth feeding
+planning, perception, belief update or scoring; the planner stays PDDLStream with
+Fast Downward as in the main pipeline, with no domain swap, no plan
+post-processing, no hard-coded action sequence and no robot motion outside a
+planned action; model tweaks must be small, expressible in the thesis's model,
+and reported with a before, an after and the effect on a claim; TAMPURA's own
+seeds, scene files and success criterion are used, honest failures are counted
+and no code is specific to a seed; and anything that cannot meet these is flagged
+and aborted, never worked around. Hani's words of 25 October bind the same
+spirit: ``Make little changes and just let our setup work on their find\_dice
+problem'', ``Every tweak is honestly reported'' (\PW{4}).
+
+Twenty-one automatic checks, the gates, make the contract runnable (\PW{4},
+\BF{2}). They scan the code that a campaign imports for welds, teleports and
+ground-truth reads, keep a ledger of executed against planned actions, allow scoring
+only through one module, confirm that TAMPURA's own files are unchanged (a hash
+of its tracked files, and of the installed copy that one arm imports, \BF{18}), and pin the random seeds and the seed-to-scene map.
+Four adversarial reviewers read the first two steps of the campaign, the
+parameterisation of the main pipeline and the harness that runs it in TAMPURA's
+world: none found a cheat,
+a ground-truth path into a decision, a plan edit or seed-specific code, and every
+major finding was a missing check, a missing rule or a stale record
+(\BF{14}). That review also recorded a limit of the held-cargo check: the planner placed the
+cargo 6 to 10\,cm below the gripper while it hangs 2 to 3\,cm below it, and the
+entry states that the thesis runs therefore certified every planned move while
+holding with the cargo 4 to 8\,cm too low (\BF{14}).
+
+Any comparison needs a noise floor. Running the unchanged pipeline twice on the
+same 40 seeds of the holding scene gave 31 of 40 and 30 of 40 successes, three
+outcome flips and different plan counts in 16 of the 35 seeds that ran (\BF{7});
+this is the reason later acceptances use a pre-registered distributional test of
+plan counts and not a per-seed rule (\BF{13}, \BF{10}).
+
+\section{Do the Thesis Numbers Carry Over?}
+\label{sec:numbers-carry}
+
+No. The audit file states that the scene change alters every seeded scene and
+therefore every number, and that the thesis's canonical sweep has to be re-run
+after the changes (\PW{1}). That re-run, called CB\#113, was started on
+20 September 2026 and is not finished: at its re-aggregation on 24 October it
+held 491 of 2160 cells, with 362 successes and 43 scene rejections (\PW{1},
+\TK{3}). Its first aggregation counted 372 successes because the result
+collector credited a rejected cell with the previous cell's success
+(\PW{1}, \TK{3}). A new cluster evaluation of the current code, of the thesis
+commit and of TAMPURA on our tabletop tasks is planned and has not run
+(\TK{6}). Until then, the thesis's numbers describe the thesis system, and the
+report's numbers describe the system as it is now, on the scenes and tasks named.

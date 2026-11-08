@@ -1,0 +1,116 @@
+% !TEX root = ../main.tex
+
+\chapter{The Thesis in Brief and What It Left Open}
+\label{ch:thesis-recap}
+
+\section{The Thesis in Brief}
+\label{sec:thesis-brief}
+
+A robot acting in a cluttered scene often cannot see everything that matters: a
+target object may be hidden behind others. The thesis \cite{alassiri2026thesis}
+extends classical task and motion planning to this case by a \emph{Boxel}
+representation. A Boxel is a box-shaped cell of the workspace. Each detected
+object gets its own cell, each region that an object hides from the camera (a
+\emph{shadow}) is a cell of its own, and the remaining free space is covered with
+a few coarse cells. The robot's belief is a set of yes-or-no facts, one per cell,
+that say whether the cell's content is known (Know-If fluents). A classical
+planner, PDDLStream \cite{garrett2018pddlstream} with Fast Downward
+\cite{helmert2006fast}, reasons over these facts and plans sensing in the same
+search as the manipulation. The system plans optimistically, assuming that a
+hidden target is in the cell it is about to look at, acts, senses, and replans
+when an assumption fails. It runs on a simulated Franka Panda in PyBullet
+\cite{coumans2021pybullet}.
+
+The thesis measured the representation by ablation: the same planner on the
+adaptive partition against a uniform grid at the same cell scale. Its headline
+table, reproduced in \Cref{tab:thesis-headline}, shows that the adaptive
+partition solved more scenes in every goal, most sharply on finding a hidden
+cube and stacking it on a tray.
+
+\begin{table}[tbp]
+\centering
+\small
+\begin{tabular}{llrr}
+\toprule
+goal & variant & success rate & mean plan time (s) \\
+\midrule
+find-and-tray-stack & semantic         & 75.6\,\% & 124.62 \\
+find-and-tray-stack & semantic+mbs0.05 & 72.2\,\% &  82.14 \\
+find-and-tray-stack & uniform          & 34.4\,\% & 692.11 \\
+\midrule
+holding             & semantic         & 65.6\,\% & 134.30 \\
+holding             & semantic+mbs0.05 & 66.7\,\% &  56.64 \\
+holding             & uniform          & 47.8\,\% & 438.53 \\
+\midrule
+stack               & semantic         & 64.4\,\% &  17.16 \\
+stack               & semantic+mbs0.05 & 64.4\,\% &   3.10 \\
+stack               & uniform          & 35.6\,\% & 924.13 \\
+\bottomrule
+\end{tabular}
+\caption{The thesis's headline table \cite{alassiri2026thesis}: success rate and
+mean success-only planning time per goal and variant, 90 episodes each (30 seeds
+and three difficulty levels).}
+\label{tab:thesis-headline}
+\end{table}
+
+\section{The Thesis's Comparison with TAMPURA}
+\label{sec:thesis-tampura}
+
+The thesis compared its \texttt{holding} task with the hidden-object task of
+TAMPURA \cite{curtis2024partially}, which the paper calls Partial Observability
+(task C) and the released code calls \fdice. It re-ran TAMPURA's released
+environment on the thesis machine over 20 seeds and reported 11 of 20
+successes (\PW{4}), a mean of 166 seconds per successful episode against 144.4
+seconds for the thesis system's wall clock, and a success rate of 65.6\,\% for the
+thesis system against the at least 63\,\% that TAMPURA's published return of 0.63
+implies
+\cite{alassiri2026thesis,curtis2024partially}. The thesis itself calls this
+comparison architectural: the two systems ran on different environments, so it
+benchmarks neither of them.
+
+\section{What the Thesis Said About Its Own Limits}
+\label{sec:thesis-limits}
+
+The thesis's limitations section states the simplifications behind its numbers
+\cite{alassiri2026thesis}. Perception was an oracle that read exact poses from
+the simulator, and the camera was fixed. Grasping was constraint-based: a held
+object was rigidly welded to the gripper, so it could not slip or be dropped,
+and only top-down grasps at one fixed height were sampled. A short hard-coded
+lift followed every place or stack. Collisions during execution were logged but
+did not trigger a replan. The shadow cells under-covered the region an object
+hides, which the thesis names as the dominant cause of the search-exhausted
+failures (13 of 18 cells). The scenes had 6 to 9 cm cubes, and the TAMPURA task
+was the closest analogue, not the same problem.
+
+\section{What Was Asked Next}
+\label{sec:asked-next}
+
+After the thesis, the supervisors' list of missing pieces became ten workstreams
+in the audit file. The wording of the first is the supervisors' as the audit
+records it: ``no workarounds and cuts any more. The ONLY thing that may stay is
+the hardcoded lift after a pick or place action'' (\PW{1}). The paper that the
+work feeds has a submission date of 4 December 2026 (\BF{1}).
+\Cref{tab:asked-next} lists the workstreams and where this report treats them.
+
+\begin{table}[tbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}lYYl@{}}
+\toprule
+workstream & what was asked & what happened & chapter \\
+\midrule
+\PW{1} & remove the weld and every oracle read; build real perception and a real pose sampler & landed in steps from 20 August to 19 September 2026, with 32 field findings (F1 to F32) & \ref{ch:system} \\
+\PW{2} & prove the stacking drop is execution, detect physical failure, fail honestly & monitor landed 19 September; root cause for height 4 found 20 September & \ref{ch:system} \\
+\PW{3} & all objects must spawn within reachable range & landed 19 September; reach measured & \ref{ch:system} \\
+\PW{4} & run our pipeline inside TAMPURA's environment for a valid comparison & restarted 25 October on a new branch; \BF{1} to \BF{68} & \ref{ch:comparison} \\
+\PW{5} & consider adopting TAMPURA's controllers & open, a decision (marked T2 in the audit) on adopting their grasp library; the campaign of \PW{4} leaves it out of scope & none \\
+\PW{6} & a real-robot experiment & a remark: not needed for ICAPS, nice to have & none \\
+\PW{7} & related work 2024 to 2026 & open & \ref{ch:open-questions} \\
+\PW{8} & comparable results from other approaches in the same environment & open; TAMPURA and LW1 are the candidates already on the list & \ref{ch:open-questions} \\
+\PW{9} & full partially observable planning with LW1 and PDDLStream, 3-D Wumpus & stretch goal; the entry names a Wumpus-World baseline as its first rung, and paths 4 and 10 work in the Wumpus world & \ref{ch:progress} \\
+\PW{10} & division of labour and framing of the paper & a remark; framing question open & \ref{ch:open-questions} \\
+\bottomrule
+\end{tabularx}
+\caption{The ten workstreams of the audit file.}
+\label{tab:asked-next}
+\end{table}
