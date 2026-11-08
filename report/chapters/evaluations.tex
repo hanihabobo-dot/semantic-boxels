@@ -17,8 +17,8 @@ generator, and in worlds that other planners define (the Wumpus world and TAMPUR
 other tasks). \Cref{tab:catalogue} has one row per evaluation. The caveat column
 repeats what the entry itself warns about. \Cref{sec:visual-check} says, for each
 comparison among them, whether Hani's visual check was done. The success criterion is
-under review: from 8 November every evaluation records the drops and collisions of each
-episode and prints clean success (no drop, no collision) beside success, and the numbers
+under review: since 8 November every evaluation must record the drops and collisions of each
+episode and print clean success (no drop, no collision) beside success. The fields are built in the arms of paths 4, 7 and 10, not yet in our own pipeline (TB-22); no evaluation has run since, and the numbers
 of this report, whose records hold no such counts, are not re-scored (rule 18 of the
 tracks, \ID{tracksstate}{tracks state file}).
 
@@ -82,7 +82,8 @@ A local check; the cluster A/B of this fix is planned (\Cref{sec:planned-cluster
 Ours 10 of 10, TAMPURA 6 of 10, pairs 4 to 0, $p = 0.125$ (\TK{5}). &
 TAMPURA's execution is kinematic; our fixed camera gives its look action no new
 view; a re-run with its own hand camera was cut after two seeds by the stop order
-for WSL. \\
+for WSL; the records hold no drop or collision counts, and the two runs of ours that
+Hani watched each succeeded with a drop (TB-23, \TK{3}). \\
 6 Nov. LW1 driving our robot in a 3-D Wumpus world (path 4). &
 18 of 18 episodes won, 0 of 369 percepts wrong; LW1 alone solves all 100 states at
 5x5 with fewer calls and shorter runs than its paper's Table 2 (\TK{4}). &
@@ -97,14 +98,23 @@ itself was not run on these tasks by the track. \\
 A straight line wins 18 and 15 of 100 states at 5x5, a random walk 39.5\,\%, a
 rule-based explorer 100 of 100 up to 15x15 (\TK{10}). &
 Pure grid code with no robot; none of these walkers is ours. \\
+8 Nov. Headless probes of the drop of tall boxes (TB-23) on random-pairs scenes with two
+occluders, seeds 0 to 5, 52 episodes (path 3). &
+Over 40 episodes of two settings, the four-fix set lost the box in 9 of 20 episodes (6 to
+the swing, 3 to collisions) and the same set with the acceleration-limited carry in 4 of 20,
+none to the swing (\TK{3}). &
+A probe, not an evaluation: two to six repetitions per seed and setting; no cost per carry is
+measurable; the A/B on seeds 0 to 19 is prepared and not run. \\
 \end{longtable}
 \end{small}
 
-Four tracks have no counted result yet. Path 6's cluster evaluation has not
-started (\Cref{sec:planned-cluster}). Path 7 has run one class\_uncertain arm whose
-rows the track holds back until Hani has answered the new items that a completeness
-check of its deviation list found at 14:22; the entry records the arm's numbers as the same as path 2's (\BF{68}, \TK{7}). Paths 8
-and 9 have built code and run no episode (\TK{8}, \TK{9}).
+Five tracks have no counted result of their own at the checkpoint. Path 6's cluster evaluation has not
+started (\Cref{sec:planned-cluster}). Path 7 has run one \cuncert\ arm whose rows the
+track held back until Hani had answered the new items that a completeness check of its
+deviation list found at 14:22; Hani answered on 8 November, the first clean batch has not
+run, and the entry records the arm's numbers as the same as path 2's (\BF{68}, \TK{7}).
+Paths 8 and 9 have built code and run no episode, and the arms of our setup in the Wumpus
+world have not run (\TK{8}, \TK{9}, \TK{10}).
 
 \section{The Time Cuts}
 \label{sec:time-cuts}
@@ -276,9 +286,12 @@ success test for both arms, with TAMPURA's reward beside it; arm A is held to
 TAMPURA's 20-action horizon by a cut-off applied to each episode's own action
 count, with the numbers with and without the cap recounted from the same records;
 and the run conditions of arm B on the cluster were accepted with checks on 7
-November about 14:20. Hani's yes to the cluster run of 11:08 stands unless the
-node-hours change; nothing has been pushed or run on the cluster, and the run waits
-for Hani's visual check under rule 15 (\TK{6}).
+November about 14:20. Hani's yes to the cluster run of 11:08 is on record;
+nothing has been pushed or run on the cluster, and the run waits
+for Hani's visual check under rule 15 (\TK{6}). The amendment that lets our test read
+TAMPURA's final world (\BF{70}) is built and checked and has not run; the cluster
+question is asked alone once a local episode of TAMPURA's arm and the tests against the
+real TAMPURA package are done (\TK{6}, \ID{tracksstate}{tracks state file}). Path 6's own files of 7 November hold that it is asked again only if the node-hours change (\Cref{sec:disagreements}).
 
 \section{Published Numbers and Our Check, by Task}
 \label{sec:published}
@@ -579,7 +592,7 @@ rule alone stops in 36 and 57 of the 100 states (\TK{10}).
 these states means something only above the floor, not above zero: a planner that
 wins 34 of 100 at 5x5 does no more than a walker that never looks at a percept.
 \Cref{tab:wumpus-bar} puts the floor, the references and our own setup in one place.
-Our setup has no result on LW1's states yet; the last two rows are the track's
+Our setup has no result on LW1's states at the checkpoint; the last two rows are the track's
 predictions, written before any arm ran, and are not results (\TK{10}).
 
 \begin{table}[tbp]
@@ -593,9 +606,9 @@ frontier walker, never refuses an unknown cell (\TK{10}) & 34 & 21 & 24 \\
 random walk, share of 10\,000 walks (\TK{10}) & 39.5\,\% & 26.1\,\% & 21.9\,\% \\
 rule-based explorer E, which reasons (\TK{10}) & 100 & 100 & 100 \\
 LW1, published Table 2 \cite{bonet2014flexible} & 100 & n/a & 100 \\
-LW1 alone, our run (\TK{4}) & 100 & n/a & 3 of 3 states \\
+LW1 alone, our run (\TK{4}) & 100 & 5 of 5 states & 3 of 3 states \\
 LW1 driving our robot (\TK{4}) & \multicolumn{3}{r}{18 of 18 episodes over the three sizes} \\
-Semantic Boxels planner (path 10) & \multicolumn{3}{r}{no result yet} \\
+Semantic Boxels planner (path 10) & \multicolumn{3}{r}{no result at the checkpoint} \\
 \quad predicted, K0: the system as it is (\TK{10}) & 35 to 40 & 20 to 25 & 20 to 25 \\
 \quad predicted, K1: with the percept rules (\TK{10}) & 100 & 100 & 100 \\
 \bottomrule
@@ -623,7 +636,7 @@ states per size against the paper's 1\,000 runs, of which some cannot be solved
 from the information the policy gathers), so the comparison shows only that the
 belief-tracking policy is far ahead at the larger sizes and that a one-step rule
 suffices where the instances have a hazard-free route. No Wumpus run of ours with
-the Semantic Boxels planner has a result yet (\Cref{ch:progress}).
+the Semantic Boxels planner has a result at the checkpoint (\Cref{ch:progress}).
 
 \section{Hani's Visual Check Before a Comparison}
 \label{sec:visual-check}
@@ -635,15 +648,16 @@ window, and approves the comparison in writing. The rule covers the evaluations
 that already exist as well as the future ones, and an existing one may stay if Hani
 confirms that it works (\ID{tracksstate}{tracks state file}, \BF{68}).
 \Cref{tab:visual-check} says for each comparison of this report whether the check was
-done. It gives the state of the track files of 17:35 on 7 November, the newest read for
-this section; the runs it refers to are listed in \ID{rule15}{the rule 15 lists}.
+done. It gives the state at Checkpoint 1, from the checkpoint table of the tracks state
+file (15:56 on 8 November) and the files of the tracks; the runs it refers to are listed
+in \ID{rule15}{the rule 15 lists}.
 
 \begin{small}
 \renewcommand{\arraystretch}{1.25}
 \begin{longtable}{@{}P{0.26\textwidth}P{0.19\textwidth}P{0.49\textwidth}@{}}
 \caption[Hani's visual check for each comparison.]{Hani's visual check under rule 15 for
-each comparison of this report, as the track files of 17:35 on 7 November record it.
-The runs are listed in \ID{rule15}{the rule 15 lists}.}\label{tab:visual-check}\\
+each comparison of this report, at Checkpoint 1 (8 November, 15:56). The runs are listed
+in \ID{rule15}{the rule 15 lists}.}\label{tab:visual-check}\\
 \toprule
 comparison & when & the check \\
 \midrule
@@ -663,16 +677,20 @@ Run before the rule; no check under it is recorded. Path 6's wave 2, below, show
 of its scenes, 113 and 102. \\
 TAMPURA's planner on our scenes against ours (\TK{5}) &
 6 Nov, ten seeds; the hand-camera batch was cut at 13:48 on 7 Nov &
-Part of it. Hani started runs in a window at 16:24 (seed 3) and 16:29 (seed 4). The
-seed 3 run was TAMPURA with the fixed camera: TAMPURA succeeded, where the headless run
-of the first batch on that seed had failed. Only the tracks state file as it stood on
-8 November records the seed 4 run; it names no system or result, and the list of 17:35
-shows only seed 3 as done (\ID{tracksstate}{tracks state file}). Ours on seeds 3 and 4
-and the hand-camera runs were still listed as to run at 17:35; no approval is recorded. \\
+Done for two seeds per system; Hani's written approval is not recorded. On 7 November
+Hani watched TAMPURA with the fixed camera on seeds 3 (16:24) and 4 (16:29), and ours on
+seeds 3 (16:37) and 4 (16:38), in windows that Hani started. TAMPURA's seed 3 run
+succeeded, where the headless run of the first batch had failed; watching ours showed
+the drops of TB-23. The hand-camera runs wait for the approval
+(\ID{tracksstate}{tracks state file}, \TK{3}). \\
 LW1 driving our robot against LW1 alone (\TK{4}) &
 6 Nov &
 Run before the rule. No new comparison is planned; the Wumpus list shows the LW1
 driver on two states. \\
+path 3: the acceleration-limited carry against the base setting, TB-23 (\TK{3}) &
+planned; the A/B is prepared, not run &
+Not done. Hani's check of seeds 3 and 4 with and without the switch is the check of
+this comparison; the commands are with Go. \\
 path 6, wave 1: ours against the thesis code (\TK{6}) &
 planned; nothing run &
 Not done. Four runs are listed (two scenes, each run once by each arm); the cluster
@@ -686,14 +704,13 @@ planner. The note of path 3 names other scenes for the shadow fix, 118 and 134
 paths 7 and 8: \cuncert, TAMPURA's own planner, ours on their environment and path 8's
 setup (\TK{7}, \TK{8}) &
 planned; one arm of ours has run, held back &
-Not done. Six runs are listed, seeds 0 and 13 on three systems, after Hani answers two
-questions of path 7 and path 8's driver exists (it was not finished at 17:35); the
-\slamcol\ runs are held. \\
+Not done. Six runs are listed, seeds 0 and 13 on three systems, after the memory guard
+allows a batch; Hani answered path 7's two questions on 8 November; the \slamcol\ runs
+are held. \\
 path 10: our setup and LW1 in the Wumpus world (\TK{10}) &
 planned; nothing run &
-Not done. Six runs were listed at 14:05 (LW1's 5x5 states 1 and 2, three controllers),
-after the end of rule 14 and three more conditions, among them robot tests that have
-never run. \\
+Not done. Six runs are listed (LW1's 5x5 states 1 and 2, three controllers); rule 14 is
+lifted since 14:07 on 8 November, and the robot tests have never run. \\
 path 9: the tag against the two looks (\TK{9}) &
 planned; nothing run &
 Not done. Six runs per setup are proposed, two seeds of each of three systems, on
@@ -705,8 +722,9 @@ yes. \\
 The other rows of \Cref{tab:catalogue} measure one system alone (TAMPURA as shipped,
 our planning layer on TAMPURA's tasks, the simple walkers), set versions of our own
 system against each other, or are void; the files record no visual check for them.
-Hani's runs of 16:24 and 16:29 are the only runs of the check that the files record.
-The other runs of the lists run in WSL and waited for the end of rule 14, which Go
-lifted on 8 November at 14:07 (\ID{tracksstate}{tracks state file}); the table keeps
-the state of 17:35 on 7 November. A run in a window shows behaviour, not the times of the cluster (the note of
-path 6), so the check does not replace a measured number.
+Hani's four watch runs of 7 November, from 16:24 to 16:38, are the only runs of the
+check that the files record. The other runs of the lists run in WSL and waited for the
+end of rule 14, which Go lifted on 8 November at 14:07
+(\ID{tracksstate}{tracks state file}); no comparison of one system against another has run since. A run in a window
+shows behaviour, not the times of the cluster (the note of path 6), so the check does
+not replace a measured number.

@@ -66,7 +66,9 @@ reads 76\,mm at 5 degrees and 98\,mm at 45 degrees), so no grasp existed; the
 span now reads the box's side along the axis nearest the pinch direction (\BF{46}).
 A third failure, in which a mis-placed cup is bumped on the move home and the die
 is lost, was recorded with two candidate causes not separated (\BF{47}); path 3
-holds it on its board (\TK{3}).
+analysed it on 7 November: the entry's own eye record refutes the bump, since the cup
+never moved, and the loss was a carry slip; the twin's motion check still ignores the
+pose radius (TB-12), a latent defect with no instance seen (\TK{3}, \BF{47}).
 
 \paragraph{What the thesis certified while holding.} The first review of the
 bridge code also found a limit of the thesis pipeline. Every pick and place
@@ -76,6 +78,21 @@ checked the cargo 6 to 10\,cm below the gripper, and the entry concludes that ``
 thesis runs therefore certified every planned move while holding with the cargo 4
 to 8 cm too low'' (\BF{14}). A repair in the planner's model is a change to the main
 pipeline with its own comparison; the entry does not schedule it (\BF{14}).
+
+\paragraph{Tall boxes in the carry.} The die-slip work measured a die and cubes. On 7
+November Hani watched our arm drop a tall occluder during a carry in two runs of path
+5's scene, boxes of 53 to 60\,mm width and 126 to 136\,mm height, and still succeed
+(TB-23); Hani reported it on 8 November. Headless probes found two causes. The carry streams its waypoints with no
+acceleration limit, so every junction kicks the box until it levers the fingers apart;
+and the carry's motion check treats space the robot has not seen as free, so the box can
+strike a hidden object. The first has a candidate cure that already exists, the
+acceleration-limited carry of \BF{59}, which removed the swing losses in the probes (6
+of 20 episodes lost to the swing without it, none of 20 with it); the second goes to
+path 14. The four-fix set of \BF{59} loses these boxes where the base setting keeps them
+on seed 3 (3 of 3 against 0 of 3), a limit of that set that the die measurements could
+not show (\Cref{sec:path3}, \TK{3}). The success count of our arm does not tell a
+success with such a drop from a clean one, which is why rule 18 records drops and
+collisions (\Cref{sec:catalogue}).
 
 \section{Time}
 \label{sec:time-findings}
@@ -121,7 +138,18 @@ whether the target is held and the arm is at home; the carry is by pose resets
 (\BF{35}). Hani decided on 29
 October that both arms get one environment and one criterion (\BF{35}), and on 7
 November Hani decided for path 6 that our physical world-state test is the standard
-success test of both arms, with TAMPURA's own reward beside it (\TK{6}).
+success test of both arms, with TAMPURA's own reward beside it (\TK{6}). For TAMPURA's
+arm on the fresh scenes this needs its final world, which exists only inside its process
+after the rollout; the amendment of \BF{70} reads it there with reads only, and has been
+built, reviewed and checked but never run (\Cref{sec:path6}).
+
+\paragraph{The success criterion itself is under review.} On the evening of 7 November
+Hani said that a single drop might be reason to count an episode as a failure. On 8
+November Hani chose to record first and decide on the counts: every evaluation record
+must carry, per episode, the drops and collisions with the detector that saw each, and
+clean success (no drop, no collision) must be printed beside success. The arms of paths 4, 7 and 10 have the fields built, our own pipeline does not yet (TB-22), and no evaluation has run since. The numbers of this
+report, whose records hold no such counts, are not re-scored (rule 18,
+\ID{tracksstate}{tracks state file}; \Cref{sec:catalogue}).
 
 \paragraph{Noise and the test for plan counts.} Run to run, the unchanged pipeline
 on our holding scene gave 31 of 40 and 30 of 40 successes, three outcome flips and
@@ -158,7 +186,9 @@ crashed on every episode, writing a debug file into a read-only folder, because 
 smoke run stops before that line (\BF{54}); the die-slip harness double-counted losses in
 two places before the evaluation ran, and was fixed (\BF{59}); and the sweep runner banked a
 rejected cell's run as the previous cell's result (\TK{3}). Each is disclosed in
-the record; the fix of the sweep runner sits on path 3's branch (\TK{3}).
+the record; the fix of the sweep runner sits on path 3's branch (\TK{3}). A fault that
+no gate could see was found by eye: Hani's own watching of two runs showed our arm
+dropping a tall box during a carry and still succeeding (TB-23, \TK{3}).
 
 \section{Cluster, Data and Process}
 \label{sec:process}
@@ -178,7 +208,11 @@ cluster's size cap counted apparent bytes (2\,769\,MiB for directories that held
 held beyond the laptop's copy of the B1 to B3 results is lost (\BF{55}). The gateway
 dropped three full snapshot uploads in one night, so snapshots now hold code only
 (\BF{56}). On 31 October Hani set the rule that every session keeps a ledger of what
-it generated and deletes its own garbage (\BF{58}).
+it generated and deletes its own garbage (\BF{58}). On 7 November every start of WSL
+failed between 11:02 and 11:08; path 12's report ranks the causes and finds none
+established (\BF{69}, \Cref{sec:path12}). Path 13's sweep of the laptop found 21.3\,GB
+of dead pip folders in the temporary folder, left by a plugin's start-up code, and the
+deletions wait for Hani (\TK{13}, \Cref{sec:path13}).
 
 \section{Decisions Taken}
 \label{sec:decisions}
@@ -235,7 +269,7 @@ of the 17 failures that ended with all shadows searched and the target not found
 which \BF{65} counts, and the die's centre
 lies outside the window in 15 of the 40 generated scenes (\BF{64}). Its fix gives
 the caster the table that TAMPURA's own place sampler uses; it is on track/fixes
-and not yet in the trunk. The local reruns are a regression check: every scene
+and not in the trunk. The local reruns are a regression check: every scene
 solved before that was tried (15) stays solved, and the entry says plainly that
 the scenes the fix turns into successes are the scenes the bug was found on, so
 they do not measure the fix. The measurement is path 6's arm A$'$ on 200 fresh scenes
@@ -276,8 +310,10 @@ Without the weld the die slipped out of the pads in 40 of 208 carries of our bas
 until four fixes; numbers produced under the weld are numbers of a weld, not of a
 grasp & \PW{1}, \BF{59} \\
 Planned moves while holding were collision-checked (methods) &
-The cargo was checked 4 to 8\,cm too low for every planned move after a pick &
-\BF{14} \\
+The cargo was checked 4 to 8\,cm too low for every planned move after a pick, and
+space the robot has not seen counts as free, so a carried box can strike a hidden
+object (TB-23) &
+\BF{14}, \TK{3} \\
 24\,\% of stack cells ended at the time budget (results) &
 Of the 29 rows labelled ``timeout'' in the semantic stack cells, 25 ended after 8 to
 21 seconds, a symbolic success that the end-of-run physics check rejected & \BF{68} \\
@@ -340,4 +376,27 @@ figure it uses and does not smooth the rest over.
   \item Path 9's file first assumed that the inspect sensor of path 8 reads the class
   from the render, and withdrew this when it agreed the interface with path 8
   (\TK{8}, \TK{9}).
+  \item Path 1's own file records the re-check on seed 106 with the final code as
+  dropped, because a headless run cannot test the viewer; the checkpoint table of the
+  tracks lists the pair as awaited (\TK{1}, \ID{tracksstate}{tracks state file}). The
+  report gives both.
+  \item Path 10's file records Hani's answers to its questions Q1 to Q4 as given by
+  13:55 on 7 November, each the recommended option; the checkpoint table lists the
+  questions among Hani's open ones with the recommended answers standing (\TK{10}).
+  \item The bug board lists TB-9, the doubled header of the test script, as open with
+  its fix an uncommitted hunk of the trunk, and path 3's state file says the fix was not built in its round; the checkpoint table lists it among the fixes
+  on the fixes branch (\TK{3}). The report follows path 3's files.
+  \item Path 5's list for Hani's visual check (\ID{rule15}{rule 15 lists}), last written
+  at 14:18 on 8 November, names ours on seeds 3 and 4 as left to watch and has no run
+  of ours in its folder of GUI runs; the checkpoint table and the bug board record
+  Hani's runs of ours at 16:37 and 16:38 on 7 November, in the logs folder of path 5's
+  copy of the checkout (\ID{tracksstate}{tracks state file}, \TK{3}). The report follows
+  the table and the board, the later records.
+  \item The cluster question: the tracks' state file has it asked alone once the check of
+  rule 15 is done; the files of path 6, written on 7 November, hold that it is asked
+  again only if the node-hours change (\ID{tracksstate}{tracks state file}, \TK{6}). The
+  report follows the tracks' state file, the newer record.
+  \item The tracks' state file (rule 11) and \BF{68} say that the shutdown command ended
+  the wedge of WSL on 7 November; the later \BF{69} says that it did not and that WSL's
+  own idle teardown did. The report follows \BF{69}.
 \end{itemize}
