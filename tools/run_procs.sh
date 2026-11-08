@@ -4,7 +4,9 @@
 # python running test_full_pipeline.py, run_bridge_on_finddice.py or
 # run_planner.py.
 #   bash run_procs.sh list                     one line each; nothing when none
-#   bash run_procs.sh kill                     TERM, then KILL, every one of them
+#   bash run_procs.sh ps                       list's lines, then the jobs under the pipeline lock
+#   bash run_procs.sh kill                     TERM, then KILL, every one run.ps1 started (SB_RUN
+#                                              in its environment); the others are named, left alone
 #   bash run_procs.sh kill-mine TEXT MAXAGE    the same for those whose command line
 #                                              contains TEXT and that are at most MAXAGE s old
 # A ghost run (BF#51): its GUI window was closed, PyBullet's client busy-waits
@@ -37,6 +39,13 @@ run_dir() {   # the run directory, from the log files the process holds open
     ls -l "/proc/$1/fd" 2>/dev/null | grep -o '/[^ ]*/run_[0-9][0-9-]*_[0-9-]*' | head -1
 }
 
+# TB-17: run.ps1 exports SB_RUN in every run's command, so its runs and
+# their children carry it; a track's episode, probe or TAMPURA process does
+# not, and run kill leaves those alone.
+from_run() {   # true when run.ps1 started the process
+    tr '\0' '\n' < "/proc/$1/environ" 2>/dev/null | grep -q '^SB_RUN='
+}
+
 what() {   # a short name from the command line
     local c="$1" seed vis save scene
     if [[ "$c" == *run_bridge_on_finddice.py* ]]; then
@@ -56,7 +65,7 @@ what() {   # a short name from the command line
 }
 
 list() {
-    local now p c age cpu dir newest quiet flag f pstart
+    local now p c age cpu dir newest quiet flag f pstart by
     now=$(date +%s)
     for p in $(pipeline_pids); do
         c=$(cmdline "$p")
@@ -79,35 +88,77 @@ list() {
                 grep -qs 'X connection to .* broken' "$f" && flag='window closed'
             fi
         fi
-        printf 'pid %-7s %7s old  %5s%% cpu  %-15s %s\n' "$p" "$(age_text "$age")" "${cpu:-?}" "$flag" "$(what "$c")"
+        if from_run "$p"; then by='run'; else by='not run'; fi
+        printf 'pid %-7s %7s old  %5s%% cpu  %-15s %-8s %s\n' "$p" "$(age_text "$age")" "${cpu:-?}" "$flag" "$by" "$(what "$c")"
     done
 }
 
+locked() {   # what holds or waits for the pipeline lock (rule 7), never ended here
+    local f c kid age
+    for f in $(pgrep -x flock); do
+        c=$(cmdline "$f")
+        [[ "$c" == *"$LOCK"* ]] || continue
+        kid=$(pgrep -P "$f" | head -1)
+        if [ -z "$kid" ]; then
+            age=$(ps -o etimes= -p "$f" 2>/dev/null | tr -d ' ')
+            printf 'pid %-7s %7s old  waiting for the lock:  %s\n' "$f" "$(age_text "$age")" "${c:0:110}"
+        else
+            age=$(ps -o etimes= -p "$kid" 2>/dev/null | tr -d ' ')
+            printf 'pid %-7s %7s old  holds the lock:       %s\n' "$kid" "$(age_text "$age")" "$(cmdline "$kid" | cut -c1-110)"
+        fi
+    done
+}
+
+# TB-17: a process that has ended but whose parent has not reaped it yet
+# (a zombie, state Z) still has its /proc entry; it is gone all the same.
+alive() {
+    local s
+    s=$(sed -n 's/^State:[[:space:]]*\([A-Z]\).*/\1/p' "/proc/$1/status" 2>/dev/null)
+    [ -n "$s" ] && [ "$s" != Z ] && [ "$s" != X ]
+}
+
 kill_pids() {   # TERM, then KILL for the survivors
-    local pids="$*" p alive i
+    local pids="$*" p left i
     [ -z "${pids// /}" ] && return 0
     for p in $pids; do printf 'ending pid %s: %s\n' "$p" "$(what "$(cmdline "$p")")"; done
     kill -TERM $pids 2>/dev/null
     for i in 1 2 3 4 5 6 7 8 9 10; do
         sleep 0.3
-        alive=''
-        for p in $pids; do [ -d "/proc/$p" ] && alive="$alive $p"; done
-        [ -z "$alive" ] && break
+        left=''
+        for p in $pids; do alive "$p" && left="$left $p"; done
+        [ -z "$left" ] && break
     done
-    if [ -n "$alive" ]; then
-        kill -KILL $alive 2>/dev/null
+    if [ -n "$left" ]; then
+        kill -KILL $left 2>/dev/null
         sleep 0.5
-        for p in $alive; do [ -d "/proc/$p" ] && printf 'pid %s would not die\n' "$p"; done
+        for p in $left; do alive "$p" && printf 'pid %s would not die\n' "$p"; done
     fi
 }
+
+# A test points these at its own dummy processes and lock (TB-17); run.ps1
+# never sets them.
+PAT=${RUN_PROCS_PAT:-$PAT}
+LOCK=${RUN_PROCS_LOCK:-/root/sb_pipeline.lock}
 
 case "$1" in
     list)
         list ;;
+    ps)
+        list
+        held=$(locked)
+        if [ -n "$held" ]; then echo 'under the pipeline lock (run kill leaves these alone):'; echo "$held"; fi ;;
     kill)
-        kill_pids $(pipeline_pids)
-        left=$(list)
-        if [ -n "$left" ]; then echo 'still there:'; echo "$left"; exit 1; fi ;;
+        mine=''; others=''
+        for p in $(pipeline_pids); do
+            if from_run "$p"; then mine="$mine $p"; else others="$others $p"; fi
+        done
+        kill_pids $mine
+        for p in $others; do
+            printf 'left alone, not started by run: pid %s: %s\n' "$p" "$(what "$(cmdline "$p")")"
+        done
+        left=''
+        for p in $mine; do alive "$p" && left="$left $p"; done
+        if [ -n "$left" ]; then echo "still there:$left"; exit 1; fi ;;
     kill-mine)
         text="$2"; maxage="${3:-100000}"; mine=''
         for p in $(pipeline_pids); do
@@ -116,5 +167,5 @@ case "$1" in
         done
         kill_pids $mine ;;
     *)
-        echo 'usage: run_procs.sh list | kill | kill-mine TEXT MAXAGE' >&2; exit 2 ;;
+        echo 'usage: run_procs.sh list | ps | kill | kill-mine TEXT MAXAGE' >&2; exit 2 ;;
 esac

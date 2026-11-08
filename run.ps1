@@ -18,7 +18,7 @@
 #   run tampura -Music         8-bit music and effects that follow the run (Windows plays them);
 #                              -Sfx   the effects only;  -Voice   Windows' voice reads the narration too
 #   run boxels -Args '--n-extra-distractors 1'   more pipeline flags, one quoted string, as is
-#   run ps                     the pipeline processes alive in WSL;  run kill   ends every one of them
+#   run ps                     the pipeline processes alive in WSL;  run kill   ends the ones run started
 #   run help                   this text;  -DryRun prints the command instead of running it
 # Never two pipeline runs at once (pddlstream temp/ race): it refuses while one is going.
 # Closing the GUI window or pressing Ctrl-C ends the run for good.  A closed window
@@ -59,7 +59,7 @@ if ($What -in 'help', '-h', '--help', '/?', '?') {
     return
 }
 if ($What -in 'ps', 'status') {
-    $alive = wsl -e bash -c "$PROCS list"
+    $alive = wsl -e bash -c "$PROCS ps"
     if ($alive) { $alive } else { Write-Host 'run: no pipeline process is alive in WSL' -ForegroundColor DarkGray }
     return
 }
@@ -147,6 +147,9 @@ function New-Run([int]$seedNo) {
     }
     if ($audio) { $cmd = "export SB_AUDIO=$audio; " + $cmd }
     if ($Voice) { $cmd = 'export SB_VOICE=on; ' + $cmd }
+    # TB-17: the run and its children carry SB_RUN, so run kill ends what
+    # run started and leaves a track's episode, probe or planner alone.
+    $cmd = 'export SB_RUN=1; ' + $cmd
     [pscustomobject]@{ Seed = $seedNo; Cmd = $cmd; Mine = $mine; Record = $record }
 }
 
@@ -172,7 +175,7 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
     if ($busy) {
         Write-Host "run: another pipeline run is going, never two at once (pddlstream temp/ race):" -ForegroundColor Yellow
         $busy | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
-        Write-Host "  a ghost (its window closed, its terminal gone)?   run kill   ends them all" -ForegroundColor Yellow
+        Write-Host "  a ghost (its window closed, its terminal gone)?   run kill   ends the ones run started" -ForegroundColor Yellow
         $code = 2
         break
     }
