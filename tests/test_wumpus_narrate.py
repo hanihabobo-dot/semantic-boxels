@@ -307,6 +307,9 @@ def test_runner_wiring(tmp_path, monkeypatch):
         rec = json.load(f)
     assert rec['outcome']['outcome'] == 'success'
     assert rec['wall']['pace_s'] == 0.0 and rec['wall']['paced_s'] == 0.0
+    # rule 18: the stand-in env has no detectors, so the record says so (never a 0)
+    assert rec['drop_detector'] == rec['collision_detector'] == 'not detected'
+    assert rec['drops'] is None and rec['clean_success'] is None and rec['incidents'] == []
     run_dir = rec['run_dir']
     with open(os.path.join(run_dir, 'ledger.jsonl'), encoding='utf-8') as f:
         kinds = [json.loads(line)['kind'] for line in f if line.strip()]

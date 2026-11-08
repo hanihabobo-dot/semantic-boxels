@@ -14,7 +14,8 @@ show as a divergence from LW1 alone (G-W3).
     run_lw1(env, max_steps=500)   the controller (run_wumpus.py --controller lw1)
     python wumpus/lw1_driver.py --size 5 --blocks 1-10 --out-dir DIR [--expect traces.json]
                                   P runs on LW1's own hidden blocks, the ground
-                                  truth beside each step, G-W3 against L's traces
+                                  truth beside each step, G-W3 against L's traces,
+                                  rule 18's drops and collisions per block
 
 The protocol (one line each; the patch's comment has it too):
     LW1 -> here:  PLAN a1;a2;...   after each planner call (print only)
@@ -37,7 +38,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from wumpus import lw1_exec, lw1_problem, trace as tr      # noqa: E402
+from wumpus import incidents, lw1_exec, lw1_problem, trace as tr      # noqa: E402
 from wumpus.world import cell_ij                            # noqa: E402
 
 W = '/root/lw1-work'
@@ -400,6 +401,7 @@ def main(argv=None):
                'g_w3': None if lt is None else {'divergence': div, 'passed': div is None},
                'lw1': res['lw1'], 'wall_s': time.time() - t0,
                'robot_s': sum(s['env_s'] for s in res['steps'])}
+        row.update(incidents.record(env, res['outcome'] == 'success'))     # rule 18
         with open(os.path.join(a.out_dir, f'p{a.size:02d}_h{k:03d}.json'), 'w') as f:
             json.dump({**row, 'trace': res['trace'], 'steps': res['steps'], 'plans_detail': res['plans'],
                        'env_calls': rec.calls}, f, indent=1, default=float)
@@ -409,7 +411,7 @@ def main(argv=None):
               f"{len(res['steps'])} actions, LW1 plan-size {st.get('plan')}, calls {st.get('calls')}, "
               f"percepts wrong {len(wrong)}/{n_obs}, G-W3 "
               f"{'n/a' if lt is None else ('PASS' if div is None else 'FAIL ' + json.dumps(div))}, "
-              f"{row['wall_s']:.1f} s", flush=True)
+              f"{row['wall_s']:.1f} s, {incidents.line(row)}", flush=True)
     with open(os.path.join(a.out_dir, f'p{a.size:02d}_summary.json'), 'w') as f:
         json.dump(rows, f, indent=1, default=float)
     return 0 if all(r['outcome'] == 'success' for r in rows) else 1
