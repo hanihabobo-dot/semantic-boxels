@@ -224,8 +224,16 @@ class ObserveViews:
             cxy = (lo[:2] + hi[:2]) / 2.0
         return lo, hi, cxy
 
-    def look_configs(self, boxel) -> List[Tuple[int, RobotConfig]]:
-        """The passing look configurations of one object, as (k, config)."""
+    def look_configs(self, boxel, standoffs=None) -> List[Tuple[int, RobotConfig]]:
+        """The passing look configurations of one object, as (k, config).
+
+        ``standoffs``: the camera's heights over the top of the box, in the
+        order tried (None: LOOK_STANDOFFS).  k counts the (standoff, wrist
+        yaw) pairs in that order, so a configuration's name look_<id>_<k> and
+        its strike key (id, k) follow the tuple: give an object one tuple and
+        the same tuple on every call (a second tuple would reuse the names)."""
+        standoffs = (LOOK_STANDOFFS if standoffs is None
+                     else tuple(float(s) for s in standoffs))
         lo, hi, cxy = self._look_target(boxel)
         pts = lattice(lo, hi)
         blocking = self._blocking_ids(boxel.id)
@@ -234,7 +242,7 @@ class ObserveViews:
         m = LOOK_IMAGE_MARGIN_PX
         out = []
         k = -1
-        for so in LOOK_STANDOFFS:
+        for so in standoffs:
             for wy in LOOK_WRIST_YAWS:
                 k += 1
                 if (boxel.id, k) in self.removed:
@@ -361,9 +369,12 @@ class ObserveViews:
     # ----- init facts ---------------------------------------------------
 
     def init_facts(self, current_config, home_config, shadows, look_boxels,
-                   declared_configs) -> Tuple[List[tuple], set]:
+                   declared_configs, standoffs=None) -> Tuple[List[tuple], set]:
         """The static M8 facts and the view pseudo-boxel ids.
-        ``declared_configs``: configs init already declares (Config q)."""
+        ``declared_configs``: configs init already declares (Config q).
+        ``standoffs``: optional {boxel id: tuple of camera standoffs} for the
+        look configurations of those objects (see look_configs); an object
+        not in it keeps LOOK_STANDOFFS."""
         self.last_stats = {'twin_render_s': 0.0, 'twin_renders': 0,
                            'look_ik': 0, 'sense_view': 0, 'look_config': 0,
                            'sense_fallback': 0}
@@ -387,7 +398,7 @@ class ObserveViews:
             for b in look_boxels:
                 if b.id in self.parked:
                     continue
-                for _, q in self.look_configs(b):
+                for _, q in self.look_configs(b, (standoffs or {}).get(b.id)):
                     configs[q.name] = q
                     facts.append(('look_config', q, b.id))
                     self.last_stats['look_config'] += 1

@@ -143,6 +143,13 @@ class LookResult:
     blocked: List[str] = field(default_factory=list)         # named regions still blocked
     pose_known: Optional[bool] = None
 
+    @property
+    def reached(self) -> bool:
+        """The precondition held and the look was made (nothing stale); how it
+        went is in ``continue_`` and ``reason``.  Path 8's inspect reads this
+        and nothing of the render (tracks/look/PLAN.md section 13)."""
+        return self.stale is None
+
 
 def _stale(why: str) -> LookResult:
     print(f"    look: stale precondition: {why}")

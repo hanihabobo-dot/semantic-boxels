@@ -13,6 +13,9 @@ possible".
    declared predicates, a removed configuration leaves the facts.
 4. The handler on a synthetic scene: what the render may write is the one
    named hypothesis and the target, nothing else.
+5. What path 8's inspect uses (PLAN section 13): LookResult.reached,
+   look_configs and init_facts with a standoff of their own, a pose look at a
+   pose that is already known and one from a changed standoff.
 """
 import os
 import sys
@@ -29,6 +32,7 @@ import look_action  # noqa: E402
 import look_domain  # noqa: E402
 import m8_domain  # noqa: E402
 import observe_views  # noqa: E402
+import robot_utils  # noqa: E402
 from test_look_correspondence import (_Loop, _add_body, _home, _known,  # noqa: E402,F401
                                       m1_calls)
 from test_look_views import world  # noqa: E402,F401  (fixture)
@@ -317,6 +321,7 @@ def test_the_target_at_the_hypothesis_is_registered_and_the_plan_goes_on(world, 
     res = _look(loop, ('blue', 'shadow_a', q), ['shadow_a'])
     after = loop.snapshot()
     assert res.continue_ and res.reason == 'look_ok' and res.found_in == 'shadow_a'
+    assert res.reached
     assert {k for k in after if after[k] != before[k]} == \
         {'boxels', 'status', 'found', 'centres', 'obj_ids'}
     assert set(after['boxels']) - set(before['boxels']) == {'blue'}
@@ -332,6 +337,7 @@ def test_an_empty_hypothesis_leaves_the_registry_and_the_plan_replans(world, m1_
     res = _look(loop, ('blue', 'shadow_a', q), ['shadow_a'])
     after = loop.snapshot()
     assert not res.continue_ and res.reason == 'look_not_found'
+    assert res.reached                                   # the look was made, nothing was there
     assert 'shadow_a' not in after['boxels'] and 'shadow_a' not in after['shadows']
     assert after['blocked'] == before['blocked']
     assert {k: after['boxels'][k] for k in after['boxels']} == \
@@ -349,6 +355,7 @@ def test_a_view_that_does_not_cover_the_hypothesis_is_a_strike_and_nothing_else(
     res = _look(loop, ('blue', 'shadow_a', q), ['shadow_a'])
     after = loop.snapshot()
     assert not res.continue_ and res.reason == 'look_blocked' and res.blocked == ['shadow_a']
+    assert res.reached                                   # a blocked look is still a look
     assert {k for k in after if after[k] != before[k]} == {'blocked'}
     assert after['blocked'] == {'shadow_a': 1}
 
@@ -362,7 +369,7 @@ def test_a_pose_look_reposes_the_object_it_is_about_and_no_other(world, m1_calls
     before = loop.snapshot()
     res = _look(loop, ('die', 'die', q), ['die'])
     after = loop.snapshot()
-    assert res.continue_ and res.reposed == ['die']
+    assert res.continue_ and res.reposed == ['die'] and res.reached
     assert {k for k in after if after[k] != before[k]} == {'boxels'}
     assert {k for k in before['boxels'] if before['boxels'][k] != after['boxels'][k]} == {'die'}
     assert _known(world.reg.get_boxel('die'))
@@ -396,5 +403,135 @@ def test_a_failed_check_writes_nothing(world, m1_calls, why):
     before = loop.snapshot()
     res = _look(loop, ('blue', h, q), [h], held=held)
     assert res.stale and res.reason == 'look_stale_precondition' and not res.continue_
+    assert not res.reached
     assert loop.snapshot() == before
     assert m1_calls == []
+
+
+# ----- 5. what path 8 uses (tracks/look/PLAN.md section 13) ----------------------------
+
+_STATS = {'twin_render_s': 0.0, 'twin_renders': 0, 'look_ik': 0, 'sense_view': 0,
+          'look_config': 0, 'sense_fallback': 0}
+
+
+def _configs(world, boxel, standoffs=None):
+    """look_configs as path 8 calls it; the arm is put back afterwards."""
+    world.views.last_stats = dict(_STATS)
+    start = world.views._arm()
+    try:
+        return world.views.look_configs(boxel, standoffs)
+    finally:
+        world.views._set_arm(start)
+
+
+def _camera(world, q):
+    world.views._set_arm(q.joint_positions)
+    return robot_utils.wrist_camera_pose(world.robot, world.cid)
+
+
+def _names(configs):
+    return [(k, q.name) for k, q in configs]
+
+
+def test_a_look_result_is_reached_when_the_look_was_made():
+    assert look_action.LookResult(True, 'look_ok').reached
+    assert look_action.LookResult(False, 'look_not_found').reached      # looked, nothing there
+    assert look_action.LookResult(False, 'look_blocked', blocked=['r']).reached
+    stale = look_action._stale('the hand is not empty (handempty)')
+    assert stale.stale and not stale.reached
+
+
+def test_no_standoffs_and_the_default_tuple_are_the_same_look_configurations(world):
+    box = world.reg.get_boxel('shadow_a')
+    default = _names(_configs(world, box))
+    assert default
+    assert _names(_configs(world, box, None)) == default
+    assert _names(_configs(world, box, observe_views.LOOK_STANDOFFS)) == default
+
+
+def test_a_changed_standoff_puts_the_camera_over_the_box_at_that_height(world):
+    box = world.reg.get_boxel('shadow_a')
+    _, _, cxy = world.views._look_target(box)
+    top = float(box.max_corner[2])
+    cfgs = _configs(world, box, (0.25,))
+    assert cfgs
+    assert {k for k, _ in cfgs} <= set(range(len(observe_views.LOOK_WRIST_YAWS)))
+    for k, q in cfgs:
+        assert q.name == observe_views.look_name('shadow_a', k)
+        cam = _camera(world, q)
+        assert abs(cam[2, 3] - (top + 0.25)) < 0.01
+        assert np.allclose(cam[:2, 3], cxy, atol=0.01)
+
+
+def test_k_counts_the_standoff_and_yaw_pairs_in_the_order_given(world):
+    box = world.reg.get_boxel('shadow_a')
+    n_yaw = len(observe_views.LOOK_WRIST_YAWS)
+    default = dict(_configs(world, box))                    # (0.20, each yaw), then (0.30, ...)
+    swapped = dict(_configs(world, box, (0.30, 0.20)))
+    assert default and len(default) == len(swapped)
+    for k, q in default.items():
+        k2 = k + n_yaw if k < n_yaw else k - n_yaw          # the same pair in the other slot
+        assert k2 in swapped, (k, k2)
+        assert np.allclose(swapped[k2].joint_positions, q.joint_positions, atol=1e-6)
+    assert all(q.name == observe_views.look_name('shadow_a', k) for k, q in swapped.items())
+
+
+def test_a_removed_pair_follows_the_tuple(world):
+    box = world.reg.get_boxel('shadow_a')
+    ks = [k for k, _ in _configs(world, box, (0.25,))]
+    assert ks
+    world.views.removed.add(('shadow_a', ks[0]))
+    assert [k for k, _ in _configs(world, box, (0.25,))] == ks[1:]
+
+
+def test_init_facts_gives_an_objects_standoffs_to_its_look_configurations(world):
+    box = world.reg.get_boxel('shadow_a')
+    top = float(box.max_corner[2])
+    facts, view_ids = world.views.init_facts(_home(), _home(), [], [box], [],
+                                             standoffs={'shadow_a': (0.25,)})
+    qs = [f[1] for f in facts if f[0] == 'look_config' and f[2] == 'shadow_a']
+    assert qs
+    assert {q.name for q in qs} == {q.name for _, q in _configs(world, box, (0.25,))}
+    for q in qs:
+        assert abs(_camera(world, q)[2, 3] - (top + 0.25)) < 0.01
+    assert {observe_views.view_boxel(q) for q in qs} <= view_ids
+    default, _ = world.views.init_facts(_home(), _home(), [], [box], [])    # no standoffs: as before
+    assert {f[1].name for f in default if f[0] == 'look_config'} == \
+        {q.name for _, q in _configs(world, box)}
+
+
+def test_a_pose_look_at_a_known_pose_is_not_refused(world, m1_calls):
+    """Path 8's inspect: the fixed eye has seen the object, so its pose is known
+    before the look; the look still runs and re-poses it."""
+    loop = _Loop(world, target='die')
+    die = world.reg.get_boxel('die')
+    die.pose_radius = 0.002
+    assert _known(die)
+    q = _centred_setup(world, centre='die')
+    before = loop.snapshot()
+    res = _look(loop, ('die', 'die', q), ['die'])
+    after = loop.snapshot()
+    assert res.reached and res.continue_ and res.reposed == ['die']
+    assert {k for k in after if after[k] != before[k]} <= {'boxels'}
+    assert {k for k in before['boxels'] if before['boxels'][k] != after['boxels'][k]} <= {'die'}
+    assert _known(world.reg.get_boxel('die'))
+
+
+@pytest.mark.parametrize('standoff', [0.25, 0.14])
+def test_a_pose_look_from_a_changed_standoff(world, m1_calls, standoff):
+    """0.14 m is about path 8's gripper height (0.1 m plus the camera's offset
+    behind the finger tips, minus the die's half height)."""
+    loop = _Loop(world, target='die')
+    die = world.reg.get_boxel('die')
+    die.min_corner = die.min_corner + np.array([0.003, 0.0, 0.0])
+    die.max_corner = die.max_corner + np.array([0.003, 0.0, 0.0])
+    cfgs = _configs(world, die, (standoff,))
+    assert cfgs, f"no look configuration passes at {standoff} m"
+    _, q = cfgs[0]
+    world.views._set_arm(q.joint_positions)
+    before = loop.snapshot()
+    res = _look(loop, ('die', 'die', q), ['die'])
+    after = loop.snapshot()
+    assert res.reached and res.continue_ and res.reposed == ['die']
+    assert {k for k in before['boxels'] if before['boxels'][k] != after['boxels'][k]} == {'die'}
+    assert _known(world.reg.get_boxel('die'))
