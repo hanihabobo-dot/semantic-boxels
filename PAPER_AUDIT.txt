@@ -7940,6 +7940,21 @@ BF#47 [FINDING, not analysed]  AFTER THE FIXES THE SAME EPISODE LOSES THE
   32.3", the final eye line; eye.jsonl).
   CLAIM EFFECT: none yet; arm O's B8 rate after the fixes carries it.
   HONESTY CLASS: finding.
+  Path 3 of the dev tracks, 2026-11-08 (TB-12 on the bug board
+  tracks/BUGS.md, analysed 2026-11-07; this note on Go's word): the brush
+  did not happen. This run's world eye has e_cups_ud's true pose at
+  (0.6362, -0.0458, 0.0413) before the move home (record 31) and at its
+  end (record 32), equal to 0.1 mm; only the belief moved, from 35.5 mm
+  off the truth to 8 mm, and that 32.3 mm re-pose is what the integrity
+  line calls "disturbed" (TB-21: any re-pose over 15 mm is printed so).
+  The "pose radius 36 mm" above is the eye line's "[bel 36mm]", the
+  believed centre's distance from the truth (world_eye.py:200-201, 433),
+  not a pose radius. The die went from the hand at the pick point
+  (0.486, -0.153) to the table at (0.267, -0.070), 23 cm toward home and
+  37 cm from the cup: the loss was the second cause, a slip in the carry,
+  which BF#59's D set cured (120 of 120 carries held in jobs D and E).
+  The twin's motion check does ignore the pose radius (TB-12: latent, no
+  instance seen).
 
 
 BF#48 [DONE]  CARRY WATCH: THE HOLD DETECTOR AGAINST THE TRUTH, LIVE IN THE
