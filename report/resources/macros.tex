@@ -1,0 +1,58 @@
+% !TEX root = ../main.tex
+
+% math typesetting utilities
+\newcommand*{\given}{\;\middle|\;}
+\newcommand*{\hateq}{\mathrel{\widehat{=}}}
+\newcommand*{\tuple}[1]{\left\langle #1 \right\rangle}
+\newcommand*{\set}[1]{\left\{ #1 \right\}}
+\newcommand*{\multiset}[1]{\left\{\!\left\{ #1 \right\}\!\right\}}
+\newcommand*{\evalat}[2][]{\left. #2 \right\rvert_{#1}}
+\newcommand*{\bmat}[1]{\begin{bmatrix} #1 \end{bmatrix}}
+\newcommand*{\sbmat}[1]{\begin{bsmallmatrix} #1 \end{bsmallmatrix}}
+\newcommand*{\dbmat}[1]{\everymath{\displaystyle} \begin{bmatrix} #1 \end{bmatrix}}
+\newcommand*{\abs}[1]{\left\lvert #1 \right\rvert}
+\newcommand*{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand*{\bvec}[1]{{\symbfit{#1}}}
+
+% math operators
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\Exp}{\symbb{E}}
+\DeclareMathOperator*{\Prob}{\symbb{P}}
+\newcommand*{\expectation}[2][]{\Exp_{#1} \left[ #2 \right]}
+\newcommand*{\probability}[1]{\Prob \left[ #1 \right]}
+
+% environments
+\newtheorem{theorem}{Theorem}
+\newtheorem{problem}{Problem} \crefname{problem}{Problem}{Problems}
+\newtheorem{hypothesis}{Hypothesis} \crefname{hypothesis}{Hypothesis}{Hypotheses}
+
+% report only: internal source tags. A tag names the PAPER_AUDIT.txt entry (or
+% another internal document) a number or finding comes from, and links to its
+% row in the appendix "Internal sources" (\isrcrow makes the link target there).
+% The tags are robust so that they survive inside \caption (a caption is also
+% written to the lists of figures and tables), and they print as plain text while
+% those lists are typeset, because every list entry is a link already.
+\makeatletter
+\newif\ifsrc@plain
+\DeclareRobustCommand*{\BF}[1]{\ifsrc@plain BF\#{}#1\else\hyperlink{src:BF#1}{BF\#{}#1}\fi}
+\DeclareRobustCommand*{\PW}[1]{\ifsrc@plain \#P#1\else\hyperlink{src:P#1}{\#P#1}\fi}
+\DeclareRobustCommand*{\TK}[1]{\ifsrc@plain path~#1\else\hyperlink{src:TK#1}{path~#1}\fi}
+\DeclareRobustCommand*{\ID}[2]{\ifsrc@plain #2\else\hyperlink{src:#1}{#2}\fi}
+\AtBeginDocument{%
+  \AddToHook{cmd/@starttoc/before}{\begingroup\src@plaintrue}%
+  \AddToHook{cmd/@starttoc/after}{\endgroup}%
+}
+\makeatother
+\newcommand*{\isrcrow}[5]{\leavevmode\hypertarget{src:#1}{#2} & #3 & #4 & #5 \\}
+% report only: ragged-right text columns, so that narrow table cells do not stretch
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+% report only: names of TAMPURA's released tasks as they are called in its code
+\newcommand*{\fdice}{\texttt{find\_dice}}
+\newcommand*{\cuncert}{\texttt{class\_uncertain}}
+\newcommand*{\slamcol}{\texttt{slam\_collect}}
+\newcommand*{\tooluse}{\texttt{tool\_use}}
+\newcommand*{\puckslide}{\texttt{puck\_slide}}
+% report only: a reference to an appendix chapter reads "Appendix B", not "Chapter B"
+\newcommand*{\appref}[1]{\hyperref[#1]{Appendix~\ref*{#1}}}

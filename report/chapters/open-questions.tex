@@ -1,0 +1,132 @@
+% !TEX root = ../main.tex
+
+\chapter{Open Questions and Pending Decisions}
+\label{ch:open-questions}
+
+This chapter lists what waits for a decision and what the results leave
+unexplained. It gives the options and the recommendations that the tracks recorded,
+as of 7 November 2026 between about 13:05 and 14:30. It decides nothing. Two decisions
+of that time were answered after the files were read and are left out: Round 1 of
+path 8's deviations,
+answered at 14:08 as recommended (\TK{8}), and arm B's run conditions on the cluster,
+the third deviation of path 6, answered at about 14:20 (\TK{6}).
+
+\section{Decisions That Wait for Hani}
+\label{sec:pending}
+
+\Cref{tab:pending} lists the open decisions by path. The tracks pass their questions
+through Go; the sub-managers ask Hani nothing themselves (\TK{8}).
+
+\begin{small}
+\begin{longtable}{@{}P{2.1cm}P{5.9cm}P{6.0cm}@{}}
+\caption[Open decisions of the record, as of 7 November, 14:00.]{Open decisions of
+the record, as of 7 November, 14:00 (\BF{68}, \BF{65}, \TK{2}, \TK{3}, \TK{4},
+\TK{6}, \TK{7}, \TK{8}, \TK{9}, \TK{1}).}\label{tab:pending}\\
+\toprule
+path or entry & question & options and recommendation as recorded \\
+\midrule
+\endfirsthead
+\toprule
+path or entry & question & options and recommendation as recorded \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\BF{65}, path 3 &
+What the paper does about the die under a cup, which lies in none of our hiding
+regions: build a region under the cup (bug TB-2), make the narrow fixes of the four
+planner problems of the entry's second option (bugs TB-3 to TB-6), or state the
+limitation &
+none recorded; the entry leaves the choice to Hani \\
+path 3 &
+Whether the cup release jam of \BF{61} gets its switch merged (TB-7); the cluster A/B
+of the shadow-table fix (it is arm A$'$ of path 6; Hani's yes of 11:08 stands, held by
+rules 12, 14 and 15) &
+Go folded the A/B into path 6's plan \\
+path 4 &
+Send the drafted question to LW1's authors about the miss on Table 2 (Hani's own
+action); more runs: LW1 on all 100 states at 10x10 (about 35 minutes of the lock) or
+the robot at 15x15 &
+the draft exists; nothing has been sent \\
+path 6 &
+Whether the 20-action cap also stops episodes inside the run (about 3.5 node-hours for
+200 episodes) &
+Go decided at 13:25 that the cap is a cut-off on each episode's own count, with the
+numbers with and without it recounted from the raw records by an independent Sonnet
+agent; the question is asked again only if the node-hours change \\
+path 7 &
+SL-1 to SL-18, the deviations of the slam\_collect arms; the 11 differences that the
+completeness check found at 14:22; whether class\_uncertain's registry needs geometry;
+whether the held-back rows stay &
+SL: hold until Hani has read the plan. The 11 differences: provisional
+recommendations exist and have not been put to Hani. Geometry: (a) no, recommended;
+(b) a declared read of the geometry at the start, about a day more; (c) our own
+render, weeks \\
+path 2 &
+TAMPURA on class\_uncertain over seeds 0 to 19 on the cluster (asked alone); what the
+paper may say from mode S runs &
+yes to the first; for the second (a) a secondary table scoped to the planning layer
+if the class\_uncertain comparison holds, slam\_collect only after its pilot says go
+\\
+path 8 &
+Rounds 2 and 3 of the 34 deviations, apart from D-29 and D-11; the apple (nine of the seeds 0 to 19
+hold one that our pinch cannot take): a change of the grasp for the whole pipeline
+with its own comparison, or report those seeds as lost; whether this path closes
+\BF{67} &
+the plan marks a recommended option for every deviation; for the apple: (a) keep the
+pinch as it is and report the apple seeds as lost to our grasp limit, recommended for
+the first numbers; (b) a change of the grasp for the whole pipeline is a question of
+its own \\
+path 9 &
+The eye's role in the first scan and the integrity monitor; unexpected bodies; whether
+a successful look continues the plan; the deviations 1, 2 and 7 that touch
+\fdice &
+keep the eye for the first scan and the monitor; the shared monitor registers
+unexpected bodies; continue after a successful look \\
+path 1 &
+The priority of the camera viewer's window &
+(A) below normal, recommended; (B) normal \\
+all comparison evaluations &
+Rule 15: Hani's visual check of two seeds per system before each evaluation; Go puts
+the lists to Hani once the WSL freeze ends &
+sets proposed per track \\
+\end{longtable}
+\end{small}
+
+\section{What the Results Leave Unexplained}
+\label{sec:unexplained}
+
+The record marks the following as open or unanalysed; this report adds nothing to
+them.
+\begin{itemize}
+  \item Why the chosen die-slip set avoids the cup loop that one of its fixes opened
+  on one scene is open (\BF{59}).
+  \item The slow tail of episodes, replan loops of observe, replan, observe, is a
+  finding of its own that none of the four time cuts addresses and the record does
+  not analyse (\BF{53}).
+  \item The die under a cup is found only by lifting the cup; whether the plan lifts
+  that cup depends on a region behind it that the die is not in (\BF{65}).
+  \item The shortfall of LW1's planner calls and lengths at 5x5 against its paper's
+  Table 2 \cite{bonet2014flexible} has a likely cause, the code version, that no one has checked with the
+  authors (\TK{4}).
+  \item TAMPURA's time per episode in our runs is shorter than the product of its
+  published per-step time and step count; the audit file notes a candidate reason, that
+  the paper's per-step time includes 200 samples of TAMPURA's effects function, and
+  confirms none (\PW{4}, \Cref{sec:published-fd}).
+  \item Whether TAMPURA's three look loops on our scenes come from the fixed camera is
+  open: the hand-camera batch was cut at 13:48 after two seeds, neither of which looped
+  (\TK{5}).
+  \item Whether the Semantic Boxels system can conclude where it is safe to go in the
+  Wumpus world is the question of path 10; its runs have not produced a result
+  (\TK{10}).
+\end{itemize}
+
+\section{What Is Not Yet Written for the Paper}
+\label{sec:paper-open}
+
+The record leaves the related work of the last years (workstream \#P7), the framing
+and the division of labour in the paper (\#P10) and comparable results from other
+approaches in the same environment (\#P8) open; the real-robot experiment (\#P6) is
+not needed for the conference and is a nice-to-have (\PW{6}, \PW{7}, \PW{8},
+\PW{10}). The submission date is 4 December 2026, and the last start of the
+evaluation campaign was set ten days before, on 24 November (\BF{1}).

@@ -1,0 +1,45 @@
+% !TEX root = ../main.tex
+
+\begin{preface}
+This is version 1.2 of an internal report on the Semantic Boxels project since the
+thesis. It states the work as of 7 November 2026, the date on the title page, with a
+few later facts given with their date. Versions 1 (commit 98294ff) and 1.1 came out on
+7 November; 1.1 added the Wumpus luck floor beside LW1 and our predictions
+(\Cref{tab:wumpus-bar}) and the visual check per comparison (\Cref{sec:visual-check}).
+Version 1.2 adds facts of 8 November: the success criterion is under review
+(\Cref{sec:catalogue}), rule 14 is lifted, and a second watch run of Hani's is on
+record. Later versions give their date in the same place and say here what changed.
+
+The report was written by a Claude session (path 11 of the dev tracks of
+\BF{68}) from the project's own record: the audit file, the documents of the dev
+tracks and the thesis. Six read-only agents first condensed the record into working
+notes with line numbers, which are kept with the tracks' documents. Each number of
+ours in the text was then copied from the entry or file that the notes name, and
+carries a tag that links to its row in \appref{ch:appendix-sources}. Outside work is
+cited from the bibliography of the thesis wherever it has an entry there. The five
+entries added to it, and every published number in \Cref{sec:published-fd} and
+\Cref{sec:published}, were checked in the papers themselves; \ID{citations}{the citation record}
+gives for each the place and the date.
+
+Three checks were run on version 1 before it was delivered. The logs of the build
+show no undefined reference or citation. A script lists every citation key of the text,
+finds it in one of the two bibliography files, and finds a row of
+\appref{ch:appendix-sources} for every source tag. And one verifier agent compared the
+five added bibliography entries with their sources, and the numbers, quotations and
+dated statements of the text with the entries and files they were taken from. It
+checked 492 items. It found 29 that its source contradicts, 7 that no source supports
+and 1 number without a tag; it marked 23 statements about the tracks as overtaken by
+later changes, and it could not check 5. The text was corrected for the first three
+groups and for most of the fourth, and \ID{verify}{the verification record} lists what was
+left unchecked. The verifier did not read the corrected text again, and the checks of
+the build and the script were run again after the corrections. They were run again
+for versions 1.1 and 1.2, whose additions the writer compared with the files they
+cite; no verifier read them.
+
+Two limits of the report are worth knowing before reading. The tracks are live, so
+the state of a track is as of the time named in its section, mostly between about 13:05
+and 14:30 on 7 November, with a few later facts given with their time; what came after,
+such as the thirteenth path that Go started at 16:02, is left for the next version
+(\ID{tracksstate}{tracks state file}). And where the record disagrees with itself,
+\Cref{sec:disagreements} says which figure the report uses.
+\end{preface}

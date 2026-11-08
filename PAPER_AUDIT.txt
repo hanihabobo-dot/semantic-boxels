@@ -768,7 +768,44 @@ WHAT MUST GO (full inventory, from the 2026-08-15 code scout):
   every cell that hits the 1800 s cap adds half an hour.  Budget two to
   three days unless the cap is lowered.  Lowering --timeout is a data
   decision, not a convenience one: the design note above says to run
-  generous and post-process aggregated.csv at any shorter bound.]  (2) all "deterministic re-roll to 343879192"-era
+  generous and post-process aggregated.csv at any shorter bound.
+  RESULT BANKING BUG, found 2026-10-24 by the shadow-oracle review and
+  FIXED the same day in eval_runner.py: run_cell took a cell's
+  timing_summary.json to be the newest one written within 1 s of the
+  launch.  A cell rejected by the pre-flight raises before the run
+  logger opens a directory and exits 1, which the runner reads as a
+  run-level failure that left a summary, so whenever the previous cell
+  had finished less than a second earlier the rejected cell banked THAT
+  cell's summary.  In CB#113 this hit 10 of the 43 pre-flight-rejected
+  find-and-tray-stack cells (randpairs_occ2_seed0, for one, held the
+  holding mbs0.05 run's success); aggregated, they would have added 10
+  phantom holding successes and hidden 10 tray-stack rejections.  The
+  fix: only a run directory created during the cell can be its own,
+  the summary's run_config must match the cell (scene, seed, goal,
+  baseline, unit costs, boxel size), and a pre-flight rejection is
+  recorded as exit_reason preflight_rejected with its stderr line.
+  --skip-existing re-runs a cell whose stored summary belongs to
+  another cell, and aggregate() checks every cell against matrix.json,
+  so the banked cell files need no editing.  Re-aggregated 2026-10-24:
+  491 cells, 43 preflight_rejected (10 of them from banked summaries),
+  362 successes where the old aggregation would have counted 372.
+  Repro: the occ2 seed 0 holding mbs0.05 cell and the tray-stack cell
+  back to back through run_cell, resume path included.
+  Path 3 of the dev tracks, 2026-11-07: committed 2026-11-06 as bb87ed6
+  on track/fixes (TB-8 on the bug board tracks/BUGS.md), byte-equal to
+  this fix, with tests/test_eval_runner_banking.py.  Its review found
+  that the run_config check alone takes an old sweep's seed re-rolls for
+  other cells' runs: until 2026-08-23 the pre-flight re-rolled a rejected
+  seed, so a genuine run of that time carries another seed, and
+  re-aggregating sweep_full_2026-05-28 would turn 34 of its successes
+  into summary_mismatch (TB-20).  b81d2ad keeps such a run as the cell's
+  own unless the cell's files show it made none: its stdout.log holds
+  the pre-flight rejection, or another cell names the same run
+  directory.  aggregate() of the tag's and b81d2ad's runners then agree
+  on every sweep in eval_results except CB#113's 43 pre-flight cells and
+  one banked cell of sweep_2026-05-11_18-13-24
+  (randpairs_occ2_seed1_holding_uc0_semantic held the
+  seed0_find-and-tray-stack_uc0_uniform run).]  (2) all "deterministic re-roll to 343879192"-era
   expectations (F5 notes, smoke lists) are historical; seed 999 now
   = loud rejection, full stop; (3) the /eval skill and
   tools/_eval_ab.py defaults updated — --seed-retry only ever
@@ -9137,6 +9174,102 @@ BF#63 [DONE; FINDING OPEN]  GENERATED-SCENE EVAL ON 40 SCENES FROM THEIR OWN
   written, run 2's changes and stall rule declared before it ran, every
   run that did not count listed with its cause; disclosed.
 
+BF#64 [FIXED on track/fixes, 51428d8; ITS A/B IS PATH 6's ARM A']  THE
+  SHADOW CASTER TOOK D8'S WINDOW W FOR THE TABLE: A CUP OUTSIDE W CASTS NO
+  SHADOW, SO THE CUP OVER THE DIE IS NEVER LIFTED  (Hani's report on
+  generated seed 118, 2026-11-04; the cause found the same day by the
+  session "Project status (fork)"; fixed and checked by the dev tracks'
+  path 3 as TB-1, 2026-11-06 and 07)
+  WHAT: Hani, 2026-11-04, on generated seed 118: "fix the seed 118 issue.
+  theres two object but it only looks behind one."  The run lifted
+  d_cups_ud only and ended all_searched; the die lay under b_cups_ud.
+  THE CAUSE: tampura_bridge/env_adapter.py:99-100 (at the tag d6a9715)
+  handed D8's window W (task_spec WINDOW_X 0.35..0.74, WINDOW_Y
+  -0.28..0.34; BF#11 (e)) to the shadow caster as its table
+  (boxel_env.py:619).  shadow_calculator.py clamps every ray hit and the
+  shadow's box to the table (:170-171, :190-191, :208-212).  On seed 118
+  b_cups_ud's believed box spans y -0.334..-0.274; the rays past its back
+  corners land near y -0.38 and are clamped to -0.28, on the camera's side
+  of the cup's centre, so the mean hit minus the centre (:226-228) points
+  toward the camera, y becomes the dominant axis, the cut at the back face
+  (:233-236) leaves a box 0 thick, and #P1's F3 guard (:300-305) drops it
+  (logged extent [0.0901, 0.0, 0.0651]).  With no region behind b the plan
+  has no reason to lift b (BF#65: we find the die only by lifting the cup
+  over it).  TAMPURA's generator samples cup centres x U(0.3, 0.7), y
+  U(-0.4, 0.4) and puts the die at a cup's pose (find_dice/
+  env_generator.py:114-118, :126-127), so the die's centre is outside W in
+  15 of BF#63's 40 scenes: 11 of our 12 failing scenes and 4 of the 28 we
+  always solved (115, 130, 133, 138).  Our own environment gives the
+  caster its logical table (boxel_env.py:908-909); W is meant for free
+  space and placement only.
+  THE FIX: track/fixes 51428d8 (2026-11-06 16:16): env_adapter.py's
+  shadow_table_ranges() reads their panda_env_utils
+  get_shortened_table_dims() (x 0.10..0.85, y -0.61..0.61: the table BF#11
+  (e) cut W from, the region their place sampler draws from) and
+  _adopt_scene hands those ranges to the caster; _SAFE_TABLE_* keep W
+  (free space, placement).  The caster is the only reader of the two
+  attributes (boxel_env.py:619).  shadow_calculator.py is unchanged: its
+  shadow direction, taken from table-clamped hits, stays a latent flaw at
+  the table's edge (TB-11 on tracks/BUGS.md); their generator keeps every
+  centre at least 15 cm inside the shortened table.  Test:
+  tampura_bridge/tests/test_bf64_shadow_table.py (5 tests on seed 118's
+  eye: the ranges are their shortened table and hold W; W as the table
+  gives the cup no shadow; their table gives a shadow behind the cup, from
+  its back face, at least 3 cm deep; the adopted env hands the caster
+  these ranges and free space W).  The same ranges sat in the trunk as an
+  uncommitted hunk from 2026-11-04 (computed inline; saved as
+  bf/BF64_shadow_table/trunk_env_adapter_hunk.patch); Go drops that hunk
+  when it merges the fix.
+  CHECKS: (1) Seed 118 with the trunk's hunk (2026-11-04, headless):
+  success in 25.5 s, 2 spaces hidden, b_cups_ud lifted, the die seen,
+  picked and brought home, every gate PASS.  (2) BF#64's batch with the
+  trunk's hunk (2026-11-04, stopped after 13 seeds): of BF#63's 12 failing
+  scenes 102, 103, 107, 111 and 127 succeed (118 in (1)); 100
+  all_searched, 101 and 104 planner_failed, 128 and 135
+  no_plan_binding_death, 124 at the 900 s cap (BF#65 has these
+  residuals); 105 and 106, solved in BF#63, stay solved.  (3) 51428d8 on
+  its branch (2026-11-06 16:17 to 17:51): tests 133 passed; bridge tests
+  94 passed (the 5 new among them), 3 skipped; static gates in full rc 0
+  (G1 83 and G2 46 hits all reviewed, G7, G11(i), G17); a locked seed-0
+  episode a success.  (4) The 18 seeds BF#64's batch had not run, on
+  51428d8 (2026-11-06 17:51 to 19:44, BF#63's 900 s cap, one pipeline
+  lock per episode): the 13 generated scenes 108 110 112 113 114 115 120
+  122 126 130 133 134 138, each a success in both of BF#63 run 2's
+  repetitions, succeed 13 of 13; shipped seed 0 succeeds; shipped seeds
+  1, 2, 5 and 6 hold the die at home (their reward 1.0) but end
+  gate_failed at G19: run from TAMPURA's folder, their loader took another
+  shipped problem file than the pins (TB-1 does not touch the loader), so
+  they are never scored.  Every scene we solved before that was tried
+  (15) stays solved.  (5) Review (Hani's answer of 2026-11-06 16:25): a
+  Sonnet reviewer approves (0 bugs, 3 nits) and a Sonnet post-review
+  ships (0 bugs, 2 nits); the nits and why they stay are on
+  tracks/BUGS.md, TB-1.
+  CLAIM EFFECT: the bug lowers our find_dice numbers on generated scenes,
+  BF#63's among them: run 2 measured the tag, which has it (16 of our 17
+  all_searched runs come from it, BF#65 (a)).  BF#63's numbers stand for
+  the code they measured.  The 6 scenes the fix turns into successes in
+  the reruns (102, 103, 107, 111, 118, 127) are the scenes the bug was
+  found on, so they are not a measurement of the fix.  The measurement is
+  path 6's arm A' (its arm A plus 51428d8, on 200 fresh scenes from their
+  generator, seeds 140 to 339, paired with A by an exact McNemar test),
+  which Hani approved with phase 1 on 2026-11-07 at 11:08; before it runs
+  Hani watches two seeds of each arm in GUI runs he starts (his rule of
+  2026-11-07 13:25; seeds 118 and 134, tracks/BUGS.md TB-1).  HONESTY
+  CLASS: a bug fix that gives our caster the table their own place
+  sampler uses; nothing tuned on eval scenes; the local reruns are a
+  regression check and disclosed as one.
+  FILES: tampura_bridge/env_adapter.py, tampura_bridge/tests/
+  test_bf64_shadow_table.py (51428d8 on track/fixes; the trunk takes it at
+  Go's merge).
+  EVIDENCE: archive/tampura_bridge_plan_2026-10-25/bf/BF64_shadow_table/
+  ((1) and (2): STATE.md, check.sh, SUMMARY.txt, s118_bridge_episode.json,
+  s118_run.log, trunk_env_adapter_hunk.patch); tracks/fixes/checks/tb1/
+  ((3)); tracks/fixes/ab/tb1_fix/ ((4): SUMMARY.txt, and records/ with
+  each seed's bridge_episode.json and console.txt; the run folders
+  deleted, DATA_LEDGER.md); tracks/fixes/probes/caster_table/ (the caster
+  alone on seed 118's eye: W gives no shadow, their table one at y
+  -0.382..-0.334 behind the cup); tracks/BUGS.md, TB-1 (the full record).
+
 BF#65 [FINDING OPEN]  THE DIE UNDER A CUP LIES IN NONE OF OUR HIDING
   REGIONS: WE FIND IT ONLY BY LIFTING THE CUP  (BF#63's open finding; asked
   by the BF#63 eval session, resumed by Hani, 2026-11-04 to 2026-11-06)
@@ -9436,8 +9569,9 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   BF#64's fix and path 6's plan, each confirmed on its own.  Go folded
   the A/B into path 6's plan as its arm A' (the tag plus TB-1 on path 6's
   200 fresh find_dice scenes) and confirmed the plan (tracks/eval/
-  PLAN.md v1.3, about 53 node-hours); Hani's yes to the cluster run is
-  still open.
+  PLAN.md v1.3, about 53 node-hours); Hani's yes to the cluster run was
+  still open that evening (he gave it on 2026-11-07 at 11:08 in path 6's
+  session; rule 12 then held the run until DV-1 to DV-3, below).
   The class_uncertain plan (BF#67) stays held; its phase 1 is path 2's
   input.  Path 2's ranking is in (tracks/tasks/TRIAGE.md): with SB's
   planning layer on TAMPURA's execute layer, class_uncertain scores 18 of
@@ -9488,10 +9622,10 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   with one look from a boxel, knowledge fluents as its effects, behind a
   default-off flag.  WSL was down from about 11:00 to 11:09: starts timed
   out while Ubuntu showed "Stopped" with its VM still alive, and path 1's
-  `wsl --shutdown` at 11:09:29 ended it (corrected 12:20 from path 1's
+  `wsl --shutdown` at 11:09:29 ended it (corrected about 11:48 from path 1's
   transcript; Go had first written that nobody ran it); what ran in WSL
   before is gone, and no counted run overlaps the gap.
-  About 11:45: "i dont know which path is responsible of this but i want
+  At 11:22: "i dont know which path is responsible of this but i want
   that wumpus sim to give us a viizual cue about not knowing where the
   wumpus is and in what is in each cell. so just like the safe cells get
   marked with green, the unknown cellls showed also get colored somehow.
@@ -9508,7 +9642,7 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   2026-11-06): first how many of LW1's instances straight-line and other
   no-reasoning walks already win, then SB as at the tag (K0) and,
   optionally, with the percept rules as derived predicates (K1); every
-  number is reported.  About 11:55, on path 8: "wait, im not sure thats
+  number is reported.  At 11:30, on path 8: "wait, im not sure thats
   what i have meant with sensing. i wanna repeat their taks. the task is
   not like that, right? basicly do thier task on their env as close as
   possible. and again, if that means waeking or setup somehow than that is
@@ -9522,13 +9656,13 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   tracks/modes/): class_uncertain with value boxels (a class cell per
   object, table and bowl boxels, no geometry), slam_collect with map
   boxels from the t = 0 map; deviations CU-1 to CU-20 and SL-1 to SL-18.
-  Hani about 12:30 (the labels he picked): CU-1 to CU-20 "Approve all
+  Hani at 12:06 (the labels he picked): CU-1 to CU-20 "Approve all
   (Recommended)"; SL-1 to SL-18 "Hold, I'll read the plan"; on
   geometry for class_uncertain's boxels (P7-Q1) "explain how their
   actions take no position" (their inspect, pick and drop take symbols
   only, and every pose is computed inside their execute functions);
   P7-Q2 (the pose belief as boxes) "Not yet, ask again later
-  (Recommended)".  About 12:40: "i also want a report styled on my
+  (Recommended)".  At 12:08: "i also want a report styled on my
   theis, also build in letex the same way is the theis was build. it is
   still an internal report. all of the lates knowledge and changes since
   the thesis is reported there. that should be its own path. it should
@@ -9549,6 +9683,130 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   enough? so thats our new look?"): path 9 weighs in; Go's view is that
   observe re-poses one known object and reveals nothing about unseen
   boxels, so the look needs sense's knowledge effects as well.
+  At 12:13, quoting Go's note on the WSL outage: "start a path that looks
+  into that".  Path 12 (Sonnet 5.5, local_902e84cf; tracks/wsl/) finds,
+  read only, why WSL wedged: a timeline from the event logs, WSL's logs
+  and the distro's journal, causes ranked, prevention as proposals for
+  Hani.  At 12:18, on path 11's report: "the theis style report path
+  should include a check and a citaion on what are the reported numbers
+  of those approches on thoses tasks."  Wherever the report gives a
+  number for an approach on a task, it gives the published numbers on the
+  same task beside it, cited and checked, and says whether our run
+  reproduces them; nothing estimated or recalled.  At 12:25, answering
+  Go's view that observe as it is is not enough for the look: "hey, so
+  lests use that as a baseline. but baseline in paranetestis, actually
+  call it somthing else in code and ou descreption of it in the paper. so
+  the baseline is not using boxles at all in the look action and we try
+  to improve on that somehow by using boxels or at least test if that is
+  possibe".  Path 9 adds a look with no boxels in the action (named, not
+  "baseline"; proposed: object-centred look) beside the boxel look, which
+  tries to improve on it, on the same seeds as the tag; a null result is
+  reported.  About 12:33, on the report: "it shouldnt have any rwth logo
+  on it. it is just an intrernal report for now."  Its title page shows
+  the title, "Internal report", Hani's name and the date of its state.
+  Plans in (tracks/<name>/PLAN.md): path 9 (one look(?o ?h ?v ?q) in
+  place of sense and observe, the viewpoint from a lattice of camera
+  poses inside the free boxel scored by ray casts, flag --look, default
+  off; its find_dice batch held under rule 12 for three deviation items);
+  path 8 (route R1: our renders, boxels, planner and loop decide and our
+  arm executes physically, their inspect label and ball-break coin as
+  their code runs them; 34 deviations in three rounds for Hani; 9 of
+  seeds 0 to 19 hold a 75.4 mm apple that our pinch cannot take today);
+  path 10 (K0 = SB as at the tag, a cautious control K0c, K1 with the
+  percept rules as derived predicates; predictions fixed before the
+  runs).  Path 10's step 1 answers the straight-line question on LW1's
+  instances (pure grid, no robot): false, the two straight lines win 18
+  and 15 of 100 at 5x5 and 8 and 2 at 10x10; but walkers with no
+  deduction win by luck (a frontier walker 34, 21 and 24 of 100 at 5x5,
+  7x7 and 10x10; a random walk 39.5, 26 and 22 %), and path 4's explore
+  rule wins 100 of 100 up to 15x15.  Path 7's class_uncertain arm A1
+  (value boxels, mode S): their reward 18 of 20, the world-state test 17
+  of 20, the same actions as path 2's probe on every seed.  Path 6 listed
+  the deviations of its cluster eval (tracks/eval/DEVIATIONS.md: DV-1 the
+  success test, DV-2 the action budget, DV-3 arm B's conditions) and
+  holds the cluster phase Hani approved at 11:08 until he answers them in
+  writing; a world state for TAMPURA's arm needs a live read inside its
+  process (a G13 amendment), since its pickle keeps only the final grasp.
+  A 12:31 screenshot showed a PyBullet window: path 1's GUI check run,
+  against rule 13; path 1 was told to end it and check headless.  Go's
+  commit e292323 swept in path 8's two staged files (content correct);
+  Go now commits through a private index.  About 12:58: "add a
+  submanager agent if you can and think that it can help".  Sub-manager
+  T (Sonnet 5.5, local_2ee96869; tracks/sub_tampura/) takes the reports,
+  checks and questions for Hani of paths 5 to 8, the paths that repeat
+  TAMPURA's tasks or setups and share rule 12's deviation rounds; Go
+  keeps the merges, the record and the other paths.  About 13:10: "if
+  you need many submanagers thats also fine".  Sub-manager W (Sonnet
+  5.5, local_6348a77e; tracks/sub_wumpus/) does the same for the Wumpus
+  paths 4 and 10.
+  About 13:20: "we need to mkae sure to run anything on wsl until this
+  issue of why we are running out ofmemoryis resolved."  Rule 14: nothing
+  runs in WSL until the cause is found (commit charge 54.5 of 60.2 GB at
+  13:20; path 12 looks for the cause).  About 13:22: "whenever there is a
+  setup where it is some env and planner vs some other snv and planner,
+  before we run any eval i have to vizuallyconfirm that everything is
+  working by running at least 4 seeds two for each system under that
+  setup. after my approval we go ahead. we should check all current and
+  future evals n cluster whether they are conformant or not. the current
+  ones can stay if i confirm it is working out."  Rule 15: no comparison
+  eval, on the laptop or the cluster, before Hani has watched 2 seeds of
+  each system and approved.  About 13:28, on the sub-managers: "they
+  should not ask me for anything. i only talk to to and some time to some
+  paths"; their questions come to Go.  Path 6's success test and action
+  budget, answered in path 6's session: "no, mkae our test the standard
+  test." (12:46): our world-state test is the standard for both arms on
+  the fresh scenes, TAMPURA's reward beside it; "add the cap to us as
+  well and make sure it is documented. also some agetn that go decides
+  should run an eval of our apprioach with vs without that limit.": our
+  arm is held to TAMPURA's 20-action horizon as a cut-off on each
+  episode's own count, and the uncapped result from the same episodes,
+  recounted by an independent agent, sits beside it.
+  About 13:30, on path 8's class_uncertain actions: "okay, thier inspect
+  is our new look that we are working on. for pick: it should also break
+  85% of the time. physics or not. would actually be quite cool if you can
+  make it break in physicy pretty quckily. for that a test for when that
+  will hape with our pick has to be done. also a coin flip alternative has
+  to be implemeted and we actualy start with that before wsitching to the
+  physical one. drop is just our drop for now".  Inspect becomes path 9's
+  look; a picked ball breaks by their 85 % coin first, by physics later,
+  after a test of when our pick would break a ball and a rule calibrated
+  to 85 %; drop stays ours.
+  About 14:10 Hani reorganised the sessions, since moving them into
+  sidebar sections had detached them from Go and the app pauses a
+  session's messages after 10 sends until he types in it: "should you
+  start over? like you start new manasures with the compact handoff of
+  thier last state and they they start new paths with the handoff as
+  well? oreniniize that. its fine if some agnets need some thimes to be
+  ready for a copact."; at 14:23: "start new suagents whenever you can.
+  not the entire thing needs to be ready for you to start a new one".
+  The first sub-managers and paths 4, 5, 6, 7, 8 and 10 wrote hand-overs
+  (W 82cf09e, path 8 a1e2361, path 10 864b969, path 7 7c6e947, path 4
+  0b2abf9, T d176271; paths 5 and 6 to follow); the second Sub-managers
+  T and W started at 14:41 on Opus and start their paths' successors
+  from the hand-overs; the first T and W were archived.  In the first
+  T's session Hani answered path 8's Round 1 (about 14:08, all as
+  recommended: route R1; D-14, D-17, D-16 and D-27 as path 7's CU-4,
+  CU-8, CU-12 and CU-18; D-26 (a), D-1, D-5 (a), D-28, D-13 and the cover
+  seeds; the P1b and P0 diagnostics once runs are allowed) and path 6's
+  DV-3 (about 14:20, "Accept, with the checks (Recommended)"), and wrote
+  "just one remark. make sure runs dont lead to massive memory buildup
+  anyhwhere.", which Go made rule 16 for every track (peak RSS and
+  MemAvailable per episode, a stop under 4 GB available, nothing left
+  behind).  In the first W's session (about 13:55) he answered path 10's
+  Q1 to Q4 as recommended.  Both first managers made read-only wsl calls
+  before rule 14 reached them (W about 13:25 and 13:55, T 14:11 and
+  14:15; each booted the idle VM); nothing ran.  T's reading at 14:11:
+  WSL used 488 MB of its 15.4 GB while Windows had 4.5 of 30.8 GB free,
+  so the memory pressure sat on the Windows side (for path 12).  At 14:18
+  Hani asked that the compact hook's cost images go every day ("make sure
+  that the autmatcly genrated copact cost images are delted everyday"):
+  the Windows task Claude-prune-compact-cards runs
+  ~/.claude/hooks/prune-compact-cards.ps1 daily at 12:10 and deletes by
+  path every compact-cost-<date>-<time>.png older than 2 hours in all
+  session scratchpads; its first run deleted 74 cards (10.8 MB).
+  The times in this
+  entry from 11:20 on were corrected on 2026-11-07 about 13:00 (Go's
+  clock had run 20 to 30 min late).
   MERGES INTO THE TRUNK: TB-16 (run.ps1 runs the checkout it lives in) as
   564ff5b; track/draw as afd80a3 (`run tampura -Draw boxels`, a merge of
   b43f962).  -Draw boxels draws the registry as debug lines and labels
@@ -9569,10 +9827,240 @@ BF#68 [DECIDED; TRACKS RUNNING]  DEV TRACKS FROM A STABLE BASE: THE SESSION
   find-and-tray-stack) is the "timeout" share of the semantic,
   semantic+mbs0.05 and uniform arms (65 of 270 stack cells).  Path 6's
   report counts a timeout only for the runner's stub at the cap.
-  EVIDENCE: tracks/STATE.md, the ten briefs, tracks/stable_check/,
+  EVIDENCE: tracks/STATE.md, the briefs tracks/<name>/BRIEF.md, tracks/stable_check/,
   tracks/draw/evidence/, tracks/eval/PLAN.md.
   CLAIM EFFECT: none.  HONESTY CLASS: process decision, no pipeline
   change.
+
+BF#69 [FINDING; CAUSE OPEN; PROPOSALS WAIT FOR HANI]  THE WSL WEDGE OF
+      2026-11-07 AND WHERE THE WINDOWS MEMORY GOES  (path 12 of BF#68;
+      Hani's rule 14, 2026-11-07 13:20)
+  WHAT: on 2026-11-07 `wsl -d Ubuntu` ended in Wsl/Service/CreateInstance/
+  ERROR_TIMEOUT for every session that tried (first call 11:02:34, last
+  failure returned 11:08:25).  The brief (tracks/wsl/BRIEF.md) took path 1's
+  `wsl --shutdown` at 11:09:29 for what ended it and gave path 12, read
+  only, the cause.  At about 13:20 Hani made it rule 14 (no WSL work and no
+  `wsl` call at all until we know why the machine runs out of memory), and
+  Go's 13:25 message made that question path 12's too: who commits the
+  memory, how it grew, and whether the 11:00 wedge was the same thing.
+  Windows-side evidence only; nothing on the machine was changed.  Every
+  number below carries a mark: MEASURED (a record on this machine, cited by
+  evidence file in REPORT.md), READ (a page or another session's message) or
+  UNVERIFIED (my reading, no proof).  The BF number came from Go (14:56).
+  FINDING A, THE WEDGE (REPORT.md sections 1 to 4):
+  (1) The cause is NOT established.  One WSL VM (44A0C6AC, created 11-02
+      14:10:47, 117.0 h old) stopped answering as a whole at or before 10:34
+      and stayed so until 11:09:55; only the Podman distro ran in it.
+      Starting an instance (ERROR_TIMEOUT after 31 to 58 s), the dev app's
+      connections to the Postgres in the Podman machine (Npgsql timeouts
+      from 10:34:11 at the latest) and the VM's own teardown (30.06 s,
+      against 0.31 to 1.17 s for nine healthy VMs) all failed.  The
+      circular Application log had wrapped, so the onset is not recorded.
+      MEASURED.
+  (2) Best-supported class: a fault around Modern Standby.  The VM was
+      paused for 48.2 of its 117.0 h (41 %, 37 standby periods; guest clock
+      lag 37.08 h against 37.40 h of host standby), and the failure was
+      there at most 63 min after the last resume (09:31:12).  Against it: 36
+      earlier resumes did no harm, and no record at or after 09:31 stands
+      out.  A probable class, the trigger unproven.  MEASURED; four upstream
+      issues report WSL broken after sleep or hibernate, none with a
+      confirmed cause (READ).
+  (3) Two readings fail.  No session's call started it: none called `wsl`
+      between 09:00 and 11:02:34, and that first call already failed.
+      `wsl --shutdown` did not end it, contrary to the brief: WSL's own 60 s
+      idle teardown began at 11:09:25.466, 60.0 s after the last failed
+      attempt and 3.5 s or more before path 1's call could run (stamped
+      11:09:29, first output 11:09:41).  MEASURED.  That the retries reset
+      the idle timer and so kept the wedged VM alive is UNVERIFIED (one
+      observation); it is why REPORT section 9 asks for no new start
+      attempt for 70 s after an ERROR_TIMEOUT.
+  (4) What the outage took: only the Podman machine (the dev app's
+      Postgres, down since 11:09:55).  Ubuntu had no instance from 11-06
+      20:15:01 to 11-07 11:10:10, so jobs reported lost at 11:09 were gone
+      by 20:15 on 11-06 at the latest (which jobs the tracks meant is
+      UNVERIFIED).  MEASURED.
+  (5) Ruled out or unlikely (MEASURED): the track sessions, `wsl --shutdown`,
+      Windows Update, Store updates, Defender, disk space and disk IO, a
+      reboot or crash, a service restart, a network change.  A stall inside
+      the guest, host memory pressure as a contributor, Podman Desktop and a
+      fault in wslservice's instance tracking stay as lower-ranked causes
+      (UNVERIFIED; REPORT section 4).
+  FINDING B, THE MEMORY (REPORT.md section 5, evidence/11):
+  (6) No record shows Windows running out of memory (no low-memory event
+      since 11-02, Resource-Exhaustion-Detector Ids 2003 and 2004: none; no
+      application-failure record), but it sat at 81 to 94 % of its commit
+      limit: 56.4 of 60.2 GB (94 %, the highest reading; path 3 at 13:27,
+      READ), 55.2 of 60.2 at 13:35 (92 %), 48.6 of 58.3 at 14:27 (83 %) and
+      47.3 of 58.3 at 14:36 (81 %) with no VM running.  The limit is RAM
+      (30.8 GB) plus a system-managed page file (28 to 30 GB).  MEASURED.
+  (7) The base is about 47 GB with no VM, and mostly Claude: 22 Claude Code
+      session processes hold 13.3 GB (0.44 to 0.79 GB each, 17 started
+      today) and the desktop app 3.9 GB, together 36 %.  Browsers and web
+      views hold 7.6 GB, node 3.4 GB, Defender 2.1 GB; about 9 GB belongs to
+      no process (kernel pools 4.2 GB, shared sections).  MEASURED.
+  (8) The swing is the WSL VM: 13.3 GB committed at 12:24 (during runs), 5.1
+      GB at 13:35, 0.85 to 1.1 GB when fresh.  There is no .wslconfig, so it
+      may take half the RAM (15.0 GiB inside).  47 GB plus 13.3 GB is 60.6
+      GB, above the 58 to 60 GB limit: arithmetic only, since no commit was
+      read at 12:24.  MEASURED; the sum UNVERIFIED.
+  (9) The 11:00 wedge was probably not this (UNVERIFIED): 9.5 GB of RAM was
+      free at 11:06 with a 251 MB VM, no low-memory record exists, and it
+      looks like a stuck VM, not starvation.  The commit at 11:00 was not
+      read; none of today's 17 Claude Code processes started before 11:08:45.
+  PROPOSALS, for Hani through Go, none applied (REPORT sections 5.7, 7, 9):
+  (a) A memory cap, `.wslconfig` [wsl2] memory=8GB (or 10GB): 47 GB plus 8
+      GB stays under the limit.  A job above the cap is killed inside the
+      VM, and the guest's real peak is unmeasured (13.3 GB included cache),
+      so test with one batch; it takes effect at the next VM start.  Go put
+      the 8 GB cap to Hani as the step before rule 14 is lifted (message of
+      14:56, READ); the restart waits for his watch runs to end
+      (tracks/STATE.md, 16:08 to 16:28, READ).
+  (b) Give memory back: end the VM when a batch ends (Go's `wsl --shutdown`
+      with `wsl --list --running` empty, rule 11), close sessions that have
+      reported (10 finished ones are about 6 GB; whether archiving ends the
+      process is UNVERIFIED), restart the desktop app daily (its largest
+      process, 1.7 GB, has run since 11-03 23:10).
+  (c) Evidence for the next wedge: `debugConsoleLogFile` in .wslconfig, the
+      Application log at 100 MB (elevated), and before any restart,
+      elevated, `collect-wsl-logs.ps1 -Dump` (READ: microsoft/WSL).
+  (d) Rules for the tracks (REPORT section 9, for tracks/STATE.md once rule
+      14 is lifted): after an ERROR_TIMEOUT no new start attempt for 70 s
+      and tell Go; wsl_health_check.ps1 before a batch and mem_log.ps1
+      during it; no time-budgeted run across a laptop sleep (the guest clock
+      stops while the wall clock jumps; which clock the budgets use is
+      UNVERIFIED); one commit reading before a VM-heavy batch, no new batch
+      above 85 % with no VM running; rule 14 should name `\\wsl.localhost\
+      Ubuntu\...` reads, which start the distro too.
+  RULE 14 AND THIS SESSION (REPORT section 0): Go's 13:25 message was held
+  by the app's message pause; I read it in Go's transcript at about 14:25
+  and it reached me at about 14:52.  Before that, two `-Probe` tests of
+  wsl_health_check.ps1 (about 14:02 and 14:04) started a VM (B4EC2889,
+  14:02:18.7 to 14:10:06.9) and two Ubuntu instances; no job or data was
+  affected, and I have made no `wsl` call since 14:07.  Six VMs started
+  between 13:52 and 14:24, during the freeze, one of them mine; the others'
+  starters are UNVERIFIED (their times fit other sessions' `wsl` calls and
+  `\\wsl.localhost\Ubuntu\...` file reads).  MEASURED for the times.
+  TOOLS (tracks/wsl/, read only, PowerShell 7): wsl_health_check.ps1 and
+  wsl_wedge_snapshot.ps1 (both call `wsl --list`: not under rule 14) and
+  mem_log.ps1 (one CSV line per sample, no `wsl` call: safe under rule 14).
+  OPEN FOR HANI (REPORT section 11; Go relays his answers): what he saw when
+  he says we run out of memory; whether he used Podman Desktop between 11:04
+  and 11:06 (it would explain the Podman distro going to Stopped); whether
+  the dev app ran after the 09:31 resume and its database worked before
+  10:30; whether the Podman machine should start at login and be started
+  again now.
+  NOT READ (needs elevation, or is gone): the Security log, SRUM, WER
+  Report.wer contents, LiveKernelReports, hcsdiag, WSL ETW traces, the
+  Podman distro's journal, the Application log before 10:34:11, commands
+  typed in Hani's own terminals.
+  STATE (2026-11-07 16:43): WSL has been up since 16:24, started by
+  Hani's own seed 3 watch run (vmmemWSL 5.6 GB private at 16:27; READ,
+  tracks/STATE.md), and rule 14 still holds for the tracks.  Path 12 makes
+  no `wsl` call and waits for Go to lift rule 14, put REPORT section 9 into
+  tracks/STATE.md and relay Hani's answers.
+  EVIDENCE: tracks/wsl/REPORT.md (committed 8cf3dbd at 14:49, updated in
+  3c7aab5 at 14:53), tracks/wsl/evidence/01 to 12, tracks/wsl/STATE.md, the
+  three scripts beside them, DATA_LEDGER.md (the Kept row).
+  CLAIM EFFECT: none known; the records show nothing of ours ran in the
+  wedged VM besides the Podman machine (finding 4).  HONESTY CLASS:
+  infrastructure finding with the cause open, Windows-side read-only
+  evidence, every claim marked; no pipeline change.
+
+BF#70 [BUILT, REVIEWED, CHECKED; NOT RUN]  THE G13 AMENDMENT: ARM T'S FINAL
+      WORLD IS READ AFTER THEIR ROLLOUT, SO THAT OUR TEST IS THE STANDARD
+      TEST  (path 6; Hani's DV-1 answer, 2026-11-07 about 12:46; a protocol
+      change under P4.6)
+  WHAT: Hani, DV-1: "no, mkae our test the standard test."  On the fresh
+  find_dice scenes the standard success test is ours on both arms (the die
+  between both finger pads, the arm at home).  For arm T that needs its final
+  world, read live: their reward comes from the abstract belief (holding of
+  the target and at-home, and their go-home reports home even when its motion
+  plan failed), their executor carries the die kinematically (enforce_grasp
+  while state.grasp is set), and their pickle keeps only state.grasp, so the
+  poses and joints exist only inside their process after the rollout
+  (tracks/eval/G13_AMENDMENT.md, "Why", with the lines of find_dice/env.py
+  and panda_env_utils.py).  G13 forbade that read: it required
+  `type(policy).rollout is Policy.rollout` on both arms and a timed subclass
+  whose __dict__ holds only __init__ and get_action.  P4.6 says any later
+  change is itself a BF entry; this is it.  The number came from Go (about
+  16:39).
+  THE CHANGE (97ff3b2 and 6328d88 on track/eval in sb-eval; not merged, not
+  pushed):
+  (1) tampura_bridge/final_world.py (new): the raw readings of the final
+      world (the held body, each finger pad's nearest point to it through
+      client.getClosestPoints, the seven arm joints against DEFAULT_ARM_POS)
+      and the verdict.  record_after_rollout writes save_dir/final_world.json
+      and never raises: a failed read is written as ok false with its error, a
+      failed write leaves no file (1fbfa4a made that every Exception, R3).
+      Reads only, no write call, no pose read by name: the static gates have
+      no new hit.
+  (2) tampura_bridge/timed_policy.py: one added method, `rollout`, which calls
+      their rollout through super(), then record_after_rollout, and returns
+      their result unchanged.  Their Policy.rollout runs unmodified and has
+      finished (history pickled, wrapup done) before the read.
+  (3) tampura_bridge/g13_runtime.py: arm T's check is now (a) their
+      TampuraPolicy.rollout is Policy.rollout, (b) the timed class defines
+      exactly __init__, get_action and rollout, (c) rollout equals the
+      reviewed text through the syntax tree (comments, docstring and layout
+      may change; any other statement, argument, decorator or call fails the
+      run).  Arm O's check is unchanged.
+  (4) tools/_bridge_campaign.py episode_t carries final_world, standard_read
+      and standard_success; their reward stays in status and rewards.
+  (5) tools/gen_scene_eval.py: arm T's row `success` is the standard test and
+      their reward is `t_reward_success`; an outcome whose final world could
+      not be read does not count and runs once more.  The report opens with
+      the caveat that T's test is geometric and ours physical.
+  THE TEST FOR T: the target body attached (state.grasp.body is a body of the
+  target category), both pads within 2 mm of it, the arm joints at home under
+  numpy's allclose (1e-4).  The 2 mm is the session's reading, not Hani's
+  words: their get_grasp closes the fingers to (1 + 0.05) times the contact
+  position, so each pad sits up to about 2 mm off the body by construction.
+  The raw gaps and joints are in each record, so another bound can be judged
+  from the records.
+  REVIEW (tracks/sub_tampura/G13_REVIEW.md, Sub-manager T (2), 2026-11-07
+  15:05 to 15:12): accepted, with R1 to R5, all built in 1fbfa4a (16:03).
+  R1: the report prints in how many T episodes the target was attached, the
+  largest pad gap and the median, and lists every episode that was attached
+  and at home and fails by the bound alone ("reported to Sub-manager T and Go
+  before a wave counts").  R2: a stop rule in gen_scene_eval: three episodes
+  of one arm under one gate (G13, G19, or FINAL_WORLD for an unread final
+  world) stop the JOB (a STOPPED line, metadata status "stopped", exit code
+  2, a resumed run refuses); a wave-wide stop when one job stops is by hand.
+  R3: above.  R4: a column "t unknown" apart from "t > 20" in the with against
+  without table.  R5: the caveat.  Go's check of 97ff3b2, 6328d88 and 1fbfa4a
+  passed (about 16:39).
+  CORRECTION OF DV-2 (tracks/eval/DEVIATIONS.md): McNemar's test of capped
+  against uncapped within one arm is a formality (a capped success is always
+  an uncapped success), so the report prints the counts, and the tests are
+  each view against T and A' against A under each view.
+  CHECKS (Windows Python 3.12, no WSL; MEASURED): 72 unit tests pass at
+  09ebc43 (Sub-manager T (2)'s re-run of test_gen_scene_eval.py,
+  test_final_world.py and test_g13_rollout_pin.py); `bridge_gates.py static`,
+  read whole, exits 0 (37 modules, G1 PASS 83 hits, G2 PASS 46 hits, G7,
+  G11(i) and G17 PASS); the check against fake `tampura` packages passes (6
+  cases).
+  NOT RUN: nothing has run against their real world: no episode, no cluster
+  step, no `wsl` call (rule 14).  Three tests that need their packages
+  (test_g13_runtime.py) are written and not run.  The facts the read relies
+  on (world.client is a BulletClient, get_finger_links returns the two pads,
+  current_q, grasp.body equal to the real body id) are read from the pinned
+  sources (tampura_environments 4167c35, tampura cdddf14), not executed.
+  BEFORE WAVE 2 COUNTS: one local arm T episode, headless, under the lock,
+  after rule 14 is lifted and on Go's word.  final_world.json must exist with
+  ok true, both pad gaps should be near 0.45 mm (Sub-manager T (2)'s
+  expectation), on a success of their reward the verdict should agree, and
+  their outcome should equal a run without the wrapper on the same seed up to
+  the usual run-to-run difference; then rule 15's visual check.
+  STATE (2026-11-07 16:57): built, reviewed and checked, not run.
+  EVIDENCE: tracks/eval/G13_AMENDMENT.md, tracks/eval/DEVIATIONS.md (DV-1,
+  DV-2), tracks/sub_tampura/G13_REVIEW.md, the commits 97ff3b2, 6328d88 and
+  1fbfa4a on track/eval (sb-eval).
+  CLAIM EFFECT: none yet.  BF#63's results use their reward and stand as they
+  are.  Any number that uses T's standard test comes only after the local
+  episode above; if the read is wrong, T's successes move both ways.
+  HONESTY CLASS: protocol change to the measurement of arm T, made at Hani's
+  word, reviewed and checked, built and not run; the 2 mm bound is the
+  session's reading and is disclosed as such.
 
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
