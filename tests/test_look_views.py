@@ -147,18 +147,75 @@ def test_the_facts_are_deterministic(world):
                for x, y in zip(a, b) if x[0] == 'Config')
 
 
-def test_a_goal_outside_every_boxel_has_no_view_and_is_named(world):
-    far = world.reg.add_boxel(_boxel('shadow_far', BoxelType.SHADOW,
-                                     [0.9, 0.9, 0.0], [0.95, 0.95, 0.05]))
-    facts, stats = _facts(world, regions=('shadow_far',), objects=())
-    assert 'shadow_far' in stats['no_view']
+def test_a_goal_no_view_can_hold_has_no_view_and_is_named(world):
+    """Below the table: every view's rays meet the plane first, so the stage 2 render
+    rejects each try.  (A goal 1 m from every boxel is no such case: the pose aimed at
+    its centre holds it, as the executor's render would.)"""
+    world.reg.add_boxel(_boxel('shadow_below', BoxelType.SHADOW,
+                               [0.2, -0.1, -0.3], [0.3, 0.1, -0.2]))
+    facts, stats = _facts(world, regions=('shadow_below',), objects=())
+    assert 'shadow_below' in stats['no_view']
     assert not any(f[0] == 'reveals' for f in facts)
+
+
+def test_a_far_goal_is_held_by_the_pose_aimed_at_its_centre(world):
+    """What the tilt set (35 degrees at most) could not do: look at a goal far from every
+    viewpoint boxel."""
+    world.reg.add_boxel(_boxel('shadow_far', BoxelType.SHADOW,
+                               [0.9, 0.9, 0.0], [0.95, 0.95, 0.05]))
+    facts, stats = _facts(world, regions=('shadow_far',), objects=())
+    assert 'shadow_far' not in stats['no_view']
+    assert any(f[0] == 'reveals' and f[2] == 'shadow_far' for f in facts)
 
 
 def test_the_arm_is_put_back(world):
     before = world.views._arm()
     _facts(world)
     assert np.allclose(world.views._arm(), before)
+
+
+def test_the_candidates_include_a_pose_aimed_at_the_centre_of_the_goal(world):
+    goal = look_views.region_goal(world.reg.get_boxel('shadow_a'))
+    v = world.reg.get_boxel('free_side')
+    _, boxes = world.lv._movable(world.reg)
+    cands = world.lv._candidates(goal, v, boxes, 0.0)
+    aimed = []
+    for cam in cands:
+        t = goal.centre - cam[:3, 3]
+        ang = math.acos(float(np.clip(cam[:3, 2] @ t / np.linalg.norm(t), -1.0, 1.0)))
+        down = math.acos(float(np.clip(-cam[2, 2], -1.0, 1.0)))        # from straight down
+        if ang < 1e-6 and down > math.radians(1.0):
+            aimed.append((cam[:3, 3], down))
+    assert aimed, "a tilted pose looks at the centre of the goal"
+    # per position: the tilted poses at both yaws, and the aimed ones at both yaws
+    n_pos = len({tuple(np.round(c[:3, 3], 4)) for c in cands})
+    assert len(cands) <= n_pos * (len(look_views.LOOK_TILTS) + 1) * len(look_views.LOOK_YAWS)
+    assert look_views.LOOK_AT_CENTRE
+
+
+def test_a_candidate_the_arm_cannot_reach_never_takes_a_stage_two_try(world):
+    world.lv.reachable = lambda ee: False
+    _, stats = _facts(world)
+    assert stats['stage1'] > 0
+    assert stats['unreachable'] == stats['stage1']          # every candidate dropped in stage 1
+    assert stats['look_ik'] == 0 and stats['twin_renders'] <= 1    # at most the current pose
+    assert 'shadow_a' in stats['no_view']
+
+
+def test_reachable_candidates_are_tried_when_the_best_ranked_ones_are_not(world):
+    """The first smokes' finding: the best-ranked candidates were out of reach and used up
+    the three tries.  Now only candidates inside the envelope are ranked."""
+    cap = 0.30
+    world.lv.reachable = lambda ee: float(ee[2]) <= cap
+    facts, stats = _facts(world, objects=())
+    assert stats['unreachable'] > 0
+    assert 'shadow_a' not in stats['no_view'] and stats['certified'] >= 1
+    for f in facts:
+        if f[0] == 'Config':
+            world.views._set_arm(f[1].joint_positions)
+            ee = p.getLinkState(world.robot, robot_utils.robot_model().ee_link,
+                                computeForwardKinematics=True, physicsClientId=world.cid)[4]
+            assert ee[2] <= cap + 0.015                       # the IK's own tolerance
 
 
 # ----- the render rule ---------------------------------------------------------

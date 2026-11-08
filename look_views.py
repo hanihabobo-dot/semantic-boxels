@@ -9,8 +9,11 @@ two stages, with no randomness:
   stage 1 (analytic, no rendering): positions on a lattice inside the boxel,
     clipped to the camera band, plus the point over the goal projected into
     the boxel; per position the orientations at the declared tilts and wrist
-    yaws.  Each candidate is scored by projecting the goal's own ray endpoints
-    into the camera and testing the believed boxes in front of them.
+    yaws, and the orientation aimed at the goal's centre (LOOK_AT_CENTRE).
+    Candidates the arm cannot reach (the planner's own envelope, ``reachable``)
+    are dropped here, so the stage 2 tries go to reachable ones.  Each
+    candidate is scored by projecting the goal's own ray endpoints into the
+    camera and testing the believed boxes in front of them.
   stage 2 (the executor's rule): the best LOOK_TRIES candidates in score
     order get IK, a collision check and one wrist render in the plan twin; the
     first whose render shows the goal passes.  That one render then names
@@ -38,7 +41,7 @@ import numpy as np
 
 import robot_utils
 from boxel_data import BoxelType
-from observe_views import (LOOK_IMAGE_MARGIN_PX, _quat, lattice,
+from observe_views import (LOOK_IMAGE_MARGIN_PX, _quat, lattice, look_at_pose,
                            wrist_render)
 from perception import (SENSE_MARGINAL_BLOCKED_FRACTION,
                         first_surface_interceptors, project_points_to_pixels,
@@ -48,6 +51,11 @@ from streams import RobotConfig
 # Declared before measuring (PLAN.md 3.4).
 LOOK_TILTS = (0.0, math.radians(20.0), math.radians(35.0))   # from straight down
 LOOK_YAWS = (0.0, math.pi / 2.0)             # the wrist's roll, as M8's looks
+# Declared before the third smoke (the second showed the tilt set cannot look at a
+# 0.45 m tall region from a camera held under the 0.45 m band): per position also the
+# orientation aimed at the centre of the goal, at both yaws; a position straight over
+# the centre adds nothing (that is tilt 0).
+LOOK_AT_CENTRE = True
 LOOK_LATTICE_FRACTIONS = (0.25, 0.75)        # per axis of the clipped boxel
 LOOK_INSET_M = 0.015                         # a pose stays this far inside its boxel
 LOOK_BAND_CLEARANCE_M = 0.12                 # over the highest believed body near it
@@ -313,13 +321,24 @@ class LookViews:
 
     def _candidates(self, goal: LookGoal, v, boxes, table_z: float):
         """Stage 1: the candidate poses of one (goal, boxel) pair, as camera
-        poses.  Tilt 0 is one pose per yaw whatever the azimuth."""
+        poses.  Tilt 0 is one pose per yaw whatever the azimuth; the pose aimed
+        at the goal's centre follows each position's tilted ones."""
         cands = []
+        centre = np.asarray(goal.centre, dtype=float)
         for pos in self._positions(goal, v, boxes, table_z):
             for tilt in LOOK_TILTS:
                 for yaw in LOOK_YAWS:
                     cands.append(camera_pose(pos, tilt, yaw, goal.centre[:2]))
+            if LOOK_AT_CENTRE and float(np.hypot(*(pos[:2] - centre[:2]))) > 1e-3:
+                for yaw in LOOK_YAWS:
+                    cands.append(look_at_pose(pos, centre, yaw))
         return cands
+
+    def _reachable_cam(self, cam, ee_inv) -> bool:
+        """The planner's reach envelope for the hand that carries ``cam``."""
+        if self.reachable is None:
+            return True
+        return bool(self.reachable((cam @ ee_inv)[:3, 3]))
 
     def _score(self, cam, goal: LookGoal, others: Sequence[LookGoal], boxes,
                here: np.ndarray):
@@ -451,6 +470,7 @@ class LookViews:
         certs: List[Cert] = []
         try:
             here_cam = self._camera_at(current_config.joint_positions)
+            ee_inv = np.linalg.inv(self.views._ee_to_camera())
             free = self._free_boxels(registry, table_z)
             # The configuration the arm is in: a look from where it stands
             # needs no move.
@@ -474,6 +494,9 @@ class LookViews:
                     self.last_stats['stage1'] += len(cands)
                     scored = []
                     for i, cam in enumerate(cands):
+                        if not self._reachable_cam(cam, ee_inv):
+                            self.last_stats['unreachable'] += 1     # never reaches stage 2
+                            continue
                         key, ok = self._score(cam, goal, others, boxes, here_cam)
                         if ok and (key[1] or not require_clear):
                             scored.append((key, i))
