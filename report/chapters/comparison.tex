@@ -236,8 +236,8 @@ space behind it is unknown, and whatever removes that reason loses the die.
 Where the 23 failures come from is itemised by cause. In 16 of the 17
 runs that ended with all shadows searched, the shadow behind the cup was clipped away by the
 window in which the pipeline plans free space; the fix for this (\BF{64}) is
-written but not yet in the trunk (\TK{3}), and the numbers of the evaluation stand
-for the code they measured. In local reruns with that fix, 6 of the
+checked on path 3's fixes branch and waits for Go's merge (\TK{3}), and the numbers of
+the evaluation stand for the code they measured. In local reruns with that fix, 6 of the
 12 scenes succeed and 6 still fail: one because the shadow was a 2.3\,cm sliver
 seen empty, two because the reach gate refuses a shadow centre 0.826\,m and 0.845
 to 0.853\,m from the base while the dice lie at 0.761\,m and 0.774\,m, one because
@@ -262,14 +262,18 @@ $p = 0.125$ (\TK{5}). TAMPURA's four failures: one place ended in a collision an
 left it holding an object, and three were look loops, in which it repeated one look
 17 to 20 times until its 20 steps were used, because our fixed camera gives its look
 action no new viewpoint (\TK{5}). The median wall time was 16.4\,s for ours against
-250.2\,s for TAMPURA (\TK{5}). The thesis named this experiment as the gap in its
+250.2\,s for TAMPURA (\TK{5}). Neither arm's record counts drops: the GUI runs of ours on
+seeds 3 and 4, which Hani watched, each succeeded after a drop of a tall box (TB-23,
+\Cref{sec:path3}), and whether the headless runs of the batch held drops is not
+recorded. The thesis named this experiment as the gap in its
 comparison; no published number exists for TAMPURA on our scenes. A re-run in
 which TAMPURA looks through its own hand camera for its looks (option B) stopped after
 five seeds (0, 2, 3, 4 and 5), all successes. Go read Hani's words of 7 November as
 making the version with the hand camera for every image, the first as well (option
 C), the deliverable. Its batch started at 13:18 and ended at 13:48 under the stop
 order for WSL with two seeds done, seed 0 a success and seed 2 a failure; the other
-eight seeds wait (\TK{5}).
+eight seeds wait for Hani's approval under rule 15, after the watch runs of
+\Cref{sec:visual-check} (\TK{5}).
 
 \section{What the Paper May and May Not Claim}
 \label{sec:claims}
