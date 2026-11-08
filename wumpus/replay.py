@@ -20,7 +20,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from wumpus import lw1_exec, trace as tr                       # noqa: E402
+from wumpus import incidents, lw1_exec, trace as tr            # noqa: E402
 from wumpus.world import WumpusWorld, parse_hidden_file         # noqa: E402
 
 
@@ -96,12 +96,13 @@ def batch(size, blocks, traces, out_dir, bench=BENCH, vis=False):
                'actions': len(res['steps']), 'expected': len(expected),
                'observations': sum(1 for s in expected if s['obs'] is not None),
                'mismatches': res['mismatches'], 'divergence': res['divergence'], 'wall_s': res['wall_s']}
+        row.update(incidents.record(env, ok))          # rule 18: a pass is the success here
         rows.append(row)
         with open(os.path.join(out_dir, f'gw2_p{size:02d}_h{k:03d}.json'), 'w') as f:
             json.dump({'instance': world.to_dict(), **row, 'steps': res['steps']}, f, indent=1, default=float)
         print(f"G-W2 {size}x{size} h{k:03d}: {'PASS' if ok else 'FAIL'}  {row['actions']}/{row['expected']} "
               f"actions, {row['observations']} observations, status {res['status']}, mismatches "
-              f"{res['mismatches']}, divergence {res['divergence']}", flush=True)
+              f"{res['mismatches']}, divergence {res['divergence']}, {incidents.line(row)}", flush=True)
     with open(os.path.join(out_dir, f'gw2_p{size:02d}_summary.json'), 'w') as f:
         json.dump(rows, f, indent=1, default=float)
     return rows
@@ -148,6 +149,7 @@ def main(argv=None):
     finally:
         env.close()
     ok = passed(res)
+    res.update(incidents.record(env, ok))              # rule 18
     if a.out:
         os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
         with open(a.out, 'w') as f:
@@ -155,7 +157,8 @@ def main(argv=None):
                        'passed': ok, **res}, f, indent=1, default=float)
     print(f"replay: {'PASS' if ok else 'FAIL'}  {len(res['steps'])}/{len(expected)} actions, "
           f"status {res['status']}{' (' + res['why'] + ')' if res['why'] else ''}, "
-          f"mismatches {res['mismatches']}, divergence {res['divergence']}, {res['wall_s']:.1f} s")
+          f"mismatches {res['mismatches']}, divergence {res['divergence']}, {res['wall_s']:.1f} s, "
+          f"{incidents.line(res)}")
     return 0 if ok else 1
 
 

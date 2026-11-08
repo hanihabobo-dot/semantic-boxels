@@ -17,6 +17,9 @@ stench: green tile in the NE quadrant, glitter: the gold bar on its pedestal
 in the SE quadrant) read from the head camera by perception.
 detect_objects_from_render.  The camera sees only its own cell (see
 WumpusEnv.footprint_half).  Nothing that decides an action may read truth().
+
+Drops and collisions (tracks rule 18, wumpus/incidents.py) are detected and
+recorded only: the detectors read PyBullet's state and change nothing.
 """
 import math
 import time
@@ -30,12 +33,14 @@ import perception
 import robot_utils
 from boxel_data import BoxelData, BoxelRegistry, BoxelType
 
+from wumpus.incidents import CONTACT_M, DISTURB_M, OFF_PEDESTAL_M
 from wumpus.world import WumpusWorld, cell_ij, cell_name
 
 # ---- layout (metres; offsets from the cell centre, scaled by the cell size) ----
 CHASSIS_HALF = 0.28
 CHASSIS_Z0, CHASSIS_Z1 = 0.02, 0.42
 CAM_Z = 1.78                       # eye height over the floor
+CHASSIS_TOP = CAM_Z + 0.05         # the head's top: the chassis body's highest point
 MAST_XY = (-0.25, 0.0)
 BREEZE_OFF = (-0.38, 0.38)
 STENCH_OFF = (0.38, 0.38)
@@ -66,7 +71,7 @@ GRASP_QUAT_DOWN = p.getQuaternionFromEuler([0, math.pi, 0])
 class WumpusEnv:
     def __init__(self, world: WumpusWorld, gui: bool = False, cell_size: float = 1.0,
                  save_dir: Optional[str] = None, real_time: Optional[bool] = None,
-                 paint: bool = False):
+                 paint: bool = False, detect: bool = True):
         self.world = world
         self.s = float(cell_size)
         self.gui = bool(gui)
@@ -94,6 +99,19 @@ class WumpusEnv:
         # body bookkeeping: id -> (kind, cell)
         self.bodies: Dict[int, Tuple[str, str]] = {}
         self.floor_tile: Dict[str, int] = {}
+        # rule 18 (wumpus/incidents.py): drops and collisions, recorded only.  Every
+        # run detects (detect=True); detect=False is for the test that the moves are
+        # the same without the detectors, and records 'not detected'.
+        self.detect = bool(detect)
+        self.drops: Optional[int] = 0 if self.detect else None
+        self.collisions: Optional[int] = 0 if self.detect else None
+        self.incidents: List[dict] = []
+        self._fixed: Dict[int, Tuple[np.ndarray, np.ndarray]] = {}   # fixed bodies' boxes
+        self._fixed_arr = None
+        self._act: Optional[str] = 'start'     # the move or grab in progress; the settle first
+        self._act_hit, self._act_touch0 = set(), set()
+        self._act_bar_touched = False
+        self._held_seen = self._ever_held = self._bar_off = False
         self._build_scene()
         self._build_robot()
         self._label_ids: List[int] = []
@@ -106,6 +124,9 @@ class WumpusEnv:
                                          physicsClientId=c)
         for _ in range(60):          # let the bar settle on its pedestal
             self._tick()
+        self._bar_ref = self._bar_pos()           # rule 18: where the bar rests
+        self._bar_rest_z = float(self._bar_ref[2])
+        self._act = None
 
     # ------------------------------------------------------------ geometry
     def cell_center(self, cell: str) -> np.ndarray:
@@ -159,6 +180,8 @@ class WumpusEnv:
                                 baseVisualShapeIndex=vis, basePosition=list(pos), physicsClientId=c)
         if kind:
             self.bodies[bid] = (kind, cell)
+        if mass == 0 and col != -1:          # a fixed box, for the chassis check (rule 18)
+            self._fixed[bid] = (np.asarray(pos, float) - half, np.asarray(pos, float) + half)
         return bid
 
     def _build_scene(self):
@@ -219,6 +242,8 @@ class WumpusEnv:
         col = p.createCollisionShape(p.GEOM_BOX, halfExtents=[hx, hy, hz], physicsClientId=c)
         bid = p.createMultiBody(0, col, vis, [ctr[0], ctr[1], hz], physicsClientId=c)
         self.bodies[bid] = ('wumpus', cell)
+        self._fixed[bid] = (np.array([ctr[0] - hx, ctr[1] - hy, 0.0]),
+                            np.array([ctr[0] + hx, ctr[1] + hy, 2 * hz]))
         self.wumpus_body = getattr(self, 'wumpus_body', {})
         self.wumpus_body[cell] = bid
 
@@ -264,11 +289,15 @@ class WumpusEnv:
         p.resetBasePositionAndOrientation(self.chassis, [x, y, z], [0, 0, 0, 1], physicsClientId=c)
         p.resetBasePositionAndOrientation(self.panda, [x, y, z + CHASSIS_Z1], [0, 0, 0, 1],
                                           physicsClientId=c)
+        if self.detect:
+            self._watch_chassis()
 
     def _tick(self, n=1):
         for _ in range(n):
             p.stepSimulation(physicsClientId=self.cid)
             self.sim_steps += 1
+            if self.detect:
+                self._watch_arm()
             if self.realtime:
                 time.sleep(1 / 240)
 
@@ -350,10 +379,12 @@ class WumpusEnv:
     # ---------------------------------------------------------------- move
     def move(self, cell: str) -> dict:
         t0, s0 = time.time(), self.sim_steps
+        self._begin('move')
         res = {'ok': False, 'why': '', 'arrived': False, 'dead': None, 'pose': None,
                'sim_steps': 0, 'wall_s': 0.0}
 
         def done():
+            self._end()
             res['pose'] = self.pose()
             res['sim_steps'] = self.sim_steps - s0
             res['wall_s'] = time.time() - t0
@@ -471,9 +502,11 @@ class WumpusEnv:
 
     def grab(self) -> dict:
         t0, s0 = time.time(), self.sim_steps
+        self._begin('grab')
         res = {'ok': False, 'why': '', 'held': False, 'sim_steps': 0, 'wall_s': 0.0}
 
         def done():
+            self._end()
             res['sim_steps'] = self.sim_steps - s0
             res['wall_s'] = time.time() - t0
             return res
@@ -532,10 +565,120 @@ class WumpusEnv:
             z_bar = p.getBasePositionAndOrientation(self.bar, physicsClientId=self.cid)[0][2]
             touching = self._finger_contacts(self.bar)
             self.held = touching == set(self.model.finger_joints) and z_bar > PEDESTAL_H + 0.05
+            self._note_hold(touching, z_bar)
         res['held'] = self.held
         res['ok'] = self.held
         res['why'] = '' if self.held else 'the bar is not held (contacts %s, bar z %.3f)' % (sorted(touching), z_bar)
         return done()
+
+    # ------------------------------------- rule 18: drops and collisions, recorded only
+    # Nothing here changes the simulation: it reads contact points and poses and
+    # compares boxes.  What counts, and why: wumpus/incidents.py.
+    def _bar_pos(self) -> np.ndarray:
+        return np.array(p.getBasePositionAndOrientation(self.bar, physicsClientId=self.cid)[0])
+
+    def _bar_box(self):
+        pos, orn = p.getBasePositionAndOrientation(self.bar, physicsClientId=self.cid)
+        rot = np.abs(np.array(p.getMatrixFromQuaternion(orn)).reshape(3, 3))
+        ext = rot @ (np.array(BAR_SIZE) / 2)        # the turned bar's axis-aligned half sizes
+        return np.array(pos) - ext, np.array(pos) + ext
+
+    def _begin(self, action: str):
+        """A move or grab starts; what is touched already is not new."""
+        if not self.detect:
+            return
+        self._act, self._act_hit, self._act_bar_touched = action, set(), False
+        self._act_touch0 = self._arm_touching() | self._chassis_inside()
+
+    def _arm_touching(self) -> set:
+        """The bodies the arm touches now without meaning to; the bar is meant in a
+        grab and while held."""
+        out = set()
+        for ct in p.getContactPoints(bodyA=self.panda, physicsClientId=self.cid):
+            other = ct[2]
+            if other == self.panda or ct[8] > CONTACT_M:
+                continue
+            if other == self.bar and (self._act == 'grab' or self._held_seen):
+                self._act_bar_touched |= self._act == 'grab'
+                continue
+            out.add(other)
+        return out
+
+    def _chassis_inside(self) -> set:
+        """The bodies whose box the chassis box enters: the chassis has no collision
+        shape, so no contact point shows it.  A held bar rides along, left out."""
+        x, y, z = self.base_xyz
+        lo = np.array([x - CHASSIS_HALF, y - CHASSIS_HALF, z + CHASSIS_Z0])
+        hi = np.array([x + CHASSIS_HALF, y + CHASSIS_HALF, z + CHASSIS_TOP])
+        if self._fixed_arr is None or len(self._fixed_arr[0]) != len(self._fixed):
+            ids = list(self._fixed)
+            self._fixed_arr = (ids, np.array([self._fixed[b][0] for b in ids]).reshape(-1, 3),
+                               np.array([self._fixed[b][1] for b in ids]).reshape(-1, 3))
+        ids, blo, bhi = self._fixed_arr
+        inside = np.all(lo < bhi - 1e-6, axis=1) & np.all(blo < hi - 1e-6, axis=1)
+        out = {ids[k] for k in np.nonzero(inside)[0]}
+        if not self._held_seen:
+            blo1, bhi1 = self._bar_box()
+            if np.all(lo < bhi1 - 1e-6) and np.all(blo1 < hi - 1e-6):
+                out.add(self.bar)
+        return out
+
+    def _watch_arm(self):            # after every simulation step
+        for bid in self._arm_touching() - self._act_touch0:
+            self._collide(bid, 'the arm touched it')
+
+    def _watch_chassis(self):        # after every base step
+        for bid in self._chassis_inside() - self._act_touch0:
+            self._collide(bid, 'the chassis entered its box')
+
+    def _end(self):
+        """A move or grab ends: the held bar's test (a drop), the never-held bar's
+        place (knocked)."""
+        if not self.detect or self._act is None:
+            return
+        pos = self._bar_pos()
+        if self._held_seen:
+            pads = self._finger_contacts(self.bar)
+            if not (pads == set(self.model.finger_joints) and pos[2] > PEDESTAL_H + 0.05):
+                self._held_seen = False
+                self._drop(f'the bar left the gripper (pads {sorted(pads)}, bar z {pos[2]:.3f})')
+        elif not self._ever_held:
+            moved = float(np.linalg.norm(pos - self._bar_ref))
+            if moved > DISTURB_M and not self._act_bar_touched:
+                self._collide(self.bar, f'the bar moved {moved * 1000:.0f} mm, never held')
+            if pos[2] < self._bar_rest_z - OFF_PEDESTAL_M and not self._bar_off:
+                self._bar_off = True
+                self._collide(self.bar, f'the bar lies {(self._bar_rest_z - pos[2]) * 100:.0f} cm '
+                                        'below its rest height, never held')
+        self._bar_ref = pos
+        self._act = None
+
+    def _note_hold(self, touching, z_bar):
+        """grab()'s test after the stow: the bar is held, or it dropped in the stow."""
+        if not self.detect:
+            return
+        self._ever_held = True
+        if self.held:
+            self._held_seen = True
+        else:
+            self._drop(f'the bar left the gripper in the stow (pads {sorted(touching)}, bar z {z_bar:.3f})')
+
+    def _collide(self, bid: int, how: str):
+        if bid in self._act_hit:         # once per action and body
+            return
+        self._act_hit.add(bid)
+        self.collisions += 1
+        self._incident('collision', how, bid)
+
+    def _drop(self, how: str):
+        self.drops += 1
+        self._incident('drop', how, self.bar)
+
+    def _incident(self, kind: str, how: str, bid: int):
+        what, cell = self.bodies.get(bid, (f'body {bid}', ''))
+        self.incidents.append({'kind': kind, 'how': how, 'body': what, 'body_cell': cell,
+                               'action': self._act or 'between actions',
+                               'robot_cell': self.robot_cell(), 'sim_step': self.sim_steps})
 
     # ------------------------------------------------------------ for checks
     def truth(self, cell: str) -> dict:

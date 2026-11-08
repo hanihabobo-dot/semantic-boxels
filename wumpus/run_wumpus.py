@@ -1,8 +1,10 @@
 """One Wumpus episode: python wumpus/run_wumpus.py --size 5 --seed 3 --vis 0.
 
 Writes episode.json into --save-dir: the instance, every step (action,
-observation, ground truth beside it, pose, sim steps, times), the outcome and
-the wall times.  Controllers get a logging wrapper that has no truth().
+observation, ground truth beside it, pose, sim steps, times), the outcome, the
+wall times and rule 18's drops, collisions, their detectors, clean_success
+and the incidents (wumpus/incidents.py).  Controllers get a logging wrapper
+that has no truth().
 
 At --log-level smart (the default) the terminal shows the curated console that
 run boxels and run tampura use: the robot says what it knows and what it will
@@ -136,7 +138,7 @@ def _refuse(message, code):
 def _episode(a, world, logger):
     """One episode on the built world; the run logger (the curated console
     with it) is open."""
-    from wumpus import narrate
+    from wumpus import incidents, narrate
     from wumpus.env import WumpusEnv
     console_ui.startup(f'Building the {a.size}x{a.size} world, seed {a.seed}')
     t0 = time.time()
@@ -182,6 +184,9 @@ def _episode(a, world, logger):
                     'action_s': sum(s['result'].get('wall_s', 0.0) for s in steps),
                     'pace_s': narrate.pace_s(), 'paced_s': narrate.paced_s()},
            'run_dir': str(logger.run_dir)}
+    # rule 18: drops, collisions, their detectors, clean_success, the incidents (deaths
+    # stay in the outcome)
+    rec.update(incidents.record(env, outcome['outcome'] == 'success'))
     if a.paint_frames:
         # render_s: the pictures' time, which run_s includes (and LW1's plan times, for a
         # BELIEF painted while LW1 plans)
@@ -192,7 +197,7 @@ def _episode(a, world, logger):
         with open(os.path.join(a.save_dir, 'episode.json'), 'w') as f:
             json.dump(rec, f, indent=1, default=float)
     print(f"wumpus: outcome {outcome['outcome']} ({outcome['reason']}), {len(steps)} actions, "
-          f"{run_s:.1f} s")
+          f"{run_s:.1f} s, {incidents.line(rec)}")
     narrate.episode_files(a.save_dir or logger.run_dir, seed=a.seed, outcome=outcome['outcome'],
                           actions=len(steps))
     if a.vis:
