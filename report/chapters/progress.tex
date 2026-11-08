@@ -39,13 +39,18 @@ The rules that every track follows, as the tracks' state file words them
   (4.4 of 30.8\,GB of memory free, 54.5 of 60.2\,GB of commit charge at 13:20), and
   Hani's words were read by Go as: run nothing in WSL until the memory problem is
   found and fixed (rule 14). Path 12 has since delivered its report to Go, and the
-  freeze still held at 16:07 (\ID{tracksstate}{tracks state file}).
+  freeze still held at 16:07 (\ID{tracksstate}{tracks state file}). Go lifted it on
+  8 November at 14:07, after Hani's runs, with WSL capped at 8\,GB.
   \item Before any evaluation of one environment and planner against another, Hani
   confirms by eye on at least four seeds, two per system, and the evaluation goes
   ahead only after Hani's approval (rule 15).
   \item Since 14:40, runs must not build up memory: one process per episode, each
   episode's peak memory and the free memory at its start and end recorded, and a batch
   stops after the current episode when less than 4\,GB is free (rule 16).
+  \item Since 8 November every evaluation records, per episode, the drops and collisions
+  and how each was detected, and reports print clean success (no drop and no collision)
+  beside success; Hani picks the headline criterion once the first counts are in
+  (rule 18).
 \end{itemize}
 
 \section{The Tracks at a Glance}
@@ -78,7 +83,7 @@ decided at 14:08; no episode \\
 9 & one look action in place of sense and observe & built behind a flag; no episode \\
 10 & our setup in the Wumpus world & triviality numbers done; SB arms built; runs stopped
 \\
-11 & this report & version 1.1 \\
+11 & this report & version 1.2 \\
 12 & why WSL wedged & read-only analysis; its report goes to Go \\
 \bottomrule
 \end{tabularx}

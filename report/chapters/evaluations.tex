@@ -16,7 +16,11 @@ simulator, on the three scenes that TAMPURA ships, on scenes from TAMPURA's own
 generator, and in worlds that other planners define (the Wumpus world and TAMPURA's
 other tasks). \Cref{tab:catalogue} has one row per evaluation. The caveat column
 repeats what the entry itself warns about. \Cref{sec:visual-check} says, for each
-comparison among them, whether Hani's visual check was done.
+comparison among them, whether Hani's visual check was done. The success criterion is
+under review: from 8 November every evaluation records the drops and collisions of each
+episode and prints clean success (no drop, no collision) beside success, and the numbers
+of this report, whose records hold no such counts, are not re-scored (rule 18 of the
+tracks, \ID{tracksstate}{tracks state file}).
 
 \begin{small}
 \begin{longtable}{@{}P{0.30\textwidth}P{0.36\textwidth}P{0.28\textwidth}@{}}
@@ -659,10 +663,12 @@ Run before the rule; no check under it is recorded. Path 6's wave 2, below, show
 of its scenes, 113 and 102. \\
 TAMPURA's planner on our scenes against ours (\TK{5}) &
 6 Nov, ten seeds; the hand-camera batch was cut at 13:48 on 7 Nov &
-Part of it. Hani started a run of TAMPURA on seed 3 at 16:24, with the fixed camera:
-TAMPURA succeeded, where the headless run of the first batch on that seed had failed
-(\ID{tracksstate}{tracks state file}). Ours on seeds 3 and 4, TAMPURA on seed 4 and
-the hand-camera runs were still to run at 17:35; no approval is recorded. \\
+Part of it. Hani started runs in a window at 16:24 (seed 3) and 16:29 (seed 4). The
+seed 3 run was TAMPURA with the fixed camera: TAMPURA succeeded, where the headless run
+of the first batch on that seed had failed. Only the tracks state file as it stood on
+8 November records the seed 4 run; it names no system or result, and the list of 17:35
+shows only seed 3 as done (\ID{tracksstate}{tracks state file}). Ours on seeds 3 and 4
+and the hand-camera runs were still listed as to run at 17:35; no approval is recorded. \\
 LW1 driving our robot against LW1 alone (\TK{4}) &
 6 Nov &
 Run before the rule. No new comparison is planned; the Wumpus list shows the LW1
@@ -699,7 +705,8 @@ yes. \\
 The other rows of \Cref{tab:catalogue} measure one system alone (TAMPURA as shipped,
 our planning layer on TAMPURA's tasks, the simple walkers), set versions of our own
 system against each other, or are void; the files record no visual check for them.
-Hani's run of 16:24 is the only run of the check that the files record; the other
-runs of the lists run in WSL and wait for the end of rule 14, when Go puts the lists to
-Hani. A run in a window shows behaviour, not the times of the cluster (the note of
+Hani's runs of 16:24 and 16:29 are the only runs of the check that the files record.
+The other runs of the lists run in WSL and waited for the end of rule 14, which Go
+lifted on 8 November at 14:07 (\ID{tracksstate}{tracks state file}); the table keeps
+the state of 17:35 on 7 November. A run in a window shows behaviour, not the times of the cluster (the note of
 path 6), so the check does not replace a measured number.
