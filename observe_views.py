@@ -45,6 +45,14 @@ VIEW_PREFIX = 'view__'
 
 # C2, declared before measuring (BF#28 used the same values).
 LOOK_STANDOFFS = (0.20, 0.30)
+# The centred look's hypothesis regions (path 9): a fragment's box is not
+# bounded by an object's size, and the wrist camera sees only 1.23 s by 0.91 s
+# metres at s metres over a box's top, so one view from 0.20 or 0.30 m cannot
+# always hold all of it (the first smoke, seed 0, 2 occluders: regions of 0.27
+# by 0.27 m and 0.10 by 0.33 m had no view).  The camera goes at the first of
+# these heights over the box top from which the twin certifies all of it in
+# view and unblocked; pose looks of registered objects keep LOOK_STANDOFFS.
+CENTRED_REGION_STANDOFFS = (0.20, 0.30, 0.40, 0.50)
 LOOK_WRIST_YAWS = (0.0, math.pi / 2)
 LOOK_IMAGE_MARGIN_PX = 8
 
@@ -163,6 +171,10 @@ class ObserveViews:
         self._retract_q: Optional[List[Optional[np.ndarray]]] = None
         self.last_stats: Dict[str, float] = {}
         self.last_fallback: List[str] = []
+        # Path 9: per look boxel, why each (standoff, yaw) pair of its last
+        # look_configs call did or did not pass: (k, standoff, yaw, verdict,
+        # detail), verdict removed | no_ik | collision | frame | blocked | ok.
+        self.last_look_notes: Dict[str, list] = {}
         # BF#52: sense_view_test's renders of this init, one per
         # configuration name, and its counters (reset by init_facts).
         self._test_renders: Dict[str, tuple] = {}
@@ -241,11 +253,14 @@ class ObserveViews:
         w, h = robot_utils.WRIST_CAMERA_WIDTH, robot_utils.WRIST_CAMERA_HEIGHT
         m = LOOK_IMAGE_MARGIN_PX
         out = []
+        notes = []
+        self.last_look_notes[boxel.id] = notes
         k = -1
         for so in standoffs:
             for wy in LOOK_WRIST_YAWS:
                 k += 1
                 if (boxel.id, k) in self.removed:
+                    notes.append((k, so, wy, 'removed', ''))
                     continue
                 cam = np.eye(4)
                 z = np.array([0.0, 0.0, -1.0])
@@ -257,10 +272,12 @@ class ObserveViews:
                                          physics_client=self.client)
                 self.last_stats['look_ik'] += 1
                 if q is None:
+                    notes.append((k, so, wy, 'no_ik', ''))
                     continue
                 if not robot_utils.is_config_collision_free(
                         self.robot, q, physics_client=self.client,
                         log_collisions=False):
+                    notes.append((k, so, wy, 'collision', ''))
                     continue
                 self._set_arm(q)
                 t0 = time.perf_counter()
@@ -271,10 +288,27 @@ class ObserveViews:
                 inside = bool(np.all(in_view) and rows.min() >= m and cols.min() >= m
                               and rows.max() <= h - 1 - m and cols.max() <= w - 1 - m)
                 icp, hids, _ = first_surface_interceptors(pts, depth_m, seg, view, proj)
-                if inside and not np.any(icp & np.isin(hids, list(blocking))):
+                hit = icp & np.isin(hids, list(blocking))
+                if not inside:
+                    notes.append((k, so, wy, 'frame',
+                                  f"rows {rows.min():.0f}..{rows.max():.0f} of {h}, "
+                                  f"cols {cols.min():.0f}..{cols.max():.0f} of {w}"))
+                elif np.any(hit):
+                    who = sorted({self._body_name(b) for b in np.asarray(hids)[hit].tolist()})
+                    notes.append((k, so, wy, 'blocked',
+                                  f"{int(np.sum(hit))} of {len(pts)} points hidden by {who}"))
+                else:
+                    notes.append((k, so, wy, 'ok', ''))
                     out.append((k, RobotConfig(joint_positions=np.asarray(q),
                                                name=look_name(boxel.id, k))))
         return out
+
+    def _body_name(self, twin_id) -> str:
+        """The task body a plan-twin id belongs to (else the id as text)."""
+        for n in self.env.objects:
+            if self._twin_id(n) == twin_id:
+                return n
+        return str(twin_id)
 
     # ----- C1 -----------------------------------------------------------
 
@@ -379,6 +413,7 @@ class ObserveViews:
                            'look_ik': 0, 'sense_view': 0, 'look_config': 0,
                            'sense_fallback': 0}
         self.last_fallback = []
+        self.last_look_notes = {}
         self._test_renders = {}                 # BF#52: a new twin state
         self.test_stats = self._fresh_test_stats()
         saved = self._arm()

@@ -35,7 +35,8 @@ import observe_views  # noqa: E402
 import robot_utils  # noqa: E402
 from test_look_correspondence import (_Loop, _add_body, _home, _known,  # noqa: E402,F401
                                       m1_calls)
-from test_look_views import world  # noqa: E402,F401  (fixture)
+from boxel_data import BoxelType  # noqa: E402
+from test_look_views import _boxel, world  # noqa: E402,F401  (world is a fixture)
 
 CENTRED_TEXT = look_domain.read(look_domain.CENTRED_FILE)
 STREAM_TEXT = (ROOT / 'pddl' / 'stream.pddl').read_text(encoding='utf-8')
@@ -248,8 +249,9 @@ def test_the_camera_goes_straight_over_the_hypothesis(world):
     assert qs, "a hypothesised fragment gets look configurations"
     assert all(q.name.startswith('look_shadow_a_') for q in qs)
     assert 'shadow_a' not in pl.last_look_stats['no_view']
-    # the same configurations as the tag's observe rule gives a box
-    want = {q.name for _, q in world.views.look_configs(world.reg.get_boxel('shadow_a'))}
+    # the tag's observe rule at the region heights (a fragment is not bounded by an object)
+    want = {q.name for _, q in world.views.look_configs(
+        world.reg.get_boxel('shadow_a'), observe_views.CENTRED_REGION_STANDOFFS)}
     assert {q.name for q in qs} == want
     # a move can reach each one: the tag's view pseudo-boxel, as for observe
     views = {f[2] for f in init if f[0] == 'config_for_boxel' and f[1] in qs}
@@ -268,7 +270,8 @@ def test_a_removed_configuration_leaves_the_facts(world):
 
 def test_a_hypothesis_with_no_passing_configuration_has_no_look(world):
     pl = _planner(world)
-    world.views.removed.update(('shadow_a', k) for k in range(4))
+    n = len(observe_views.CENTRED_REGION_STANDOFFS) * len(observe_views.LOOK_WRIST_YAWS)
+    world.views.removed.update(('shadow_a', k) for k in range(n))
     init = _init(pl)
     assert ('look_for', 'blue', 'shadow_a') in init
     assert not [f for f in init if f[0] == 'look_config' and f[2] == 'shadow_a']
@@ -535,3 +538,42 @@ def test_a_pose_look_from_a_changed_standoff(world, m1_calls, standoff):
     assert res.reached and res.continue_ and res.reposed == ['die']
     assert {k for k in before['boxels'] if before['boxels'][k] != after['boxels'][k]} == {'die'}
     assert _known(world.reg.get_boxel('die'))
+
+
+# ----- 6. a region larger than one view (the first smoke, seed 0) ----------------------
+
+def _big_region(world):
+    """0.30 by 0.30 m: more than the wrist camera holds from 0.20 or 0.30 m over its
+    top (it sees 0.91 s metres along its short image side), clear of the other bodies."""
+    world.reg.add_boxel(_boxel('shadow_big', BoxelType.SHADOW, [-0.05, 0.10, 0.0],
+                               [0.25, 0.40, 0.05]))
+    return world.reg.get_boxel('shadow_big')
+
+
+def test_a_region_larger_than_the_view_has_no_configuration_at_the_default_heights(world):
+    big = _big_region(world)
+    assert _configs(world, big) == []
+    notes = world.views.last_look_notes['shadow_big']
+    assert len(notes) == len(observe_views.LOOK_STANDOFFS) * len(observe_views.LOOK_WRIST_YAWS)
+    verdicts = {v for _, _, _, v, _ in notes}
+    assert 'frame' in verdicts and verdicts <= {'frame', 'no_ik', 'collision'}
+    assert all('rows' in d and 'cols' in d for _, _, _, v, d in notes if v == 'frame')
+
+
+def test_the_region_heights_reach_a_view_that_holds_the_whole_region(world):
+    big = _big_region(world)
+    cfgs = _configs(world, big, observe_views.CENTRED_REGION_STANDOFFS)
+    assert cfgs
+    ks = [k for k, _ in cfgs]
+    assert min(ks) >= 2 * len(observe_views.LOOK_WRIST_YAWS)     # none at 0.20 or 0.30 m
+    verdict = {k: v for k, _, _, v, _ in world.views.last_look_notes['shadow_big']}
+    assert all(verdict[k] == 'ok' for k in ks)
+
+
+def test_a_region_with_no_view_is_explained_in_the_log(world, capsys):
+    pl = _planner(world)
+    n = len(observe_views.CENTRED_REGION_STANDOFFS) * len(observe_views.LOOK_WRIST_YAWS)
+    world.views.removed.update(('shadow_a', k) for k in range(n))
+    _init(pl)
+    out = capsys.readouterr().out
+    assert 'no view of shadow_a' in out and 'removed' in out

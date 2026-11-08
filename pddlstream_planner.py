@@ -42,7 +42,7 @@ from streams import (BoxelStreams, RobotConfig, Trajectory, Grasp,
                      NOMINAL_HIDDEN_EXTENTS, HOME_PSEUDO_BOXEL)
 from robot_utils import REST_POSES, robot_model
 import pose_belief
-from observe_views import VIEW_PREFIX
+from observe_views import VIEW_PREFIX, CENTRED_REGION_STANDOFFS
 
 
 # F7 remedy 3 (2026-09-19): pddlstream solve() search_sample_ratio (its
@@ -1198,7 +1198,8 @@ class PDDLStreamPlanner:
             [self.goal_config] if self.goal_config is not None else [])
         facts, views = self.m8_views.init_facts(
             current_config, self.home_config, [],
-            [reg.get_boxel(c) for c in centres], declared)
+            [reg.get_boxel(c) for c in centres], declared,
+            standoffs={s: CENTRED_REGION_STANDOFFS for s in regions})
         self.streams.view_boxel_ids = frozenset(views)
         with_view = set()
         for f in facts:
@@ -1219,6 +1220,12 @@ class PDDLStreamPlanner:
               f"{stats['twin_renders']} twin renders "
               f"{stats['twin_render_s']:.2f}s, {stats['look_ik']} IK, total "
               f"{stats['build_s']:.2f}s")
+        for c in no_view:                       # why: each (standoff, yaw) pair's verdict
+            why = '; '.join(
+                f"{so:.2f} m yaw {np.degrees(wy):.0f}: {verdict}"
+                f"{' (' + detail + ')' if detail else ''}"
+                for _, so, wy, verdict, detail in self.m8_views.last_look_notes.get(c, []))
+            print(f"  [look] no view of {c}: {why or 'no pair was tried (parked)'}")
         return stats
 
     def _look_facts(self, init, target_objects, shadows, held_obj,
