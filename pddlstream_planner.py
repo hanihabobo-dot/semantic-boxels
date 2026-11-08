@@ -42,7 +42,9 @@ from streams import (BoxelStreams, RobotConfig, Trajectory, Grasp,
                      NOMINAL_HIDDEN_EXTENTS, HOME_PSEUDO_BOXEL)
 from robot_utils import REST_POSES, robot_model
 import pose_belief
-from observe_views import VIEW_PREFIX, CENTRED_REGION_STANDOFFS
+from observe_views import (VIEW_PREFIX, CENTRED_REGION_MAX_CONFIGS,
+                           CENTRED_REGION_OFFSETS, CENTRED_REGION_STANDOFFS,
+                           explain_notes)
 
 
 # F7 remedy 3 (2026-09-19): pddlstream solve() search_sample_ratio (its
@@ -1179,13 +1181,15 @@ class PDDLStreamPlanner:
                             current_config, pose_known) -> Dict[str, Any]:
         """Path 9, --look centred: the facts of the object-centred look
         (look_domain.LOOK_SECTION_CENTRED).  look_for as in the boxel look.
-        The camera goes straight over the centre of what the look is about,
-        ?h: the fragment's box for a search look, the object's box for a pose
-        look; the tag's own observe rule (ObserveViews.look_configs) applied
-        unchanged, so the twin certifies that all of ?h is in view and
-        unblocked from the configuration.  Nothing here asks the boxel model
-        about any other region, any other body, or free space.  Appends to
-        ``init``; returns the stats."""
+        The camera is aimed at the centre of what the look is about, ?h: the
+        fragment's box for a search look, the object's box for a pose look.
+        An object's look is the tag's own observe rule (ObserveViews.
+        look_configs): straight down over the centre.  A region's look also
+        tries poses at a horizontal offset from the centre (look_candidates)
+        and keeps the first few.  The twin certifies, for every one, that all
+        of ?h is in view and unblocked from the configuration.  Nothing here
+        asks the boxel model about any other region, any other body, or free
+        space.  Appends to ``init``; returns the stats."""
         if self.m8_views is None:
             raise ValueError("--look centred needs planner.m8_views (main() sets it)")
         t0 = time.perf_counter()
@@ -1199,7 +1203,9 @@ class PDDLStreamPlanner:
         facts, views = self.m8_views.init_facts(
             current_config, self.home_config, [],
             [reg.get_boxel(c) for c in centres], declared,
-            standoffs={s: CENTRED_REGION_STANDOFFS for s in regions})
+            standoffs={s: CENTRED_REGION_STANDOFFS for s in regions},
+            offsets={s: CENTRED_REGION_OFFSETS for s in regions},
+            max_configs={s: CENTRED_REGION_MAX_CONFIGS for s in regions})
         self.streams.view_boxel_ids = frozenset(views)
         with_view = set()
         for f in facts:
@@ -1220,12 +1226,9 @@ class PDDLStreamPlanner:
               f"{stats['twin_renders']} twin renders "
               f"{stats['twin_render_s']:.2f}s, {stats['look_ik']} IK, total "
               f"{stats['build_s']:.2f}s")
-        for c in no_view:                       # why: each (standoff, yaw) pair's verdict
-            why = '; '.join(
-                f"{so:.2f} m yaw {np.degrees(wy):.0f}: {verdict}"
-                f"{' (' + detail + ')' if detail else ''}"
-                for _, so, wy, verdict, detail in self.m8_views.last_look_notes.get(c, []))
-            print(f"  [look] no view of {c}: {why or 'no pair was tried (parked)'}")
+        for c in no_view:                       # why: the verdicts of the poses tried
+            why = explain_notes(self.m8_views.last_look_notes.get(c, []))
+            print(f"  [look] no view of {c}: {why or 'no pose was tried (parked)'}")
         return stats
 
     def _look_facts(self, init, target_objects, shadows, held_obj,

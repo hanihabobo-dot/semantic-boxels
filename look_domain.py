@@ -23,9 +23,10 @@ look_action.py; tests/test_look_correspondence.py compares the two.
 Two looks (Hani, 2026-11-07, verbatim in tracks/look/PLAN.md section 11):
 --look boxel is the one above (a viewpoint boxel, reveal facts from our boxel
 model); --look centred is the reference arm that uses no boxel model in the
-look: look(?o ?h ?q), the camera straight over the centre of what it looks at
-(?h), the whole of ?h in view and unblocked in the plan twin (the tag's observe
-rule), effects as sense's, nothing about the rest of the view.
+look: look(?o ?h ?q), the camera aimed at the centre of what it looks at (?h),
+the whole of ?h in view and unblocked in the plan twin (the tag's observe rule,
+straight over the centre, and for a region also from a horizontal offset),
+effects as sense's, nothing about the rest of the view.
 generate(live, 'centred') writes CENTRED_FILE.  The paper speaks of the
 object-centred look and the boxel look.
 """
@@ -161,7 +162,7 @@ LOOK_SECTION = """  ;; =========================================================
 
 # The object-centred look (--look centred): the same predicates without the
 # reveal facts and their derivations, plus look_config (the tag's own static
-# fact for a wrist view straight over an object, m8_domain.py).
+# fact for a wrist view of an object, m8_domain.py).
 _LOOK_PRED_BOXEL = (
     "    ;; --- Look: static facts from the plan twin, and what they derive ---\n"
     "    (look_for ?o ?h)             ; a look may hypothesise ?o at ?h\n"
@@ -172,7 +173,7 @@ _LOOK_PRED_BOXEL = (
 _LOOK_PRED_CENTRED = (
     "    ;; --- Look: static facts from the plan twin ---\n"
     "    (look_for ?o ?h)             ; a look may hypothesise ?o at ?h\n"
-    "    (look_config ?q ?h)          ; the camera at ?q is straight over ?h and sees all of it\n")
+    "    (look_config ?q ?h)          ; the camera at ?q is aimed at ?h's centre and sees all of it\n")
 _CFB_BOXEL = "; Config ?q targets boxel ?b (EE inside ?b; for a look, the camera)\n"
 _CFB_CENTRED = ("; Config ?q targets boxel ?b (EE inside ?b; a look "
                 "configuration's is its view pseudo-boxel)\n")
@@ -185,10 +186,11 @@ PREDICATES_CENTRED = (PREDICATES.replace(_LOOK_PRED_BOXEL, _LOOK_PRED_CENTRED)
 LOOK_SECTION_CENTRED = """  ;; =========================================================================
   ;; LOOK (path 9, --look centred): one wrist-camera look, centred on ?h
   ;; =========================================================================
-  ;; Replaces sense and observe.  The arm is at ?q, the camera straight over the
-  ;; centre of what it looks at (?h), a standoff above its top, and renders
-  ;; once.  The static fact look_config is the tag's observe rule: the plan twin
-  ;; shows all of ?h in view and unblocked from ?q.  The look names one
+  ;; Replaces sense and observe.  The arm is at ?q, the camera aimed at the
+  ;; centre of what it looks at (?h) from a standoff above its top, straight
+  ;; over it or from a horizontal offset, and renders once.  The static fact
+  ;; look_config is the tag's observe rule: the plan twin shows all of ?h in
+  ;; view and unblocked from ?q.  The look names one
   ;; hypothesis ?h and says nothing about what else the view covers, where in
   ;; free space the camera may stand, or which body would hide the view.  That
   ;; is what the boxel look adds.

@@ -16,7 +16,12 @@ possible".
 5. What path 8's inspect uses (PLAN section 13): LookResult.reached,
    look_configs and init_facts with a standoff of their own, a pose look at a
    pose that is already known and one from a changed standoff.
+6. A region larger than one straight view (the first smokes, seed 0): the region
+   heights, and why a region has no view.
+7. The look-at poses: a camera at a horizontal offset from the centre, aimed at the
+   centre, certified like the straight one; the default offsets are the tag's looks.
 """
+import math
 import os
 import sys
 from pathlib import Path
@@ -242,17 +247,23 @@ def test_the_centred_init_names_only_declared_predicates_and_no_reveal(world):
     assert pl.last_look_stats['look_for'] >= 1
 
 
-def test_the_camera_goes_straight_over_the_hypothesis(world):
+def test_the_camera_is_aimed_at_the_centre_of_the_hypothesis(world):
     pl = _planner(world)
     init = _init(pl)
     qs = [f[1] for f in init if f[0] == 'look_config' and f[2] == 'shadow_a']
     assert qs, "a hypothesised fragment gets look configurations"
     assert all(q.name.startswith('look_shadow_a_') for q in qs)
     assert 'shadow_a' not in pl.last_look_stats['no_view']
-    # the tag's observe rule at the region heights (a fragment is not bounded by an object)
-    want = {q.name for _, q in world.views.look_configs(
-        world.reg.get_boxel('shadow_a'), observe_views.CENTRED_REGION_STANDOFFS)}
+    # the tag's observe rule at the region heights (a fragment is not bounded by an
+    # object), plus the look-at poses, the first few that pass
+    box = world.reg.get_boxel('shadow_a')
+    want = {q.name for _, q in _configs(world, box, observe_views.CENTRED_REGION_STANDOFFS,
+                                        observe_views.CENTRED_REGION_OFFSETS,
+                                        observe_views.CENTRED_REGION_MAX_CONFIGS)}
     assert {q.name for q in qs} == want
+    assert len(qs) <= observe_views.CENTRED_REGION_MAX_CONFIGS
+    for q in qs:                       # IK may turn the hand up to robot_utils.IK_ORN_TOL_DEG
+        assert _aim_error_deg(world, q, box) <= robot_utils.IK_ORN_TOL_DEG + 0.5
     # a move can reach each one: the tag's view pseudo-boxel, as for observe
     views = {f[2] for f in init if f[0] == 'config_for_boxel' and f[1] in qs}
     assert views == {observe_views.view_boxel(q) for q in qs}
@@ -265,12 +276,17 @@ def test_a_removed_configuration_leaves_the_facts(world):
     gone = first[0]
     world.views.removed.add(('shadow_a', observe_views.look_index(gone, 'shadow_a')))
     again = [f[1].name for f in _init(pl) if f[0] == 'look_config' and f[2] == 'shadow_a']
-    assert gone not in again and set(again) == set(first) - {gone}
+    assert gone not in again
+    assert set(first) - {gone} <= set(again)            # the others stay
+    # the region's cap is refilled by the next passing pose, never by the removed one
+    assert len(again) in (len(first) - 1, len(first))
+    assert len(again) <= observe_views.CENTRED_REGION_MAX_CONFIGS
 
 
 def test_a_hypothesis_with_no_passing_configuration_has_no_look(world):
     pl = _planner(world)
-    n = len(observe_views.CENTRED_REGION_STANDOFFS) * len(observe_views.LOOK_WRIST_YAWS)
+    n = len(observe_views.look_candidates(observe_views.CENTRED_REGION_STANDOFFS,
+                                          observe_views.CENTRED_REGION_OFFSETS))
     world.views.removed.update(('shadow_a', k) for k in range(n))
     init = _init(pl)
     assert ('look_for', 'blue', 'shadow_a') in init
@@ -417,12 +433,12 @@ _STATS = {'twin_render_s': 0.0, 'twin_renders': 0, 'look_ik': 0, 'sense_view': 0
           'look_config': 0, 'sense_fallback': 0}
 
 
-def _configs(world, boxel, standoffs=None):
+def _configs(world, boxel, standoffs=None, offsets=None, max_configs=None):
     """look_configs as path 8 calls it; the arm is put back afterwards."""
     world.views.last_stats = dict(_STATS)
     start = world.views._arm()
     try:
-        return world.views.look_configs(boxel, standoffs)
+        return world.views.look_configs(boxel, standoffs, offsets, max_configs)
     finally:
         world.views._set_arm(start)
 
@@ -430,6 +446,16 @@ def _configs(world, boxel, standoffs=None):
 def _camera(world, q):
     world.views._set_arm(q.joint_positions)
     return robot_utils.wrist_camera_pose(world.robot, world.cid)
+
+
+def _aim_error_deg(world, q, boxel):
+    """The angle between the camera's optical axis at q and the line from the
+    camera to the centre of the box."""
+    cam = _camera(world, q)
+    lo, hi, cxy = world.views._look_target(boxel)
+    target = np.array([cxy[0], cxy[1], (float(lo[2]) + float(hi[2])) / 2.0])
+    t = target - cam[:3, 3]
+    return float(np.degrees(np.arccos(np.clip(cam[:3, 2] @ t / np.linalg.norm(t), -1.0, 1.0))))
 
 
 def _names(configs):
@@ -555,9 +581,9 @@ def test_a_region_larger_than_the_view_has_no_configuration_at_the_default_heigh
     assert _configs(world, big) == []
     notes = world.views.last_look_notes['shadow_big']
     assert len(notes) == len(observe_views.LOOK_STANDOFFS) * len(observe_views.LOOK_WRIST_YAWS)
-    verdicts = {v for _, _, _, v, _ in notes}
+    verdicts = {n.verdict for n in notes}
     assert 'frame' in verdicts and verdicts <= {'frame', 'no_ik', 'collision'}
-    assert all('rows' in d and 'cols' in d for _, _, _, v, d in notes if v == 'frame')
+    assert all('rows' in n.detail and 'cols' in n.detail for n in notes if n.verdict == 'frame')
 
 
 def test_the_region_heights_reach_a_view_that_holds_the_whole_region(world):
@@ -566,14 +592,160 @@ def test_the_region_heights_reach_a_view_that_holds_the_whole_region(world):
     assert cfgs
     ks = [k for k, _ in cfgs]
     assert min(ks) >= 2 * len(observe_views.LOOK_WRIST_YAWS)     # none at 0.20 or 0.30 m
-    verdict = {k: v for k, _, _, v, _ in world.views.last_look_notes['shadow_big']}
+    verdict = {n.k: n.verdict for n in world.views.last_look_notes['shadow_big']}
     assert all(verdict[k] == 'ok' for k in ks)
 
 
 def test_a_region_with_no_view_is_explained_in_the_log(world, capsys):
     pl = _planner(world)
-    n = len(observe_views.CENTRED_REGION_STANDOFFS) * len(observe_views.LOOK_WRIST_YAWS)
+    n = len(observe_views.look_candidates(observe_views.CENTRED_REGION_STANDOFFS,
+                                          observe_views.CENTRED_REGION_OFFSETS))
     world.views.removed.update(('shadow_a', k) for k in range(n))
     _init(pl)
     out = capsys.readouterr().out
     assert 'no view of shadow_a' in out and 'removed' in out
+
+
+# ----- 7. the look-at poses --------------------------------------------------------------
+
+@pytest.mark.parametrize('yaw', observe_views.LOOK_WRIST_YAWS)
+def test_a_look_at_pose_straight_over_the_target_is_exactly_the_tags_pose(yaw):
+    pos = np.array([0.21, 0.03, 0.35])
+    cam = observe_views.look_at_pose(pos, [pos[0], pos[1], 0.02], yaw)
+    z = np.array([0.0, 0.0, -1.0])
+    x = np.array([math.cos(yaw), math.sin(yaw), 0.0])
+    want = np.eye(4)
+    want[:3, :3] = np.column_stack([x, np.cross(z, x), z])
+    want[:3, 3] = pos
+    assert np.array_equal(cam, want)
+
+
+@pytest.mark.parametrize('yaw', observe_views.LOOK_WRIST_YAWS)
+def test_a_look_at_pose_has_its_axis_through_the_target(yaw):
+    pos = np.array([0.06, 0.0, 0.65])
+    tgt = np.array([0.21, 0.0, 0.20])
+    cam = observe_views.look_at_pose(pos, tgt, yaw)
+    r = cam[:3, :3]
+    assert np.allclose(r.T @ r, np.eye(3), atol=1e-12) and np.isclose(np.linalg.det(r), 1.0)
+    assert np.allclose(r[:, 2], (tgt - pos) / np.linalg.norm(tgt - pos), atol=1e-12)
+    assert abs(float(r[:, 0] @ r[:, 2])) < 1e-12                  # x is perpendicular to the axis
+    assert float(r[:, 0] @ np.array([math.cos(yaw), math.sin(yaw), 0.0])) > 0.5   # and follows the yaw
+    assert np.allclose(cam[:3, 3], pos)
+
+
+def test_the_look_candidates_are_numbered_standoff_offset_azimuth_yaw():
+    assert observe_views.look_candidates() == [
+        (so, 0.0, 0.0, wy) for so in observe_views.LOOK_STANDOFFS
+        for wy in observe_views.LOOK_WRIST_YAWS]
+    yaws = (0.0, math.pi / 2)
+    azs = (0.0, math.pi / 2, -math.pi / 2)
+    c = observe_views.look_candidates((0.2, 0.3), (0.0, 0.15), yaws, azs)
+    assert len(c) == 2 * (1 * 2 + 3 * 2)        # per standoff: offset 0 once per yaw, then every azimuth
+    assert c[:4] == [(0.2, 0.0, 0.0, 0.0), (0.2, 0.0, 0.0, math.pi / 2),
+                     (0.2, 0.15, 0.0, 0.0), (0.2, 0.15, 0.0, math.pi / 2)]
+    assert c[4] == (0.2, 0.15, math.pi / 2, 0.0) and c[6] == (0.2, 0.15, -math.pi / 2, 0.0)
+    assert c[8] == (0.3, 0.0, 0.0, 0.0)         # the next standoff starts the list again
+
+
+def test_no_offsets_and_the_default_offsets_are_the_same_look_configurations(world):
+    box = world.reg.get_boxel('shadow_a')
+    default = _configs(world, box)
+    assert default
+    again = _configs(world, box, None, observe_views.LOOK_OFFSETS)
+    assert _names(again) == _names(default)
+    for (_, a), (_, b) in zip(default, again):
+        assert np.array_equal(a.joint_positions, b.joint_positions)
+
+
+def test_a_look_from_an_offset_puts_the_camera_there_and_aims_it_at_the_centre(world):
+    box = world.reg.get_boxel('shadow_a')
+    lo, hi, cxy = world.views._look_target(box)
+    cands = observe_views.look_candidates((0.30,), (0.15,))
+    cfgs = _configs(world, box, (0.30,), (0.15,))
+    assert cfgs, "a pose 0.15 m out passes over this small box"
+    toward = (world.views.base_xy - cxy) / np.linalg.norm(world.views.base_xy - cxy)
+    for k, q in cfgs:
+        so, off, az, wy = cands[k]
+        d = np.array([toward[0] * math.cos(az) - toward[1] * math.sin(az),
+                      toward[0] * math.sin(az) + toward[1] * math.cos(az)])
+        cam = _camera(world, q)
+        assert np.allclose(cam[:2, 3], cxy + off * d, atol=0.02)
+        assert abs(cam[2, 3] - (float(hi[2]) + so)) < 0.02
+        assert _aim_error_deg(world, q, box) <= robot_utils.IK_ORN_TOL_DEG + 0.5
+    assert {cands[k][2] for k, _ in cfgs} - {0.0}, "a sideways pose passes too"
+
+
+def test_max_configs_stops_at_that_many_passing_poses(world):
+    box = world.reg.get_boxel('shadow_a')
+    every = _configs(world, box, (0.30,), (0.0, 0.15))
+    assert len(every) >= 3
+    two = _configs(world, box, (0.30,), (0.0, 0.15), 2)
+    assert [k for k, _ in two] == [k for k, _ in every][:2]
+    notes = world.views.last_look_notes['shadow_a']
+    assert notes[-1].k == two[-1][0], "nothing after the second passing pose was tried"
+    world.views.removed.add(('shadow_a', two[0][0]))                # a strike: the next one takes its place
+    assert [k for k, _ in _configs(world, box, (0.30,), (0.0, 0.15), 2)] == \
+        [k for k, _ in every][1:3]
+
+
+def test_init_facts_gives_a_region_its_offsets_and_cap(world):
+    box = world.reg.get_boxel('shadow_a')
+    facts, _ = world.views.init_facts(_home(), _home(), [], [box], [],
+                                      standoffs={'shadow_a': (0.30,)},
+                                      offsets={'shadow_a': (0.0, 0.15)},
+                                      max_configs={'shadow_a': 2})
+    names = {f[1].name for f in facts if f[0] == 'look_config' and f[2] == 'shadow_a'}
+    assert names == {q.name for _, q in _configs(world, box, (0.30,), (0.0, 0.15), 2)}
+    assert len(names) == 2
+
+
+def _tall_region(world, side):
+    """The shape of seed 0's target shadow: 0.267 by 0.272 m and 0.4535 m tall, about
+    0.5 m from the robot base, clear of the world's other bodies."""
+    lo, hi = {'left': ([-0.05, 0.10, 0.0], [0.217, 0.372, 0.4535]),
+              'right': ([-0.0535, -0.371, 0.0], [0.2135, -0.099, 0.4535])}[side]
+    world.reg.add_boxel(_boxel('shadow_tall', BoxelType.SHADOW, lo, hi))
+    return world.reg.get_boxel('shadow_tall')
+
+
+@pytest.mark.parametrize('side', ['left', 'right'])
+def test_a_tall_region_has_no_straight_view_but_a_look_at_view(world, side):
+    """The second smoke (seed 0): no straight view over the tall shadow is within the
+    arm's reach (frame at 0.20 and 0.30 m up, no_ik above).  A camera 0.15 to 0.35 m out
+    toward the robot, aimed at the centre, holds all of it."""
+    from perception import project_points_to_pixels
+    tall = _tall_region(world, side)
+    assert _configs(world, tall, observe_views.CENTRED_REGION_STANDOFFS) == []
+    cands = observe_views.look_candidates(observe_views.CENTRED_REGION_STANDOFFS,
+                                          observe_views.CENTRED_REGION_OFFSETS)
+    cfgs = _configs(world, tall, observe_views.CENTRED_REGION_STANDOFFS,
+                    observe_views.CENTRED_REGION_OFFSETS,
+                    observe_views.CENTRED_REGION_MAX_CONFIGS)
+    assert cfgs, "a look-at pose holds the tall region"
+    assert len(cfgs) <= observe_views.CENTRED_REGION_MAX_CONFIGS
+    lo, hi, _ = world.views._look_target(tall)
+    pts = observe_views.lattice(lo, hi)
+    w, h, m = (robot_utils.WRIST_CAMERA_WIDTH, robot_utils.WRIST_CAMERA_HEIGHT,
+               observe_views.LOOK_IMAGE_MARGIN_PX)
+    for k, q in cfgs:
+        assert cands[k][1] > 0.0, "none of the passing poses is a straight one"
+        view, proj = robot_utils.wrist_camera_matrices(_camera(world, q))
+        rows, cols, _, in_view = project_points_to_pixels(pts, view, proj, w, h)
+        assert np.all(in_view) and rows.min() >= m and cols.min() >= m
+        assert rows.max() <= h - 1 - m and cols.max() <= w - 1 - m
+    notes = {n.k: n for n in world.views.last_look_notes['shadow_tall']}
+    assert all(notes[k].verdict == 'ok' for k, _ in cfgs)
+
+
+def test_explain_notes_counts_the_verdicts_and_gives_the_first_reason():
+    N = observe_views.LookNote
+    assert observe_views.explain_notes([]) == ''
+    text = observe_views.explain_notes([
+        N(0, 0.20, 0.0, 0.0, 0.0, 'frame', 'rows -5..500 of 480, cols 3..600 of 640'),
+        N(1, 0.20, 0.0, 0.0, math.pi / 2, 'frame', 'rows -4..499 of 480, cols 4..601 of 640'),
+        N(2, 0.30, 0.15, math.pi / 2, 0.0, 'blocked', '3 of 27 points hidden by [\'green_object\']'),
+        N(3, 0.40, 0.15, 0.0, 0.0, 'no_ik'), N(4, 0.50, 0.0, 0.0, 0.0, 'removed')])
+    assert text.startswith('5 poses tried: ')
+    assert '1 blocked, e.g. 0.30 m up, 0.15 m out at 90 deg, yaw 0: 3 of 27 points hidden by' in text
+    assert '2 frame, e.g. 0.20 m up, 0.00 m out at 0 deg, yaw 0: rows -5..500' in text
+    assert '1 no_ik' in text and '1 removed' in text

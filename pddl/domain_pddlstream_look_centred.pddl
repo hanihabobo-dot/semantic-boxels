@@ -39,7 +39,7 @@
 
     ;; --- Look: static facts from the plan twin ---
     (look_for ?o ?h)             ; a look may hypothesise ?o at ?h
-    (look_config ?q ?h)          ; the camera at ?q is straight over ?h and sees all of it
+    (look_config ?q ?h)          ; the camera at ?q is aimed at ?h's centre and sees all of it
 
     ;; --- Stream certified facts ---
     (valid_grasp ?o ?g)           ; Grasp ?g valid for object ?o
@@ -69,10 +69,11 @@
   ;; =========================================================================
   ;; LOOK (path 9, --look centred): one wrist-camera look, centred on ?h
   ;; =========================================================================
-  ;; Replaces sense and observe.  The arm is at ?q, the camera straight over the
-  ;; centre of what it looks at (?h), a standoff above its top, and renders
-  ;; once.  The static fact look_config is the tag's observe rule: the plan twin
-  ;; shows all of ?h in view and unblocked from ?q.  The look names one
+  ;; Replaces sense and observe.  The arm is at ?q, the camera aimed at the
+  ;; centre of what it looks at (?h) from a standoff above its top, straight
+  ;; over it or from a horizontal offset, and renders once.  The static fact
+  ;; look_config is the tag's observe rule: the plan twin shows all of ?h in
+  ;; view and unblocked from ?q.  The look names one
   ;; hypothesis ?h and says nothing about what else the view covers, where in
   ;; free space the camera may stand, or which body would hide the view.  That
   ;; is what the boxel look adds.

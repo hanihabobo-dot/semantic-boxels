@@ -102,11 +102,12 @@ CENTRED_SPEC = {
         'at_config': ('check', f"the arm readback is within {AT_CONFIG_TOL_RAD} rad "
                                "of ?q on every joint, else stale_precondition"),
         'look_config': ('static', "planner side: at ?q the plan twin's wrist camera "
-                                  "is straight over ?h and shows all of ?h in view "
-                                  "and unblocked (ObserveViews.look_configs, the "
-                                  "tag's observe rule); the executor does not check "
-                                  "it, and a render that still hides part of ?h is "
-                                  "a strike"),
+                                  "is aimed at the centre of ?h (straight over it, "
+                                  "or from a horizontal offset for a region) and "
+                                  "shows all of ?h in view and unblocked "
+                                  "(ObserveViews.look_configs, the tag's observe "
+                                  "rule); the executor does not check it, and a "
+                                  "render that still hides part of ?h is a strike"),
     },
     'eff': {
         ('obj_at_boxel', True, False): (
