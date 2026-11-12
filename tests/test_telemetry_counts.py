@@ -402,6 +402,18 @@ def test_the_counts_mode_writes_no_stream_and_reads_only_what_it_counts(sim, tmp
                               'getBaseVelocity'}
 
 
+def test_the_counts_mode_clocks_its_own_checks(sim, tmp_path):
+    tele = observer(tmp_path)
+    assert tele.counts()['check_s'] == 0.0
+    scripted_episode(sim, tele)
+    tele.close()
+    cost = tele.counts()['check_s']
+    assert 0.0 < cost < 1.0                   # a few dozen scripted checks
+    assert json.loads((tmp_path / telemetry.COUNTS_FILE).read_text())['check_s'] == cost
+    # the recorder's cost is its recording, not this clock
+    assert observer(tmp_path / 'rec', counts_only=False).counts()['check_s'] is None
+
+
 def test_the_counts_mode_needs_no_run_directory(sim):
     tele = observer(None)
     carry(sim, tele)

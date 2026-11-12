@@ -71,6 +71,8 @@ COUNTS MODE (TB-22, tracks rule 18: drops and collisions in every record)
   ``world_counts.json`` in the run directory is rewritten at arming, on
   every counted event and at the close, so a run killed at its wall-clock
   cap keeps its counts.  ``--world-counts off`` turns the mode off.
+  The mode clocks its own checks: the record's ``counts_cost_s`` is the
+  wall time they took in that run.
 """
 
 from __future__ import annotations
@@ -79,6 +81,7 @@ import json
 import logging
 import math
 from pathlib import Path
+from time import perf_counter as _perf
 
 import numpy as np
 import pybullet as p
@@ -208,6 +211,7 @@ class WorldTelemetry:
         self._drops = []                    # counted drops, in order
         self._disturbed = {}                # (phase index, body) -> event
         self._dropped_in = {}               # body -> phase index of its last drop
+        self._check_s = 0.0                 # wall time spent in the counts mode's checks
         self._closed = False
 
         self.step_count = 0
@@ -359,7 +363,9 @@ class WorldTelemetry:
 
         if self.counts_only:
             if self.step_count % EVENT_STRIDE == 0:
+                t0 = _perf()                 # the mode's own cost, for the record
                 self._check_counts()
+                self._check_s += _perf() - t0
             return
 
         forced = False
@@ -786,7 +792,11 @@ class WorldTelemetry:
         return {'drops': [dict(e) for e in self._drops],
                 'collisions': [dict(e) for e in self._disturbed.values()],
                 'mode': 'counts' if self.counts_only else 'recorder',
-                'steps': self.step_count, 'closed': self._closed}
+                'steps': self.step_count, 'closed': self._closed,
+                # what the counts mode itself cost this run, in wall seconds
+                # (None under the recorder, whose cost is its recording)
+                'check_s': (round(self._check_s, 4) if self.counts_only
+                            else None)}
 
     def _save_counts(self):
         """Rewrite the counts file (a few hundred bytes): at arming, on
