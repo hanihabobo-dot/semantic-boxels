@@ -830,19 +830,6 @@ def main(gui=True, run_logger=None, scene_config=None,
 
     # audit #10 — uniform-grid baseline.  Toggle BoxelTestEnv's
     # free-space dispatch and (re)build the lattice at the requested
-    # The curated console's header (a no-op without console_ui installed).
-    _switch_text = ', '.join(f"{k} {'on' if v else 'off'}"
-                             for k, v in pose_belief.SWITCHES.items())
-    console_ui.header(
-        scene=(f"{run_config.get('scene')} seed {run_config.get('seed')}, "
-               f"{run_config.get('n_occluders')} occluders, "
-               f"{run_config.get('n_targets')} targets, "
-               f"{run_config.get('n_hidden')} hidden" if run_config else None),
-        goal=(goal_kind + (f" {target_name}" if target_name else "")
-              + (" at home" if goal_at_home else "")),
-        switches=(f"{_switch_text}, grip squeeze "
-                  f"{robot_utils.GRIP_SQUEEZE * 1000:g} mm, planner "
-                  f"{getattr(args, 'planner', '?')}"))
     # cell size before any boxel/registry work in Phase 2.  Default
     # path (baseline='semantic') leaves env.use_uniform_grid=False, so
     # generate_free_space falls through to the octree pipeline as before.
@@ -3219,7 +3206,6 @@ if __name__ == "__main__":
         "n_extra_distractors": args.n_extra_distractors,
         "n_objects":    args.n_objects,
         "seed":         args.seed,
-        "slip_fixes": slip_fixes.resolve(getattr(args, 'slip_fixes', '')),            # BF#59, BF#62
         "goal":         args.goal,
         "stack_height": args.stack_height,
         "unit_costs":   args.unit_costs,
@@ -3233,6 +3219,7 @@ if __name__ == "__main__":
         "sense_over_region": getattr(args, 'sense_over_region', 'on'),  # BF#52
         "search_effort_weight": getattr(args, 'search_effort_weight', '1'),          # BF#53
         "search_initial_complexity": getattr(args, 'search_initial_complexity', 3),  # BF#53
+        "slip_fixes": slip_fixes.resolve(getattr(args, 'slip_fixes', '')),            # BF#59, BF#62
         "search_sample_ratio": getattr(args, 'search_sample_ratio', None),
         "path_check_step": getattr(args, 'path_check_step', None),
         "path_check_diag": bool(getattr(args, 'path_check_diag', False)),
