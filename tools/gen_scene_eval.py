@@ -62,6 +62,17 @@ code 4.  --min-avail-gb and --peak-report-gb change the limits (0 only records).
 The report prints the memory lines and, from each job folder, the job script's
 own memory_lines.txt.
 
+DROPS AND COLLISIONS (rule 18 of tracks/STATE.md; TB-22): since TB-22 every
+row carries drops, collisions, drop_detector, collision_detector and
+clean_success (world_counts.of_record in run_one; arm T's carry is kinematic,
+so its drops "cannot happen" and its collisions are "not detected").  The
+report prints them after the tables: the episodes with a drop or a collision
+per arm, the records' own words on how each count was taken, and clean success
+beside success for each view.  A count nothing could take is printed as words,
+never as 0, and a success without a count is "unknown", never clean.  Recorded
+only: no count, pair or test above changes.  Rows from before TB-22 print one
+line saying so.
+
 ARM O2 (path 6, PLAN.md P6-Q9): arm O's episode again, from a second snapshot
 (--snapshot-o2: arm O's snapshot plus one fix, TB-1, and nothing else; the
 runner prints the two snapshots' scene files and manifest equal or stops), run
@@ -779,6 +790,106 @@ def with_vs_without(final):
     return '\n'.join(lines)
 
 
+def clean_of(row, success):
+    """Rule 18's clean success of a row under one view's success: a failure is
+    never clean; a success whose drops or collisions nothing could count is
+    unknown (None), never clean by default."""
+    if not success:
+        return False
+    d, c = row.get('drops'), row.get('collisions')
+    if d is None or c is None:
+        return None
+    return d == 0 and c == 0
+
+
+def _count_cells(cnt, field, detector):
+    """The two cells of one count column of an arm (episodes with one or more,
+    the total) and a note: numbers only over the episodes something counted;
+    'cannot happen' and 'not detected' are printed as words, never as 0."""
+    counted = [r[field] for r in cnt
+               if isinstance(r.get(field), (int, float)) and not isinstance(r.get(field), bool)
+               and not str(r.get(detector) or '').startswith('cannot happen')]
+    if not counted:
+        cannot = cnt and all(str(r.get(detector) or '').startswith('cannot happen') for r in cnt)
+        return ('cannot happen' if cannot else 'not detected'), '-', ''
+    rest = len(cnt) - len(counted)
+    return (str(sum(1 for v in counted if v > 0)), str(int(sum(counted))),
+            f"{rest} of {len(cnt)} episodes without a count" if rest else '')
+
+
+def clean_lines(final, views=(('success', 'success'),)):
+    """Rule 18 (tracks/STATE.md): the drops and the collisions of the counted
+    episodes, how each count was taken, and clean success beside success for
+    each view.  Recorded only: no count above changes with them.  The rows
+    carry the fields since TB-22 (world_counts.of_record in run_one); rows
+    from before it print one line."""
+    counted = {k: r for k, r in final.items() if r['counts']}
+    if not any('drop_detector' in r for r in counted.values()):
+        return ["drops and collisions (rule 18): these rows carry no such fields (they were recorded before "
+                "TB-22), so clean success is not shown"]
+    arms = [x for x in ('O', 'O2', 'T') if any(k[0] == x for k in counted)]
+    by_arm = {x: [r for k, r in counted.items() if k[0] == x] for x in arms}
+    lines = ["drops and collisions (rule 18; recorded, they change no count above): a drop is a held body that left "
+             "the gripper outside a place; a count that nothing could take is never printed as 0",
+             f"{'arm':4} {'counted':>8} {'episodes with a drop':>21} {'drops':>6} "
+             f"{'episodes with a collision':>26} {'collisions':>10}"]
+    notes = []
+    for arm in arms:
+        cnt = by_arm[arm]
+        d1, d2, dn = _count_cells(cnt, 'drops', 'drop_detector')
+        c1, c2, cn = _count_cells(cnt, 'collisions', 'collision_detector')
+        lines.append(f"{arm:4} {len(cnt):8} {d1:>21} {d2:>6} {c1:>26} {c2:>10}")
+        notes += [f"  {arm} drops: {dn}"] if dn else []
+        notes += [f"  {arm} collisions: {cn}"] if cn else []
+    lines += notes
+    lines.append("how each count was taken (the records' own words, with the number of episodes):")
+    for arm in arms:
+        for field in ('drop_detector', 'collision_detector'):
+            texts = {}
+            for r in by_arm[arm]:
+                t = str(r.get(field) or 'no field in the row')
+                texts[t] = texts.get(t, 0) + 1
+            for t, n in sorted(texts.items(), key=lambda kv: -kv[1]):
+                lines.append(f"  {arm} {field} ({n}): {t[:200]}")
+    lines.append(f"{'arm':4} {'view':30} {'counted':>8} {'success':>8} {'clean success':>13} {'95 % Wilson':>14} "
+                 f"{'unknown':>8}")
+    for arm in arms:
+        cnt = by_arm[arm]
+        for key, label in views:
+            verdicts = [clean_of(r, r.get(key)) for r in cnt]
+            k = sum(1 for r in cnt if r.get(key))
+            kc = sum(1 for v in verdicts if v is True)
+            unknown = sum(1 for v in verdicts if v is None)
+            if unknown == 0:
+                lo, hi = wilson(kc, len(cnt))
+                cell, ci = f"{kc:13}", f"[{lo:.2f}, {hi:.2f}]"
+            elif unknown == k:
+                cell, ci = f"{'not measured':>13}", f"{'-':>12}"
+            else:
+                cell, ci = f"{f'at least {kc}':>13}", f"{'-':>12}"
+            lines.append(f"{arm:4} {label:30} {len(cnt):8} {k:8} {cell} {ci:>14} {unknown:8}")
+    keys = sorted({(s, rep) for (_, s, rep) in counted})
+    for x, y in (('O', 'T'), ('O2', 'O'), ('O2', 'T')):
+        if x not in arms or y not in arms:
+            continue
+        for key, label in views:
+            pairs = [(s, rep) for (s, rep) in keys if (x, s, rep) in counted and (y, s, rep) in counted]
+            vx = {p: clean_of(counted[(x,) + p], counted[(x,) + p].get(key)) for p in pairs}
+            vy = {p: clean_of(counted[(y,) + p], counted[(y,) + p].get(key)) for p in pairs}
+            n_unknown = sum(1 for p in pairs if vx[p] is None or vy[p] is None)
+            if n_unknown:
+                lines.append(f"paired {x} against {y} on clean success ({label}): not printed, {n_unknown} of "
+                             f"{len(pairs)} pairs hold a success whose drops or collisions nothing could count")
+                continue
+            both = sum(1 for p in pairs if vx[p] and vy[p])
+            xo = sum(1 for p in pairs if vx[p] and not vy[p])
+            yo = sum(1 for p in pairs if vy[p] and not vx[p])
+            lines.append(f"paired {x} against {y} on clean success ({label}): {len(pairs)} pairs; both clean "
+                         f"{both}, only {x} {xo}, only {y} {yo}, neither {len(pairs) - both - xo - yo}; "
+                         f"exact McNemar p = {mcnemar_exact(xo, yo):.3g}")
+    return lines
+
+
 def report(dirs):
     rows, final = final_rows(dirs)
     if not final:
@@ -787,7 +898,7 @@ def report(dirs):
     stops = stops + [''] if stops else []
     if not all('capped_success' in r for r in final.values()):
         # no cap fields (BF#63 run 2 and earlier): an uncapped block, printed as before
-        return '\n'.join(stops + [report_tables(rows, final)])
+        return '\n'.join(stops + [report_tables(rows, final), ''] + clean_lines(final))
     capped = {k: dict(r, success=r['capped_success']) for k, r in final.items()}
     out = [T_CAVEAT, ''] + stops
     out += [f"success = the standard test (DV-1). Arms O and O2 are held to T's {CAP_ACTIONS}-action horizon "
@@ -808,6 +919,8 @@ def report(dirs):
     out += ['', f"arm T, the standard test against their own reward ({len(t_rows)} counted episodes): "
                 f"both say success {both}, only the standard test {t_only}, only their reward {r_only}"]
     out += t_pad_lines(final)
+    out += [''] + clean_lines(final, views=(('capped_success', f'within {CAP_ACTIONS} actions (headline)'),
+                                            ('success', 'without the action limit')))
     mem = [{'label': f"{r['arm']} seed {r['seed']} rep {r['rep']} attempt {r['attempt']}", 'mem': r['mem'],
             'peak_over_6gb': r.get('peak_over_6gb')} for r in rows if r.get('mem')]
     memory = (mw.summary_lines(mem) if mem else []) + job_memory_lines(dirs)
