@@ -1441,7 +1441,13 @@ class BoxelStreams:
         plan that binds).  The aim is the centroid of the reachable points
         of a REGION_AIM_GRID lattice over the footprint, inset by half the
         object's footprint where the region is wider than the object (the
-        hypothesised object lies inside the region).  The reachable part of
+        hypothesised object lies inside the region).  For an object without
+        a boxel that footprint is the class LOWER bound
+        (NOMINAL_HIDDEN_EXTENTS_MIN): the question is F6's, "could an
+        instance that hides in this region be reached", and the smallest
+        instance can lie that close to the region's face (with the upper
+        bound scene 128's reachable strip was missed by 1 mm, BF#65's A/B
+        round 1).  The reachable part of
         a box at one height is convex (a disc and a sphere cut it), so the
         centroid is reachable; if rounding says otherwise the reachable
         lattice point nearest to it is taken.  Called only after the centre
@@ -1456,7 +1462,7 @@ class BoxelStreams:
         obj_boxel = self.registry.get_boxel(str(obj_id))
         half = (np.asarray(obj_boxel.extent, dtype=float)[:2]
                 if obj_boxel is not None
-                else np.asarray(NOMINAL_HIDDEN_EXTENTS, dtype=float)[:2] / 2.0)
+                else np.asarray(NOMINAL_HIDDEN_EXTENTS_MIN, dtype=float)[:2] / 2.0)
         inset = np.minimum(half, (hi - lo) / 2.0)
         xs = np.linspace(lo[0] + inset[0], hi[0] - inset[0], self.REGION_AIM_GRID)
         ys = np.linspace(lo[1] + inset[1], hi[1] - inset[1], self.REGION_AIM_GRID)

@@ -152,6 +152,35 @@ def test_the_aim_keeps_the_object_inside_a_wide_region(world):
     s.registry.add_boxel(region)
     aim = s.region_reach_aim('dice', region, g)
     assert aim is not None
-    half = streams.NOMINAL_HIDDEN_EXTENTS[0] / 2.0
+    half = streams.NOMINAL_HIDDEN_EXTENTS_MIN[0] / 2.0
     assert aim[0] >= region.min_corner[0] + half - 1e-9
     assert abs(aim[1]) <= 0.10 - half + 1e-9
+
+
+def test_an_unseen_target_takes_the_class_lower_bound_as_its_inset(world):
+    """Scene 128's shape (BF#65's A/B, round 1): the strip of the region in
+    reach is thinner than half the class upper bound.  For a target without
+    a boxel the inset is half the class LOWER bound (F6's question, could an
+    instance hide here), so the strip counts; a registered object keeps its
+    own half footprint; a strip thinner than the lower bound's half holds
+    no instance."""
+    cid, robot = world
+    s = _streams(cid, robot, [])
+    g = _grasp()
+    limit = _limit_x(s, g)
+    lo_half = streams.NOMINAL_HIDDEN_EXTENTS_MIN[0] / 2.0
+    up_half = streams.NOMINAL_HIDDEN_EXTENTS[0] / 2.0
+    assert lo_half < 0.018 < up_half
+    region = _box('shadow_strip', BoxelType.SHADOW, limit - 0.018, limit + 0.20)
+    s.registry.add_boxel(region)
+    aim = s.region_reach_aim('dice', region, g)
+    assert aim is not None
+    assert aim[0] >= region.min_corner[0] + lo_half - 1e-9
+    thin = _box('shadow_thin', BoxelType.SHADOW, limit - 0.012, limit + 0.20)
+    s.registry.add_boxel(thin)
+    assert s.region_reach_aim('dice', thin, g) is None
+    # Registered at the upper bound's size, the object does not fit the strip.
+    dice = _box('dice', BoxelType.OBJECT, 0.0, 0.04, y_lo=-0.02, y_hi=0.02, top=0.04)
+    dice.object_name = 'dice'
+    s.registry.add_boxel(dice)
+    assert s.region_reach_aim('dice', region, g) is None
