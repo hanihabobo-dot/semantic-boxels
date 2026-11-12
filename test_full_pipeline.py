@@ -977,6 +977,14 @@ def main(gui=True, run_logger=None, scene_config=None,
     # table surface: where objects are, where shadows are, and where
     # the robot can safely place things.
     print("\n--- Phase 2: Calculating Boxels ---")
+    if look_on:
+        # Path 9 (PLAN 11.12): a look can only be planned for a region one
+        # arm-camera image holds, so in a look mode every hidden region is
+        # cut into cells of that size, here and wherever a fragment is made
+        # later.  Without --look the attribute stays None.
+        env.shadow_calculator.max_fragment_side = observe_views.look_cell_side()
+        print(f"  [look] hidden regions are cut into cells of at most "
+              f"{env.shadow_calculator.max_fragment_side:.3f} m (one look holds a cell)")
     obs = env.get_camera_observation()
     all_known = obs.boxels
     free_boxels = env.generate_free_space(all_known, visualize=False)

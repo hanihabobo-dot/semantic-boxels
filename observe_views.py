@@ -68,6 +68,14 @@ LOOK_OFFSETS = (0.0,)
 LOOK_AZIMUTHS = (0.0, math.pi / 2.0, -math.pi / 2.0)    # from the direction toward the base
 LOOK_WRIST_YAWS = (0.0, math.pi / 2)
 LOOK_IMAGE_MARGIN_PX = 8
+# Path 9 (PLAN 11.12, declared 2026-11-12 before any episode ran on it): in a
+# look mode a hidden region is cut into cells one look holds.  The smoke of
+# that day (seed 0, centred) had no view of the 0.267 by 0.272 m region where
+# the target stood: a region is the whole shadow a block casts from the fixed
+# camera, and the arm does not reach the heights from which that fits.  The
+# share of the image's short side a cell may fill; the rest is for the arm's
+# pose error (the IK's orientation tolerance, a few millimetres of position).
+LOOK_CELL_SLACK = 0.85
 
 # C1: retracted configurations, top-down, on an arc near the robot base:
 # (radius from the base in xy, bearing from the base's +x axis, height
@@ -82,6 +90,18 @@ _SUPPORTS = ("plane", "table")
 
 def view_boxel(config) -> str:
     return VIEW_PREFIX + str(config.name)
+
+
+def look_cell_side() -> float:
+    """The longest side (m) of a region that one look holds from the lowest
+    look standoff at either wrist yaw: the image's short side at that distance
+    over the region's top, less the certification margin on both edges, times
+    LOOK_CELL_SLACK.  It follows from the camera and the look heights; no
+    scene enters it."""
+    h = robot_utils.WRIST_CAMERA_HEIGHT
+    f = (h / 2.0) / math.tan(math.radians(robot_utils.WRIST_CAMERA_FOV_DEG) / 2.0)
+    held = 2.0 * min(LOOK_STANDOFFS) * ((h - 1) / 2.0 - LOOK_IMAGE_MARGIN_PX) / f
+    return LOOK_CELL_SLACK * held
 
 
 def look_name(obj: str, k: int) -> str:
