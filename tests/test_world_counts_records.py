@@ -65,10 +65,11 @@ def test_a_summary_nothing_watched_says_not_detected(tmp_path):
 
 
 def test_a_watched_summary_without_events_is_a_clean_success(tmp_path):
-    s = _summary(tmp_path, observer_counts=WATCHED_CLEAN,
+    s = _summary(tmp_path, observer_counts=dict(WATCHED_CLEAN, check_s=0.42),
                  drops_noticed={'entry': 0, 'lift': 0, 'carry': 0},
                  collisions_reported=0)
     assert (s['drops'], s['collisions'], s['clean_success']) == (0, 0, True)
+    assert s['counts_cost_s'] == 0.42        # what the counting cost the run
     assert s['drop_detector'] == wc.DROP_DETECTOR
     assert s['collision_detector'] == wc.COLLISION_DETECTOR
     assert (s['drops_noticed'], s['collisions_reported']) == (0, 0)

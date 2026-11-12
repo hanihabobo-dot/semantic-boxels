@@ -21,6 +21,8 @@ collisions_reported (the moves after which the executor's own contact
 report named a contact).  The two "noticed" numbers are what the robot saw;
 drops and collisions are the simulator's ground truth, read by telemetry's
 counts mode (telemetry.py), which nothing in the pipeline decides on.
+counts_cost_s is the wall time that counting took in the episode, by the
+observer's own clock.
 
 This module only builds and reads the fields: it imports no simulator, so
 the runner, the bridge driver and the harnesses can use it anywhere.
@@ -32,6 +34,8 @@ FIELDS = ('drops', 'collisions', 'drop_detector', 'collision_detector',
           'clean_success')
 # Lists and texts kept out of a flat CSV (eval_runner.LIST_VALUED).
 DETAIL_FIELDS = ('drop_events', 'collision_events')
+# What the robot itself saw, and the wall time the counting took (s).
+EXTRA_FIELDS = ('drops_noticed', 'collisions_reported', 'counts_cost_s')
 COUNTS_FILE = 'world_counts.json'
 SUMMARY_FILE = 'timing_summary.json'
 
@@ -69,7 +73,8 @@ def not_detected(success, why=None, drops_noticed=None,
             'clean_success': clean(success, None, None),
             'drop_events': [], 'collision_events': [],
             'drops_noticed': drops_noticed,
-            'collisions_reported': collisions_reported}
+            'collisions_reported': collisions_reported,
+            'counts_cost_s': None}
 
 
 def episode_fields(success, counts, integrity_events=None,
@@ -102,7 +107,9 @@ def episode_fields(success, counts, integrity_events=None,
                                    len(collision_events)),
             'drop_events': drop_events, 'collision_events': collision_events,
             'drops_noticed': drops_noticed,
-            'collisions_reported': collisions_reported}
+            'collisions_reported': collisions_reported,
+            # the observer's own clock: what its checks cost this run
+            'counts_cost_s': counts.get('check_s')}
 
 
 def with_success(fields, success):
@@ -126,7 +133,8 @@ def kinematic_arm_fields(success, collisions=None, collision_detector=None):
             'collision_detector': collision_detector or 'their execution',
             'clean_success': clean(success, 0, collisions),
             'drop_events': [], 'collision_events': [],
-            'drops_noticed': None, 'collisions_reported': None}
+            'drops_noticed': None, 'collisions_reported': None,
+            'counts_cost_s': None}
 
 
 def _read_json(path):
@@ -146,8 +154,8 @@ def from_run_dir(run_dir, success=None):
     detected.  success, when given, replaces the summary's own verdict."""
     summary = _read_json(os.path.join(run_dir, SUMMARY_FILE)) if run_dir else None
     if summary is not None and all(k in summary for k in FIELDS):
-        fields = {k: summary.get(k) for k in FIELDS + DETAIL_FIELDS
-                  + ('drops_noticed', 'collisions_reported')}
+        fields = {k: summary.get(k)
+                  for k in FIELDS + DETAIL_FIELDS + EXTRA_FIELDS}
         return with_success(fields, summary.get('success') if success is None
                             else success)
     counts = _read_json(os.path.join(run_dir, COUNTS_FILE)) if run_dir else None
@@ -168,7 +176,7 @@ def from_bridge_episode(episode, save_dir, success):
     the pipeline run the driver kept under <save_dir>/ours (its summary,
     else its counts file: the counts up to the kill)."""
     if episode is not None and all(k in episode for k in FIELDS):
-        keys = FIELDS + DETAIL_FIELDS + ('drops_noticed', 'collisions_reported')
+        keys = FIELDS + DETAIL_FIELDS + EXTRA_FIELDS
         return with_success({k: episode.get(k) for k in keys}, success)
     try:
         runs = sorted(n for n in os.listdir(os.path.join(save_dir, 'ours'))
