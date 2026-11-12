@@ -6,8 +6,8 @@ counts"): every eval record, of every arm, carries per episode
 
   drops               how often a held object left the gripper outside a
                       place, or None when nothing could see it;
-  collisions          objects knocked (a bystander moved by an action it
-                      was no part of), or None;
+  collisions          objects knocked (a bystander that the arm or its
+                      load touched and moved in an action), or None;
   drop_detector       how each count was detected, or "cannot happen", or
   collision_detector  "not detected".  A 0 is never written where nothing
                       could see the event;
@@ -45,7 +45,9 @@ CANNOT_HAPPEN = 'cannot happen'
 DROP_DETECTOR = ('telemetry counts: a carried body left both finger pads, '
                  'or the gripper opened on it, outside the release of a place')
 COLLISION_DETECTOR = ('telemetry counts: distinct (action, body) pairs of a '
-                      'body the arm did not hold moved over 3 mm, plus the '
+                      'body the gripper did not hold in that action that '
+                      'moved over 3 mm after the arm, a body in its grip or '
+                      'a body so knocked touched it, plus the '
                       "monitor's knocked_off_table bodies not among them")
 
 

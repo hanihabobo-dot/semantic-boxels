@@ -274,47 +274,198 @@ def test_wide_fingers_do_not_hide_a_drop(sim, tmp_path):
 
 # ----- collisions ----------------------------------------------------------
 
-def knock(sim, body, mm, speed=0.1):
+def knock(sim, tele, body, mm, link=3):
+    """An arm link (no finger) touches the body for one check; the body is
+    then ``mm`` further along x."""
+    sim.contacts.add((ROBOT, body, link, -1))
+    checks(tele, 1)
+    sim.contacts.discard((ROBOT, body, link, -1))
     sim.pos[body][0] += mm / 1000.0
-    sim.vel[body] = [speed, 0.0, 0.0]
+
+
+def knocked(tele):
+    return [(e['object'], e['by']) for e in tele.counts()['collisions']]
 
 
 def test_a_knocked_bystander_counts_once_per_action(sim):
     tele = observer()
     tele.phase('move 1')
-    knock(sim, CUP, 5.0)
-    checks(tele, 30)                          # it fires on every check
+    knock(sim, tele, CUP, 5.0)
+    checks(tele, 30)                          # over 3 mm on every check
     assert len(tele.counts()['collisions']) == 1
     tele.phase('move 2')
     checks(tele, 5)
-    assert len(tele.counts()['collisions']) == 1   # not moved in this action
-    knock(sim, CUP, 4.0)
-    knock(sim, BOX, 7.5)
+    assert len(tele.counts()['collisions']) == 1   # not touched in this action
+    knock(sim, tele, CUP, 4.0)
+    knock(sim, tele, BOX, 7.5)
     checks(tele, 5)
     events = tele.counts()['collisions']
     assert [(e['object'], e['phase']) for e in events] == [
-        ('cup', 'move 1'), ('box', 'move 2'), ('cup', 'move 2')]
-    assert events[1]['moved_mm'] == 7.5
+        ('cup', 'move 1'), ('cup', 'move 2'), ('box', 'move 2')]
+    assert events[2]['moved_mm'] == 7.5 and events[2]['by'] == 'arm link 3'
 
 
 def test_what_is_no_collision(sim):
     tele = observer()
     tele.phase('move')
-    knock(sim, CUP, 2.9)                      # under 3 mm
+    knock(sim, tele, CUP, 2.9)                # touched, but under 3 mm
     checks(tele, 5)
-    sim.pos[BOX][0] += 0.02
-    sim.vel[BOX] = [0.0, 0.0, 0.0]            # displaced but at rest
+    sim.pos[BOX][0] += 0.02                   # moved, but nothing touched it
+    sim.vel[BOX] = [0.1, 0.0, 0.0]
     checks(tele, 5)
     assert tele.counts()['collisions'] == []
-    # the body the arm holds in this action moves with the hand
+    # the body the gripper holds in this action moves with the hand
     tele.gripper_command(opening=False)
     sim.pinch(CUP)
     checks(tele, 1)
-    knock(sim, CUP, 50.0)
+    sim.pos[CUP][0] += 0.05
     checks(tele, 5)
-    sim.release(CUP)                          # and settles after the release
+    tele.gripper_command(opening=True, placing=True)
+    sim.release(CUP)
+    sim.pos[CUP][2] -= 0.01                   # and settles after the release
     checks(tele, 5)
     assert tele.counts()['collisions'] == []
+
+
+def test_a_body_still_settling_when_execution_starts_is_no_collision(sim):
+    # find_dice seed 0 (2026-11-12): the die was still tumbling under its
+    # cup when the first action began and came to rest 5.8 mm away; the arm
+    # touched neither.  Nor does a light touch of the cup make the die's
+    # own motion a collision: the cup was not knocked.
+    tele = observer()
+    tele.phase('move to the first look')
+    sim.rest(BOX, on=CUP)
+    sim.pos[BOX][2] -= 0.0058
+    sim.vel[BOX] = [0.0, 0.0, -0.2]
+    checks(tele, 5)
+    sim.contacts.add((ROBOT, CUP, 3, -1))
+    sim.pos[BOX][2] -= 0.004
+    checks(tele, 5)
+    assert tele.counts()['collisions'] == []
+
+
+def test_a_touch_of_one_step_is_seen(sim):
+    tele = observer()
+    tele.phase('move')
+    sim.contacts.add((CUP, ROBOT, -1, 5))
+    tele.tick()                               # an odd step: no check on it
+    sim.contacts.clear()
+    sim.pos[CUP][1] += 0.006
+    tele.tick()
+    assert knocked(tele) == [('cup', 'arm link 5')]
+
+
+def test_a_bystander_brushed_by_a_finger_counts(sim):
+    # The DISTURBED line leaves out every body a finger touched; the count
+    # leaves out only what the gripper held.
+    tele = observer()
+    carry(sim, tele)                          # the box is in the hand
+    tele.phase('move')
+    sim.pinch(CUP, pads=(PADS[1],))           # the outside of a finger
+    checks(tele, 1)
+    sim.pos[CUP][0] += 0.004
+    checks(tele, 2)
+    assert knocked(tele) == [('cup', 'arm link 10')]
+    assert n_drops(tele) == 0
+
+
+def test_a_bystander_knocked_by_the_held_body_counts(sim):
+    tele = observer()
+    carry(sim, tele)
+    tele.phase('move')
+    sim.rest(BOX, on=CUP)                     # the carried box strikes the cup
+    checks(tele, 1)
+    sim.lift(BOX)
+    sim.pos[CUP][0] += 0.01
+    checks(tele, 1)
+    assert knocked(tele) == [('cup', 'held box')]
+    assert n_drops(tele) == 0
+
+
+def test_how_a_held_body_that_touches_another_body_is_counted(sim):
+    tele = observer()
+    carry(sim, tele)
+    tele.phase('move')
+    sim.rest(BOX, on=CUP)                     # the carried box lies on the cup
+    checks(tele, 2)
+    sim.pos[CUP][0] += 0.002                  # and gives it 2 mm: a touch only
+    checks(tele, 2)
+    assert tele.counts()['collisions'] == []
+    sim.pos[BOX][0] += 0.05                   # the held box itself never counts
+    sim.pos[CUP][0] += 0.003                  # 5 mm from where it was touched
+    checks(tele, 1)
+    assert knocked(tele) == [('cup', 'held box')]
+    sim.release(BOX)                          # the strike takes the box as well
+    checks(tele, telemetry.DROP_CHECKS)
+    assert n_drops(tele) == 1 and len(tele.counts()['collisions']) == 1
+    sim.pos[CUP][0] += 0.02                   # the falling box shoves it on:
+    checks(tele, 3)                           # still the one collision
+    events = tele.counts()['collisions']
+    assert len(events) == 1 and events[0]['moved_mm'] == 25.0
+
+
+def test_what_a_knocked_body_runs_into_counts_too(sim):
+    tele = observer()
+    tele.phase('move')
+    knock(sim, tele, CUP, 8.0)
+    checks(tele, 1)                           # the cup is counted
+    sim.rest(CUP, on=BOX)                     # and slides into the box
+    checks(tele, 1)
+    sim.pos[BOX][0] += 0.005
+    checks(tele, 1)
+    assert knocked(tele) == [('cup', 'arm link 3'), ('box', 'knocked cup')]
+
+
+def test_a_picks_own_body_shoved_before_both_pads_hold_it_is_no_collision(
+        sim, tmp_path):
+    tele = observer(tmp_path)
+    tele.phase('pick box')
+    tele.gripper_command(opening=False)
+    sim.rest(BOX)
+    sim.pinch(BOX, pads=(PADS[0],))           # one pad reaches it first
+    checks(tele, 1)
+    sim.pos[BOX][0] += 0.004                  # and pushes it to the other
+    checks(tele, 1)
+    assert knocked(tele) == [('box', 'arm link 9')]    # so far a shoved body
+    sim.pinch(BOX)
+    checks(tele, 1)
+    assert tele.counts()['collisions'] == []           # the grasp's own body
+    on_disk = json.loads((tmp_path / telemetry.COUNTS_FILE).read_text())
+    assert on_disk['collisions'] == []
+    # a grasp that never gets both pads on the body stays a collision
+    tele.gripper_command(opening=True)
+    sim.release(BOX)
+    tele.phase('pick cup')
+    tele.gripper_command(opening=False)
+    sim.pinch(CUP, pads=(PADS[0],))
+    checks(tele, 1)
+    sim.pos[CUP][0] += 0.004
+    checks(tele, 3)
+    sim.release(CUP)
+    checks(tele, 3)
+    assert knocked(tele) == [('cup', 'arm link 9')]
+
+
+def test_a_placed_body_under_the_retreat_is_no_collision(sim):
+    tele = observer()
+    tele.phase('place box')
+    carry(sim, tele)
+    sim.rest(BOX)
+    checks(tele, 2)
+    tele.gripper_command(opening=True, placing=True)
+    sim.pinch(BOX, pads=(PADS[0],))           # one pad still lies on it
+    checks(tele, 2)
+    tele.phase('move home')
+    checks(tele, 1)
+    sim.pos[BOX][0] += 0.005                  # the retreat drags it a little
+    checks(tele, 3)
+    assert tele.counts()['collisions'] == [] and n_drops(tele) == 0
+    sim.release(BOX)
+    checks(tele, 1)
+    tele.phase('look')                        # an action later it is a bystander
+    knock(sim, tele, BOX, 5.0)
+    checks(tele, 1)
+    assert knocked(tele) == [('box', 'arm link 3')]
 
 
 def test_the_fall_of_a_dropped_body_is_no_collision(sim):
@@ -324,16 +475,17 @@ def test_the_fall_of_a_dropped_body_is_no_collision(sim):
     sim.release(BOX)
     checks(tele, telemetry.DROP_CHECKS)
     assert n_drops(tele) == 1
+    sim.pos[BOX][2] -= 0.04                   # it falls, in the drop's action
+    checks(tele, 3)
     tele.gripper_command(opening=True)        # the pipeline's open after it
-    tele.phase('move home')                   # the box still rolls on the table
+    tele.phase('move home')                   # and still rolls in the next one
     sim.rest(BOX)
-    knock(sim, BOX, 40.0)
+    sim.pos[BOX][0] += 0.04
     checks(tele, 5)
     assert tele.counts()['collisions'] == []
-    tele.phase('look')                        # an action later it is a bystander
-    knock(sim, BOX, 6.0)
-    checks(tele, 5)
-    assert [e['object'] for e in tele.counts()['collisions']] == ['box']
+    knock(sim, tele, BOX, 6.0)                # the arm then runs into it
+    checks(tele, 1)
+    assert knocked(tele) == [('box', 'arm link 3')]
 
 
 # ----- the two modes, the file, the cost ------------------------------------
@@ -342,14 +494,13 @@ def scripted_episode(sim, tele):
     tele.phase('pick box')
     carry(sim, tele)
     tele.phase('move')
-    knock(sim, CUP, 6.0)
+    knock(sim, tele, CUP, 6.0)
     checks(tele, 4)
     sim.release(BOX)
     checks(tele, telemetry.DROP_CHECKS + 1)
     sim.rest(BOX)
     tele.gripper_command(opening=True)
     tele.phase('pick box again')
-    sim.vel[CUP] = [0.0, 0.0, 0.0]
     carry(sim, tele)
     tele.phase('place box')
     sim.rest(BOX)
@@ -377,6 +528,8 @@ def test_the_recorder_and_the_counts_mode_count_the_same(monkeypatch, tmp_path):
     assert results[0] == ([('box', 'move', 'left the finger pads with no '
                                            'release commanded')],
                           [('cup', 'move')])
+    log = (tmp_path / 'False' / 'telemetry.log').read_text(encoding='utf-8')
+    assert '!! COLLISION' in log and 'after the arm link 3 touched it' in log
 
 
 def test_the_counts_file_is_there_before_the_run_ends(sim, tmp_path):
@@ -398,8 +551,15 @@ def test_the_counts_mode_writes_no_stream_and_reads_only_what_it_counts(sim, tmp
     tele.note('ignored')
     tele.close()
     assert sorted(f.name for f in tmp_path.iterdir()) == [telemetry.COUNTS_FILE]
-    assert set(sim.calls) <= {'getContactPoints', 'getBasePositionAndOrientation',
-                              'getBaseVelocity'}
+    assert set(sim.calls) <= {'getContactPoints', 'getBasePositionAndOrientation'}
+
+
+def test_an_action_that_touches_nothing_reads_one_contact_list_per_step(sim):
+    tele = observer()
+    tele.phase('move')
+    sim.calls.clear()
+    checks(tele, 10)
+    assert sim.calls == ['getContactPoints'] * (10 * telemetry.EVENT_STRIDE)
 
 
 def test_the_counts_mode_clocks_its_own_checks(sim, tmp_path):
