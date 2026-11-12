@@ -2,7 +2,7 @@
 """class_uncertain, arm T (TAMPURA) on the cluster (Q42): the episodes of one job, one process each.
 
   cu_eval.py --snapshot SB --out OUT --seeds 0-4 --reps 3 --venv-t TW/.venv --tampura-work TW
-             [--cap 3600] [--scratch /tmp] [--hashseed 0|unset] [--dry-run]
+             [--cap 3600] [--scratch /tmp] [--hashseed episode|N|unset] [--dry-run]
              [--min-avail-gb 4] [--peak-report-gb 6]
   cu_eval.py --report OUT [OUT ...]            the rows of these folders, counted
 
@@ -12,6 +12,13 @@ holds only two links into their tree (env_configs, class_uncertain's problems), 
 `run cu -System tampura` builds it for Hani's look.  Their tree is never written.  The scratch
 directory is removed by its exact path when the episode ends.  The episode's own files stay in
 OUT/T/seed<N>_rep<R>/ (their save folder with the history, the console, the spans, the read).
+
+The hash seed (worker S's sheet, tracks/modes/CLUSTER_SHEET_CU.md section 2): every repetition of a
+seed runs with the same --global-seed, and under one PYTHONHASHSEED their run may repeat itself to
+the action (arm T on find_dice scene 113 did, three runs out of three, 2026-11-12).  The default
+`episode` gives every episode its own recorded value, 1000 * seed + repetition + 1, so that the
+repetitions are draws and each can be run again; a number sets that value for all, `unset` leaves
+the variable out as their own way to run does (draws, but no episode can be repeated).
 
 Order: repetitions outside, seeds inside, so a job that is cut short has whole repetitions first.
 A row that exists is not run again (a second call of the same job folder resumes).
@@ -85,6 +92,15 @@ def ep_name(seed, rep):
     return f"seed{seed}_rep{rep}"
 
 
+def hashseed_for(mode, seed, rep):
+    """The PYTHONHASHSEED of one episode: None (left unset), the fixed number, or the episode's own."""
+    if mode == 'unset':
+        return None
+    if mode == 'episode':
+        return 1000 * seed + rep + 1
+    return int(mode)
+
+
 def child_env(base, tampura_work, hashseed):
     """The environment of an episode: the caller's, with the variables `run cu -System tampura`
     sets (their two packages on PYTHONPATH and nothing of ours) and the hash seed as declared."""
@@ -94,7 +110,7 @@ def child_env(base, tampura_work, hashseed):
     env['PYTHONDONTWRITEBYTECODE'] = '1'
     env['MPLBACKEND'] = 'Agg'
     env.pop('PYTHONHOME', None)
-    if hashseed == 'unset':
+    if hashseed is None:
         env.pop('PYTHONHASHSEED', None)
     else:
         env['PYTHONHASHSEED'] = str(int(hashseed))
@@ -147,7 +163,7 @@ def build_row(seed, rep, order, rc, timed_out, wall_s, final, spans, hashseed):
     final = final or {}
     row = {'task': TASK, 'seed': seed, 'rep': rep, 'arm': ARM, 'arm_name': ARM_NAME, 'policy': 'tampura_policy',
            'order': order, 'rc': rc, 'timed_out': bool(timed_out), 'wall_s': round(wall_s, 2),
-           'pythonhashseed': None if hashseed == 'unset' else int(hashseed),
+           'pythonhashseed': hashseed,
            'get_action_s': round(sum(s.get('get_action_s', 0.0) for s in spans), 3),
            'get_action_spans': [round(s.get('get_action_s', 0.0), 3) for s in spans]}
     for k in ('max_steps', 'steps', 'actions', 'rewards', 'reward_t0', 'success_first_goal', 'first_goal_step',
@@ -194,7 +210,8 @@ def run_one(a, seed, rep, order, base_env=None, popen=subprocess.Popen):
     os.makedirs(save_dir, exist_ok=True)
     scratch = os.path.join(a.scratch, f"cu_{ARM}_{os.path.basename(os.path.normpath(a.out))}_{name}")
     make_scratch(scratch, a.tampura_work)
-    env = child_env(os.environ if base_env is None else base_env, a.tampura_work, a.hashseed)
+    hashseed = hashseed_for(a.hashseed, seed, rep)
+    env = child_env(os.environ if base_env is None else base_env, a.tampura_work, hashseed)
     cmd = command(a, seed, save_dir)
     t0 = time.time()
     timed_out = False
@@ -214,7 +231,7 @@ def run_one(a, seed, rep, order, base_env=None, popen=subprocess.Popen):
         shutil.rmtree(scratch, ignore_errors=True)        # the directory this episode made, by its exact path
     wall = time.time() - t0
     return build_row(seed, rep, order, rc, timed_out, wall, read_json(os.path.join(save_dir, FINAL_NAME)),
-                     read_spans(os.path.join(save_dir, SPANS_NAME)), a.hashseed)
+                     read_spans(os.path.join(save_dir, SPANS_NAME)), hashseed)
 
 
 def load_rows(path):
@@ -339,7 +356,8 @@ def main(argv=None):
     ap.add_argument('--venv-t', help="arm T's venv (theirs)")
     ap.add_argument('--tampura-work', help='their tree: tampura, tampura_environments')
     ap.add_argument('--scratch', default='/tmp', help='where the episodes get their working directories')
-    ap.add_argument('--hashseed', default='0', help="PYTHONHASHSEED of every episode, or 'unset'")
+    ap.add_argument('--hashseed', default='episode',
+                    help="PYTHONHASHSEED: 'episode' (1000 * seed + repetition + 1, the default), a number for all, or 'unset'")
     ap.add_argument('--dry-run', action='store_true', help='print the episodes and their commands, run nothing')
     ap.add_argument('--min-avail-gb', type=float, default=None)
     ap.add_argument('--peak-report-gb', type=float, default=None)
@@ -350,19 +368,21 @@ def main(argv=None):
     for name in ('snapshot', 'out', 'seeds', 'venv_t', 'tampura_work'):
         if not getattr(a, name):
             ap.error('--' + name.replace('_', '-') + ' is needed')
-    if a.hashseed != 'unset':
-        int(a.hashseed)
+    if a.hashseed not in ('unset', 'episode') and not 0 <= int(a.hashseed) <= 4294967295:
+        ap.error('--hashseed must be episode, unset or a number from 0 to 4294967295')
     if a.reps < 1:
         ap.error('--reps must be at least 1')
     a.seed_list = parse_seeds(a.seeds)
     if a.dry_run:
-        env = child_env({}, a.tampura_work, a.hashseed)
-        print(f"{len(a.seed_list) * a.reps} episode(s), cap {a.cap:.0f} s each, environment " +
+        env = child_env({}, a.tampura_work, None)
+        print(f"{len(a.seed_list) * a.reps} episode(s), cap {a.cap:.0f} s each, hash seed {a.hashseed}, environment " +
               ' '.join(f"{k}={v}" for k, v in sorted(env.items())))
         for rep in range(a.reps):
             for seed in a.seed_list:
                 save = os.path.join(a.out, ARM, ep_name(seed, rep), 'save')
-                print(f"rep {rep} seed {seed}: " + ' '.join(command(a, seed, save)))
+                hs = hashseed_for(a.hashseed, seed, rep)
+                print(f"rep {rep} seed {seed}: " + ('' if hs is None else f"PYTHONHASHSEED={hs} ")
+                      + ' '.join(command(a, seed, save)))
         return 0
     return run(a)
 
