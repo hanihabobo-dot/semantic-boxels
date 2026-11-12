@@ -14,6 +14,14 @@ tag's with TB-8 and TB-20; arm B: the thesis commit's, with its seed retry).
   ... --set all --only-tags TAG[,TAG...] ...                a final pass
   ... --dry-run                                             print, run nothing
   ... [--min-avail-gb 4] [--peak-report-gb 6]               rule 16's limits, GB (0: only record)
+  ... [--fresh-stream-stats]                                TB-24: no statistics carried between cells
+
+TB-24 (--fresh-stream-stats): every pipeline run loads pddlstream's stream statistics from
+statistics/py<N>/ in its working directory and rewrites them with its own measured times.  The
+working directory is the arm's code copy, so a cell starts from the times of the arm's cells
+before it in the same job.  With the switch that folder is removed before every cell that runs
+(the runner's run_cell is wrapped at run time, as for rule 16; the arm's files stay unedited),
+and every cell starts as the first run in a fresh copy does.  p6_run.json records the switch.
 
 Rule 16 (tools/memwatch.py): the runner's run_cell is wrapped at run time (the arm's own
 file stays unedited) so that each cell's MemAvailable at its start and end, its peak RSS
@@ -33,6 +41,7 @@ import hashlib
 import json
 import os
 import platform
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -40,6 +49,46 @@ from pathlib import Path
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOOLS = os.path.dirname(HERE)
 PRESET = 'p6-slot'
+STATS_DIR = 'statistics'        # pddlstream: statistics/py<N>/<domain>-streams.pkl under the working directory
+
+
+def statistics_files(target):
+    """The files under a pddlstream statistics folder, or SystemExit when it holds anything that
+    is not statistics/py<N>/<name>.pkl: only such a folder is ever removed."""
+    found = []
+    for root, _, files in os.walk(target):
+        rel = os.path.relpath(root, target)
+        for name in files:
+            if rel == '.' or os.sep in rel or not rel.startswith('py') or not name.endswith('.pkl'):
+                raise SystemExit(f"{target} holds {os.path.join(rel, name)}, which is not pddlstream's "
+                                 "statistics/py<N>/<name>.pkl: nothing removed, nothing run")
+            found.append(os.path.join(root, name))
+    return found
+
+
+def install_fresh_statistics(er, code_dir, log=print):
+    """TB-24 (tracks/BUGS.md): wrap `run_cell` of the arm's own runner so that pddlstream's stream
+    statistics are removed before every cell that runs.  Each pipeline run loads
+    statistics/py<N>/boxel-streams.pkl from its working directory (the arm's code copy) and
+    rewrites it with its own measured times, so without this a cell starts from the times of the
+    arm's cells before it in the same job and its plan can depend on its place in the job.  With
+    it every cell starts as the first run in a fresh copy does.  A cell the runner skips
+    (--skip-existing, its summary is banked) removes nothing.  The arm's files stay unedited: the
+    one folder under the working directory is removed by its path, and only when it holds nothing
+    but such files.  Returns the wrapper."""
+    orig = er.run_cell
+    target = os.path.join(code_dir, STATS_DIR)
+
+    def fresh(cell, sweep_dir, timeout_s, extra_args, skip_existing):
+        tag = er.cell_tag(cell)
+        banked = skip_existing and os.path.exists(os.path.join(str(sweep_dir), 'cells', tag, 'timing_summary.json'))
+        if not banked and os.path.isdir(target):
+            files = statistics_files(target)
+            shutil.rmtree(target)
+            log(f"stats {tag}: removed {target} ({len(files)} file(s)) before the cell")
+        return orig(cell, sweep_dir, timeout_s, extra_args, skip_existing)
+    er.run_cell = fresh
+    return fresh
 
 
 def sha256_file(path):
@@ -94,6 +143,9 @@ def main(argv=None):
                     help="rule 16: MemAvailable under this stops the batch after the cell (default 4; 0 only records)")
     ap.add_argument('--peak-report-gb', type=float, default=None,
                     help="rule 16: a peak RSS over this is flagged peak_over_6gb (default 6; 0 only records)")
+    ap.add_argument('--fresh-stream-stats', action='store_true',
+                    help="TB-24: remove the working directory's statistics/ (pddlstream's stream statistics) "
+                         "before every cell that runs, so that no cell starts from the cells before it")
     a = ap.parse_args(argv)
 
     code = os.getcwd()
@@ -144,7 +196,14 @@ def main(argv=None):
         json.dump(meta, f, indent=1)
     min_kb = memwatch.limit_kb(memwatch.MIN_AVAIL_GB if a.min_avail_gb is None else a.min_avail_gb)
     peak_kb = memwatch.limit_kb(memwatch.PEAK_REPORT_GB if a.peak_report_gb is None else a.peak_report_gb)
-    meta.update(min_avail_limit_kb=min_kb, peak_limit_kb=peak_kb)
+    meta.update(min_avail_limit_kb=min_kb, peak_limit_kb=peak_kb, fresh_stream_stats=bool(a.fresh_stream_stats))
+    with open(meta_path, 'w', encoding='utf-8') as f:
+        json.dump(meta, f, indent=1)
+    if a.fresh_stream_stats:
+        if not hasattr(er, 'run_cell'):
+            raise SystemExit('--fresh-stream-stats needs a runner with run_cell')
+        # inside the memory guard, so that a cell's record covers its own run only
+        install_fresh_statistics(er, code, log=lambda s: print('[stats] ' + s, flush=True))
     if hasattr(er, 'run_cell'):
         memwatch.install_run_cell_guard(er, out, min_kb, peak_kb, log=lambda s: print('[mem] ' + s, flush=True))
     t0 = time.time()
