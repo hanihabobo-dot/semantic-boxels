@@ -1,0 +1,51 @@
+== gates and job ends
+5248855 cn-112 Intel(R) Xeon(R) Platinum 8160 CPU @ 2.1 harness rc 0: True  GEN_DONE: True  gate FAILs: none
+5248856 cn-111 Intel(R) Xeon(R) Platinum 8160 CPU @ 2.1 harness rc 0: True  GEN_DONE: True  gate FAILs: none
+5248857 cn-109 Intel(R) Xeon(R) Platinum 8160 CPU @ 2.1 harness rc 0: True  GEN_DONE: True  gate FAILs: none
+5248858 cn-115 Intel(R) Xeon(R) Platinum 8160 CPU @ 2.1 harness rc 0: True  GEN_DONE: True  gate FAILs: none
+5248859 cn-104 Intel(R) Xeon(R) Platinum 8160 CPU @ 2.1 harness rc 0: True  GEN_DONE: True  gate FAILs: none
+5248860 cn-103 Intel(R) Xeon(R) Platinum 8160 CPU @ 2.1 harness rc 0: True  GEN_DONE: True  gate FAILs: none
+5248861 cn-110 Intel(R) Xeon(R) Platinum 8160 CPU @ 2.1 harness rc 0: True  GEN_DONE: True  gate FAILs: none
+5248862 cn-114 Intel(R) Xeon(R) Platinum 8160 CPU @ 2.1 harness rc 0: True  GEN_DONE: True  gate FAILs: none
+5248863 cn-113 Intel(R) Xeon(R) Platinum 8160 CPU @ 2.1 harness rc 0: True  GEN_DONE: True  gate FAILs: none
+5248864 cn-107 Intel(R) Xeon(R) Platinum 8160 CPU @ 2.1 harness rc 0: True  GEN_DONE: True  gate FAILs: none
+
+== per cup count (counted runs; successes/counted, Wilson 95 %; timeouts)
+1 cups (7 scenes): O 14/14 (1.00 [0.78, 1.00]) to 0   T 12/12 (1.00 [0.76, 1.00]) to 0
+2 cups (9 scenes): O 16/18 (0.89 [0.67, 0.97]) to 0   T 10/16 (0.62 [0.39, 0.82]) to 0
+3 cups (8 scenes): O 12/16 (0.75 [0.51, 0.90]) to 0   T 10/16 (0.62 [0.39, 0.82]) to 0
+4 cups (8 scenes): O 16/16 (1.00 [0.81, 1.00]) to 0   T  6/16 (0.38 [0.18, 0.61]) to 0
+5 cups (8 scenes): O 11/16 (0.69 [0.44, 0.86]) to 1   T  8/16 (0.50 [0.28, 0.72]) to 0
+
+== pairs per cup count (both / only O / only T / neither)
+1 cups: 12 pairs, both 12, only O 0, only T 0, neither 0
+2 cups: 16 pairs, both 8, only O 6, only T 2, neither 0
+3 cups: 16 pairs, both 8, only O 4, only T 2, neither 2
+4 cups: 16 pairs, both 6, only O 10, only T 0, neither 0
+5 cups: 16 pairs, both 6, only O 5, only T 2, neither 3
+
+== arm O outcomes of counted failures
+  s100 r0 cups 5: failure (all_searched), wall 62.7, carries 0, losses 0
+  s100 r1 cups 5: failure (all_searched), wall 55.8, carries 0, losses 0
+  s101 r0 cups 5: failure (planner_failed), wall 211.3, carries 0, losses 0
+  s101 r1 cups 5: failure (planner_failed), wall 60.0, carries 0, losses 0
+  s104 r0 cups 3: failure (planner_failed), wall 23.0, carries 0, losses 0
+  s104 r1 cups 3: failure (planner_failed), wall 16.7, carries 0, losses 0
+  s124 r1 cups 5: timeout, wall 900.2, carries 0, losses 0
+  s128 r0 cups 2: failure (no_plan_binding_death), wall 55.6, carries 0, losses 0
+  s128 r1 cups 2: failure (no_plan_binding_death), wall 19.7, carries 0, losses 0
+  s135 r0 cups 3: failure (no_plan_binding_death), wall 29.5, carries 0, losses 0
+  s135 r1 cups 3: failure (no_plan_binding_death), wall 28.9, carries 0, losses 0
+  totals: {'failure (all_searched)': 2, 'failure (planner_failed)': 4, 'timeout': 1, 'failure (no_plan_binding_death)': 4}
+
+== arm T: counted failures (timeouts vs other) and crashes
+  counted failures 30: timeouts 0, ended below reward 1 30
+  crashed runs 8 of 84 T runs: s127 r0 a1, s127 r0 a2, s127 r1 a1, s127 r1 a2, s138 r0 a1, s138 r0 a2, s138 r1 a1, s138 r1 a2
+
+== walls (counted runs, s): median, min, max
+  O: all 30.8 [15.6, 900.2]  successes 30.2 [15.6, 436.3]
+  T: all 142.7 [50.5, 447.7]  successes 103.4 [50.5, 447.7]
+
+== per-scene success agreement across the two reps (counted)
+  O: same outcome in both reps 39 scenes, different 1
+  T: same outcome in both reps 38 scenes, different 0
