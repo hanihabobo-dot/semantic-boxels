@@ -45,6 +45,8 @@ from collections import OrderedDict
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import episode_metrics  # noqa: E402
+sys.path.append(os.path.dirname(HERE))   # the snapshot's root, last on the path
+import world_counts  # noqa: E402  (TB-22: drops, collisions, clean success)
 
 # The metrics summarised per arm (tools/episode_metrics.py's names).
 MEDIANS = ('wall_s', 'planning_s', 'planning_first_s', 'exec_s', 'plan_calls',
@@ -207,6 +209,7 @@ def run_episode(a, arm, seed, rep, extra_args=(), extra_env=None):
                       process_wall_s=round(time.time() - t0, 1),
                       started=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(t0)),
                       fixes=arm_fixes(arm), save_dir=save_dir)
+    bj = None
     try:
         with open(os.path.join(save_dir, 'bridge_episode.json'), 'r', encoding='utf-8') as f:
             bj = json.load(f)
@@ -222,6 +225,11 @@ def run_episode(a, arm, seed, rep, extra_args=(), extra_env=None):
         rec['metrics'] = None
         rec['metrics_error'] = str(e)
     rec['carries'], rec['losses'], rec['pick_tries'] = count_carries(save_dir)
+    # TB-22 (tracks rule 18): drops, collisions and clean success of the
+    # episode, under this harness's success test (the pipeline's goal check);
+    # a run killed at the cap keeps the counts up to the kill.
+    rec.update(world_counts.from_bridge_episode(
+        bj if isinstance(bj, dict) else None, save_dir, _ok(rec)))
     return rec
 
 

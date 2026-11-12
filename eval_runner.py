@@ -36,6 +36,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional
 
+import world_counts       # TB-22: drops, collisions, clean_success per row
+
 
 # ---------------------------------------------------------------------------
 # Matrix presets
@@ -412,6 +414,12 @@ def cell_to_argv(cell: Dict, extra_args: List[str]) -> List[str]:
         # the very numbers this harness reports (and write ~1-2 MB per
         # cell).  Sweeps therefore opt out; interactive headless
         # diagnostics keep it.
+        # TB-22 (tracks rule 18): the opt-out drops the recorder, not the
+        # counts.  A headless run without the recorder arms its counts
+        # mode (drops and collisions only, a few hundred bytes), so every
+        # row carries drops, collisions and clean_success; its cost in
+        # wall time is measured in tracks/freeze (--world-counts off in
+        # extra_args is the arm without it).
         "--no-telemetry",
     ]
     # audit #67 follow-up — only emit count knobs when the scene
@@ -544,6 +552,20 @@ def _stored_rejection(cell_dir: Path) -> Optional[str]:
         stdout_log.read_text(encoding="utf-8", errors="replace"))
 
 
+def _counts_without_summary(runs_before: set) -> Dict:
+    """TB-22: rule 18's fields of a cell whose run left no summary (killed
+    at the wall-clock budget, or crashed).
+
+    The observer's counts mode keeps world_counts.json in the run
+    directory while it runs, so such a cell still has its drops and
+    collisions up to its end.  Only a run directory that did not exist
+    before the launch can be the cell's (as for the summary, TB-8); with
+    none, the fields say "not detected" and the counts stay empty, never 0.
+    """
+    return world_counts.from_run_dir(
+        world_counts.newest_counts_dir("logs", runs_before), success=False)
+
+
 def _run_dir_claims(cells_root: Path) -> Dict[str, int]:
     """How many cells of a sweep name each run directory in run_dir.txt."""
     claims: Dict[str, int] = {}
@@ -636,6 +658,7 @@ def run_cell(
             "success": False,
             "exit_reason": "timeout",
             "wall_clock_s": round(wall, 3),
+            **_counts_without_summary(runs_before),
         }
         summary_path.write_text(json.dumps(stub, indent=2))
         print(f"[runner] {tag}: TIMEOUT after {timeout_s}s")
@@ -655,6 +678,7 @@ def run_cell(
             "success": False,
             "exit_reason": f"crash_exit{proc.returncode}",
             "wall_clock_s": round(wall, 3),
+            **_counts_without_summary(runs_before),
         }
         summary_path.write_text(json.dumps(stub, indent=2))
         print(f"[runner] {tag}: CRASH exit={proc.returncode}")
@@ -669,6 +693,11 @@ def run_cell(
             "exit_reason": ("preflight_rejected" if rejection
                             else "no_summary"),
             "wall_clock_s": round(wall, 3),
+            # TB-22: a rejected cell ran no episode; a run that ended
+            # without a summary may have left its counts.
+            **(world_counts.not_detected(
+                   False, why="pre-flight rejected: no episode ran")
+               if rejection else _counts_without_summary(runs_before)),
         }
         if rejection:
             stub["preflight_message"] = rejection
@@ -687,6 +716,8 @@ def run_cell(
             "summary_mismatch": mismatch,
             "foreign_run_dir": str(ts_path.parent.absolute()),
             "wall_clock_s": round(wall, 3),
+            **world_counts.not_detected(
+                False, why="the new run's summary belongs to another cell"),
         }
         summary_path.write_text(json.dumps(stub, indent=2))
         print(f"[runner] {tag}: the new run's summary belongs to another "
@@ -718,6 +749,9 @@ PRIMARY_COLUMNS = [
     "goal", "unit_costs",
     "baseline", "uniform_cell_size",
     "success", "exit_reason",
+    # TB-22 (tracks rule 18): success with no drop and no collision, and
+    # the two counts (empty where nothing could see the event).
+    "clean_success", "drops", "collisions",
     "plan_count", "total_planning_time_s", "wall_clock_s",
 ]
 
@@ -739,6 +773,8 @@ LIST_VALUED = {
     # Audit #73 step 2(d): per-replan boxel count snapshots for plot 11
     # (boxel evolution across replans).  List-of-dicts, jsonl-only.
     "boxel_counts_per_replan",
+    # TB-22: what the drop and collision counts counted, jsonl-only.
+    "drop_events", "collision_events", "drops_noticed_by",
 }
 
 
@@ -816,6 +852,13 @@ def aggregate(sweep_dir: Path) -> Path:
             if isinstance(rc, dict):
                 for k, v in rc.items():
                     data.setdefault(k, v)
+            if "drops" not in data:
+                # TB-22: a record made without the counts (a sweep from
+                # before them, or a row relabelled above): every row still
+                # carries the fields, and they say that nothing watched.
+                data.update(world_counts.not_detected(
+                    bool(data.get("success")),
+                    why="the record has no counts"))
             rows.append(data)
 
     extra_keys = sorted({k for r in rows for k in r.keys()}
