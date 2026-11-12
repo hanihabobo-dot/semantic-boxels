@@ -74,6 +74,11 @@ COUNTS MODE (TB-22, tracks rule 18: drops and collisions in every record)
     settling when execution starts, the fall of a dropped body).  The
     recorder's DISTURBED line is not this count: it is a log line for
     any body that moves while no finger touched it.
+    LIMIT: a body that rides on a held body (a loaded tray) is touched by
+    the load and moves with it, so it would count as knocked.  No task
+    picks a loaded body: every domain's pick requires (clear ?o), and the
+    tray has a fixed base (checked 2026-11-12 on the domains of this tree
+    and of track/look, track/lookalike and track/wumpus_sb).
 
   Both are ground truth for the episode's record (world_counts.py);
   nothing in the pipeline reads them before the run's summary is written.

@@ -48,7 +48,10 @@ COLLISION_DETECTOR = ('telemetry counts: distinct (action, body) pairs of a '
                       'body the gripper did not hold in that action that '
                       'moved over 3 mm after the arm, a body in its grip or '
                       'a body so knocked touched it, plus the '
-                      "monitor's knocked_off_table bodies not among them")
+                      "monitor's knocked_off_table bodies not among them; "
+                      'limit: a body that rides on a held body would count '
+                      'as knocked (no task picks a loaded body: pick '
+                      'requires clear, the tray is fixed)')
 
 
 # ----- what the robot itself notices during a run ------------------------
