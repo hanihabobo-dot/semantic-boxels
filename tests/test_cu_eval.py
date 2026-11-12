@@ -54,7 +54,15 @@ def test_the_episodes_environment_holds_their_two_packages_and_nothing_of_ours(t
     assert env['PYTHONHASHSEED'] == '0' and env['MPLBACKEND'] == 'Agg' and env['PYTHONDONTWRITEBYTECODE'] == '1'
     assert 'PYTHONHOME' not in env and env['PATH'] == '/usr/bin'
     assert base['PYTHONPATH'] == '/snap/sb:/w/pddlstream_lib'          # the caller's is not edited
-    assert 'PYTHONHASHSEED' not in ce.child_env(base, '/w/tw', 'unset')
+    assert 'PYTHONHASHSEED' not in ce.child_env(base, '/w/tw', None)
+
+
+def test_the_hash_seed_is_the_episodes_own_unless_a_number_or_unset_is_asked():
+    assert ce.hashseed_for('episode', 0, 0) == 1 and ce.hashseed_for('episode', 13, 2) == 13003
+    seen = {ce.hashseed_for('episode', s, r) for s in range(20) for r in range(3)}
+    assert len(seen) == 60 and min(seen) >= 1                 # every episode its own, none of them 0
+    assert ce.hashseed_for('0', 13, 2) == 0 and ce.hashseed_for('7', 1, 1) == 7
+    assert ce.hashseed_for('unset', 13, 2) is None
 
 
 def test_the_command_is_their_driver_through_cu_t_with_their_config_and_no_planner_argument(tmp_path):
@@ -73,7 +81,7 @@ def test_the_command_is_their_driver_through_cu_t_with_their_config_and_no_plann
 
 
 def test_a_row_of_a_finished_episode_carries_the_world_test_and_rule_18s_words_never_a_zero():
-    row = ce.build_row(13, 2, 5, 0, False, 612.345, dict(FINAL_OK), SPANS, '0')
+    row = ce.build_row(13, 2, 5, 0, False, 612.345, dict(FINAL_OK), SPANS, 13003)
     assert (row['task'], row['seed'], row['rep'], row['arm'], row['order']) == ('class_uncertain', 13, 2, 'T', 5)
     assert row['counts'] is True and row['success'] is True and row['world_success_end'] is True and row['why'] is None
     assert row['success_first_goal'] is True and row['first_goal_step'] == 3
@@ -82,7 +90,7 @@ def test_a_row_of_a_finished_episode_carries_the_world_test_and_rule_18s_words_n
     assert row['get_action_s'] == 60.75 and row['get_action_spans'] == [40.5, 20.25] and row['wall_s'] == 612.35
     assert row['drops'] is None and row['collisions'] is None and row['clean_success'] is None
     assert row['drop_detector'].startswith('cannot happen') and row['collision_detector'].startswith('not detected')
-    assert row['pythonhashseed'] == 0 and ce.build_row(1, 0, 0, 0, False, 1.0, dict(FINAL_OK), [], 'unset')['pythonhashseed'] is None
+    assert row['pythonhashseed'] == 13003 and ce.build_row(1, 0, 0, 0, False, 1.0, dict(FINAL_OK), [], None)['pythonhashseed'] is None
 
 
 def test_their_reward_without_the_world_test_is_not_a_success():
@@ -172,7 +180,13 @@ def test_one_episode_runs_in_its_own_scratch_which_is_gone_afterwards(tmp_path, 
     ep = os.path.join(a.out, 'T', 'seed7_rep1')
     assert os.path.isfile(os.path.join(ep, 'console.txt')) and os.path.isfile(os.path.join(ep, 'save', ce.FINAL_NAME))
     assert row['seed'] == 7 and row['rep'] == 1 and row['order'] == 3 and row['success'] is True and row['rc'] == 0
-    assert row['get_action_s'] == 60.75
+    assert row['get_action_s'] == 60.75 and row['pythonhashseed'] == 0
+    a.hashseed = 'episode'
+    row = ce.run_one(a, 7, 2, 4, base_env={'PATH': 'p', 'PYTHONHASHSEED': '0'}, popen=FakeProc(log))
+    assert log[1]['env']['PYTHONHASHSEED'] == '7003' and row['pythonhashseed'] == 7003
+    a.hashseed = 'unset'
+    row = ce.run_one(a, 7, 3, 5, base_env={'PATH': 'p', 'PYTHONHASHSEED': '0'}, popen=FakeProc(log))
+    assert 'PYTHONHASHSEED' not in log[2]['env'] and row['pythonhashseed'] is None
 
 
 def test_an_episode_past_the_cap_is_ended_and_recorded_as_a_timeout(tmp_path, plain_scratch):
@@ -259,9 +273,10 @@ def test_the_dry_run_prints_every_episode_and_runs_nothing(tmp_path, capsys, mon
     rc = ce.main(['--snapshot', '/w/sb_1', '--out', '/w/out/5', '--seeds', '0-1', '--reps', '2', '--venv-t', '/w/tw/.venv',
                   '--tampura-work', '/w/tw', '--dry-run'])
     out = capsys.readouterr().out.splitlines()
-    assert rc == 0 and out[0].startswith('4 episode(s), cap 3600 s each') and 'PYTHONHASHSEED=0' in out[0]
+    assert rc == 0 and out[0].startswith('4 episode(s), cap 3600 s each, hash seed episode') and 'PYTHONHASHSEED' not in out[0]
     assert [line.split(':')[0] for line in out[1:]] == ['rep 0 seed 0', 'rep 0 seed 1', 'rep 1 seed 0', 'rep 1 seed 1']
     assert all('--global-seed' in line and 'cu_t.py' in line for line in out[1:])
+    assert [line.split()[4] for line in out[1:]] == ['PYTHONHASHSEED=1', 'PYTHONHASHSEED=1001', 'PYTHONHASHSEED=2', 'PYTHONHASHSEED=1002']
 
 
 # ---- cu_t.py: what is read from their history, and the one read after their rollout ---------------------
@@ -420,6 +435,16 @@ def test_the_job_script_is_marked_not_run_and_calls_the_harness_as_declared():
     assert len(calls) == 2                                    # the dry run and the run
     assert all('--seeds $SEEDS --reps $REPS --cap $CAP' in c for c in calls)
     assert text.count('--hashseed $HASHSEED') == 2 and text.count('--scratch $LD') == 2
+    assert 'HASHSEED=${CU_HASHSEED:-episode}' in text and 'ARMS=${CU_ARMS:-T,S}' in text
+    # worker S's arms after arm T, its own lines (tracks/modes/CLUSTER_SHEET_CU.md section 1), in a subshell
+    for line in ('bash $SB/tasks_probe/run_sb.sh a1 ep_run.py cu cu_boxels.py $S_FIRST $S_N $OUT/S/a1.jsonl',
+                 'bash $SB/tasks_probe/run_sb.sh a0 ep_run.py cu cu_a0.py $S_FIRST $S_N $OUT/S/a0.jsonl',
+                 'bash $SB/tasks_probe/run_cr.sh $S_FIRST $S_N $OUT/S/rand.jsonl',
+                 'export SB_LOCK_HELD=1 TAMPURA_WORK=$TW SB_PDDLSTREAM_LIB=$W/pddlstream_lib SB_VENV_O=$W/armO-venvA',
+                 'export SB_SCRATCH=$LD/p4cu_s_$JOB PROBE_TIMEOUT=3600', 'rm -rf $LD/p4cu_s_$JOB'):
+        assert line in text
+    assert text.index('tools/cu_eval.py --snapshot $SB --out $OUT --seeds $SEEDS --reps $REPS --cap $CAP \\\n    --venv-t $TW/.venv --tampura-work $TW --scratch $LD --hashseed $HASHSEED\n') < text.index('bash $SB/tasks_probe/run_sb.sh a1')
+    assert "need the seeds as one range A-B" in text and '[ $HRC != 4 ]' in text
     assert 'TREE CHANGED' in text and 'tree_hash tree_before.txt' in text and 'tree_hash tree_after.txt' in text
     assert 'prune_work.sh --apply' in text and 'STOPPED_LOW_MEMORY' in text
     assert 'bridge_gates' not in text                         # find_dice's gates do not apply to this task
