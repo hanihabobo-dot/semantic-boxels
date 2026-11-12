@@ -349,7 +349,11 @@ def test_look_off_builds_the_tags_init(world):
 _IN_WSL = 'microsoft' in platform.uname().release.lower()
 _ON_DRIVE = re.match(r'^/mnt/[a-z]/', str(ROOT)) is not None
 _PWSH = shutil.which('pwsh.exe') if _IN_WSL and _ON_DRIVE else None
-_STABLE = ROOT.parent / 'sb-stable'
+# The base the look code sits on: track/freeze since the merge of 2026-11-12
+# (aabc70a), checked out as ..\sb-freeze; before that the tag in ..\sb-stable,
+# whose launcher has no lock wrapper (TB-17) and no -Draw.  If sb-freeze's
+# launcher moves on, this test fails until track/freeze is merged again.
+_BASE = ROOT.parent / 'sb-freeze'
 needs_pwsh = pytest.mark.skipif(_PWSH is None, reason='needs pwsh.exe through WSL interop')
 
 
@@ -368,11 +372,11 @@ def _dry(ps1: Path, args: str) -> str:
 @pytest.mark.parametrize('args', ['boxels -Seed 3 -Headless', 'boxels -Seed 0',
                                   'tampura -Seed 118 -Gen -Headless', 'tampura -Seed 5',
                                   'boxels -Seed 3 -Headless -Off'])
-def test_without_look_the_command_is_the_tags(args):
+def test_without_look_the_command_is_the_bases(args):
     mine = _dry(ROOT / 'run.ps1', args)
     assert '--look' not in mine
-    if (_STABLE / 'run.ps1').is_file():
-        theirs = _dry(_STABLE / 'run.ps1', args)
+    if (_BASE / 'run.ps1').is_file():
+        theirs = _dry(_BASE / 'run.ps1', args)
         norm = lambda s: s.replace('/mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels', '<S>')
         assert norm(mine) == norm(theirs)
 
@@ -380,6 +384,10 @@ def test_without_look_the_command_is_the_tags(args):
 @needs_pwsh
 @pytest.mark.parametrize('value', ['boxel', 'centred'])
 def test_the_look_switch_appends_one_flag(value):
+    # The pipeline command sits inside the lock wrapper's quoted bash -c
+    # (TB-17), so the flag is the one thing added, not the string's tail.
     off = _dry(ROOT / 'run.ps1', 'boxels -Seed 3 -Headless')
     on = _dry(ROOT / 'run.ps1', f'boxels -Seed 3 -Headless -Look {value}')
-    assert on == off + f' --look {value}'
+    assert on.count('--look') == 1
+    assert on.replace(f' --look {value}', '', 1) == off
+    assert f"--n-occluders 2 --look {value}'" in on
