@@ -114,6 +114,9 @@ from execution import (audit_robot_held_state,
                        pick_contact_floor)
 # BF#59 carry_hold_check: the move's hold postcondition (execution.py).
 from execution import carry_hold_begin, carry_hold_end
+# TB-22: the losses of a held body the robot noticed, for the run's record.
+from execution import noticed_drops, noticed_drops_reset
+import world_counts
 import pose_belief
 import m8_domain
 import observe_views
@@ -794,6 +797,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     # so an unknown name is refused here, before anything runs.
     import slip_fixes
     slip_fixes.configure(getattr(args, 'slip_fixes', ''))
+    noticed_drops_reset()       # TB-22: this run's own count
     # The two known domains must match the switch (a caller may pass
     # another file deliberately; that one is not judged here).
     _dom = os.path.abspath(domain_file) if domain_file else m8_domain.LIVE_FILE
@@ -1318,6 +1322,22 @@ def main(gui=True, run_logger=None, scene_config=None,
               f"(frames {telemetry_period:.3f}s, "
               f"heartbeat {telemetry_heartbeat:.2f}s of sim time)")
         telemetry.phase("phase-5 planning (pre-execution)")
+    elif world_counts.wanted(getattr(args, 'world_counts', 'auto'), gui):
+        # TB-22 (tracks rule 18): drops and collisions in every episode
+        # record.  With the recorder off (every eval passes --no-telemetry,
+        # and so does the bridge) a headless run arms the observer's counts
+        # mode instead: the two counts and nothing else, no frame, no
+        # heartbeat, no stream file.  It is the same write-only observer:
+        # the counts go into the run's summary and nothing reads them
+        # before.  --world-counts off leaves it out (for measuring its own
+        # cost), on arms it under the GUI too.
+        _rm = robot_model()
+        telemetry.enable(
+            env.client_id, robot_id, body_id_to_name,
+            run_logger.run_dir if run_logger is not None else None,
+            ee_link=_rm.ee_link, arm_joints=_rm.arm_joints,
+            finger_joints=_rm.finger_joints, counts_only=True)
+        telemetry.phase("phase-5 planning (pre-execution)")
 
     # Initialise belief (all shadows unknown) and the planner.
     # The planner is stateless between calls — all context it needs
@@ -1533,6 +1553,10 @@ def main(gui=True, run_logger=None, scene_config=None,
     # F28: physical stack failures per (object, support) with a 3-strike
     # honest ending; episode_over ends the loop from inside a plan.
     integrity_events: list = []
+    # TB-22 (tracks rule 18): the moves and picks after which the
+    # executor's own contact report (detect_execution_collisions) named a
+    # contact; it goes into the record beside the observer's count.
+    collisions_reported = 0
     stack_fail_counts: Dict[tuple, int] = {}
     disturbed_counts: Dict[str, int] = {}   # reset every plan
     target_lost_seen = False                # a goal object's region observed empty
@@ -2159,12 +2183,13 @@ def main(gui=True, run_logger=None, scene_config=None,
                         [p.getJointState(robot_id, i)[0] for i in robot_model().arm_joints]
                     )
                     current_config = _readback_config(actual_joints, q2.name)
-                detect_execution_collisions(
-                    robot_id, env.client_id,
-                    held_body_id=held_body_id,
-                    support_body_ids=support_body_ids,
-                    label=f"move to {dest_boxel_id}",
-                    body_names=body_id_to_name)
+                if detect_execution_collisions(
+                        robot_id, env.client_id,
+                        held_body_id=held_body_id,
+                        support_body_ids=support_body_ids,
+                        label=f"move to {dest_boxel_id}",
+                        body_names=body_id_to_name):
+                    collisions_reported += 1        # TB-22, counted only
                 print(f"    -> Arrived at {dest_boxel_id}")
                 if goal_at_home and home_misses >= 2:
                     exit_reason = "home_not_reached"
@@ -2457,12 +2482,13 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # body so the emergency-drop path can relocate the right
                 # OBJECT boxel if we have to release mid-plan.
                 held_object_boxel_id = obj_str if obj_str in boxel_to_pybullet else None
-                detect_execution_collisions(
-                    robot_id, env.client_id,
-                    held_body_id=held_body_id,
-                    support_body_ids=support_body_ids,
-                    label=f"after pick {pick_obj_name}",
-                    body_names=body_id_to_name)
+                if detect_execution_collisions(
+                        robot_id, env.client_id,
+                        held_body_id=held_body_id,
+                        support_body_ids=support_body_ids,
+                        label=f"after pick {pick_obj_name}",
+                        body_names=body_id_to_name):
+                    collisions_reported += 1        # TB-22, counted only
                 print(f"    *** {pick_obj_name} PICKED UP! ***")
                 # #P2 (a): the descent and the lift can shove neighbours;
                 # the held object is excluded (F26).
@@ -3116,6 +3142,11 @@ def main(gui=True, run_logger=None, scene_config=None,
         registry=registry,
         last_init=planner.last_init,
         boxel_counts_per_replan=boxel_counts_per_replan,
+        # TB-22 (tracks rule 18): the observer's counts (None when nothing
+        # watched), the losses the robot noticed, the executor's reports.
+        observer_counts=telemetry.run_counts(),
+        drops_noticed=noticed_drops(),
+        collisions_reported=collisions_reported,
     )
 
     # Keep the GUI visible briefly so the user can inspect the final

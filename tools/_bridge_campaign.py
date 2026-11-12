@@ -50,6 +50,8 @@ STALL_FACTOR = 1.5          # P4.6 MACHINE: wall above 1.5 x cap is a stall
 STOP_RULE_COUNT = 3         # P4.6 HARNESS STOP RULE
 PER_RUN_GATES = ('G13', 'G19')
 HERE = os.path.abspath(__file__)
+sys.path.append(os.path.dirname(os.path.dirname(HERE)))   # the snapshot's root, last
+import world_counts  # noqa: E402  (TB-22: drops, collisions, clean success)
 
 # Their RolloutHistory is read in THEIR venv with nothing of ours on the
 # path (G6's convention); the reader prints one JSON line.  The pickle is
@@ -358,6 +360,10 @@ def episode_t(a, rep, seed, order, scene_map, others, stall_rerun=False):
     rec['success'] = rec['status'] == 'success'
     if rc == 139 and rec['status'] == 'success':
         rec['note'] += 'rc 139 after the history was written (pybullet teardown); '
+    # TB-22 (tracks rule 18): their carry is kinematic, so a drop cannot
+    # happen; their find_dice execution reports no collision, so that count
+    # is "not detected" (never a 0 nothing could see).
+    rec.update(world_counts.kinematic_arm_fields(rec['success']))
     return rec
 
 
@@ -464,6 +470,9 @@ def episode_o(a, rep, seed, order, scene_map, others, stall_rerun=False):
         rec['loop_s'] = a.cap
     rec['success'] = (be is not None and bool((be.get('outcome') or {}).get('success'))
                       and rec['status'] == 'success')
+    # TB-22 (tracks rule 18): the simulator's drops and collisions of the
+    # episode; a run killed at the cap keeps the counts up to the kill.
+    rec.update(world_counts.from_bridge_episode(be, save_dir, rec['success']))
     return rec
 
 

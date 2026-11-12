@@ -46,6 +46,31 @@ CONSOLE CONTRACT
   DISABLED BY DEFAULT under the GUI (user direction 2026-08-22: the GUI
   run already shows this, and the sampling should not tax it); pass
   ``--telemetry`` to force it on, ``--no-telemetry`` to force it off.
+
+COUNTS MODE (TB-22, tracks rule 18: drops and collisions in every record)
+
+  ``counts_only=True`` arms the same observer without the recording: no
+  frames, heartbeats, summaries, notes or log lines, and no stream files.
+  It keeps two run-level counts, which the recorder keeps as well:
+
+  * DROPS.  A body counts as carried once both finger pads hold it and it
+    touches nothing but the robot (CARRIED_CHECKS checks in a row).  A
+    carried body is dropped when it has no finger contact for DROP_CHECKS
+    checks in a row, or when the gripper is opened on it, in both cases
+    outside the release of a place (the pipeline tells the observer when
+    it commands the gripper: gripper_command).  Unlike GRIP_LOST this
+    does not ask how wide the fingers are, so a body that levers the
+    fingers past 35 mm on its way out still counts, and so does one
+    knocked out of the hand onto another body.
+  * COLLISIONS.  The DISTURBED test, counted once per (action, body).
+    The fall of a dropped body is its drop: its motion in the action of
+    the drop and in the action after it is not counted again.
+
+  Both are ground truth for the episode's record (world_counts.py);
+  nothing in the pipeline reads them before the run's summary is written.
+  ``world_counts.json`` in the run directory is rewritten at arming, on
+  every counted event and at the close, so a run killed at its wall-clock
+  cap keeps its counts.  ``--world-counts off`` turns the mode off.
 """
 
 from __future__ import annotations
@@ -103,6 +128,15 @@ TILT_WARN_DEG = 15.0                # a resting cube should stay near 0
 DISTURB_MM = 3.0                    # unheld body moved this much = poked
 OFF_TABLE_DROP = 0.05               # m below the support it started on
 
+# The drop count (TB-22).  Checks are EVENT_STRIDE steps apart (1/120 s).
+# CARRIED_CHECKS: a pinched body off every support this long is carried
+# (25 ms: the squeeze of a grasp on the table does not make a carry).
+# DROP_CHECKS: a carried body with no finger contact this long is dropped
+# (25 ms of free fall is 3 mm; a hold does not lose both pads that long).
+CARRIED_CHECKS = 3
+DROP_CHECKS = 3
+COUNTS_FILE = 'world_counts.json'
+
 
 def _yaw_pitch_roll_deg(quat):
     """Body orientation as (roll, pitch, yaw) in degrees."""
@@ -130,6 +164,9 @@ class WorldTelemetry:
         ee_link / arm_joints / finger_joints: robot indices, injected so
             this module does not import robot_utils (which imports the
             world back).
+        counts_only: the counts mode (module docstring): the drop and
+            collision counts without the recording.  ``run_dir`` may then
+            be None (no counts file).
     """
 
     def __init__(self, client_id, robot_id, body_names, run_dir,
@@ -138,7 +175,8 @@ class WorldTelemetry:
                  timestep: float = DEFAULT_TIMESTEP,
                  ee_link: int = 11,
                  arm_joints=(0, 1, 2, 3, 4, 5, 6),
-                 finger_joints=(9, 10)):
+                 finger_joints=(9, 10),
+                 counts_only: bool = False):
         self.client_id = client_id
         self.robot_id = robot_id
         self.body_names = dict(body_names or {})
@@ -149,13 +187,28 @@ class WorldTelemetry:
         self.ee_link = ee_link
         self.arm_joints = list(arm_joints)
         self.finger_joints = list(finger_joints)
+        self.counts_only = bool(counts_only)
 
-        self.run_dir = Path(run_dir)
-        self.run_dir.mkdir(parents=True, exist_ok=True)
-        self._stream = open(self.run_dir / 'telemetry.log', 'w',
-                            encoding='utf-8')
-        self._jsonl = open(self.run_dir / 'telemetry.jsonl', 'w',
-                           encoding='utf-8')
+        self.run_dir = Path(run_dir) if run_dir is not None else None
+        if self.run_dir is not None:
+            self.run_dir.mkdir(parents=True, exist_ok=True)
+        if self.counts_only:
+            self._stream = None
+            self._jsonl = None
+        else:
+            self._stream = open(self.run_dir / 'telemetry.log', 'w',
+                                encoding='utf-8')
+            self._jsonl = open(self.run_dir / 'telemetry.jsonl', 'w',
+                               encoding='utf-8')
+
+        # The run-level counts (TB-22), kept in both modes.
+        self._phase_index = 0
+        self._release_commanded = True      # no close commanded yet
+        self._grip = {}                     # body -> its grip state (_drop_check)
+        self._drops = []                    # counted drops, in order
+        self._disturbed = {}                # (phase index, body) -> event
+        self._dropped_in = {}               # body -> phase index of its last drop
+        self._closed = False
 
         self.step_count = 0
         self.sim_time = 0.0
@@ -187,16 +240,17 @@ class WorldTelemetry:
         self._spawn_pos = {}                # body -> pose at enable()
         self._support_z = {}                # body -> z it started resting at
 
-        self._stream.write(
-            "# Semantic Boxels world telemetry (#P1 F17)\n"
-            f"# frame every {self.frame_every} steps "
-            f"({frame_period_s:.3f} s sim), heartbeat every "
-            f"{self.heartbeat_every} steps ({heartbeat_period_s:.2f} s sim), "
-            f"timestep {self.timestep * 1000:.3f} ms\n"
-            "# events checked every "
-            f"{EVENT_STRIDE} steps; thresholds: fling {FLING_SPEED} m/s, "
-            f"ee {EE_SPEED_WARN} m/s, joint step {JOINT_STEP_WARN} rad, "
-            f"tilt {TILT_WARN_DEG} deg, disturb {DISTURB_MM} mm\n\n")
+        if self._stream is not None:
+            self._stream.write(
+                "# Semantic Boxels world telemetry (#P1 F17)\n"
+                f"# frame every {self.frame_every} steps "
+                f"({frame_period_s:.3f} s sim), heartbeat every "
+                f"{self.heartbeat_every} steps ({heartbeat_period_s:.2f} s sim), "
+                f"timestep {self.timestep * 1000:.3f} ms\n"
+                "# events checked every "
+                f"{EVENT_STRIDE} steps; thresholds: fling {FLING_SPEED} m/s, "
+                f"ee {EE_SPEED_WARN} m/s, joint step {JOINT_STEP_WARN} rad, "
+                f"tilt {TILT_WARN_DEG} deg, disturb {DISTURB_MM} mm\n\n")
         for bid, name in sorted(self.body_names.items()):
             try:
                 pos, quat = p.getBasePositionAndOrientation(
@@ -206,6 +260,11 @@ class WorldTelemetry:
             self._spawn_pos[bid] = np.asarray(pos, dtype=float)
             self._phase_start_pos[bid] = np.asarray(pos, dtype=float)
             self._support_z[bid] = float(pos[2])
+        self._save_counts()
+        if self.counts_only:
+            logger.debug("[tele] counts mode armed: %d bodies, drops and "
+                         "collisions only (TB-22)", len(self.body_names))
+            return
         logger.debug("[tele] telemetry armed: %d bodies, frame %.3f s, "
                      "heartbeat %.2f s -> %s",
                      len(self.body_names), frame_period_s,
@@ -235,6 +294,13 @@ class WorldTelemetry:
 
     def close(self):
         """Flush the final action summary and close the streams."""
+        self._closed = True
+        self._save_counts()
+        if self.counts_only:
+            logger.debug("[tele] counts mode closed after %d steps: %d "
+                         "drop(s), %d collision(s)", self.step_count,
+                         len(self._drops), len(self._disturbed))
+            return
         self._emit_phase_summary()
         try:
             self._stream.flush()
@@ -250,7 +316,9 @@ class WorldTelemetry:
 
     def phase(self, label: str):
         """Close the current action block, summarise it, and start a new one."""
-        self._emit_phase_summary()
+        if not self.counts_only:
+            self._emit_phase_summary()
+        self._phase_index += 1
         self._phase = label
         self._phase_start_step = self.step_count
         self._phase_start_time = self.sim_time
@@ -271,6 +339,8 @@ class WorldTelemetry:
                 self._phase_start_pos[bid] = np.asarray(pos, dtype=float)
             except Exception:
                 pass
+        if self.counts_only:
+            return
         self._write(f"\n===== PHASE: {label}  "
                     f"(t={self.sim_time:7.3f}s step={self.step_count})\n")
         logger.debug("[tele] phase: %s (t=%.3fs step=%d)",
@@ -286,6 +356,11 @@ class WorldTelemetry:
         """Called immediately after every ``p.stepSimulation``."""
         self.step_count += 1
         self.sim_time += self.timestep
+
+        if self.counts_only:
+            if self.step_count % EVENT_STRIDE == 0:
+                self._check_counts()
+            return
 
         forced = False
         if self.step_count % EVENT_STRIDE == 0:
@@ -305,10 +380,25 @@ class WorldTelemetry:
 
     # ----- sampling --------------------------------------------------------
 
-    def _body_state(self, bid):
-        """Pose, velocity, contacts and derived quantities for one body."""
+    def _body_state(self, bid, light: bool = False):
+        """Pose, velocity, contacts and derived quantities for one body.
+
+        ``light`` (the counts mode): only what the DISTURBED test reads,
+        the displacement this action and, for a body that moved past
+        DISTURB_MM, its speed; the velocity of a body that did not move
+        is not read (the test is false for it whatever its speed)."""
         pos, quat = p.getBasePositionAndOrientation(
             bid, physicsClientId=self.client_id)
+        if light:
+            start = self._phase_start_pos.get(bid)
+            moved_mm = (math.dist(pos, start) * 1000.0
+                        if start is not None else 0.0)
+            speed = 0.0
+            if moved_mm > DISTURB_MM:
+                lin, _ = p.getBaseVelocity(bid, physicsClientId=self.client_id)
+                speed = math.sqrt(lin[0] ** 2 + lin[1] ** 2 + lin[2] ** 2)
+            return {'id': bid, 'name': self.body_names.get(bid, str(bid)),
+                    'moved_mm': moved_mm, 'speed': speed}
         lin, ang = p.getBaseVelocity(bid, physicsClientId=self.client_id)
         pos = np.asarray(pos, dtype=float)
         lin = np.asarray(lin, dtype=float)
@@ -438,14 +528,13 @@ class WorldTelemetry:
                 self._event('EE_FAST',
                             f"end effector at {rob['ee_speed']:.2f} m/s",
                             force_frame=False)
-            for bid in self.body_names:
-                if bid == self.robot_id:
-                    continue
-                cps = p.getContactPoints(bodyA=self.robot_id, bodyB=bid,
-                                         physicsClientId=self.client_id)
-                links = {c[3] for c in cps}
-                if links & set(self.finger_joints):
-                    held_ids.add(bid)
+            # One read of the robot's contacts gives every body a finger
+            # touches (TB-22: the counts mode reads the same, so both
+            # modes hand the drop count the same contacts).
+            finger_contacts = self._finger_contacts()
+            held_ids = set(finger_contacts)
+            if self._drop_check(finger_contacts):
+                fired = True
             # A body that was between the pads and no longer is, while the
             # fingers are still closed AND the body is touching nothing
             # else, was NOT released — it slipped or was flung.  Both
@@ -549,13 +638,166 @@ class WorldTelemetry:
             # never holding got knocked.  The object this action picked,
             # carried or placed is excluded (it is supposed to move, and
             # it keeps settling for a moment after release).
-            if (bid not in held_ids and bid not in self._held_this_phase
-                    and st['moved_mm'] > DISTURB_MM and st['speed'] > 0.01):
+            if self._is_disturbed(bid, st, held_ids):
+                self._count_disturbed(bid, st)
                 fired |= self._event(
                     'DISTURBED',
                     f"{name} moved {st['moved_mm']:.1f} mm this action "
                     f"though the arm never grasped it")
         return fired
+
+    # ----- the run-level counts (TB-22) -------------------------------------
+
+    def _is_disturbed(self, bid, st, held_ids) -> bool:
+        """The DISTURBED test, shared by the recorder and the counts mode."""
+        return (bid not in held_ids and bid not in self._held_this_phase
+                and st['moved_mm'] > DISTURB_MM and st['speed'] > 0.01)
+
+    def _finger_contacts(self) -> dict:
+        """``{body: finger links touching it}`` from one read of the
+        robot's contact points (either body order of a contact pair)."""
+        fingers = self.finger_joints
+        touching = {}
+        for c in p.getContactPoints(bodyA=self.robot_id,
+                                    physicsClientId=self.client_id):
+            if c[1] == self.robot_id:
+                other, link = c[2], c[3]
+            else:
+                other, link = c[1], c[4]
+            if (link in fingers and other != self.robot_id
+                    and other in self.body_names):
+                touching.setdefault(other, set()).add(link)
+        return touching
+
+    def _check_counts(self):
+        """The counts mode's check: the contacts and poses the two counts
+        read, and nothing else (no joint, link, AABB or tilt read)."""
+        held_ids = set()
+        if self.robot_id is not None:
+            finger_contacts = self._finger_contacts()
+            held_ids = set(finger_contacts)
+            self._drop_check(finger_contacts)
+            self._held_prev = held_ids
+            self._held_this_phase |= held_ids
+        for bid in self.body_names:
+            if bid == self.robot_id or bid in held_ids \
+                    or bid in self._held_this_phase:
+                continue
+            try:
+                st = self._body_state(bid, light=True)
+            except Exception:
+                continue
+            if self._is_disturbed(bid, st, held_ids):
+                self._count_disturbed(bid, st)
+
+    def _drop_check(self, finger_contacts) -> bool:
+        """Advance the drop count by one check.  Returns True when a drop
+        was counted.
+
+        A body both pads hold after a close command is tracked; off every
+        support for CARRIED_CHECKS checks in a row it is carried.  A
+        carried body without finger contact for DROP_CHECKS checks in a
+        row is dropped.  A tracked body that was never carried and loses
+        the fingers was a grasp that did not take: it is forgotten."""
+        both = set(self.finger_joints)
+        if not self._release_commanded:
+            for bid, links in finger_contacts.items():
+                if links >= both and bid not in self._grip:
+                    self._grip[bid] = {'air': 0, 'carried': False, 'free': 0,
+                                       'off': False}
+        counted = False
+        for bid in list(self._grip):
+            st = self._grip[bid]
+            # 'off': off every support at this check (it touches nothing
+            # but the robot); gripper_command reads the last one.
+            st['off'] = not self._touching_non_robot(bid)
+            if bid in finger_contacts:
+                st['free'] = 0
+                if not st['carried']:
+                    st['air'] = st['air'] + 1 if st['off'] else 0
+                    st['carried'] = st['air'] >= CARRIED_CHECKS
+                continue
+            if not st['carried']:
+                del self._grip[bid]
+                continue
+            st['free'] += 1
+            if st['free'] >= DROP_CHECKS:
+                del self._grip[bid]
+                self._count_drop(bid, 'left the finger pads with no '
+                                      'release commanded')
+                counted = True
+        return counted
+
+    def gripper_command(self, opening: bool, placing: bool = False):
+        """The pipeline commands the gripper (robot_utils.open_gripper and
+        the two closes call this before their first motor command).
+
+        A close starts a grip.  An open ends every grip: a carried body
+        still in the fingers when the gripper opens outside a place is
+        dropped by that open (the hand let go of it in mid-air), and so is
+        one that had already left the fingers (two checks without them, or
+        one check and off every support at the last look); the release of
+        a place drops nothing that the fingers still hold.  Reads no
+        simulator state."""
+        if not opening:
+            self._release_commanded = False
+            return
+        for bid, st in list(self._grip.items()):
+            if not st['carried']:
+                continue
+            if st['free'] == 0 and placing:
+                continue
+            if st['free'] == 0:
+                self._count_drop(bid, 'the gripper opened on it outside the '
+                                      'release of a place')
+            elif st['free'] >= 2 or st['off']:
+                self._count_drop(bid, 'left the finger pads before the '
+                                      'gripper was opened')
+        self._grip.clear()
+        self._release_commanded = True
+
+    def _count_drop(self, bid, how: str):
+        name = self.body_names.get(bid, str(bid))
+        self._drops.append({'object': name, 'phase': self._phase,
+                            't': round(self.sim_time, 3), 'how': how})
+        self._dropped_in[bid] = self._phase_index
+        self._save_counts()
+        if not self.counts_only:
+            self._event('DROP', f"{name} {how} (drop {len(self._drops)} of "
+                                f"this run)")
+
+    def _count_disturbed(self, bid, st):
+        dropped = self._dropped_in.get(bid)
+        if dropped is not None and self._phase_index <= dropped + 1:
+            return      # still the fall of its drop, not a collision
+        key = (self._phase_index, bid)
+        seen = self._disturbed.get(key)
+        if seen is None:
+            self._disturbed[key] = {'object': st['name'], 'phase': self._phase,
+                                    't': round(self.sim_time, 3),
+                                    'moved_mm': round(st['moved_mm'], 1)}
+            self._save_counts()
+        elif st['moved_mm'] > seen['moved_mm']:
+            seen['moved_mm'] = round(st['moved_mm'], 1)
+
+    def counts(self) -> dict:
+        """The run's counts so far: the drops and the collisions (one per
+        action and body), each as a list of events."""
+        return {'drops': [dict(e) for e in self._drops],
+                'collisions': [dict(e) for e in self._disturbed.values()],
+                'mode': 'counts' if self.counts_only else 'recorder',
+                'steps': self.step_count, 'closed': self._closed}
+
+    def _save_counts(self):
+        """Rewrite the counts file (a few hundred bytes): at arming, on
+        every counted event and at the close."""
+        if self.run_dir is None:
+            return
+        try:
+            with open(self.run_dir / COUNTS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.counts(), f)
+        except OSError:
+            pass
 
     def _latched(self, bid, kind: str, condition: bool, detail: str) -> bool:
         """Fire ``kind`` on the transition into ``condition``, once."""
@@ -598,6 +840,8 @@ class WorldTelemetry:
     def _write(self, text: str):
         # Flushed eagerly: a run that dies mid-episode (the interesting
         # case) must still leave a complete frame stream on disk.
+        if self._stream is None:        # the counts mode writes no stream
+            return
         self._stream.write(text)
         self._stream.flush()
 
@@ -770,8 +1014,9 @@ class WorldTelemetry:
 
 # ---------------------------------------------------------------------------
 # Module-level singleton.  Every stepSimulation site calls ``tick()``; it is
-# a no-op (one attribute test) whenever telemetry is off, which is the case
-# for GUI runs by default and for every run started with --no-telemetry.
+# a no-op (one attribute test) whenever nothing is armed: GUI runs by
+# default, and any run with both --no-telemetry and --world-counts off.  A
+# headless run under --no-telemetry alone has the counts mode armed (TB-22).
 # ---------------------------------------------------------------------------
 
 _ACTIVE: WorldTelemetry | None = None
@@ -793,7 +1038,29 @@ def disable():
 
 
 def is_active() -> bool:
+    """Whether the RECORDER is on (frames, notes, summaries).  False in
+    the counts mode, so the pipeline builds no note text for it."""
+    return _ACTIVE is not None and not _ACTIVE.counts_only
+
+
+def is_counting() -> bool:
+    """Whether the run's drops and collisions are being counted (the
+    recorder or the counts mode)."""
     return _ACTIVE is not None
+
+
+def run_counts() -> dict | None:
+    """The run's drop and collision counts so far (TB-22), or None when
+    nothing watches the world.  Reads no simulator state."""
+    return _ACTIVE.counts() if _ACTIVE is not None else None
+
+
+def gripper_command(opening: bool, placing: bool = False):
+    """The pipeline is about to command the gripper open or closed
+    (``placing``: the open is the release of a place or a stack).  Feeds
+    the drop count; a no-op when nothing watches."""
+    if _ACTIVE is not None:
+        _ACTIVE.gripper_command(opening, placing)
 
 
 def active() -> WorldTelemetry | None:

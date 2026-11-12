@@ -40,6 +40,7 @@ import tampura_environments                      # noqa: E402,F401
 from tampura_bridge import g13_runtime              # noqa: E402
 from tampura_bridge import policy as bridge_policy   # noqa: E402
 import slip_fixes                                    # noqa: E402  (BF#59, BF#62)
+import world_counts                                  # noqa: E402  (TB-22, rule 18)
 
 
 class _SceneFile(logging.Handler):
@@ -185,6 +186,11 @@ def main():
     # BF#50 (user rule, 2026-10-30): the eye images are for debugging only,
     # off unless asked; passed through like the switches.
     ap.add_argument('--save-screenshots', choices=('off', 'on'), default='off')
+    # TB-22 (tracks rule 18): the drop and collision counts of the episode's
+    # record (run_logger's --world-counts: auto is on in a headless run),
+    # passed through like the switches; off is the arm that measures their
+    # cost.
+    ap.add_argument('--world-counts', choices=('auto', 'on', 'off'), default='auto')
     # BF#68 (run tampura -Draw): what the GUI shows besides the scene, a comma
     # list of policy.DRAW_KINDS.  Nothing here reaches the executing world or
     # a camera render; it is ignored without --vis 1.
@@ -285,7 +291,8 @@ def main():
                   'search_effort_weight': a.search_effort_weight,
                   'search_initial_complexity': str(a.search_initial_complexity),
                   'slip_fixes': slip_fixes.resolve(a.slip_fixes),
-                  'save_screenshots': a.save_screenshots})
+                  'save_screenshots': a.save_screenshots,
+                  'world_counts': a.world_counts})
     cfg.driver = {'events': events, 'seed': config['global_seed'],
                   'rng_untouched': rng_untouched,
                   'pythonhashseed': os.environ.get('PYTHONHASHSEED')}
@@ -316,6 +323,12 @@ def main():
     cfg.out['ledger_gates'] = report.rows
     cfg.out['outcome'] = gates.episode_outcome(
         cfg.out['rewards'], cfg.out.get('error'), report)
+    # TB-22 (tracks rule 18): drops, collisions, the two detector texts and
+    # clean_success in the episode's record, from the pipeline's run (its
+    # summary, or the counts file of a run that wrote none) under this
+    # record's own success.
+    cfg.out.update(world_counts.from_run_dir(
+        cfg.out.get('run_dir'), success=cfg.out['outcome']['success']))
     with open(os.path.join(config['save_dir'], 'bridge_episode.json'), 'w') as f:
         # BF#41: the switches (M8 to M10, the aperture rule, the squeeze)
         # travel with the episode; bridge runs leave main()'s run_config
