@@ -14,6 +14,7 @@ import numpy as np
 import pybullet as p
 
 import telemetry          # #P1 F17 world telemetry (no-op unless armed)
+import world_counts       # TB-22: the run's record of the robot's own notices
 
 logger = logging.getLogger(__name__)
 
@@ -710,6 +711,9 @@ def detect_execution_collisions(robot_id: int,
         for msg in collisions:
             print(f"    *** COLLISION{tag}: {msg} ***")
         logger.warning("execution collisions%s: %s", tag, collisions)
+        # TB-22: counted for the run's record (collisions_reported), beside
+        # the simulator's own count; nothing decides on it.
+        world_counts.report_collision()
 
     return collisions
 

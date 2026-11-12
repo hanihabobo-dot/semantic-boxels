@@ -552,20 +552,6 @@ def _stored_rejection(cell_dir: Path) -> Optional[str]:
         stdout_log.read_text(encoding="utf-8", errors="replace"))
 
 
-def _counts_without_summary(runs_before: set) -> Dict:
-    """TB-22: rule 18's fields of a cell whose run left no summary (killed
-    at the wall-clock budget, or crashed).
-
-    The observer's counts mode keeps world_counts.json in the run
-    directory while it runs, so such a cell still has its drops and
-    collisions up to its end.  Only a run directory that did not exist
-    before the launch can be the cell's (as for the summary, TB-8); with
-    none, the fields say "not detected" and the counts stay empty, never 0.
-    """
-    return world_counts.from_run_dir(
-        world_counts.newest_counts_dir("logs", runs_before), success=False)
-
-
 def _run_dir_claims(cells_root: Path) -> Dict[str, int]:
     """How many cells of a sweep name each run directory in run_dir.txt."""
     claims: Dict[str, int] = {}
@@ -658,7 +644,6 @@ def run_cell(
             "success": False,
             "exit_reason": "timeout",
             "wall_clock_s": round(wall, 3),
-            **_counts_without_summary(runs_before),
         }
         summary_path.write_text(json.dumps(stub, indent=2))
         print(f"[runner] {tag}: TIMEOUT after {timeout_s}s")
@@ -678,7 +663,6 @@ def run_cell(
             "success": False,
             "exit_reason": f"crash_exit{proc.returncode}",
             "wall_clock_s": round(wall, 3),
-            **_counts_without_summary(runs_before),
         }
         summary_path.write_text(json.dumps(stub, indent=2))
         print(f"[runner] {tag}: CRASH exit={proc.returncode}")
@@ -693,11 +677,6 @@ def run_cell(
             "exit_reason": ("preflight_rejected" if rejection
                             else "no_summary"),
             "wall_clock_s": round(wall, 3),
-            # TB-22: a rejected cell ran no episode; a run that ended
-            # without a summary may have left its counts.
-            **(world_counts.not_detected(
-                   False, why="pre-flight rejected: no episode ran")
-               if rejection else _counts_without_summary(runs_before)),
         }
         if rejection:
             stub["preflight_message"] = rejection
@@ -716,8 +695,6 @@ def run_cell(
             "summary_mismatch": mismatch,
             "foreign_run_dir": str(ts_path.parent.absolute()),
             "wall_clock_s": round(wall, 3),
-            **world_counts.not_detected(
-                False, why="the new run's summary belongs to another cell"),
         }
         summary_path.write_text(json.dumps(stub, indent=2))
         print(f"[runner] {tag}: the new run's summary belongs to another "
@@ -737,6 +714,59 @@ def run_cell(
           f"plan_count={summary.get('plan_count')} "
           f"plan_time_s={summary.get('total_planning_time_s')}")
     return out_row
+
+
+def run_cell_counted(
+    cell: Dict,
+    sweep_dir: Path,
+    timeout_s: float,
+    extra_args: List[str],
+    skip_existing: bool,
+) -> Dict:
+    """run_cell, with rule 18's fields in every row (TB-22).
+
+    A cell whose run wrote its summary carries the fields already.  A stub
+    row gets them here, and so does the cell's stored stub: a rejected
+    cell ran no episode; a cell killed at the wall-clock budget, crashed
+    or left without a summary has the counts its run kept in
+    world_counts.json up to its end (only a run directory that did not
+    exist before the launch can be the cell's, as for the summary, TB-8);
+    with none, and for every other row without counts (a summary of
+    another cell, a stored row from before the counts), the fields say
+    "not detected" and the counts stay empty, never 0.  A stored row that
+    this call only resumed (--skip-existing) is not rewritten.
+    """
+    summary_path = sweep_dir / "cells" / cell_tag(cell) / "timing_summary.json"
+    stored_before = (summary_path.read_text()
+                     if summary_path.exists() else None)
+    runs_before = _run_dir_names()
+    row = run_cell(cell, sweep_dir, timeout_s, extra_args, skip_existing)
+    if "drops" in row:
+        return row
+    reason = str(row.get("exit_reason"))
+    if reason == "preflight_rejected":
+        fields = world_counts.not_detected(
+            False, why="pre-flight rejected: no episode ran")
+    elif reason == "summary_mismatch":
+        fields = world_counts.not_detected(
+            False, why="the new run's summary belongs to another cell")
+    elif reason in ("timeout", "no_summary") or reason.startswith("crash_exit"):
+        fields = world_counts.from_run_dir(
+            world_counts.newest_counts_dir("logs", runs_before), success=False)
+    else:
+        fields = world_counts.not_detected(
+            bool(row.get("success")), why="the record has no counts")
+    row.update(fields)
+    try:
+        text = summary_path.read_text()
+        stored = json.loads(text)
+        if text != stored_before and "drops" not in stored:
+            stored.update(fields)
+            summary_path.write_text(json.dumps(stored, indent=2))
+    except Exception as e:
+        print(f"[runner] {cell_tag(cell)}: the stored row did not get the "
+              f"count fields: {e}")
+    return row
 
 
 # ---------------------------------------------------------------------------
@@ -982,8 +1012,8 @@ def main(argv=None):
     n_failures = 0
     for i, cell in enumerate(cells, 1):
         print(f"\n[runner] cell {i}/{len(cells)}")
-        row = run_cell(cell, sweep_dir, args.timeout,
-                       args.extra_arg, args.skip_existing)
+        row = run_cell_counted(cell, sweep_dir, args.timeout,
+                               args.extra_arg, args.skip_existing)
         if not row.get("success"):
             n_failures += 1
             if 0 <= args.max_failures < n_failures:

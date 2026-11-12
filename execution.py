@@ -77,24 +77,12 @@ slip_fixes.register(
 PickResult = namedtuple('PickResult', 'held_body_id config touched')
 
 # TB-22 (tracks rule 18): the losses of a held body that the robot itself
-# noticed in this run, by the check that noticed them: 'entry' (the place
-# and stack entry assert), 'lift' (the re-verify after the post-pick lift),
-# 'carry' (carry_hold_check).  The record's drops_noticed is their sum; it
-# stands beside the simulator's own count (telemetry's counts mode), so a
-# report can show a drop the robot missed.  Counted only: nothing reads
-# them before the run's summary.
-_noticed_drops = {'entry': 0, 'lift': 0, 'carry': 0}
-
-
-def noticed_drops_reset() -> None:
-    """A new run: test_full_pipeline.main calls this at its start."""
-    for k in _noticed_drops:
-        _noticed_drops[k] = 0
-
-
-def noticed_drops() -> dict:
-    """The run's noticed losses by check."""
-    return dict(_noticed_drops)
+# notices are counted for the run's record, by the check that noticed them
+# (world_counts.notice_drop: 'entry', the place and stack entry assert;
+# 'lift', the re-verify after the post-pick lift; 'carry',
+# carry_hold_check).  Counted only: nothing reads them before the run's
+# summary.
+import world_counts                                 # noqa: E402
 
 
 # The pick's contact floor above the table (#P1 F24): the pads reach
@@ -579,7 +567,7 @@ def _assert_held_contact(robot_id, held_body_id, obj_name, gui, action):
               f"held object not in the gripper (pad contacts="
               f"{sorted(pad_links) or 'none'}, need both {list(fingers)}, "
               f"pad_normal_force={nf:.2f}N).  Opening gripper (#P1 F1).")
-        _noticed_drops['entry'] += 1
+        world_counts.notice_drop('entry')
         open_gripper(robot_id, gui)
         raise EmptyHandError(
             f"{action} {obj_name}: no held-object pad contact at entry")
@@ -670,7 +658,7 @@ def carry_hold_end(robot_id, held_body_id, start: Optional[CarryStart],
               f"{list(_fingers)}), pad_normal_force={nf:.2f}N after the move "
               f"to {dest}. Opening gripper and replanning (BF#59 "
               f"carry_hold_check).")
-        _noticed_drops['carry'] += 1
+        world_counts.notice_drop('carry')
         open_gripper(robot_id, gui)
     return CarryHold(held, pads, nf, npts, growth_mm)
 
@@ -1466,7 +1454,7 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
               f"{list(_fingers)}), pad_normal_force={lift_nf:.2f}N, "
               f"obj_z={obj_z_now:.4f}. Opening gripper and replanning "
               f"(#P1 F1).")
-        _noticed_drops['lift'] += 1
+        world_counts.notice_drop('lift')
         open_gripper(robot_id, gui)
         return _failed()
 

@@ -288,11 +288,11 @@ def main():
                   'pick_aperture_from_pose': a.pick_aperture_from_pose,
                   'sense_over_region': a.sense_over_region,
                   'grip_squeeze_mm': str(a.grip_squeeze_mm),
+                  'world_counts': a.world_counts,
                   'search_effort_weight': a.search_effort_weight,
                   'search_initial_complexity': str(a.search_initial_complexity),
                   'slip_fixes': slip_fixes.resolve(a.slip_fixes),
-                  'save_screenshots': a.save_screenshots,
-                  'world_counts': a.world_counts})
+                  'save_screenshots': a.save_screenshots})
     cfg.driver = {'events': events, 'seed': config['global_seed'],
                   'rng_untouched': rng_untouched,
                   'pythonhashseed': os.environ.get('PYTHONHASHSEED')}
