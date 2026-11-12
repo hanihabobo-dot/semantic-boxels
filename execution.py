@@ -53,6 +53,7 @@ from reboxelize import reboxelize_free_space
 from streams import NOMINAL_HIDDEN_EXTENTS, RobotConfig
 import pose_belief
 import slip_fixes
+import interior_regions   # BF#65 option 1 (D6, M2): the region under a cover
 from robot_utils import (robot_model, solve_ik,
                          move_robot_smooth, open_gripper, close_gripper,
                          close_gripper_until_contact, pinch_axis,
@@ -2425,7 +2426,8 @@ def sweep_all_fragments(*, registry, belief, viz, shadows,
                         shadow_occluder_map, boxel_centers,
                         boxel_to_pybullet, target_pybullet_id, robot_id,
                         sense_support_ids, sense_depth_m, sense_seg,
-                        sense_view, sense_proj, skip_ids=frozenset()):
+                        sense_view, sense_proj, skip_ids=frozenset(),
+                        target_det=None):
     """Classify EVERY registry shadow fragment against one render (#P1 F16).
 
     The sense action already pays for a full depth+seg render, and that
@@ -2477,6 +2479,19 @@ def sweep_all_fragments(*, registry, belief, viz, shadows,
             continue
         if outcome != "clear_but_empty":
             continue
+        # BF#65 option 1 (never true with --interior-regions off): the
+        # grid's lowest slice sits above a target shorter than 2 cm, so an
+        # interior region whose cover is away can read empty while this
+        # render's detection (``target_det``) puts the target inside it.
+        # Like a found_target above: reported, left for a planned sense or
+        # the frame's registration, never removed as empty.
+        if interior_regions.ENABLED and interior_regions.holds_detection(
+                bd, target_det):
+            target_seen.append(sid)
+            print(f"    [F16] the sense render shows the TARGET inside {sid} "
+                  f"(its detection, not the grid) — not removed as empty "
+                  f"(BF#65).")
+            continue
         belief.mark_sensed(sid, found=False)
         registry.remove_boxel(sid)
         if viz is not None:
@@ -2490,6 +2505,9 @@ def sweep_all_fragments(*, registry, belief, viz, shadows,
         if caster_bd is not None and sid in getattr(
                 caster_bd, "shadow_boxel_ids", []):
             caster_bd.shadow_boxel_ids.remove(sid)
+        if caster_bd is not None and sid in getattr(
+                caster_bd, "interior_boxel_ids", []):
+            caster_bd.interior_boxel_ids.remove(sid)          # BF#65
         removed.append(sid)
         print(f"    -> fragment {sid} observed empty in this render — "
               f"removed (F16 full sweep)")
@@ -2543,6 +2561,19 @@ def register_new_detections(*, env, registry, belief, viz, detections,
         det = detections[name]
         aabb_min = np.array(det.est_min, dtype=float)
         aabb_max = np.array(det.est_max, dtype=float)
+        # BF#65 (d) (never true with --interior-regions off): the target in
+        # view INSIDE the box of a cover that still stands over its interior
+        # region is under that cover; no look and no grasp reaches it there,
+        # and an OBJECT boxel for it leaves the planner without a skeleton
+        # (scene 104).  Recorded as seen under the cover, not registered;
+        # the held object is no standing cover.
+        if name == str(target_name):
+            _cov = interior_regions.standing_cover(
+                registry, det.est_center, exclude=skip_names)
+            if _cov is not None:
+                interior_regions.note_seen_under(name, _cov[0], _cov[1],
+                                                 det.pixel_count)
+                continue
         # Review round 2 (2026-09-19): a FIRST registration from a body
         # the arm partly hides makes a wrong box that then casts wrong
         # fragments; with the render at hand, leave such a body for a
@@ -2627,6 +2658,16 @@ def register_new_detections(*, env, registry, belief, viz, detections,
                 boxel_centers[s_id] = sp.center
                 belief.add_shadow(s_id)
                 n_shadows += 1
+            # BF#65 option 1 (no-op with --interior-regions off): a newly
+            # registered body whose class declares a cavity owns the region
+            # under it too, unless that space was observed empty before the
+            # body came to stand there (D6's status rule).
+            n_shadows += len(interior_regions.bookkeep(
+                interior_regions.cast_for(env, registry, obj_bd,
+                                          [str(target_name)],
+                                          first_observation=False),
+                shadows=shadows, shadow_occluder_map=shadow_occluder_map,
+                boxel_centers=boxel_centers, belief=belief, viz=viz))
         if viz is not None:
             viz.draw_boxel_data(obj_bd)
             for s_id in obj_bd.shadow_boxel_ids:
@@ -2865,9 +2906,28 @@ def handle_sense_action(
                "interceptors": {body_id_to_name.get(b, str(b)): n
                                 for b, n in interceptor_counts.items()}})
 
+    # BF#65 option 1 (never true with --interior-regions off): the grid's
+    # lowest slice sits 2 cm above the table, above a target shorter than
+    # that, so an interior region whose cover is away reads empty with the
+    # target lying in it.  When this render's detection puts the target
+    # inside the sensed interior region, the outcome is the truthful one:
+    # found.  The find came from the detection, not from the grid, and the
+    # plan's pick is bound to the region's centre with the class-prior
+    # grasp, so the loop replans and picks the target from its own box.
+    _target_det = sense_detections.get(str(target_name))
+    _interior_found = bool(
+        sense_outcome == "clear_but_empty" and interior_regions.ENABLED
+        and interior_regions.holds_detection(shadow_boxel, _target_det))
+    if _interior_found:
+        sense_outcome = "found_target"
+        print(f"    [interior] {target_name} is detected inside {shadow_id} "
+              f"({_target_det.pixel_count} px, below the sense grid's lowest "
+              f"slice): found (BF#65)")
+
     if sense_outcome == "found_target":
         belief.mark_sensed(str(shadow_id), found=True)
-        print(f"    *** TARGET FOUND in {shadow_id}! (ray-cast) ***")
+        print(f"    *** TARGET FOUND in {shadow_id}! "
+              f"({'detection' if _interior_found else 'ray-cast'}) ***")
 
         # Audit #76: register an OBJECT boxel for the discovered target.
         # Hidden targets have no OBJECT boxel at startup (they live inside
@@ -2894,11 +2954,19 @@ def handle_sense_action(
             # it — the pick that usually follows in the SAME plan uses
             # the execution servo's own live re-aim, not this boxel.
             t_det = sense_detections.get(target_obj_str)
+            # BF#65 (d) (never true with --interior-regions off): a target
+            # the grid caught while it lies under a standing cover is not
+            # registered either (register_new_detections has the why).
+            _cov = (interior_regions.standing_cover(registry, t_det.est_center)
+                    if t_det is not None else None)
             if t_det is None:
                 print(f"      [step3-diag] {target_obj_str} found but "
                       f"renders below the detection minimum — OBJECT "
                       f"boxel NOT registered this round (audit #76 "
                       f"hook deferred to the next observation).")
+            elif _cov is not None:
+                interior_regions.note_seen_under(
+                    target_obj_str, _cov[0], _cov[1], t_det.pixel_count)
             else:
                 target_bd = BoxelData(
                     id=target_obj_str,
@@ -2946,7 +3014,8 @@ def handle_sense_action(
                                 occluders, belief,
                                 render=(sense_depth_m, sense_seg,
                                         sense_view, sense_proj))
-        return ActionResult(continue_=True, reason="sense_found_target")
+        return ActionResult(continue_=not _interior_found,
+                            reason="sense_found_target")
 
     # #P1 step (3): a contains_nontarget where NO discovered body is
     # localizable in the render (all below DETECTION_MIN_PIXELS) cannot
@@ -3086,7 +3155,7 @@ def handle_sense_action(
                 sense_support_ids=sense_support_ids,
                 sense_depth_m=sense_depth_m, sense_seg=sense_seg,
                 sense_view=sense_view, sense_proj=sense_proj,
-                skip_ids={sid_str})
+                skip_ids={sid_str}, target_det=_target_det)
             _register_new_detections()
             _lost = refresh_object_aabbs(
                 env, registry, viz, detections=sense_detections,
@@ -3151,6 +3220,9 @@ def handle_sense_action(
         if caster_bd is not None and sid_str in getattr(
                 caster_bd, "shadow_boxel_ids", []):
             caster_bd.shadow_boxel_ids.remove(sid_str)
+        if caster_bd is not None and sid_str in getattr(
+                caster_bd, "interior_boxel_ids", []):
+            caster_bd.interior_boxel_ids.remove(sid_str)      # BF#65
         # #P1 F16: sweep EVERY fragment against this render, not just the
         # caster's siblings.  Same observation, same removal criterion —
         # it simply stops discarding evidence the render already has.
@@ -3161,7 +3233,8 @@ def handle_sense_action(
             target_pybullet_id=target_pybullet_id, robot_id=robot_id,
             sense_support_ids=sense_support_ids, sense_depth_m=sense_depth_m,
             sense_seg=sense_seg, sense_view=sense_view,
-            sense_proj=sense_proj, skip_ids={sid_str})
+            sense_proj=sense_proj, skip_ids={sid_str},
+            target_det=_target_det)
 
         if sense_outcome == "contains_nontarget":
             # Non-target objects discovered inside the shadow.
@@ -3354,6 +3427,16 @@ def handle_sense_action(
                         # lists it and the loop can exit "all searched"
                         # with it unsensed.
                         belief.add_shadow(s_id)
+
+                # BF#65 option 1 (no-op with --interior-regions off): the
+                # discovered body's interior region, under D6's status
+                # rule, as in register_new_detections.
+                interior_regions.bookkeep(
+                    interior_regions.cast_for(env, registry, obj_bd,
+                                              [str(target_name)],
+                                              first_observation=False),
+                    shadows=shadows, shadow_occluder_map=shadow_occluder_map,
+                    boxel_centers=boxel_centers, belief=belief, viz=viz)
 
                 if viz is not None:
                     viz.draw_boxel_data(obj_bd)

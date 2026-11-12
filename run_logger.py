@@ -845,6 +845,18 @@ def parse_pipeline_args(argv=None):
              "region when the arm there does not block the eye's view, then "
              'pick from there (on), or return to a static view spot before '
              'every sense as before (off).')
+    # BF#65 option 1 (2026-11-12; the audit's D6, model tweak M2): a hiding
+    # region under an object whose class declares a cavity that holds the
+    # target class (interior_regions.py), unknown until the object is moved
+    # away and the space looked at.  Off by default: no scene of our own
+    # declares a cavity, and on find_dice it is a model addition that Hani
+    # switches on.
+    parser.add_argument(
+        '--interior-regions', choices=['off', 'on'], default='off',
+        help="BF#65 option 1 (D6, M2): the space under an object whose "
+             "class declares a cavity is a hiding region, searched by "
+             "moving the object away (on), or no such region (off, the "
+             "default).")
     # BF#53 (2026-10-30), the optimistic search's settings.  pddlstream
     # weighs a stream result's effort into the search's costs only with
     # effort_weight set; without it every attempt of the adaptive loop may

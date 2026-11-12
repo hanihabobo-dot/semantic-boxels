@@ -135,6 +135,9 @@ def _label_for_boxel(bd: BoxelData) -> str:
     if bd.boxel_type == BoxelType.OBJECT:
         return bd.object_name or bd.id
     if bd.boxel_type == BoxelType.SHADOW:
+        # BF#65 option 1: an interior region is the space UNDER its owner.
+        if getattr(bd, 'region_kind', 'lateral') == 'interior':
+            return bd.id
         if bd.created_by_object:
             return f"shadow_of_{bd.created_by_object}"
         return bd.id

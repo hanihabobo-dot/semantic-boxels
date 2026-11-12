@@ -122,6 +122,7 @@ import logging
 import math
 import robot_utils
 import slip_fixes
+import interior_regions   # BF#65 option 1 (D6, M2): the region under a cover
 
 # BF#59 carry_trapezoid (proposals/carry_motion.md 2.2, with loss_dynamics'
 # carry_accel_limit merged into it by both reviews; STATE.md candidate 5).
@@ -787,6 +788,11 @@ def main(gui=True, run_logger=None, scene_config=None,
     # so an unknown name is refused here, before anything runs.
     import slip_fixes
     slip_fixes.configure(getattr(args, 'slip_fixes', ''))
+    # BF#65 option 1 (D6, model tweak M2): the hiding region under a cover
+    # whose class declares a cavity (interior_regions.py), off unless the
+    # run says --interior-regions on.  Set every run; it also clears the
+    # previous run's "seen under a cover" records.
+    interior_regions.configure(getattr(args, 'interior_regions', 'off'))
     # The two known domains must match the switch (a caller may pass
     # another file deliberately; that one is not judged here).
     _dom = os.path.abspath(domain_file) if domain_file else m8_domain.LIVE_FILE
@@ -809,7 +815,8 @@ def main(gui=True, run_logger=None, scene_config=None,
         switches=(f"{_switch_text}, grip squeeze "
                   f"{robot_utils.GRIP_SQUEEZE * 1000:g} mm, planner "
                   f"{getattr(args, 'planner', '?')}"
-                  + (f", slip fixes {slip_fixes.spec()}" if slip_fixes.spec() else "")))
+                  + (f", slip fixes {slip_fixes.spec()}" if slip_fixes.spec() else "")
+                  + (", interior regions on" if interior_regions.ENABLED else "")))
 
     # =========================================================
     # PHASE 1: Setup Environment
@@ -1000,6 +1007,14 @@ def main(gui=True, run_logger=None, scene_config=None,
     # M8 A: the initial registrations' pose radius (no-op, no render,
     # while every switch is OFF).
     record_initial_detections(env, registry)
+    # BF#65 option 1 (D6, M2; no-op with the switch off): every registered
+    # object whose class declares a cavity that holds a target class gets
+    # its interior region, unknown, before the shadow list below is taken,
+    # so it is wired like any fragment (belief, census, facts).  BF#65 (d):
+    # a target the first render shows INSIDE a standing cover's box leaves
+    # the registry again and is recorded as seen under that cover.
+    if interior_regions.ENABLED:
+        interior_regions.cast_first_observation(env, registry, [target_name])
     registry.save_to_json("boxel_data.json")
     if run_logger:
         run_logger.save_artefact("boxel_data.json")
@@ -1351,6 +1366,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                  stream_sha=m8_domain.sha(planner.stream_pddl),
                  switches=dict(pose_belief.SWITCHES,
                                sense_over_region=sense_over_region,
+                               interior_regions=interior_regions.ENABLED,     # BF#65
                                search_effort_weight=search_effort_weight,
                                search_initial_complexity=search_initial_complexity,
                                slip_fixes=slip_fixes.spec()))                 # BF#59
@@ -1698,6 +1714,12 @@ def main(gui=True, run_logger=None, scene_config=None,
         # never observed empty, and the run outcome discloses them.
         known_empty = (belief.get_known_empty_shadows()
                        + belief.get_parked_shadows())
+        # BF#65 (d) (no-op with --interior-regions off): while the target is
+        # recorded as seen under a cover, the planner is offered that
+        # cover's interior region alone; the other unknown regions are
+        # withheld like the parked ones (the belief keeps them unknown).
+        known_empty = known_empty + interior_regions.withheld(
+            registry, belief, planner_target_objects)
 
         # Giveup parole (2026-08-21): see the pick_giveup_marked_at
         # comment above.  Runs before planner.plan() so the paroled

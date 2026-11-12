@@ -171,6 +171,10 @@ def main():
     for flag in ('--m8', '--m9', '--m10', '--pick-aperture-from-pose',
                  '--sense-over-region'):
         ap.add_argument(flag, choices=('off', 'on'), default='on')
+    # BF#65 option 1 (D6, model tweak M2): the hiding region under a cup
+    # (interior_regions.py; task_spec.HOLLOW_CAVITY declares the cavities),
+    # passed through like the switches; off unless asked.
+    ap.add_argument('--interior-regions', choices=('off', 'on'), default='off')
     # GF10 (BF#38): the pick close's squeeze (0.5 mm since BF#44), passed through like the switches.
     ap.add_argument('--grip-squeeze-mm', type=float, default=0.5)
     # BF#53: the optimistic search's settings (run_logger's flags of the
@@ -263,6 +267,7 @@ def main():
         switches={'m8': a.m8, 'm9': a.m9, 'm10': a.m10,
                   'pick_aperture_from_pose': a.pick_aperture_from_pose,
                   'sense_over_region': a.sense_over_region,
+                  'interior_regions': a.interior_regions,
                   'grip_squeeze_mm': str(a.grip_squeeze_mm),
                   'search_effort_weight': a.search_effort_weight,
                   'search_initial_complexity': str(a.search_initial_complexity),
