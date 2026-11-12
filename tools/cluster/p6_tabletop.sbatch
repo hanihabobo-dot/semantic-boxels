@@ -44,6 +44,11 @@ REDO_LIST=${4:-}
 JOB=${SLURM_JOB_ID:-local}
 LD=${P4_LOCAL_DIR:-/tmp}
 CAP=${P6_CAP:-1800}
+# TB-24: P6_FRESH_STATS=1 (sbatch --export=ALL,P6_FRESH_STATS=1) removes each arm's statistics/
+# (pddlstream's stream statistics, in the arm's code copy) before every cell, so that no cell
+# starts from the measured times of the cells before it; 0 carries the file through the job.
+STATS_ARG=
+[ "${P6_FRESH_STATS:-0}" = 1 ] && STATS_ARG=--fresh-stream-stats
 VA=$W/armO-venvA/bin
 OUT=$LD/p6_$JOB
 if [ "$MODE" = smoke ] || [ "$MODE" = redo ]; then LABEL=$MODE; else LABEL=$(printf 'job%02d' "$((10#$MODE))"); fi
@@ -119,6 +124,7 @@ hdr "host $(hostname)  job ${SLURM_JOB_ID:-none}  $(date -Is)  mode $MODE  A $SN
 hdr "cpu $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//')  threads $(nproc --all)  allowed $(nproc)  load $(cut -d' ' -f1-3 /proc/loadavg)"
 # rule 16 (PLAN section 17): the memory at the start, the kind of file system under $LD (tmpfs is RAM) and the job's --mem
 hdr "memory at the start: $(awk '/^(MemTotal|MemAvailable):/ {printf "%s %s kB  ", $1, $2}' /proc/meminfo)local fs $LD $(df -PT $LD | awk 'NR == 2 {print $2}') (tmpfs is RAM), Slurm --mem ${SLURM_MEM_PER_NODE:-?} MB"
+hdr "stream statistics (TB-24): $([ -n "$STATS_ARG" ] && echo 'removed before every cell (P6_FRESH_STATS=1)' || echo 'carried through the cells of an arm in this job (P6_FRESH_STATS=0)')"
 hdr "python $($VA/python -c 'import sys, numpy, pybullet; print(sys.version.split()[0], "numpy", numpy.__version__, "pybullet", pybullet.getAPIVersion())' 2>&1 | tail -1)"
 $VA/python -m pip freeze > $OUT/pip_freeze.txt 2>&1
 hdr "pip freeze sha256 $(sha256sum < $OUT/pip_freeze.txt | cut -c1-16)"
@@ -154,7 +160,7 @@ run_p6() {   # run_p6 <A|B> <label> <p6_run.py arguments>: one arm's cells into 
   local arm=$1 label=$2 rc
   shift 2
   echo "[p6] $(date -Is) start arm $arm $label"
-  ( cd $OUT/code$arm && $VA/python -u $SNAP_A/tools/cluster/p6_run.py --arm $arm "$@" \
+  ( cd $OUT/code$arm && $VA/python -u $SNAP_A/tools/cluster/p6_run.py --arm $arm "$@" $STATS_ARG \
       --out $OUT/$arm/$label --timeout $CAP ) < /dev/null > $OUT/log_${arm}_$label.txt 2>&1
   rc=$?
   tail -n 4 $OUT/log_${arm}_$label.txt

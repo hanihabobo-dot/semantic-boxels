@@ -267,6 +267,100 @@ def test_smoke_cells_and_only_tags(tmp_path, monkeypatch, capsys, restore_runner
 
 
 # ---------------------------------------------------------------------------
+# TB-24: pddlstream's stream statistics are not carried from cell to cell
+# ---------------------------------------------------------------------------
+
+def _stats(code, name='boxel-streams.pkl', py='py3'):
+    d = code / 'statistics' / py
+    d.mkdir(parents=True, exist_ok=True)
+    (d / name).write_bytes(b'x')
+    return d / name
+
+
+def _runner_with_cells(code, seen):
+    """A stand-in for an arm's runner: run_cell notes whether the statistics file was there when
+    the cell started and writes one, as a pipeline run does."""
+    from types import SimpleNamespace
+
+    def run_cell(cell, sweep_dir, timeout_s, extra_args, skip_existing):
+        seen.append((cell['tag'], (code / 'statistics' / 'py3' / 'boxel-streams.pkl').exists()))
+        _stats(code)
+        return {'tag': cell['tag']}
+    return SimpleNamespace(run_cell=run_cell, cell_tag=lambda c: c['tag'])
+
+
+def test_fresh_statistics_removes_the_file_before_every_cell_that_runs(tmp_path):
+    code = tmp_path / 'codeA'
+    code.mkdir()
+    seen, log = [], []
+    er = _runner_with_cells(code, seen)
+    sweep = tmp_path / 'sweep'
+    p6_run.install_fresh_statistics(er, str(code), log=log.append)
+    for tag in ('c1', 'c2', 'c3'):
+        assert er.run_cell({'tag': tag}, sweep, 1800.0, [], True) == {'tag': tag}
+    # without the switch the second and third cell would have started with the file of the one before
+    assert seen == [('c1', False), ('c2', False), ('c3', False)]
+    assert len(log) == 2 and 'stats c2: removed' in log[0] and '(1 file(s))' in log[0]
+    # a banked cell (its summary exists, --skip-existing) is not an episode: nothing is removed for it
+    (sweep / 'cells' / 'c4').mkdir(parents=True)
+    (sweep / 'cells' / 'c4' / 'timing_summary.json').write_text('{}')
+    er.run_cell({'tag': 'c4'}, sweep, 1800.0, [], True)
+    assert seen[-1] == ('c4', True)
+
+
+def test_without_the_switch_the_file_is_carried(tmp_path):
+    code = tmp_path / 'codeA'
+    code.mkdir()
+    seen = []
+    er = _runner_with_cells(code, seen)
+    for tag in ('c1', 'c2'):
+        er.run_cell({'tag': tag}, tmp_path / 'sweep', 1800.0, [], True)
+    assert seen == [('c1', False), ('c2', True)]
+
+
+def test_fresh_statistics_removes_nothing_it_does_not_know(tmp_path):
+    code = tmp_path / 'codeA'
+    code.mkdir()
+    _stats(code)
+    assert len(p6_run.statistics_files(str(code / 'statistics'))) == 1
+    for foreign in (code / 'statistics' / 'notes.txt', code / 'statistics' / 'py3' / 'data.json',
+                    code / 'statistics' / 'other' / 'x.pkl', code / 'statistics' / 'py3' / 'deep' / 'x.pkl'):
+        foreign.parent.mkdir(parents=True, exist_ok=True)
+        foreign.write_text('mine')
+        with pytest.raises(SystemExit) as e:
+            p6_run.statistics_files(str(code / 'statistics'))
+        assert 'nothing removed' in str(e.value)
+        foreign.unlink()
+    seen = []
+    er = _runner_with_cells(code, seen)
+    p6_run.install_fresh_statistics(er, str(code), log=lambda s: None)
+    (code / 'statistics' / 'keep.txt').write_text('mine')
+    with pytest.raises(SystemExit):
+        er.run_cell({'tag': 'c1'}, tmp_path / 'sweep', 1800.0, [], True)
+    assert (code / 'statistics' / 'keep.txt').exists() and seen == []      # nothing removed, nothing run
+
+
+def test_the_switch_is_recorded_and_needs_run_cell(tmp_path, monkeypatch, restore_runner_modules):
+    code = _fake_code_dir(tmp_path)                 # this fake runner has no run_cell
+    monkeypatch.chdir(code)
+    monkeypatch.delitem(sys.modules, 'eval_runner', raising=False)
+    with pytest.raises(SystemExit) as e:
+        p6_run.main(['--arm', 'B', '--slot', '3', '--out', str(tmp_path / 'o'), '--fresh-stream-stats'])
+    assert 'run_cell' in str(e.value)
+    assert json.loads((tmp_path / 'o' / 'p6_run.json').read_text())['fresh_stream_stats'] is True
+    assert p6_run.main(['--arm', 'B', '--slot', '3', '--out', str(tmp_path / 'p')]) == 0
+    assert json.loads((tmp_path / 'p' / 'p6_run.json').read_text())['fresh_stream_stats'] is False
+
+
+def test_the_job_script_passes_the_switch_only_when_asked():
+    text = open(os.path.join(REPO, 'tools', 'cluster', 'p6_tabletop.sbatch'), encoding='utf-8').read()
+    assert '[ "${P6_FRESH_STATS:-0}" = 1 ] && STATS_ARG=--fresh-stream-stats' in text
+    assert 'p6_run.py --arm $arm "$@" $STATS_ARG \\' in text
+    assert 'stream statistics (TB-24)' in text
+    assert '\r' not in text                         # the script runs under bash: LF only
+
+
+# ---------------------------------------------------------------------------
 # the smoke verdict
 # ---------------------------------------------------------------------------
 
