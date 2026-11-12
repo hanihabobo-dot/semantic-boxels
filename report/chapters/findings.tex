@@ -1,0 +1,402 @@
+% !TEX root = ../main.tex
+
+\chapter{Findings and Fixes}
+\label{ch:findings}
+
+This chapter groups the findings, fixes and decisions of the record by theme. Each
+section says what the finding changes for a reader of the thesis. The numbers and
+the results of the evaluations themselves are in \Cref{ch:comparison} and
+\Cref{ch:evaluations}; the changes to the system are in \Cref{ch:system}.
+
+\section{Holding the Object}
+\label{sec:holding-findings}
+
+\paragraph{The die leaves the pads on the move home.} The first measurement of
+TAMPURA's setting found that a light box of the die's class, held by both pads
+from 7 to 10\,N once the gripper settled, left the pads on the move to the home
+configuration in 91 of 96 probe trials (\BF{11}). The first review of the bridge
+code recorded this as a blocker that no work package owned (\BF{14}). Hani fixed
+the rule for the remedy before any probe: the first remedy that keeps a die-class
+body and a cup-class body between the pads at 0.5\,N or more in at least 95\,\%
+of the 96 trials is adopted (\BF{15}); the probe applied it to every cup class
+(\BF{38}). The probe gave, for the die, 1 of 96
+held at the old 3\,mm squeeze, 0 at 2\,mm, 18 at 1\,mm and 93 at 0.5\,mm; the cup
+classes were held in 77 to 96 of 96 at every level and the cube and block in 94 to
+96 (\BF{38}). Hani watched seed 0 of \fdice\ at both settings (the 3\,mm run lost
+the die with ``finger-pad contact incomplete'', the 0.5\,mm run carried it home) and
+made 0.5\,mm the default of every pick of every scene and goal (\BF{44}). A check
+of the hold detector against the simulator's ground truth found that it agreed in
+all six self-test carries, so the loss at 3\,mm is real (\BF{48}). The
+acceptance of the new squeeze on our own scenes (holding and stack goals) was not
+run; the probe measured the die and the GUI runs the cups (\BF{44}).
+
+\paragraph{Their die cannot slip.} In TAMPURA's own environment the die is carried
+home by resetting its pose to the gripper at every waypoint; in a measured run the
+carry made no simulation step and no motor call, and the die's offset in the tool
+frame stayed constant to 0.001\,mm while it rose 0.38\,m (\BF{35}). Hani's decision
+of 29 October was that the comparison is one to one: the planners differ, and
+the environment and the success criterion are the same for both arms (\BF{35}).
+How to realise this was left open: carrying our die the way TAMPURA's is carried, so
+that both are kinematic, or both physical, which would need a change to TAMPURA's
+executor (\BF{35}). The decision of 30 October kept our arm physical (\BF{37}, as path 6's
+deviation file cites it, \TK{6}), and the comparison stayed planner against
+planner (\BF{59}, \BF{63}).
+
+\paragraph{What the die-slip campaign found.} The campaign's diagnosis
+(\Cref{sec:slip-campaign} gives its results) is that the die rotates out of a
+near-face pinch during the swing home (\BF{59}). The 0.5\,mm hold's force falls to
+0\,N once the fingers stop inside the close's tolerance. How well the die is held
+depends on the angle between the pads and the die's faces: held in 79 to 88\,\% of
+trials at an exact face, 46 to 51\,\% at 1 to 25 degrees off and 80 to 94\,\% on an
+edge. The eye's yaw noise of 9.5 degrees cannot certify a face pinch. Each carry
+home turns the wrist's last joint by 168 to 242 degrees. A hold of 10\,N needs 200
+solver iterations, because PyBullet's default of 50 expels the 5\,g die (\BF{59}).
+The slow tail of episodes is a cup loop: the refresh from the overhead eye
+overwrites the pose uncertainty that the wrist's close look had measured (0.4 to
+5.5\,mm), and the planner plans up to 90 times until the cap (\BF{59}). The four
+fixes that survived (\Cref{tab:slip}) are on by default since 2 November (\BF{62}).
+
+\paragraph{Planner fixes found in the four-cup runs.} Watching four-cup scenes
+found three planner faults. A move was certified from the approach pose alone, so a
+place whose contact pose had no inverse kinematics was accepted and then aborted;
+now the contact pose is solved from every approach configuration (\BF{45}). Round
+cups, whose registry boxes are squares with an arbitrary fitted yaw, were sized
+along the pads and exceeded the span of the gripper at most yaws (a 69.6\,mm box
+reads 76\,mm at 5 degrees and 98\,mm at 45 degrees), so no grasp existed; the
+span now reads the box's side along the axis nearest the pinch direction (\BF{46}).
+A third failure, in which a mis-placed cup is bumped on the move home and the die
+is lost, was recorded with two candidate causes not separated (\BF{47}); path 3
+analysed it on 7 November: the entry's own eye record refutes the bump, since the cup
+never moved, and the loss was a carry slip; the twin's motion check still ignores the
+pose radius (TB-12), a latent defect with no instance seen (\TK{3}, \BF{47}).
+
+\paragraph{What the thesis certified while holding.} The first review of the
+bridge code also found a limit of the thesis pipeline. Every pick and place
+configuration carries a grasp offset of 6 to 10\,cm below the gripper, while the
+real cargo hangs 2 to 3\,cm below it. A planned move after a pick therefore
+checked the cargo 6 to 10\,cm below the gripper, and the entry concludes that ``the
+thesis runs therefore certified every planned move while holding with the cargo 4
+to 8 cm too low'' (\BF{14}). A repair in the planner's model is a change to the main
+pipeline with its own comparison; the entry does not schedule it (\BF{14}).
+
+\paragraph{Tall boxes in the carry.} The die-slip work measured a die and cubes. On 7
+November Hani watched our arm drop a tall occluder during a carry in two runs of path
+5's scene, boxes of 53 to 60\,mm width and 126 to 136\,mm height, and still succeed
+(TB-23); Hani reported it on 8 November. Headless probes found two causes. The carry streams its waypoints with no
+acceleration limit, so every junction kicks the box until it levers the fingers apart;
+and the carry's motion check treats space the robot has not seen as free, so the box can
+strike a hidden object. The first has a candidate cure that already exists, the
+acceleration-limited carry of \BF{59}, which removed the swing losses in the probes (6
+of 20 episodes lost to the swing without it, none of 20 with it); the second goes to
+path 14. The four-fix set of \BF{59} loses these boxes where the base setting keeps them
+on seed 3 (3 of 3 against 0 of 3), a limit of that set that the die measurements could
+not show (\Cref{sec:path3}, \TK{3}). The success count of our arm does not tell a
+success with such a drop from a clean one, which is why rule 18 records drops and
+collisions (\Cref{sec:catalogue}).
+
+\section{Time}
+\label{sec:time-findings}
+
+The baseline recorded on 30 October is one GUI run of seed 10 with four cups: a
+success in 7 plans, 154.5\,s of wall time, of which planning took 42.9\,s and
+execution 105.8\,s over 31 steps; every sense was preceded by a move home, four
+returns costing 18.1\,s, because the model certifies a sense view only for the
+current configuration, the home configuration and the retract arc (\BF{52}). Three
+versions of the fold of the sense into the approach to the pick each raised planning
+time, and two of them also cut execution time (\BF{52}). Hani kept only the search
+settings (\BF{57}); the fold returned the same day as a switch for Hani's own test
+and is on by default (\BF{52}). The search settings of the planner were the one change that
+shortened episodes (\Cref{sec:time-cuts}). Times measured on the cluster before 28
+October saved screenshots and are not comparable with times measured after the
+change that stopped them (\BF{17}).
+
+\section{Keeping the Comparison Comparable}
+\label{sec:comparable}
+
+\paragraph{TAMPURA's tree and robot.} The TAMPURA environments tree (commit
+4167c35) does not import as shipped: it star-imports a module that the same commit
+deleted. The thesis's laptop run of 11 of 20 was made on a tree with one import fix,
+which the comparison now keeps, pins by hash and discloses (\BF{3}). The first measurement of TAMPURA's setting (\BF{4}, \BF{11}) found a
+robot whose open gripper position of 0.045 lies beyond its own joint limit of
+0.04, finger pads that end 7.2\,mm beyond the grasp target, and a die of about
+17\,mm that falls and tilts inside its cup after the physics set-up: 37.7\,mm
+deeper in one layout and 39.8\,mm in another, tilted 21 and 49.8 degrees. The die's
+mass is 5.2\,g and the cups' 13 to 21\,g (the entry cites Calli et al. for the
+masses). The eye is at (0.1786, 0.0488, 0.5883) with a vertical field of view of
+49.134 degrees and an image of 640 by 480 pixels, and the arm's reach is a sphere of
+radius 0.810\,m with its centre at 0.124\,m height (\BF{4}, \BF{11}).
+
+\paragraph{Seeds and scenes.} A seed's scene depends on the order in which the file
+system lists the scene files, so the laptop and the cluster load different scenes
+for the same seed (\BF{8}). The campaigns use the cluster's map: seeds 1, 2, 3, 4, 8,
+14, 15 and 18 load one layout, seeds 5, 6, 10, 17 and 19 another, and seeds 0, 7, 9,
+11, 12, 13 and 16 the third (\BF{8}). A GUI run on the laptop prints the mismatch
+and goes on, flagged; headless runs stop; no run is scored from a GUI (\BF{39}).
+
+\paragraph{One success test.} TAMPURA's own test reads, from its abstract belief,
+whether the target is held and the arm is at home; the carry is by pose resets
+(\BF{35}). Hani decided on 29
+October that both arms get one environment and one criterion (\BF{35}), and on 7
+November Hani decided for path 6 that our physical world-state test is the standard
+success test of both arms, with TAMPURA's own reward beside it (\TK{6}). For TAMPURA's
+arm on the fresh scenes this needs its final world, which exists only inside its process
+after the rollout; the amendment of \BF{70} reads it there with reads only, and has been
+built, reviewed and checked but never run (\Cref{sec:path6}).
+
+\paragraph{The success criterion itself is under review.} On the evening of 7 November
+Hani said that a single drop might be reason to count an episode as a failure. On 8
+November Hani chose to record first and decide on the counts: every evaluation record
+must carry, per episode, the drops and collisions with the detector that saw each, and
+clean success (no drop, no collision) must be printed beside success. The arms of paths 4, 7 and 10 have the fields built, our own pipeline does not yet (TB-22), and no evaluation has run since. The numbers of this
+report, whose records hold no such counts, are not re-scored (rule 18,
+\ID{tracksstate}{tracks state file}; \Cref{sec:catalogue}).
+
+\paragraph{Noise and the test for plan counts.} Run to run, the unchanged pipeline
+on our holding scene gave 31 of 40 and 30 of 40 successes, three outcome flips and
+different plan counts on 16 of 35 seeds (\BF{7}). A per-seed plan-count rule fails
+a change that does nothing, about 96\,\% of the time, so the record replaced it by a
+permutation test fixed before any run: reference and candidate each run 40 seeds
+three times, interleaved, and the test passes when its $p$ value is at least 0.05
+(\BF{13}, \BF{14}).
+
+\section{What Makes a Number Trustworthy}
+\label{sec:trust}
+
+The comparison runs under automated gates and a ledger of every run
+(\Cref{sec:honest}). The first review of the bridge code (\BF{14}) used four
+adversarial reviewers with four lenses: cheating, whether the changes stay within the
+thesis's formalism of partially observable deterministic planning, the validity of the
+comparison, and feasibility. Each returned ``revise'', with 47 findings merged into
+37. No reviewer found a cheat, a ground-truth path into a decision, a plan edit or
+code specific to one seed; every major finding was a missing check, a missing rule
+or a stale record (\BF{14}). Nine fixes of the gates followed. They include a
+runtime check that TAMPURA's code and loop are unmodified in both arms (\BF{16},
+\BF{18}), a test that replaces every value read inside the write-only region by
+noise (passed on seed 0 with a positive control that fails as it must; seed 1 awaits
+the cluster) (\BF{19}), controls that score a held die as 1.0, a held cup as 0.0 and
+a die with the arm 0.002 rad off the home pose as 0.0 (\BF{20}), one outcome label for
+every episode derived from reward, error and gates (\BF{21}), and a check that no
+foreign file sits in TAMPURA's trees (\BF{24}). The gates add little time: 0.051\,ms
+against 0.069\,ms per collision check (\BF{25}). The review also found the harness's
+``green'' to cover less than its deliverable lists, and reopened B2 until the fixes
+landed (\BF{14}, \BF{12}).
+
+Later runs found faults that no review had: the first two campaigns of our arm
+crashed on every episode, writing a debug file into a read-only folder, because the
+smoke run stops before that line (\BF{54}); the die-slip harness double-counted losses in
+two places before the evaluation ran, and was fixed (\BF{59}); and the sweep runner banked a
+rejected cell's run as the previous cell's result (\TK{3}). Each is disclosed in
+the record; the fix of the sweep runner sits on path 3's branch (\TK{3}). A fault that
+no gate could see was found by eye: Hani's own watching of two runs showed our arm
+dropping a tall box during a carry and still succeeding (TB-23, \TK{3}).
+
+\section{Cluster, Data and Process}
+\label{sec:process}
+
+Hani's directive of 26 October is that evaluation runs always run on the chair's
+cloud, not on the laptop (\BF{5}). The first cluster runs ran both arms serially on
+one exclusive node of the chair's cluster with a fixed hash seed, and the node's
+processor is an Intel Xeon Platinum 8160 at 2.10\,GHz (\BF{6}, \BF{9}); the later
+campaigns ran on 8 CPUs of a node, shared in the time-cut evaluation (\BF{53},
+\BF{63}). The thesis's own TAMPURA run of
+2026-05-26 stays a separate reference on other hardware (\BF{5}). Simulation
+screenshots are local debugging only and are kept for a week (\BF{17}, \BF{50});
+run data are compacted after a day, deleted after two weeks, and the cluster holds
+at most 1\,GiB (\BF{49}). Two infrastructure failures cost time or data. The
+cluster's size cap counted apparent bytes (2\,769\,MiB for directories that held
+690\,MiB) and removed seven snapshots and seven result archives; what those archives
+held beyond the laptop's copy of the B1 to B3 results is lost (\BF{55}). The gateway
+dropped three full snapshot uploads in one night, so snapshots now hold code only
+(\BF{56}). On 31 October Hani set the rule that every session keeps a ledger of what
+it generated and deletes its own garbage (\BF{58}). On 7 November every start of WSL
+failed between 11:02 and 11:08; path 12's report ranks the causes and finds none
+established (\BF{69}, \Cref{sec:path12}). Path 13's sweep of the laptop found 21.3\,GB
+of dead pip folders in the temporary folder, left by a plugin's start-up code, and the
+deletions wait for Hani (\TK{13}, \Cref{sec:path13}).
+
+\section{Decisions Taken}
+\label{sec:decisions}
+
+\Cref{tab:decisions} lists the decisions of the record that shape the results, with
+Hani's words where the record quotes them.
+
+\begin{table}[tbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}l@{\hspace{6pt}}Y@{\hspace{6pt}}l@{}}
+\toprule
+date & decision & source \\
+\midrule
+26 Oct & Deadline 4 December 2026; the last start of the evaluation campaign is 24
+November & \BF{1} \\
+26 Oct & TAMPURA's one import fix is kept, pinned and disclosed: ``keep the existing
+import fix'' & \BF{3} \\
+26 Oct & ``evaluation runs always run on the chair's cloud, not on the laptop'' & \BF{5} \\
+27 Oct & The per-seed plan-count rule gives way to a test fixed before any run; the
+main-pipeline change B3 is accepted & \BF{10}, \BF{13} \\
+28 Oct & The cleanup of rediscovered objects (M7) becomes the default for the
+thesis scenes too; every thesis number made before is labelled as the old cleanup &
+\BF{15} \\
+29 Oct & ``the comparison is one to one. The planners differ; the environment and the
+success criterion are the same for both arms'' & \BF{35} \\
+30 Oct & The pick squeeze default is 0.5\,mm & \BF{44} \\
+31 Oct & Only the planner's search settings stay of the four time cuts: ``okay, i want
+only fix four applied; the other fixes stay on some branch for reference'' & \BF{57} \\
+31 Oct & Entropy search for the search order is logged and left out of this paper &
+\BF{60} \\
+2 Nov & The four switches of the chosen die-slip set are on by default: ``Yes, on by
+default'' & \BF{62} \\
+3 Nov & Scenes from TAMPURA's own generator, its code untouched: ``yes, maximally so'';
+every cluster run approved on its own & \BF{63} \\
+6 Nov & Attribute boxelization is saved as far future work; the dev tracks start from a
+stable base & \BF{66}, \BF{68} \\
+\bottomrule
+\end{tabularx}
+\caption{Decisions of the record that shape the results.}
+\label{tab:decisions}
+\end{table}
+
+\section{What Our Occlusion Model Does on TAMPURA's Task}
+\label{sec:occlusion-findings}
+
+The one finding that qualifies the representation itself is \BF{65}, reported in
+\Cref{sec:why-fail}: on \fdice\ the die starts in none of our hiding regions, which
+begin at the back face of the object that casts them, and every success of ours was
+found by lifting a cup. A second finding, \BF{64}, is a clip: the shadow caster took the
+window in which the pipeline plans free space for the table, so a cup outside that
+window cast no shadow and the cup over the die was never lifted. It accounts for 16
+of the 17 failures that ended with all shadows searched and the target not found,
+which \BF{65} counts, and the die's centre
+lies outside the window in 15 of the 40 generated scenes (\BF{64}). Its fix gives
+the caster the table that TAMPURA's own place sampler uses; it is on track/fixes
+and not in the trunk. The local reruns are a regression check: every scene
+solved before that was tried (15) stays solved, and the entry says plainly that
+the scenes the fix turns into successes are the scenes the bug was found on, so
+they do not measure the fix. The measurement is path 6's arm A$'$ on 200 fresh scenes
+(\Cref{sec:planned-cluster}), and the numbers of the generated-scene evaluation stand
+for the code they measured (\BF{64}).
+
+\section{Ideas Logged for Later}
+\label{sec:ideas}
+
+Four ideas are in the record without results. Ranking the shadow fragments by their
+probability per cost, with a search by entropy, would let the planner choose where
+to look next; the shadow belief holds no probabilities today, and Hani decided to log
+the idea and leave it out of this paper (\BF{60}). Merging boxels by any attribute
+that the planner reads, including probability mass, as a family of cells of equal
+mass, is Hani's idea of 6 November; the entry finds the merge rule in the code to be
+about fifteen lines, recommends a paragraph in the paper, and keeps the belief work
+for after the deadline; nothing was built (\BF{66}). Deleting the sense action and
+keeping only observe (\BF{32}) is now taken up by path 9's single look action
+(\Cref{sec:path9}). Drawing the pipeline's debug cameras in TAMPURA's GUI (\BF{27}) is
+now path 1's second part (\Cref{sec:path1}).
+
+\section{Statements of the Thesis That the Record Qualifies}
+\label{sec:qualify}
+
+\Cref{tab:qualify} lists the statements of the thesis \cite{alassiri2026thesis}
+that the work since then qualifies. It does not list statements that remain true.
+
+\begin{table}[tbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}P{3.6cm}Yl@{}}
+\toprule
+thesis statement & what the record says now & source \\
+\midrule
+Objects are held by a rigid weld, so a held object cannot slip or be dropped
+(limitations) &
+Without the weld the die slipped out of the pads in 40 of 208 carries of our base
+until four fixes; numbers produced under the weld are numbers of a weld, not of a
+grasp & \PW{1}, \BF{59} \\
+Planned moves while holding were collision-checked (methods) &
+The cargo was checked 4 to 8\,cm too low for every planned move after a pick, and
+space the robot has not seen counts as free, so a carried box can strike a hidden
+object (TB-23) &
+\BF{14}, \TK{3} \\
+24\,\% of stack cells ended at the time budget (results) &
+Of the 29 rows labelled ``timeout'' in the semantic stack cells, 25 ended after 8 to
+21 seconds, a symbolic success that the end-of-run physics check rejected & \BF{68} \\
+The sensor model of the methods chapter describes the code (three passages) &
+It no longer does: sensing runs over a rendered observation and discovered
+fragments enter the belief & \PW{1} \\
+Our wall clock of 144.4\,s per successful episode is on par with TAMPURA's 166\,s,
+and 65.6\,\% against at least 63\,\% (comparison) &
+The parity sentences are to be deleted unless the intervals support them. On
+generated scenes ours is ahead and the lead is not significant (57 of 80 against 46
+of 76, $p = 0.12$) & \PW{4}, \BF{63} \\
+TAMPURA's laptop baseline of 11 of 20 (comparison) &
+The tree it ran on had one import fix; seeds load different scenes on laptop and
+cluster; as shipped on the cluster TAMPURA solved 13 of 20 & \BF{3}, \BF{8}, \BF{9} \\
+Shadow cells under-cover the region an object hides (limitations) &
+Our regions begin at the object's back face and never cover the space under it, so
+a die at a cup's pose lies in none of them & \BF{65} \\
+Holding is scored by one physical test &
+It is scored by two: the weld in the thesis sweep, the pads at 0.5\,N now & \TK{6} \\
+\bottomrule
+\end{tabularx}
+\caption{Statements of the thesis that the record qualifies.}
+\label{tab:qualify}
+\end{table}
+
+\section{Where the Record Disagrees with Itself}
+\label{sec:disagreements}
+
+The sources the report draws on disagree in a few places. The report states which
+figure it uses and does not smooth the rest over.
+\begin{itemize}
+  \item Entry \BF{5} says the cluster is reached through the RWTH VPN; the later \BF{6}
+  says no VPN is needed. The report follows \BF{6}.
+  \item \BF{10} counts one new outcome difference in the B3 re-runs; its correction
+  in \BF{14} counts two (seeds 10 and 116). The report follows the correction.
+  \item The pads reach 7.2\,mm below the grasp target in \BF{4} and \BF{14} and
+  11.2\,mm in \BF{26}; the entries do not reconcile them.
+  \item \BF{5}, \BF{6} and \BF{14} keep the marker ``open'' although their work is done
+  (\BF{6} reports the set-up finished, \BF{25} that all gate fixes landed), and the
+  summary lines of the audit list the workstreams \PW{2} and \PW{3} as open although
+  \PW{3} and the main parts of \PW{2} landed on 19 September (the last deliverable of
+  \PW{2} was answered on 20 September).
+  \item \BF{40} gives the submission time of the first campaign as 14:07, \BF{45} as
+  13:53.
+  \item \BF{44} reads the GUI run that Hani watched with ``squeeze 0'' as a 0.5\,mm run;
+  \BF{48} shows that it passed no flag and ran the 3\,mm default, recorded as
+  \texttt{grip\_squeeze\_mm} 3.0. The report follows \BF{48}.
+  \item \BF{59} counts TAMPURA's 60 episodes on the shipped scenes as 40 successes, the
+  one crash included as a censored failure; \BF{63} counts 40 of 59 valid episodes for
+  the same scenes. The report gives both where it uses them.
+  \item Our mean discounted return on run 2 of the generated scenes is 0.585 over 80
+  episodes by the step-equivalence convention, 0.592 over the 76 pairs, 0.600 over 80
+  without the observes, and 0.698 over 80 under the one-action harness of today
+  (\ID{bf63step}{step-count file}; the 0.592 is in \ID{bf63review}{the review file}).
+  The report quotes 0.585 and names the convention.
+  \item Hani's visual-check rule (rule 15) is dated about 13:22 in most files (the
+  \ID{tracksstate}{tracks' state file}, \BF{68}, and the files of paths 6, 8, 9 and 10) and 13:25, the
+  time of Go's relay, in a few (the files of paths 3, 7 and 10). The report gives no
+  time for the rule.
+  \item Path 9's file first assumed that the inspect sensor of path 8 reads the class
+  from the render, and withdrew this when it agreed the interface with path 8
+  (\TK{8}, \TK{9}).
+  \item Path 1's own file records the re-check on seed 106 with the final code as
+  dropped, because a headless run cannot test the viewer; the checkpoint table of the
+  tracks lists the pair as awaited (\TK{1}, \ID{tracksstate}{tracks state file}). The
+  report gives both.
+  \item Path 10's file records Hani's answers to its questions Q1 to Q4 as given by
+  13:55 on 7 November, each the recommended option; the checkpoint table lists the
+  questions among Hani's open ones with the recommended answers standing (\TK{10}).
+  \item The bug board lists TB-9, the doubled header of the test script, as open with
+  its fix an uncommitted hunk of the trunk, and path 3's state file says the fix was not built in its round; the checkpoint table lists it among the fixes
+  on the fixes branch (\TK{3}). The report follows path 3's files.
+  \item Path 5's list for Hani's visual check (\ID{rule15}{rule 15 lists}), last written
+  at 14:18 on 8 November, names ours on seeds 3 and 4 as left to watch and has no run
+  of ours in its folder of GUI runs; the checkpoint table and the bug board record
+  Hani's runs of ours at 16:37 and 16:38 on 7 November, in the logs folder of path 5's
+  copy of the checkout (\ID{tracksstate}{tracks state file}, \TK{3}). The report follows
+  the table and the board, the later records.
+  \item The cluster question: the tracks' state file has it asked alone once the check of
+  rule 15 is done; the files of path 6, written on 7 November, hold that it is asked
+  again only if the node-hours change (\ID{tracksstate}{tracks state file}, \TK{6}). The
+  report follows the tracks' state file, the newer record.
+  \item The tracks' state file (rule 11) and \BF{68} say that the shutdown command ended
+  the wedge of WSL on 7 November; the later \BF{69} says that it did not and that WSL's
+  own idle teardown did. The report follows \BF{69}.
+\end{itemize}

@@ -50,6 +50,7 @@ from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 import console_ui
+import world_counts       # TB-22: the record's drop and collision fields
 
 if TYPE_CHECKING:
     from boxel_data import BoxelRegistry
@@ -415,6 +416,9 @@ def report_run_outcome(
     registry: Optional["BoxelRegistry"] = None,
     last_init: Optional[list] = None,
     boxel_counts_per_replan: Optional[list] = None,  # audit #73 step 2(d) plot 11
+    observer_counts: Optional[dict] = None,     # TB-22: telemetry's run counts
+    drops_noticed: Optional[dict] = None,       # TB-22: by the robot's own checks
+    collisions_reported: Optional[int] = None,  # TB-22: the executor's reports
 ):
     """Print success/failure classification, planning timing summary,
     and write timing_summary.json into the run logger's run directory.
@@ -565,6 +569,21 @@ def report_run_outcome(
                   f"plans with {len(remaining)} unsearched shadows remaining")
         print(f"  Plans executed: {plan_count}")
 
+    # TB-22 (tracks rule 18): drops, collisions, how each was detected and
+    # clean_success, for every episode record (world_counts.py).  Without
+    # the observer the counts are None and say "not detected", never 0.
+    rule18 = world_counts.episode_fields(
+        success, observer_counts, integrity_events,
+        drops_noticed=(sum(drops_noticed.values())
+                       if drops_noticed is not None else None),
+        collisions_reported=collisions_reported)
+    rule18["drops_noticed_by"] = dict(drops_noticed or {})
+    print(f"  World counts (TB-22): drops {rule18['drops']} "
+          f"(noticed by the robot: {rule18['drops_noticed']}), collisions "
+          f"{rule18['collisions']} (reported by the executor: "
+          f"{rule18['collisions_reported']}), clean success "
+          f"{rule18['clean_success']}")
+
     print(f"\n--- Planning timing summary ---")
     print(f"  Total plan() calls       : {len(plan_times)}")
     print(f"  Cumulative planning time : {total_plan_time:.3f}s")
@@ -644,6 +663,9 @@ def report_run_outcome(
                 "boxel_counts_per_replan": boxel_counts_per_replan or [],
                 **boxel_counts,
                 **init_facts,
+                # TB-22 (tracks rule 18): drops, collisions, the two
+                # detector texts, clean_success, and what was counted.
+                **rule18,
             }, indent=2))
             print(f"  Timing summary written to {summary_path}")
         except Exception as e:
@@ -975,7 +997,22 @@ def parse_pipeline_args(argv=None):
         '--no-telemetry',
         dest='telemetry',
         action='store_false',
-        help='Force the world telemetry recorder OFF, including headless.',
+        help='Force the world telemetry recorder OFF, including headless. '
+             'The drop and collision counts stay (--world-counts).',
+    )
+    parser.add_argument(
+        '--world-counts',
+        dest='world_counts',
+        choices=['auto', 'on', 'off'],
+        default='auto',
+        help='TB-22 (tracks rule 18): count drops and collisions for the '
+             "run's record (drops, collisions, clean_success in "
+             'timing_summary.json). auto (default): on in every headless '
+             'run, also under --no-telemetry, as the recorder\'s counts '
+             'mode (no frames, no heartbeats, no stream files); off under '
+             'the GUI. on: also under the GUI. off: no counts unless the '
+             'recorder itself runs; the record then says "not detected". '
+             'Nothing in the pipeline reads the counts.',
     )
     parser.add_argument(
         '--telemetry-period',

@@ -1,0 +1,239 @@
+% !TEX root = ../main.tex
+
+\chapter{Deviations from the Published Tasks and Setups}
+\label{ch:appendix-deviations}
+
+A deviation is anything in our setup that differs from the published setup for the
+same task: TAMPURA's own, or LW1's for path 4. Under rule 12 of the tracks every deviation is approved by Hani in
+writing in chat before anything that rests on it is run or merged. The last column
+gives whom the source says the deviation favours: T for TAMPURA, ours for our arm,
+or neither; ``not stated'' where the source gives no direction. The lists are as of
+7 November, between about 13:00 and 14:30, with Hani's answers of 8 November added.
+Approvals are as the tracks record them.
+Paths 4 and 5 and the rows C1 to C17 of path 6 rest on Hani's earlier written answers,
+which rule 12 counts as approved: for path 5 those of 6 November at 16:25 and 7
+November at about 10:55, for path 4 those of 6 November at 15:08 and 16:25. The table
+gives a time only where the track states one.
+
+\begin{footnotesize}
+\begin{longtable}{@{}P{1.25cm}P{9.2cm}P{2.5cm}@{}}
+\caption{Deviations by path.}\label{tab:deviations}\\
+\toprule
+id & what differs & favours \\
+\midrule
+\endfirsthead
+\toprule
+id & what differs & favours \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+
+\multicolumn{3}{@{}p{13.7cm}@{}}{\textbf{Path 5: TAMPURA on our scenes (\TK{5})}} \\
+T-0 & a timer on TAMPURA's action call; the only change to TAMPURA; no effect on the
+score & neither \\
+G-1 & a rigid shift of our world into the frame of TAMPURA's scene & not stated \\
+G-2 & a grasp library for our boxes & not stated \\
+G-3 & TAMPURA's own Panda model at our base pose & not stated \\
+G-4 & TAMPURA's camera class at the pose and intrinsics of our fixed camera & not
+stated \\
+G-5 & a floor box for the table top & not stated \\
+G-6 & four blocks of TAMPURA's scene set-up swapped for ours & not stated \\
+G-7 & the goal object's category is the die's & not stated \\
+G-8 & a copied driver of TAMPURA's runner & not stated \\
+G-9 & scoring: the target held at the end in each arm's own executing world, with
+TAMPURA's reward as a second column & not stated \\
+G-10 & the batch and analysis scripts & not stated \\
+G-11 & a camera table & not stated \\
+R1 & the belief's simulator is built from the scene's true categories and poses; the
+hidden object sits at its true pose and occludes voxels in TAMPURA's belief & T \\
+R2 & the target is known by its true category; ours is told the target's name too &
+even \\
+R3 & observations carry the true pose of every object in the segmentation mask; ours
+estimates boxes from depth & T \\
+R4 & the look sampler reads the occluder's pose in the belief's world & not stated \\
+R5 & a look's success is modelled by a random newly seen voxel; the true position is
+never read there & not stated \\
+R6 & execution is kinematic and noise free: a grasp never slips & T \\
+R7 & the goal includes being at home, ours does not & not stated \\
+R8 & TAMPURA keeps its 20 steps, ours has no step budget & not stated \\
+D-1 & TAMPURA looks through its own hand camera, a sensor ours does not have; for
+the first image our fixed camera (option B) or the hand camera too (option C) & T \\
+\midrule
+
+\multicolumn{3}{@{}p{13.7cm}@{}}{\textbf{Path 4: LW1 against its own setting (\TK{4}), from path 4's report; item 12 concerns a 3-D lattice that was not chosen}} \\
+1 & observations come from our camera and perception, not from LW1's hidden state &
+not stated \\
+2 & a robot in physics executes the actions and can fail; a failure ends the episode
+as an error & not stated \\
+3 & LW1's binary is patched (one observation hook, the progression of its hidden state
+skipped, prints for the driver); its translation, action selection and inference are
+unchanged & not stated \\
+4 & the planner FF v2.3 with two table sizes raised and a larger parser stack; its
+search is unchanged & not stated \\
+5 & a newer compiler (g++ 11.4, C++14) instead of g++ 7.2 & not stated \\
+6 & this laptop against the paper's 2014 machine; times are compared on one machine
+only & not stated \\
+7 & a handful of states per size against the paper's 100 (LW1 alone runs all 100 at
+5x5) & not stated \\
+8 & the world's geometry (cell size, robot, camera) has no counterpart in LW1 & not
+stated \\
+9 & a death ends the episode as an outcome & not stated \\
+10 & time caps of 300\,s per run at 5x5 and 3\,600\,s at 7x7, 10x10 and 15x15, against
+10\,800\,s that path 4 gives for the authors' runs & not stated \\
+11 & two domain files give the same counts at 5x5; one is used & not stated \\
+13 & LW1's code is the 2018 head of its repository, not the 2014 code of the paper &
+not stated \\
+\midrule
+
+\multicolumn{3}{@{}p{13.7cm}@{}}{\textbf{Path 7: class\_uncertain, CU-1 to CU-20, approved by Hani at 12:06 (\TK{7})}} \\
+CU-1 & our decision layer only; TAMPURA's execution functions for both arms; bounds
+every claim & neither \\
+CU-2 & TAMPURA's object models inside its pick, for both arms (accepted and declared) &
+neither \\
+CU-3 & the estimator reads only the output of the step function & neither \\
+CU-4 & a pick is gated on a known fruit & ours on success, T on steps \\
+CU-5 & a failed pick binding is retired & ours \\
+CU-6 & grasp draws & neither in expectation \\
+CU-7 & random streams are saved and restored & neither \\
+CU-8 & success is TAMPURA's reward plus a world-state test & T under its own reward \\
+CU-9 & a no-op once the goal holds & even \\
+CU-10 & the planner is called directly & neither \\
+CU-11 & virtual environments with identical versions & neither \\
+CU-12 & 15 distinct scenes over seeds 0 to 19 & neither \\
+CU-13 & the clocks differ; both are reported & not stated \\
+CU-14 & a crash inside TAMPURA's execution functions & neither by construction \\
+CU-15 & a failed drop switches TAMPURA's environment to answer from the belief & both
+arms \\
+CU-16 & drops only into the bowl & even \\
+CU-17 & the planning state is a boxel registry with three cell values per object &
+neither \\
+CU-18 & the cell partition is task knowledge that TAMPURA's planner also has & neither
+\\
+CU-19 & no extents in the registry & not stated \\
+CU-20 & boxel identifiers map to symbols by one logged table & neither \\
+\midrule
+
+\multicolumn{3}{@{}p{13.7cm}@{}}{\textbf{Path 7: slam\_collect, SL-1 to SL-18, on hold until Hani has read the plan (\TK{7})}} \\
+SL-1 & an initial observation & neither \\
+SL-2 & the belief holds our estimate & the more accurate estimator \\
+SL-3 & a replica of the scoring & neither \\
+SL-4 & a sketch of 20 particles instead of 100 & ours under the world test \\
+SL-5 & the true collision flag & ours under the world test \\
+SL-6 & no corner move & T, marginally \\
+SL-7 & a reactive gate that places only into the goal & T \\
+SL-8 & hop cost & neither \\
+SL-9 & noise reseeded & neither \\
+SL-10 & an inapplicable action is a no-op & neither \\
+SL-11 & the world-state test is primary & neither by construction \\
+SL-12 & virtual environment & neither \\
+SL-13 & laptop timing & neither if on one machine \\
+SL-14 & the map registry comes from the exact map at the start & ours; it is the
+representation under test \\
+SL-15 & obstacles inflated by 0.335\,m, free space cut to 0.2\,m cells, constants
+frozen & not stated \\
+SL-16 & the boxel hop predictor estimates the primitive count of TAMPURA's random
+search, uncalibrated & neither \\
+SL-17 & no box belief of the pose and no localisation gate in the first pass & not
+stated \\
+SL-18 & the gate of path 2 with its hop estimate is the control of the new code & not
+stated \\
+\midrule
+
+\multicolumn{3}{@{}p{13.7cm}@{}}{\textbf{Path 6: cluster evaluation (\TK{6})}} \\
+DV-1 & success test on \fdice: answered, our world-state test is the standard for both
+arms, TAMPURA's reward beside it & T in the earlier form \\
+DV-2 & action budget: answered, arm A is held to 20 actions by a cut-off on each
+episode's count, both arms 900\,s & ours under the old rule; the cap removes it \\
+DV-3 & arm B's conditions on the cluster (Python 3.11.15, numpy 1.24.4, Xeon nodes,
+hash seed 0): answered at about 14:20, accepted with checks & neither \\
+C1 & the whole pipeline in TAMPURA's world & neither \\
+C2 & our fixed eye instead of the wrist camera & not measured \\
+C3 & physical execution: the die cannot slip in TAMPURA's world & T (ours: 57 carries,
+none lost in the hand in run 2) \\
+C4 & hollow cups & neither \\
+C5 & one 900\,s cap, TAMPURA's 20 steps & neither, after DV-2 \\
+C6 & fresh scenes, seeds 140 to 339 & neither \\
+C7 & validity rule and retry of TAMPURA's crashes & T, slightly \\
+C8 & back to back on one node, one repetition & neither \\
+C9 & its own virtual environment & neither \\
+C10 & cluster hardware & neither \\
+C11 & arm A$'$ & not a TAMPURA deviation \\
+C12 & the thesis commit 6b00cd7 for arm B & neither \\
+C13 & our own seed lists & neither; limits any A against B claim \\
+C14 & two physical tests for holding & not applicable \\
+C15 & the automatic cell variant only & neither \\
+C16 & arm B's seed re-roll & neither \\
+C17 & one plotting script & neither \\
+\midrule
+
+\multicolumn{3}{@{}p{13.7cm}@{}}{\textbf{Path 8: class\_uncertain in our setup, 34 deviations; the ten of Round 1, the first ten rows, decided at 14:08, and D-29 and D-11 at 13:32 (\TK{8})}} \\
+D-25 & the route: our renders, boxels, planner and loop decide, our arm acts
+physically (R1, decided) & T \\
+D-26 & the rollout form: TAMPURA's step function runs once on one registered action &
+neither \\
+D-1 & no object models for our arm (decided by Hani on 6 November) & T \\
+D-27 & task knowledge given to our arm & neither \\
+D-5 & the camera: renders give geometry only & T on information \\
+D-28 & inspect is path 9's look; decided on 7 November at 13:32 & neither \\
+D-13 & the break rule: a coin first, a physical break later, both at 85\,\%; decided at
+13:32 & neither \\
+D-14 & pick only a known fruit & ours on success, T on steps \\
+D-17 & success: the world-state test is primary & T under its own reward \\
+D-16 & seeds 0 to 19 with a manifest plus cover seeds & neither \\
+D-2 & grasps and the apple & T \\
+D-7 & a physical against a welded executor & T \\
+D-8 & physics edits & ours \\
+D-9 & collision checking & T \\
+D-10 & planning geometry & T \\
+D-29 & the drop is our own drop; decided at 13:32 & ours on the world test \\
+D-11 & release height; decided with D-29 & T, slightly \\
+D-15 & step budget & ours, slightly \\
+D-22 & calibrations & direction unknown \\
+D-32 & wall cap of 900\,s & the faster arm \\
+D-3, D-4 & outcome model (D-3); order and names of objects (D-4) & D-3 neither; D-4 T
+if its planner uses the order, unverified \\
+D-6, D-12 & the bowl's role; sleeps in TAMPURA's code & D-6 even; D-12 ours by about 4
+to 8\,s per episode \\
+D-18 to D-24 & silent simulation (D-18), broken ball in hand (D-19), code against paper
+(D-20), window W (D-21), clocks (D-23), repetitions (D-24) & D-18 T under its own
+reward; D-20 neither; D-21 neither; D-19, D-23, D-24 not stated \\
+D-30 to D-34 & cell size and floors (D-30), TAMPURA's crash paths (D-31), virtual
+environments (D-33), GUI and headless (D-34) & D-30 neither; D-31 ours; D-33 neither;
+D-34 neither \\
+\midrule
+
+\multicolumn{3}{@{}p{13.7cm}@{}}{\textbf{Path 9: one look action, seven items; none is recorded as approved (\TK{9})}} \\
+1 & the sensor of the planned sensing on \texttt{run boxels} is the wrist camera, not
+the fixed eye & not stated \\
+2 & the first scan and the integrity monitor still use the eye & not stated \\
+3 & the eye's corridor facts are not built in look mode & not stated \\
+4 & a blocked region is not shrunk; the sweep over other fragments is a named
+conditional effect & not stated \\
+5 & a successful look does not force a replan & not stated \\
+6 & ``found'' is judged against the looked-at object & not stated \\
+7 & look configurations come from the plan twin posed from the belief & not stated \\
+\end{longtable}
+\end{footnotesize}
+
+Path 2 lists three deviations for \tooluse\ and six for \puckslide\ (\TK{2}), and
+path 10 lists nine items for the Wumpus world, eight adaptations of our own system and
+one new display piece, none a deviation from a TAMPURA task (\TK{10}). The completeness
+check of path 7, which ended at 14:22, found 11 differences that the lists of path 7
+miss and 11 entries to correct. On 8 November Hani approved nine of the differences
+(U-1 to U-4, U-6, U-7 and U-9 to U-11, all for \cuncert) and the corrected wording of
+five entries (CU-3, CU-5, CU-6, CU-7 and CU-10) (\ID{tracksstate}{tracks state file});
+the differences are in section 12 of the plan of path 7 and not in the table. The other
+two differences (U-5 and U-8) and the corrections B-5 to B-11, which concern the
+\slamcol\ arms, wait with SL-1 to SL-18 for question Q3 (\TK{7}). The live plan of path 7
+gives the corrected entries
+as follows: the direction of CU-5 is unclear; that of CU-7 is neither for the breaks
+and unclear for the arm's inverse kinematics and motion; CU-3 holds for the new arm and
+not for path 2's control arm, which takes its object and region lists from TAMPURA's
+world; SL-3 favours T under their
+reward, SL-7 T under arm R, and SL-11 their reward favours T; SL-10 edits the executed
+action and waits for Hani's written yes; SL-15's cells are 10/64 = 0.15625\,m, not
+0.2\,m; the control of SL-18 is a fifth arm that keeps path 2's gate and hop estimate,
+while the new code uses the registry's names and readout. CU-19 follows the answer to
+the question whether class\_uncertain's registry
+needs geometry, which is open (\TK{7}).

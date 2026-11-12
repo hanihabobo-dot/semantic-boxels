@@ -17,12 +17,17 @@
 #   run boxels -Look boxel     one look action from a free-space boxel instead of sense and observe (path 9)
 #   run boxels -Look centred   the object-centred look instead (no boxel model in the look; path 9's reference)
 #   run tampura -Screenshots   also save the eye PNGs at every snapshot (debugging only; off since BF#50)
+#   run tampura -Draw boxels   the GUI also draws the boxels (lines and labels, changing as the registry
+#                              changes); adds nothing to the world and nothing to a camera image; with
+#                              -Headless it is ignored (nothing is drawn); run boxels draws them as is
 #   run tampura -Music         8-bit music and effects that follow the run (Windows plays them);
 #                              -Sfx   the effects only;  -Voice   Windows' voice reads the narration too
 #   run boxels -Args '--n-extra-distractors 1'   more pipeline flags, one quoted string, as is
-#   run ps                     the pipeline processes alive in WSL;  run kill   ends every one of them
+#   run ps                     the pipeline processes alive in WSL;  run kill   ends the ones run started
 #   run help                   this text;  -DryRun prints the command instead of running it
-# Never two pipeline runs at once (pddlstream temp/ race): it refuses while one is going.
+# Every run takes the pipeline lock (rule 7: one episode at a time, pddlstream temp/ race): it
+# waits while a track's episode or another run holds it, and says who; it refuses while
+# another run it started is still alive.
 # Closing the GUI window or pressing Ctrl-C ends the run for good.  A closed window
 # leaves PyBullet's client busy-waiting in C and the process would outlive its
 # terminal at full CPU (BF#51), so the run is a child process polled from here, its
@@ -41,10 +46,12 @@ param(
     [ValidateSet('', 'boxel', 'centred', 'on')][string]$Look = '',
     [double]$Squeeze = 0,
     [switch]$Screenshots,
+    [string[]]$Draw = @(),
     [switch]$Music,
     [switch]$Sfx,
     [switch]$Voice,
-    [switch]$DryRun,
+    # -D and -Dr meant -DryRun before -Draw existed; the aliases keep them so
+    [Alias('D', 'Dr')][switch]$DryRun,
     [string]$Args = '',
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest
 )
@@ -58,11 +65,11 @@ $PY = '/root/armO-venvA/bin/python'
 $PROCS = "tr -d '\r' < $S/tools/run_procs.sh | bash -s --"
 
 if ($What -in 'help', '-h', '--help', '/?', '?') {
-    Get-Content $PSCommandPath | Select-Object -First 24 | ForEach-Object { $_ -replace '^# ?', '' }
+    Get-Content $PSCommandPath | Select-Object -First 27 | ForEach-Object { $_ -replace '^# ?', '' }
     return
 }
 if ($What -in 'ps', 'status') {
-    $alive = wsl -e bash -c "$PROCS list"
+    $alive = wsl -e bash -c "$PROCS ps"
     if ($alive) { $alive } else { Write-Host 'run: no pipeline process is alive in WSL' -ForegroundColor DarkGray }
     return
 }
@@ -107,6 +114,24 @@ if ($Squeeze -gt 0) {
     $sw += ' --grip-squeeze-mm ' + $Squeeze.ToString([cultureinfo]::InvariantCulture)
 }
 if ($Screenshots) { $sw += ' --save-screenshots on' }
+# -Draw (BF#68): what the GUI draws besides the scene, one word or a comma
+# list, any case; boxels today.  The bridge driver takes it as --draw; it
+# draws nothing without the GUI and run boxels has its own overlay.
+$draws = @($Draw | ForEach-Object { $_ -split '[\s,]+' } | Where-Object { $_ } |
+           ForEach-Object { $_.ToLowerInvariant() } | Select-Object -Unique)
+$badDraw = @($draws | Where-Object { $_ -notin 'boxels' })
+if ($badDraw.Count -gt 0) {
+    Write-Host "run: -Draw takes boxels (several: a comma list), not '$($badDraw -join ' ')'" -ForegroundColor Yellow
+    exit 2
+}
+if ($draws.Count -gt 0 -and $What -ne 'tampura') {
+    Write-Host "run: -Draw is for run tampura; run boxels draws its boxels in the GUI as it is" -ForegroundColor Yellow
+    $draws = @()
+} elseif ($draws.Count -gt 0 -and $Headless) {
+    Write-Host "run: -Draw is ignored with -Headless (there is no GUI), nothing is drawn" -ForegroundColor Yellow
+    $draws = @()
+}
+if ($draws.Count -gt 0) { $sw += ' --draw ' + ($draws -join ',') }
 $extra = (@($Args) + @($Rest) | Where-Object { $_ -and $_ -ne '--' }) -join ' '
 if ($extra) { $extra = ' ' + $extra }
 $audio = if ($Music) { 'on' } elseif ($Sfx) { 'sfx' } else { '' }
@@ -151,6 +176,21 @@ function New-Run([int]$seedNo) {
     }
     if ($audio) { $cmd = "export SB_AUDIO=$audio; " + $cmd }
     if ($Voice) { $cmd = 'export SB_VOICE=on; ' + $cmd }
+    # TB-17 and rule 7: the run holds the pipeline lock, so a track's episode
+    # in another checkout and this run never overlap.  A batch takes the lock
+    # one episode at a time, so the run waits at most for the episode going
+    # now (a waiter blocked in the kernel takes the lock before the batch's
+    # next episode can ask for it); while it waits, run ps says who holds it.  The
+    # flock's command line keeps the run's own (run ps, run kill, kill-mine
+    # find it by that).  RUN_PROCS_LOCK is a test's own lock.  No double
+    # quotes: the command reaches bash through wsl.exe's command line.
+    $q = $cmd.Replace("'", "'\''")
+    $cmd = "L=`${RUN_PROCS_LOCK:-/root/sb_pipeline.lock}; flock -n `$L true || " +
+           "{ echo run: waiting for the pipeline lock `$L, rule 7, one episode at a time. Now:; $PROCS ps; }; " +
+           "exec flock `$L bash -c '$q'"
+    # TB-17: the run and its children carry SB_RUN, so run kill ends what
+    # run started and leaves a track's episode, probe or planner alone.
+    $cmd = 'export SB_RUN=1; ' + $cmd
     [pscustomobject]@{ Seed = $seedNo; Cmd = $cmd; Mine = $mine; Record = $record }
 }
 
@@ -172,11 +212,14 @@ $many = $seeds.Count -gt 1
 $done = @()
 $code = 0
 for ($i = 0; $i -lt $seeds.Count; $i++) {
-    $busy = wsl -e bash -c "$PROCS list"
+    # TB-17 (Go, 2026-11-08): only a run that run started refuses a new one;
+    # a track's episode does not (the pipeline lock keeps the two apart, and
+    # the new run says who holds it while it waits).
+    $busy = wsl -e bash -c "$PROCS busy"
     if ($busy) {
-        Write-Host "run: another pipeline run is going, never two at once (pddlstream temp/ race):" -ForegroundColor Yellow
+        Write-Host "run: a run started by run is still going, never two at once:" -ForegroundColor Yellow
         $busy | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
-        Write-Host "  a ghost (its window closed, its terminal gone)?   run kill   ends them all" -ForegroundColor Yellow
+        Write-Host "  a ghost (its window closed, its terminal gone)?   run kill   ends the ones run started" -ForegroundColor Yellow
         $code = 2
         break
     }

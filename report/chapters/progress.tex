@@ -1,0 +1,623 @@
+% !TEX root = ../main.tex
+
+\chapter{Work in Progress: The Dev Tracks}
+\label{ch:progress}
+
+On 6 November Hani asked for independent dev tracks, started from a stable version
+of the function whose numbers are comparable to TAMPURA's (\BF{68}). The session
+``Go'' orchestrates them. Each track has one responsible session, which reports to
+its parent when its job is done; the parent then archives that conversation
+(\BF{68}). On 8 November at about 15:45 Hani announced that the current state would
+be presented to the supervisor, asked that the tracks come to a halt, that big things
+be brought to an end and that exploratory ones be cut, and named that state
+Checkpoint 1 (\BF{68}). At the checkpoint no track starts a batch, a probe, an
+evaluation or a cluster job; a step that was running ends and is recorded; and nothing
+is merged into the trunk (\ID{tracksstate}{tracks state file}). The state of each
+track below is the one at the checkpoint, from the checkpoint table of the tracks
+state file (written at 15:56 on 8 November) and from the track's own files; a later
+fact is given with its time. Where the files disagree, \Cref{sec:disagreements} says
+so.
+
+\section{The Stable Base and the Rules}
+\label{sec:tracks-base}
+
+The base is the tag \texttt{stable-2026-11-06} on commit d6a9715 of the branch
+\texttt{tampura-bridge}. Its pipeline code is what run 2 of the generated-scene
+evaluation measured, so its numbers are those: ours 57 of 80, TAMPURA 46 of 76, pairs
+18 to 9, exact McNemar $p = 0.122$ (\BF{68}). On the laptop the tag passes 130
+unit tests and 89 bridge tests (3 skipped), solves seed 0 in 36 seconds and a
+generated seed (106) in 60 seconds; its known failures are \BF{64} and \BF{65}
+(\BF{68}). Each track works on its own branch and in its own copy of the checkout;
+only the orchestrator merges into the trunk (\BF{68}).
+
+The rules that every track follows, as the tracks' state file words them
+(\ID{tracksstate}{tracks state file}):
+\begin{itemize}
+  \item Simulation batches take a lock, one at a time, with a hold of at most
+  about 30 minutes (rule 7).
+  \item Tracks launch agents of the Sonnet or Haiku class only (rule 9).
+  \item Every deviation from a TAMPURA task or setup is approved by Hani in writing
+  in chat before anything that rests on it is run or merged; code may be prepared
+  meanwhile (rule 12).
+  \item Tracks put no window on Hani's desktop; GUI features are checked off screen
+  (rule 13).
+  \item From 13:25 on 7 November the tracks started no batch in WSL. The laptop was low on memory
+  (4.4 of 30.8\,GB of memory free, 54.5 of 60.2\,GB of commit charge at 13:20), and
+  Hani's words were read by Go as: run nothing in WSL until the memory problem is
+  found and fixed. Path 12's report did not establish a cause (\BF{69}). Go lifted
+  the freeze on 8 November at 14:07 on Hani's word, with the virtual machine capped
+  at 8\,GB and with guards: a memory check before every batch, no new batch above
+  85\,\% of the commit limit, a memory log during it, and a wait of 70 seconds after a
+  start timeout (rule 14).
+  \item Before any evaluation of one environment and planner against another, Hani
+  confirms by eye on at least four seeds, two per system, and the evaluation goes
+  ahead only after Hani's approval (rule 15, \Cref{sec:visual-check}).
+  \item Since 14:40 on 7 November, runs must not build up memory: one process per
+  episode, each episode's peak memory and the free memory at its start and end
+  recorded, and a batch stops after the current episode when less than 4\,GB is free
+  (rule 16).
+  \item A session that Hani compacts often stays idle afterwards, so its parent sends
+  it one message to wake it (rule 17).
+  \item Since 8 November every evaluation records, per episode, the drops and collisions
+  and how each was detected, and reports print clean success (no drop and no collision)
+  beside success; Hani picks the headline criterion once the first counts are in
+  (rule 18).
+\end{itemize}
+
+\section{The Tracks at Checkpoint 1}
+\label{sec:tracks-table}
+
+\Cref{tab:tracks} lists the fourteen paths, what each had reached at the checkpoint
+and what each waits for; the sections that follow take them in turn.
+
+\begin{small}
+\begin{longtable}{@{}rP{0.15\textwidth}P{0.38\textwidth}P{0.29\textwidth}@{}}
+\caption[The dev tracks at Checkpoint 1.]{The dev tracks at Checkpoint 1, 8 November
+2026 (\BF{68}, \ID{tracksstate}{tracks state file}). Two sub-managers, T for paths 5 to
+8 and W for paths 4 and 10, prepare the reports and the questions of these paths for
+Go.}\label{tab:tracks}\\
+\toprule
+path & job & state at the checkpoint & waits for \\
+\midrule
+\endfirsthead
+\toprule
+path & job & state at the checkpoint & waits for \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+1 & drawing the boxels and the cameras in the GUI &
+Boxel drawing is merged (afd80a3). The camera views are built (merge request b81c836,
+branch head a8e68f2). &
+A pair of runs on seed 106 with the final code (the track's own file records that
+re-check as dropped), then Go's merge \\
+2 & which TAMPURA tasks give a quick result &
+Delivered and archived on 6 November. &
+Hani's answers to questions Q40 to Q45 (three are answered) \\
+3 & bug board and fix rollout &
+23 bugs on the board. Fixes for TB-1, TB-8 with TB-20 and TB-17 are with Go on the
+fixes branch (head ab97ce1); TB-9's is not built. TB-23, the drop of a held box: probes found two causes and
+a candidate cure for one. &
+Hani's visual check of TB-23, then its A/B and Hani's decision on the default; Go's
+merges \\
+4 & LW1 in a 3-D Wumpus world &
+Final report: LW1 won 18 of 18 episodes. The branch (bff1818) carries the new drop and
+collision fields; its merge checks passed, and the merge request is ready and not
+sent. &
+Hani's decisions on the open items of its report, and Hani's own look at the painter; Go's
+merge \\
+5 & TAMPURA's planner on our scenes &
+Ten seeds: ours 10 of 10, TAMPURA 6 of 10 with our fixed camera. Hani watched seeds 3
+and 4 on both systems (7 November, 16:24 to 16:38). &
+Hani's written approval under rule 15; the runs with TAMPURA's hand camera \\
+6 & cluster evaluation &
+The amendment that reads TAMPURA's final world after its rollout (\BF{70}) is built,
+reviewed and checked; nothing has run. &
+A local episode of TAMPURA's arm and three tests against the real TAMPURA package;
+rule 15; then the cluster question, asked alone \\
+7 & our planning layer with boxels on TAMPURA's tasks &
+Hani approved the nine new differences and the corrected wording on 8 November. The drop
+and collision fields are built into its arms. &
+Question Q3 on \slamcol\ (after Hani reads section 3.4 of its plan); rule 15 on seeds 0
+and 13; the first clean batch \\
+8 & \texttt{class\_\allowbreak uncertain} in our setup &
+Plan version 2 with route R1; Round 1 decided; code on its branch (8fe013d). &
+Hani's Rounds 2 and 3 \\
+9 & one look action &
+Both looks have look-at candidates (branch commits 6642881 and dc6ee7f); 238 tests and the
+gates pass; no episode has run on the changes. &
+Hani's items 1, 2 and 7 and questions Q-L1 to Q-L3; the first episodes \\
+10 & our setup in the Wumpus world &
+The arms of our setup are built (branch commit d3aba88); nothing has run. &
+Hani's questions Q1 to Q4 (the recommended answers stand) \\
+11 & this report &
+Version 2. &
+Go's check, then the tag \\
+12 & why WSL wedged &
+Done: report and \BF{69}. &
+Hani's questions in section 11 of its report \\
+13 & leaks and dead data &
+Done: report (5efc1f2) and addendum (b18169e): 21.3\,GB of dead pip folders in the
+temporary folder, about 6.8\,GiB reclaimable in the WSL disk. &
+Hani's choices on what to delete \\
+14 & collision and drop detection &
+Requested on 8 November at about 14:15; not started. &
+The first path of the next round \\
+\end{longtable}
+\end{small}
+
+\section{Path 1: Drawing the Boxels}
+\label{sec:path1}
+
+Hani asked that the pipeline's boxels be drawn in the GUI, and later the views of
+all our cameras, switched on by a command of the launcher (\TK{1}). Part A,
+\texttt{run tampura -Draw boxels}, is merged into the trunk (afd80a3, the evening of
+6 November) and changes nothing the run sees or does: paired runs with and without
+drawing, on seed 0 and on a generated scene, produced the same plans, steps, renders,
+body numbers and gate results, until the planner's own answer differs on identical
+inputs, with nobody drawing as well (\TK{1}). The planner's wall time varies from 2 to
+46 seconds between runs of the same code, and its random search draws from global
+generators, so across 11 runs the states agree exactly when the searches agree
+(\TK{1}). Part B, the views of the eye and the wrist camera, is committed on its
+branch (b81c836, head a8e68f2) as a merge request: its plans, actions and renders
+were identical with and without the cameras until the planner's own answer differs,
+the static gates pass, and the bridge suite and the unit tests pass
+(\ID{tracksstate}{tracks state file}). The checkpoint table lists a pair of runs on
+seed 106 with the final code as awaited; the track's own file records that re-check as
+dropped, because a headless run cannot test the viewer, and the evidence for seed 106
+is the first version's (\TK{1}). The track's checks opened windows on Hani's desktop,
+which led to rule 13; the priority of the viewer's window (below normal, so that it
+never competes with the run, or normal, for fresher frames) is Hani's call (\TK{1}).
+
+\section{Path 2: Which TAMPURA Tasks Give a Quick Result}
+\label{sec:path2}
+
+Hani asked which of TAMPURA's other tasks could give a first number within a few
+working days on which the accuracy is neither zero nor that of chance (\TK{2}).
+Path 2 delivered on 6 November and was archived. Its ranking is that two tasks give
+a quick result, both through our planning layer on TAMPURA's execution functions:
+\cuncert\ first and \slamcol\ second; \fdice-simple is a smoke test, and \tooluse\ and
+\puckslide\ are not quick (\TK{2}). The \tooluse\ task needs 4 to 6 days and
+\puckslide\ 13.5 to 17 working days to a result, the track estimates (\TK{2}). The
+results are in \Cref{tab:published-cu} and \Cref{tab:published-sl}, with the check
+against the published numbers. The track states that neither task exercises our
+perception or physical execution, and that any claim from them must say so
+(\TK{2}). It also found two faults outside our own code: TAMPURA's \cuncert\
+applies a motion plan that failed (TB-19 of the board, \TK{3}), and the planner
+library's translator needs a cost function defined for every tuple of objects (TB-18,
+\TK{3}).
+
+The track's questions Q40 to Q45 are partly answered. Hani's answer was to implement
+both tasks even though the perception is TAMPURA's, since boxelization still has to
+be used somehow; this made mode S count and led to path 7 (\TK{2}, \BF{68}). The use of
+TAMPURA's object models inside mode S is accepted and declared, the world-state test
+is primary (\BF{68}). TAMPURA on \cuncert\ over seeds 0 to 19 on the cluster
+(about 3.4 hours at the laptop's mean, the track estimates) and what the paper may
+say from mode S runs are open (\TK{2}).
+
+\section{Path 3: The Bug Board and Its Rollout}
+\label{sec:path3}
+
+Path 3 keeps the board of bugs found on the stable base and in the other tracks and
+lands each fix on its own branch with a test, the full gate read and a locked episode
+before it is released (\TK{3}). \Cref{tab:board} lists the board, which has 23 bugs at
+the checkpoint. Four fixes are with the orchestrator: TB-1, the shadow caster's table
+(\BF{64}); TB-8 and TB-20, the sweep runner's fixes; and TB-17, the launcher's
+\texttt{run kill} (\TK{3}). The fix for TB-9, the test script's doubled header, is not
+built (\Cref{tab:board}). The fix TB-16 is merged
+(564ff5b). On 6 November Hani approved the plan (15:10) and answered ``Yes, all
+recommended'' to the questions of paths 3, 4 and 5 (16:25): review rounds by Sonnet
+reviewers for the two larger fixes only, and \texttt{run kill} to end only runs that
+\texttt{run} started (\TK{3}).
+
+\begin{small}
+\begin{longtable}{@{}P{1.35cm}P{0.78\textwidth}@{}}
+\caption[The bug board of path 3 on 8 November.]{The bug board of path 3 on 8 November,
+16:30, when path 3 closed its round (\TK{3}).}\label{tab:board}\\
+\toprule
+bug & what it is, in plain words, and where it stands \\
+\midrule
+\endfirsthead
+\toprule
+bug & what it is, in plain words, and where it stands \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+TB-1 & The shadow caster took the planning window for the table, so a cup outside it
+casts no shadow (\BF{64}). Fixed and checked on the fixes branch (51428d8): 18 seeds show
+no regression; waits for Go's merge, and its cluster A/B is arm A$'$ of path 6 after
+Hani's visual check. \\
+TB-2 & The die under an upside-down cup lies in none of our hiding regions (\BF{65}).
+Waits for Hani's choice. \\
+TB-3 & A pick out of a region aims at the region's centre, and the reach gate refuses a
+centre past 0.80\,m. Waits for Hani's choice. \\
+TB-4 & The pose-uncertainty rule loops on a cup whose overhead and wrist centres
+disagree. Waits for Hani's choice. \\
+TB-5 & The object-fitted grasp rejects a wrist look whose top rectangle is 2\,mm larger
+than the fused one. Waits for Hani's choice. \\
+TB-6 & A body seen inside or under another has no look configuration, so it can never be
+picked. Waits for Hani's choice. \\
+TB-7 & A cup release jam (\BF{61}); its switch is unmerged. Waits for Hani's merge
+decision. \\
+TB-8 & The sweep runner banks a rejected cell's run as the previous cell's result. Fixed
+(bb87ed6), checked and reviewed; with TB-20, waits for Go's merge. \\
+TB-9 & The test script prints its header twice. The board lists it open, with the fix as
+an uncommitted hunk of the trunk, and path 3's state file says it was not built in the round; the checkpoint table lists it among the fixes waiting
+for Go. \\
+TB-10 & A GUI run whose window is closed spins at full CPU (\BF{51}). Fixed in the
+launcher, while the record said it was not. \\
+TB-11 & The shadow direction comes from table-clamped hits, so a caster at the table's
+edge can lose its shadow. Latent. \\
+TB-12 & The twin's motion check uses believed poses and ignores the pose radius
+(\BF{47}). Analysed on 7 November: the defect is in the code, but the one case that
+cited it, the die loss of \BF{47}, was a carry slip; no instance seen, no fix
+recommended. \\
+TB-13 & Four of five sampled places unreachable at the contact height on one scene
+(\BF{42}). Open. \\
+TB-14 & Our pick floor of 35\,mm contradicts the 11.2\,mm finger probe (\BF{26}). Open.
+\\
+TB-15 & One arm O run hung at start-up before loading its scene (\BF{63}). Analysed and
+placed on 8 November from the cluster's files: it stalled 3 seconds after its start, in
+the imports or the configuration, which read from the cluster's work volume in the
+slow hour of run 1; no fix beyond the retry. \\
+TB-16 & The launcher runs the main checkout's code whichever checkout it is started
+from. Merged (564ff5b). \\
+TB-17 & \texttt{run kill} ends every pipeline process in WSL, the tracks' runs
+included. Fixed on the fixes branch (32ab5b2 and ab97ce1): a run now waits for the
+pipeline lock and says who holds it, and the busy refusal counts only runs that
+\texttt{run} started. The tests, the gates, the live lock wait and Go's one episode
+pass (16:22); the merge request is with Go. \\
+TB-18 & The planner library's translator grounds actions that their preconditions
+forbid, so a domain with a function cost fails. Latent. \\
+TB-19 & TAMPURA's \cuncert\ applies a motion plan that failed. Their code, not
+ours. \\
+TB-20 & The check of TB-8 takes a run configuration unlike its cell for another cell's
+summary. Fixed (b81d2ad); waits for the merge with TB-8. \\
+TB-21 & The integrity monitor calls a belief correction ``disturbed''. Cosmetic, open;
+fix candidates are written, no episode changes. \\
+TB-22 & Rule 18: our episode record has no ground-truth drops or collisions. Open; Go
+chose counts-only telemetry in every headless run, with its wall-time cost measured
+first. \\
+TB-23 & Top priority (Hani, 8 November): our pipeline drops a tall occluder during the
+carry. Open; two causes found by headless probes (below). \\
+\end{longtable}
+\end{small}
+
+\paragraph{TB-23, the drop of a held box.} Hani reported on 8 November at about 14:15,
+as top priority, that in Hani's runs of our arm the held box was dropped repeatedly
+and the run still recovered. The runs were seeds 3 and 4 of path 5's scene (two
+occluders, goal holding), watched in the GUI (\TK{3}). GUI runs record no
+telemetry, so path 3 counted from the simulator's truth before every action: one drop
+in each run, in each case of the green box, so 2 drops in 3 carries of occluders over
+the two runs; the target is never carried, because the goal is holding and its pick
+ends the episode (\TK{3}). Both runs succeeded: in seed 3 the target became visible when the box was
+lifted, and in seed 4 the replan moved the other occluder; each drop cost a carry and
+a replan of 7 to 10 seconds and left a box on its side (\TK{3}). Headless probes found
+two causes: 24 episodes on seeds 3 and 4, with the simulator's state logged every 0.01
+seconds, then 28 more on seed 2 and in a batch that measured the wall time (\TK{3}):
+\begin{enumerate}
+  \item \emph{The carry's jerks swing the box out of the grip.} The arm streams every
+  waypoint pair at a constant joint speed with no acceleration limit, so at each
+  junction the hand's speed drops from 0.60 to 0.11\,m/s in one frame (58\,m/s$^2$).
+  Each jerk swings the box, whose weight hangs 55 to 60\,mm below the middle of the
+  strip of about 16\,mm that the pads hold, until it levers the fingers apart. The
+  switch \texttt{carry\_trapezoid} of \BF{59}, one acceleration-limited schedule per
+  held move, is the candidate cure: it removes the jerks. Over the 40 episodes of the
+  two settings, the four-fix
+  set of \BF{59} lost the box in 9 of 20 episodes, 6 to the swing and 3 to collisions;
+  with the switch added the box was lost in 4 of 20, none to the swing and 4 to
+  collisions. A held move takes 0.39 seconds in both settings, so no cost per carry is
+  measurable. Whether the switch
+  becomes a default is Hani's call after Hani's visual check of seeds 3 and 4 with and
+  without it; the A/B on seeds 0 to 19, with three arms (the four-fix set, the set with
+  the switch, and the base without the fixes; about 170 episodes, 50 minutes), is
+  prepared and not run.
+  \item \emph{The carried box hits an object the robot has not seen.} The carry's
+  motion check treats unknown space as free, so on seed 4 the box strikes the hidden
+  target at about 1\,m/s in every setting; the four-fix set then loses the box and
+  the base setting keeps it and shoves the neighbouring box by 130 to 140\,mm. A second
+  case, with a box the robot knows (seed 2, the one carry of 12 that needed a
+  random-tree path), shows the trapezoid schedule following the path with a rest at the
+  bend, and the carried box hitting the other occluder, which the check lists as an
+  obstacle, toppling it and leaving the hand. This cause goes to path 14.
+\end{enumerate}
+Two further findings follow. The four-fix set of \BF{59}, which brought the die to no
+loss in 60 carries, loses these tall boxes where the base setting keeps them (seed 3:
+3 of 3 against 0 of 3), so the board's owed check of that set on our own scenes fails
+on this scene. And the telemetry takes a gripper opened past 35\,mm for an opening
+one, so a drop caused by a strike has no lost-grip record, which rule 18's drop count
+must not inherit (\TK{3}).
+
+\section{Path 4: LW1 in a 3-D Wumpus World}
+\label{sec:path4}
+
+Hani asked for a 3-D Wumpus world that uses knowledge fluents instead of our
+know-if predicates, and for LW1 as the planner, run on our environment (\TK{4}). Path
+4 built LW1's own Wumpus instances as 3-D scenes: one-metre floor tiles, a shaft under
+each pit, the monster, the gold bar and markers for breeze and stench, with the
+Panda on a mobile base looking down with its camera. LW1 sends each action it
+executes over a pipe, our driver runs it on the robot and returns the robot's
+perception as LW1's observations; LW1 never reads its hidden state, and its
+translation, action selection and inference are unchanged (\TK{4}). The results and
+the check against the paper's Table 2 are in \Cref{tab:published-lw1} and the text
+below it: 18 of 18 episodes won, 0 of 369 percepts wrong, and a miss on the paper's
+numbers of planner calls and length at 5x5 (\TK{4}).
+
+Path 4 had to raise two table sizes in the planner FF for LW1's first call at 5x5
+and enlarge a parser stack for 10x10; FF's search is unchanged (\TK{4}). Its report
+is final. Its branch carries the fields of rule 18 (a drop of the gold bar, a body
+touched without meaning to): for the finished runs the collisions read ``not
+detected'', and the drops are ruled out by LW1's stored grab results (\TK{4}). The
+merge checks at the branch's tip (bff1818) passed under the lock between 14:56 and
+15:03 (269 unit tests, 96 bridge tests with 3 skipped, the static gates, a replay of 48
+of 48 pairs), and the merge request is ready and not sent (\TK{4}). Three items are
+Hani's: (a) the drafted question to LW1's authors about the miss, which is Hani's own
+action and has not been sent; (b) LW1 alone on all 100 hidden states at 10x10; (c) what
+to run at 15x15, a replay of LW1's actions only, LW1 driving the robot, or neither.
+Hani's own look at the painter in the GUI is also owed before any comparison
+(\TK{4}). On 7 November at 11:22 Hani asked for a visual cue for the cells the
+simulation does not know, and for what may be in each cell; the one format for the
+painter, which path 10 feeds as well, is Go's relay (\TK{4}, \ID{tracksstate}{tracks state file}).
+
+\section{Path 5: TAMPURA on Our Scenes}
+\label{sec:path5}
+
+Path 5 is the mirror of the thesis's comparison: TAMPURA's planner, its
+\fdice\ model and its configuration run unchanged on the scenes that \texttt{run
+boxels} builds, with glue code only (\TK{5}). \Cref{sec:reverse} gives the result on
+ten seeds and \appref{ch:appendix-deviations} the numbered deviations. The
+tweak list has one item, a timer on TAMPURA's action call, without effect on the
+score (\TK{5}). The kill cap is 1\,800\,s for both arms, with the 900\,s of run 2
+kept as a second table; seeds 1, 8, 12 and 14 have no scene, so the ten seeds
+are the first ten that build (\TK{5}). The belief grid of our scenes has 11\,288
+cells against about 4\,900 in TAMPURA's own table (\TK{5}).
+
+The hand-camera question was settled on 7 November. The five seeds of option B
+(TAMPURA's own hand camera for its looks, our fixed camera for the first image) all
+succeeded, with wall times of 282, 199, 293, 406 and 991 seconds, the last inflated by
+the track's own concurrent runs and not to be quoted as a time. A probe of option C
+(the hand camera for every image) showed that the first image differs: on seed 0 the
+hand camera sees one of three objects and not the target, on seed 9 all three including
+the target. Go read Hani's words of 7 November as making option C the deliverable
+(\TK{5}); the audit entry records Hani's decision as TAMPURA's own hand camera and
+standard sensing (\BF{68}). The batch of option C started at 13:18 and was ended at
+13:48 by the stop order for WSL, after two seeds: seed 0 succeeded in 684 seconds, and
+seed 2 failed in 264 seconds, with the target already in the hand camera's first image
+and one identical pick repeated 20 times with nothing held (\TK{5}). The other seeds of
+option C wait for Hani's approval under rule 15.
+
+On the evening of 7 November Hani watched seeds 3 and 4 on both systems, in
+windows that Hani started from path 5's copy of the checkout: TAMPURA with the fixed camera
+at 16:24 and 16:29, ours at 16:37 and 16:38 (\ID{tracksstate}{tracks state file},
+\TK{3}). TAMPURA's seed 3 run succeeded, where the headless run of the first batch had
+failed (\TK{5}); watching ours is where the drops of TB-23 were found
+(\Cref{sec:path3}). Hani's written approval is not recorded. Path 5's own list for the
+check still has ours to watch (\Cref{sec:disagreements}).
+\emph{Check against the published numbers:} no published number applies to TAMPURA
+on our scenes; the published numbers on its own task are in \Cref{tab:published-fd}.
+
+\section{Path 6: The Cluster Evaluation}
+\label{sec:path6}
+
+The plan of path 6 is in \Cref{sec:planned-cluster}. Nothing has been pushed or run on
+the cluster. At about 14:20 on 7 November the third deviation, arm B's run conditions
+on the cluster, was answered (accepted, with checks), and the work waits for Hani's
+visual check under rule 15 and for the cluster question, which is asked alone
+(\TK{6}). Its laptop smoke on 6 November (three cells per arm, all succeeded) shows
+that arm B reproduces the sweep's boxel counts at the first replan (holding 2, 2 and
+13; tray-stack 4, 5 and 16; stack 3, 3 and 16) at 2.7 to 5.0 times the sweep's wall
+time on a loaded laptop, which the plan says is not a measure of the cluster (\TK{6}).
+The first local job, 36 cells, is tool scaffolding and not a result (\TK{6}).
+
+On the fresh \fdice\ scenes the standard success test is ours on both arms: the die
+between both finger pads and the arm at home. TAMPURA's run decides its reward from
+its abstract belief and carries the die kinematically, so the poses and joints of its
+final world exist only inside its process after the rollout. The first plan forbade
+reading that world; Hani's answer on 7 November at about 12:46 was to make our test the
+standard test, and the amendment of \BF{70} reads the final world after TAMPURA's own
+rollout has finished, with reads only and without changing the rollout. It was reviewed
+by Sub-manager T (accepted, with five requests, all built) and checked by Go on 7
+November at about 16:39; its checks pass (72 unit tests, the static gates read whole
+with exit 0, a check against fake TAMPURA packages). It has never run against TAMPURA's
+real world: no episode, no cluster step (\BF{70}). For TAMPURA's arm the test is geometric where ours is physical:
+the target attached, both pads within 2\,mm of it and the arm's joints at home; the
+2\,mm is the session's reading, not Hani's words (\BF{70}).
+
+\section{Path 7: Our Planning Layer With Boxels on TAMPURA's Tasks}
+\label{sec:path7}
+
+Hani's word after path 2's result was to implement both tasks even if the perception
+is TAMPURA's, since boxelization still has to be used somehow (\TK{7}). Path 7 builds
+a planning problem generated only from a boxel registry: for \cuncert, value
+boxels (unknown, fruit, ball) without geometry; for \slamcol, map boxels cut from
+the exact map at the start, so that free boxels reach the planner only through
+tables, and the claim there is representation and prediction, never a gain in success
+(\TK{7}). The track expects no success difference between its boxel and no-boxel arms
+and claims none (\TK{7}).
+
+The deviations of \cuncert\ (CU-1 to CU-20) were approved by Hani on 7 November at
+12:06; those of \slamcol\ (SL-1 to SL-18) are on hold until Hani has read the plan
+(\TK{7}). The track ran its first arm on \cuncert\ seeds 0 to 19 between 12:10 and
+12:28, under the lock, and queued three more jobs before Go's messages about rule 12
+reached it at about 12:35; it then stopped the queue and reported the incident to Go.
+The rows of that arm were held back until the track's completeness check of its
+deviation lists had run; the entry of \BF{68} records the arm's numbers as the same as
+path 2's (\BF{68}, \TK{7}). The check, a read-only agent, ran from 12:57 to 14:22 and
+found 11 differences missing from the lists and 11 entries wrong or incomplete
+(\TK{7}). Hani answered both questions on 8 November: all nine new
+differences of \cuncert\ are approved, and so is the corrected wording of five entries (CU-3, CU-5, CU-6,
+CU-7 and CU-10), each by the option marked as recommended
+(\ID{tracksstate}{tracks state file}).
+
+The track built the memory guard (one process per episode) on 7 November and, since the answers, a world
+test for the random floor, and the drop and collision fields of rule 18 into its two
+arms and the floor, with tests; no episode has run on any of it (\TK{7}). The first
+clean batch compares seeds 0 to 2 with path 2's rows. It waits for the Windows commit
+charge to stay under 85\,\% and for Hani's visual check of seeds 0 and 13 on three
+systems; the \slamcol\ arms wait for question Q3 (\TK{7}). The question whether
+\cuncert's registry needs geometry stays in the record as open (\TK{7}).
+\emph{Check against the published numbers:} the arm's numbers equal path 2's, so the
+check is that of \Cref{tab:published-cu}.
+
+\section{Path 8: TAMPURA's class\_uncertain Task in Our Setup}
+\label{sec:path8}
+
+Hani corrected an earlier design on 7 November about 11:30: path 8 is to repeat
+TAMPURA's own task on TAMPURA's own environment as closely as possible, with any
+tweak or setup change allowed, and every deviation approved by Hani in writing in chat
+(\TK{8}). The earlier plan, a die with look-alikes, is dropped (\TK{8}). The plan
+(version 2) recommends route R1: our renders, boxels, planner and loop decide, our
+arm executes physically, and the task's two rules, the label that an inspection
+returns and the coin that decides whether a ball breaks, run exactly as TAMPURA's
+code runs them (\TK{8}). It lists 34 deviations in three rounds, 24 from the earlier
+list and 10 new. On 7 November at about 13:30 (relayed at 13:32) Hani decided that TAMPURA's inspect becomes
+our new look action, that a picked ball breaks 85\,\% of the time (first by TAMPURA's
+coin, later by a physics rule calibrated on about 30 picks per ball class), and that
+our drop is used as it is (\TK{8}). Hani's answer on Round 1, the ten items that decide
+the shape, reached the track at 14:08: all as recommended, route R1 among them and the
+earlier decision that no object models are given to our arm (\TK{8}). The plan names a
+structural risk: nine of the seeds 0 to 19 hold an apple of 75.4\,mm that our pinch
+cannot take today, so with today's grasp this arm can win at most 11 of 20 (\TK{8}).
+Path 9 delivered the interface that the inspect action needs on 8 November at 14:21
+(\TK{8}). At the checkpoint the track waits for Hani's Rounds 2 and 3. No episode and
+no number exist; the plan estimates about 12 working days after Hani's first round for
+the first numbers (\TK{8}).
+
+\section{Path 9: One Look Action}
+\label{sec:path9}
+
+Hani asked that sense and observe, the two sensing actions of our pipeline, be
+replaced by a single look action from a boxel with knowledge fluents, with a tight
+planning file whose Python does what the action says and nothing else (\TK{9}). On 7
+November Hani added that a look that uses no boxels in the action is to be the
+reference: the paper speaks of the object-centred look and the boxel look, and does
+not call the reference a baseline (\TK{9}). The track inventoried 26 mismatches
+between today's planning file and its Python (12 things the Python does that the file
+does not say, 8 things the file claims that the Python does not establish, 6
+predicates with no counterpart) and added a correspondence test (\TK{9}). Both looks
+are built and committed behind a flag, off by default, with the unit, correspondence
+and gate tests passing (\TK{9}).
+
+Three short development runs on seed 0 on 8 November, which are not evidence, showed a
+limit: neither look had a view of the region where the target hides. A view from
+above that keeps a region of 0.27\,m in the frame needs more camera height than the
+arm can give at 0.48\,m from the base, and the boxel look keeps its camera in a
+free-space boxel under a ceiling of 0.5\,m (\TK{9}). The track then gave both looks
+look-at candidates from the robot's side, lower and tilted, and filters out poses the
+arm cannot reach before they are ranked. On three synthetic tall boxes the straight
+ladder of heights passes 0 of 8 poses on each, and the new grid certifies 3, 4 and 4
+views. At the last commit 238 tests and the static gates pass (\TK{9}). No episode
+has run on the change, so there is no performance number. If the boxel look still has
+no view of tall shadows, raising its ceiling is a change of the shared partition and
+Hani's decision (\TK{9}). The plan proposes three arms on the same seeds, the tag, the
+object-centred look and the boxel look, first on the tabletop and only after Hani's
+written yes on \fdice\ (\TK{9}). Hani's word that TAMPURA's inspect is this new look
+(\Cref{sec:path8}) fixes the interface with path 8 (\TK{8}, \TK{9}).
+
+\section{Path 10: Our Setup in the Wumpus World}
+\label{sec:path10}
+
+Hani wanted a visual cue for what the Wumpus simulation does not know, and a new path
+that runs our setup in the Wumpus world, because the supposed problem of our setup is
+that it cannot conclude where it is safe to go. If it can, the earlier test was too
+trivial. If it cannot, the numbers are to be reported anyway (\TK{10}). Step 1
+measured how often policies without reasoning win LW1's own instances
+(\Cref{tab:walkers}). The Semantic Boxels arms are built and tested on constructed
+worlds: K0, the system as at the tag, which may move into an unknown cell, assuming
+it free; K0c, a cautious control; and K1, which adds the percept rules (\TK{10}). The
+track wrote its predictions before any arm ran: K0 near the floor, about 35 to 40 of
+100 at 5x5 and about 20 to 25 at 7x7 and 10x10, with the rest deaths; K0c stuck at
+the first step on every instance; K1 solving what the rule explorer solves, 100 of 100
+up to 15x15, without a death (\TK{10}). Hani answered the track's four questions by
+13:55 on 7 November with its recommendations: keep SB's rule for K0 with K0c beside
+it, build and run K1, run the extension sets after the required ones, and keep the code
+on its own branch (\TK{10}); the checkpoint table lists the four questions among
+Hani's open ones, with the recommended answers standing (\Cref{sec:disagreements}). No
+arm has run in the Wumpus world, so there is no result (\TK{10}).
+\emph{Check against the published numbers:} none exists for the walkers; see
+\Cref{sec:published}.
+
+\section{Path 11: This Report}
+\label{sec:path11}
+
+Path 11 is this report (\TK{11}). It is a Claude session's reading of the project's own
+record, built like the thesis, with every number copied from the entry or file that a
+tag names. Version 2 is its final version for Checkpoint 1.
+
+\section{Path 12: Why WSL Wedged}
+\label{sec:path12}
+
+On 7 November every attempt to start WSL ended in a start timeout between 11:02 and
+11:08, and Hani's rule 14 then froze all WSL work until it was known why the machine
+runs out of memory. Path 12 read the Windows side only, apart from two tests of its own health-check script before rule 14 reached it, and
+ranks each statement as measured, read or unverified (\BF{69}, \TK{12}). The cause of
+the wedge is not established. The virtual machine, 117 hours old, stopped answering as a
+whole at or before 10:34 and answered again at 11:09:55; it had been paused for 41\,\%
+of its life, in 37 periods of the laptop's standby, and the failure came at most 63
+minutes after the last resume. That makes a fault around the laptop's modern standby the
+best-supported class, with the trigger unproven (\BF{69}). Two readings fail: no
+session's call started the wedge, and the shutdown command did not end it; WSL's own
+idle teardown did (\BF{69}). Windows never ran out of memory in the records, but sat at
+81 to 94\,\% of its commit limit, with 56.4 of 60.2\,GB at the highest reading; the
+Claude sessions and the desktop app hold 36\,\% of the standing base of about 47\,GB, and
+the WSL virtual machine is the swing, 13.3\,GB committed at 12:24 during runs
+(\BF{69}). The report proposes a memory cap, giving memory back, evidence for the next
+wedge, and rules for the tracks. The cap (8\,GB) and the rules are in place as rule
+14's guards; the other proposals are not recorded as done, and the report's questions
+wait for Hani (\BF{69}).
+
+\section{Path 13: Leaks and Dead Data}
+\label{sec:path13}
+
+On Hani's request of 7 November at about 15:57, path 13 swept the code, the laptop's
+disk, its memory and the cluster for leaks and for dead data that the project had
+generated, read only and alone (\TK{13}). Its largest finding is 21.3\,GB of dead
+folders in the temporary folder: 7\,802 pip folders that a plugin's start-up code left
+behind when its installation was killed at a time limit, from 22 October to 7 November,
+which the plugin's later version no longer does. The temporary folder as a whole holds
+47.2\,GB, of which about 36\,GB is garbage or probably garbage. Few code leaks grow
+without bound; the report proposes seven entries for the board, LK-1 to LK-7, among
+them a transfer archive left in the temporary folder when a snapshot upload fails and
+state files that nothing prunes (\TK{13}). While the sweep ran, the commit charge rose
+from 76 to 86\,\% in 22 minutes, when a WSL virtual machine started from Hani's own
+terminal; about 4\,GB of the standing base is duplicate server processes of each
+session (\TK{13}). After rule 14 was lifted, an addendum measured the Ubuntu disk read
+only: 41\,GB used inside a file of 47.85\,GiB, so about 6.8\,GiB are reclaimable
+(\TK{13}). Nothing was deleted; the deletions wait for Hani's choices through Go.
+
+\section{Path 14: Collision and Drop Detection}
+\label{sec:path14}
+
+On 8 November at about 14:15 Hani asked for a new path and reported the bug of TB-23
+as its top priority: the box held in the semantic environment is dropped repeatedly in
+the trials, and the run still recovers. The path is to revamp the collision detection,
+which Hani recalls as written a year ago, so that the robot collides with no other object, also
+while it holds one, and never drops the held object unintentionally
+(\TK{14}, \ID{tracksstate}{tracks state file}). The scope for its brief is recorded and
+the path has not started. The scope is an audit of what exists (the telemetry's lost-grip and knock
+events, the carry's hold check, the motion planner's collision checks with the held
+object's geometry, TB-12 and TB-21); the second cause of TB-23, the carry that treats
+unknown space as free; the detector gap; noticing a drop when it happens; a dropped
+body left on its side; and the executor's motion without an acceleration limit. The
+design makes the detectors feed the fields of rule 18, and an A/B and Hani's visual
+check come before any evaluation. The branch is \texttt{track/collision} in
+\texttt{..\textbackslash sb-collision} (\ID{tracksstate}{tracks state file}).
+
+\section{Merges and the Next Round}
+\label{sec:merges}
+
+Two merges have reached the trunk: the launcher fix TB-16 (564ff5b, 6 November 17:11)
+and path 1's boxel drawing (afd80a3, the evening of 6 November), each after
+the orchestrator's own check of the tests, the bridge tests, the static gates read in
+full and a locked episode (\ID{tracksstate}{tracks state file}). At the checkpoint
+nothing more is merged. The git tag \texttt{checkpoint-2026-11-08} marks the trunk at
+the checkpoint; Go sets it after the final version of this report. The next round
+starts with Go, in this order (\ID{tracksstate}{tracks state file}):
+\begin{enumerate}
+  \item Start path 14.
+  \item The merges, each after its checks: path 1's camera views, TB-8 with TB-20,
+  TB-1, TB-9, TB-17 and the Wumpus branch.
+  \item Hani's decisions in one round (\Cref{ch:open-questions}).
+  \item Successors for the sessions that were archived, from their state files.
+\end{enumerate}

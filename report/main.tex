@@ -1,0 +1,49 @@
+% !TEX root = main.tex
+% !TEX program = lualatex
+% !BIB program = biber
+
+\input{resources/preamble}
+
+
+\title{Semantic Boxels Since the Thesis:\texorpdfstring{\\}{ }Findings, Evaluations and Work in Progress}
+\author{Hani Alassiri Alhabboub}
+\date{\formatdate{8}{11}{2026}}
+
+\newcommand\reportkind{Internal Report}
+\newcommand\reportcheckpoint{Checkpoint 1}
+\newcommand\reportversion{Version 2}
+
+
+\begin{document}
+
+  \frontmatter
+  \include{resources/title-page}
+  \include{chapters/preface}
+  \include{chapters/summary}
+  \tableofcontents
+
+  \mainmatter
+  \include{chapters/introduction}
+  \include{chapters/thesis-recap}
+  \include{chapters/system}
+  \include{chapters/comparison}
+  \include{chapters/evaluations}
+  \include{chapters/findings}
+  \include{chapters/progress}
+  \include{chapters/open-questions}
+
+  \appendix
+  \include{chapters/appendix-deviations}
+  \include{chapters/appendix-sources}
+
+  \backmatter
+  \listacronyms
+  \listsymbols
+  \listfigures
+  \listtables
+  \listalgorithms
+  \listlistings
+  \listreferences
+  \listtodos
+
+\end{document}

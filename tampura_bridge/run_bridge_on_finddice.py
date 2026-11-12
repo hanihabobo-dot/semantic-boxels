@@ -40,6 +40,7 @@ import tampura_environments                      # noqa: E402,F401
 from tampura_bridge import g13_runtime              # noqa: E402
 from tampura_bridge import policy as bridge_policy   # noqa: E402
 import slip_fixes                                    # noqa: E402  (BF#59, BF#62)
+import world_counts                                  # noqa: E402  (TB-22, rule 18)
 
 
 class _SceneFile(logging.Handler):
@@ -189,7 +190,23 @@ def main():
     # BF#50 (user rule, 2026-10-30): the eye images are for debugging only,
     # off unless asked; passed through like the switches.
     ap.add_argument('--save-screenshots', choices=('off', 'on'), default='off')
+    # TB-22 (tracks rule 18): the drop and collision counts of the episode's
+    # record (run_logger's --world-counts: auto is on in a headless run),
+    # passed through like the switches; off is the arm that measures their
+    # cost.
+    ap.add_argument('--world-counts', choices=('auto', 'on', 'off'), default='auto')
+    # BF#68 (run tampura -Draw): what the GUI shows besides the scene, a comma
+    # list of policy.DRAW_KINDS.  Nothing here reaches the executing world or
+    # a camera render; it is ignored without --vis 1.
+    ap.add_argument('--draw', default='',
+                    help='comma list of what the GUI draws: '
+                         + ', '.join(bridge_policy.DRAW_KINDS))
     a = ap.parse_args()
+    draw = [d.strip() for d in a.draw.split(',') if d.strip()]
+    unknown = [d for d in draw if d not in bridge_policy.DRAW_KINDS]
+    if unknown:
+        ap.error(f"--draw takes {', '.join(bridge_policy.DRAW_KINDS)} "
+                 f"(a comma list), not {', '.join(unknown)}")
     arg_dict = {'config': a.config, 'global_seed': a.global_seed,
                 'vis': bool(a.vis), 'save_dir': a.save_dir}
     config = tconfig.load_config(config_file=a.config, arg_dict=arg_dict)
@@ -257,17 +274,25 @@ def main():
                     f"(the ledger's G19 gate records the mismatch)")
         print(g19_note, flush=True)
         console_ui.warn(g19_note)       # verbatim on the console as well
+    if draw and not a.vis:
+        draw_note = (f"--draw {','.join(draw)} is ignored without the GUI "
+                     f"(--vis 0): nothing is drawn")
+        print(draw_note, flush=True)
+        console_ui.warn(draw_note)
+        draw = []
     console_ui.set_context(scene=f"find_dice seed {a.global_seed}")
     stamp('scene_map_asserted')
     cfg = bridge_policy.EpisodeConfig(
         seed=a.global_seed, scene_file=scene.name_seen,
         log_dir=os.path.join(config['save_dir'], 'ours'), vis=bool(a.vis),
+        draw=frozenset(draw),
         stop_before_planning=bool(a.stop_before_planning),
         log_level=a.log_level, max_plan_time=a.max_plan_time,
         switches={'m8': a.m8, 'm9': a.m9, 'm10': a.m10,
                   'pick_aperture_from_pose': a.pick_aperture_from_pose,
                   'sense_over_region': a.sense_over_region,
                   'grip_squeeze_mm': str(a.grip_squeeze_mm),
+                  'world_counts': a.world_counts,
                   'search_effort_weight': a.search_effort_weight,
                   'search_initial_complexity': str(a.search_initial_complexity),
                   'slip_fixes': slip_fixes.resolve(a.slip_fixes),
@@ -303,6 +328,12 @@ def main():
     cfg.out['ledger_gates'] = report.rows
     cfg.out['outcome'] = gates.episode_outcome(
         cfg.out['rewards'], cfg.out.get('error'), report)
+    # TB-22 (tracks rule 18): drops, collisions, the two detector texts and
+    # clean_success in the episode's record, from the pipeline's run (its
+    # summary, or the counts file of a run that wrote none) under this
+    # record's own success.
+    cfg.out.update(world_counts.from_run_dir(
+        cfg.out.get('run_dir'), success=cfg.out['outcome']['success']))
     with open(os.path.join(config['save_dir'], 'bridge_episode.json'), 'w') as f:
         # BF#41: the switches (M8 to M10, the aperture rule, the squeeze)
         # travel with the episode; bridge runs leave main()'s run_config

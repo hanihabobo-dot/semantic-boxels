@@ -115,6 +115,7 @@ from execution import (audit_robot_held_state,
 # BF#59 carry_hold_check: the move's hold postcondition (execution.py).
 from execution import carry_hold_begin, carry_hold_end
 import pose_belief
+import world_counts       # TB-22: the run's drop and collision record
 import m8_domain
 import observe_views
 import look_domain
@@ -713,7 +714,8 @@ def main(gui=True, run_logger=None, scene_config=None,
          home_joints=None,
          goal_at_home: bool = False,
          held_cargo_resolve: bool = False,
-         home_hold_step_cap: Optional[int] = None):
+         home_hold_step_cap: Optional[int] = None,
+         overlay_bodies: bool = True):
     """Run one episode: set-up, boxelization, the plan-act-sense loop.
 
     #P4 B3 parameters (PAPER_AUDIT P4.4), every default today's
@@ -745,6 +747,12 @@ def main(gui=True, run_logger=None, scene_config=None,
                         from the readback with the held body as cargo.
       home_hold_step_cap  a move to q_home ends with a final hold of at
                         most this many steps (None: no hold).
+    BF#68 (run tampura -Draw boxels):
+      overlay_bodies    True draws the boxel overlay with its translucent
+                        phantom bodies (today's behaviour); False draws
+                        debug lines and labels alone, so the overlay adds no
+                        body to the world (draw_boxel_overlays with the GUI
+                        on decides whether anything is drawn at all).
     There is no goal argument: main() builds the goal.
     """
     print("=" * 60)
@@ -839,19 +847,6 @@ def main(gui=True, run_logger=None, scene_config=None,
 
     # audit #10 — uniform-grid baseline.  Toggle BoxelTestEnv's
     # free-space dispatch and (re)build the lattice at the requested
-    # The curated console's header (a no-op without console_ui installed).
-    _switch_text = ', '.join(f"{k} {'on' if v else 'off'}"
-                             for k, v in pose_belief.SWITCHES.items())
-    console_ui.header(
-        scene=(f"{run_config.get('scene')} seed {run_config.get('seed')}, "
-               f"{run_config.get('n_occluders')} occluders, "
-               f"{run_config.get('n_targets')} targets, "
-               f"{run_config.get('n_hidden')} hidden" if run_config else None),
-        goal=(goal_kind + (f" {target_name}" if target_name else "")
-              + (" at home" if goal_at_home else "")),
-        switches=(f"{_switch_text}, grip squeeze "
-                  f"{robot_utils.GRIP_SQUEEZE * 1000:g} mm, planner "
-                  f"{getattr(args, 'planner', '?')}"))
     # cell size before any boxel/registry work in Phase 2.  Default
     # path (baseline='semantic') leaves env.use_uniform_grid=False, so
     # generate_free_space falls through to the octree pipeline as before.
@@ -1029,7 +1024,7 @@ def main(gui=True, run_logger=None, scene_config=None,
 
     viz = None
     if gui and draw_boxel_overlays:
-        viz = BoxelVisualizer()
+        viz = BoxelVisualizer(phantoms=overlay_bodies)
         viz.draw_registry(registry, duration=0, label_size=1.0,
                           skip_free=not show_free)
 
@@ -1325,6 +1320,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     # logger.debug or straight to the telemetry files, so the console is
     # untouched either way.
     # -----------------------------------------------------------------
+    world_counts.run_reset()    # TB-22: the robot's own notices, this run's
     _tele_on = (not gui) if telemetry_enabled is None else telemetry_enabled
     if _tele_on and run_logger is not None:
         _rm = robot_model()
@@ -1340,6 +1336,27 @@ def main(gui=True, run_logger=None, scene_config=None,
               f"(frames {telemetry_period:.3f}s, "
               f"heartbeat {telemetry_heartbeat:.2f}s of sim time)")
         telemetry.phase("phase-5 planning (pre-execution)")
+    elif world_counts.wanted(getattr(args, 'world_counts', 'auto'), gui):
+        # TB-22 (tracks rule 18): drops and collisions in every episode
+        # record.  With the recorder off (every eval passes --no-telemetry,
+        # and so does the bridge) a headless run arms the observer's counts
+        # mode instead: the two counts and nothing else, no frame, no
+        # heartbeat, no stream file.  It is the same write-only observer:
+        # the counts go into the run's summary and nothing reads them
+        # before.  --world-counts off leaves it out (for measuring its own
+        # cost), on arms it under the GUI too.
+        _rm = robot_model()
+        telemetry.enable(
+            env.client_id, robot_id, body_id_to_name,
+            run_logger.run_dir if run_logger is not None else None,
+            ee_link=_rm.ee_link, arm_joints=_rm.arm_joints,
+            finger_joints=_rm.finger_joints, counts_only=True)
+        telemetry.phase("phase-5 planning (pre-execution)")
+    else:
+        # Nothing watches this run.  An observer a caller left armed from
+        # an earlier run in this process must not lend that run's counts
+        # to this run's record.
+        telemetry.disable()
 
     # Initialise belief (all shadows unknown) and the planner.
     # The planner is stateless between calls — all context it needs
@@ -3242,6 +3259,11 @@ def main(gui=True, run_logger=None, scene_config=None,
         registry=registry,
         last_init=planner.last_init,
         boxel_counts_per_replan=boxel_counts_per_replan,
+        # TB-22 (tracks rule 18): the observer's counts (None when nothing
+        # watched), the losses the robot noticed, the executor's reports.
+        observer_counts=telemetry.run_counts(),
+        drops_noticed=world_counts.noticed_drops(),
+        collisions_reported=world_counts.collisions_reported(),
     )
 
     # Keep the GUI visible briefly so the user can inspect the final
@@ -3332,7 +3354,6 @@ if __name__ == "__main__":
         "n_extra_distractors": args.n_extra_distractors,
         "n_objects":    args.n_objects,
         "seed":         args.seed,
-        "slip_fixes": slip_fixes.resolve(getattr(args, 'slip_fixes', '')),            # BF#59, BF#62
         "goal":         args.goal,
         "stack_height": args.stack_height,
         "unit_costs":   args.unit_costs,
@@ -3348,6 +3369,7 @@ if __name__ == "__main__":
         "sense_over_region": getattr(args, 'sense_over_region', 'on'),  # BF#52
         "search_effort_weight": getattr(args, 'search_effort_weight', '1'),          # BF#53
         "search_initial_complexity": getattr(args, 'search_initial_complexity', 3),  # BF#53
+        "slip_fixes": slip_fixes.resolve(getattr(args, 'slip_fixes', '')),            # BF#59, BF#62
         "search_sample_ratio": getattr(args, 'search_sample_ratio', None),
         "path_check_step": getattr(args, 'path_check_step', None),
         "path_check_diag": bool(getattr(args, 'path_check_diag', False)),

@@ -1,0 +1,39 @@
+% !TEX root = ../main.tex
+
+% Adapted from the thesis's title page (thesis/resources/title-page.tex). On Hani's
+% word (2026-11-07): no logo and none of the thesis's formal fields (student number,
+% degree, institute, supervisors, examiners). It shows "Internal Report", the title,
+% the date of the state and the author; the page has no footer (see preamble.tex).
+
+\makeatletter
+\begin{titlepage}
+  \thispagestyle{title}
+
+  \vspace{13mm-\baselineskip-\parskip}
+
+  \begin{flushleft}
+
+    \textbf{\color{darkgray}\reportkind}
+
+    \textbf{\color{darkgray}\reportcheckpoint, \reportversion}
+
+    \vfill
+
+    \begin{singlespace}
+      \LARGE\textbf{\@title}
+    \end{singlespace}
+
+  \end{flushleft}
+
+  \vspace{10mm}
+
+  {\large State of \@date}
+
+  \vfill
+
+  {\large\@author}
+
+\end{titlepage}
+\makeatother
+
+\newpage\thispagestyle{empty}\null

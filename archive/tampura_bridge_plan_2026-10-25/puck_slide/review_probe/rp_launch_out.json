@@ -1,0 +1,613 @@
+{
+ "joint_path_len": 2,
+ "L1": [
+  {
+   "effort": 0.01,
+   "x": 0.7638587981292309,
+   "y": 0.010276366705854816,
+   "off_table": false,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 6,
+   "events": [
+    {
+     "step": 23,
+     "link": 13,
+     "puck_x": 0.4033052415793138,
+     "puck_y": 0.0006523539279863618,
+     "puck_speed": 0.1977900433092224,
+     "link_com_speed": 0.1725252852219251,
+     "contact_point_speed": 0.1725364247071363,
+     "tooltip_x": 0.3358570376933476,
+     "tooltip_y": 0.00036691373781832674,
+     "tooltip_speed": 0.1725645719135355
+    }
+   ],
+   "sep_speed": 0.1977900433092224,
+   "d_slide": 0.36068197731899887,
+   "ratio_puck_to_link_com": 1.1464409002703482,
+   "ratio_puck_to_contact_point": 1.1463668825000382,
+   "ratio_puck_to_tooltip": 1.146179897275359,
+   "sep_offset_x": 0.06744820388596617,
+   "mu": 0.05,
+   "mass": 1.0
+  },
+  {
+   "effort": 0.015,
+   "x": 1.122789187584558,
+   "y": 0.03258543963782784,
+   "off_table": false,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 5,
+   "events": [
+    {
+     "step": 23,
+     "link": 13,
+     "puck_x": 0.41186149907080344,
+     "puck_y": 0.0010785410583968483,
+     "puck_speed": 0.2859740042526109,
+     "link_com_speed": 0.257633262832081,
+     "contact_point_speed": 0.2576291574210794,
+     "tooltip_x": 0.34375208516165817,
+     "tooltip_y": 0.00042188302279613245,
+     "tooltip_speed": 0.25761946241941247
+    }
+   ],
+   "sep_speed": 0.2859740042526109,
+   "d_slide": 0.7116255075203562,
+   "ratio_puck_to_link_com": 1.1100042017439404,
+   "ratio_puck_to_contact_point": 1.1100218900502925,
+   "ratio_puck_to_tooltip": 1.1100636635404368,
+   "sep_offset_x": 0.06810941390914527,
+   "mu": 0.05,
+   "mass": 1.0
+  },
+  {
+   "effort": 0.02,
+   "x": 2.0070747295498323,
+   "y": 0.04493293278007324,
+   "off_table": true,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 4,
+   "events": [
+    {
+     "step": 22,
+     "link": 13,
+     "puck_x": 0.4187220982210797,
+     "puck_y": 0.0011476941953602038,
+     "puck_speed": 0.37496826083560114,
+     "link_com_speed": 0.3422208115678926,
+     "contact_point_speed": 0.34219391555985773,
+     "tooltip_x": 0.35018427531005397,
+     "tooltip_y": 0.0004089085972282979,
+     "tooltip_speed": 0.34212235835217125
+    }
+   ],
+   "sep_speed": 0.37496826083560114,
+   "d_slide": 1.5889560184495015,
+   "ratio_puck_to_link_com": 1.0956909929518177,
+   "ratio_puck_to_contact_point": 1.095777112875084,
+   "ratio_puck_to_tooltip": 1.0960063020775135,
+   "sep_offset_x": 0.06853782291102573,
+   "mu": 0.05,
+   "mass": 1.0
+  },
+  {
+   "effort": 0.03,
+   "x": 2.351264817794697,
+   "y": 0.038764797579560105,
+   "off_table": true,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 3,
+   "events": [
+    {
+     "step": 18,
+     "link": 13,
+     "puck_x": 0.42534704092819786,
+     "puck_y": 0.0009882533191691895,
+     "puck_speed": 0.547307394598096,
+     "link_com_speed": 0.3475121479603491,
+     "contact_point_speed": 0.3474096484375558,
+     "tooltip_x": 0.35557230863532163,
+     "tooltip_y": 0.00033652840247707977,
+     "tooltip_speed": 0.34713322911697275
+    }
+   ],
+   "sep_speed": 0.547307394598096,
+   "d_slide": 1.9262882314302434,
+   "ratio_puck_to_link_com": 1.5749302515333747,
+   "ratio_puck_to_contact_point": 1.575394917957986,
+   "ratio_puck_to_tooltip": 1.57664939190731,
+   "sep_offset_x": 0.06977473229287623,
+   "mu": 0.05,
+   "mass": 1.0
+  },
+  {
+   "effort": 0.01,
+   "x": 0.593261974484991,
+   "y": 0.014865487303674936,
+   "off_table": false,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 6,
+   "events": [
+    {
+     "step": 26,
+     "link": 13,
+     "puck_x": 0.4059060307223665,
+     "puck_y": 0.0014312942547342817,
+     "puck_speed": 0.19610536272371903,
+     "link_com_speed": 0.1723198632945863,
+     "contact_point_speed": 0.17232792443808212,
+     "tooltip_x": 0.3380138155275978,
+     "tooltip_y": 0.00038573258042523865,
+     "tooltip_speed": 0.1723487612970487
+    }
+   ],
+   "sep_speed": 0.19610536272371903,
+   "d_slide": 0.18783696975318762,
+   "ratio_puck_to_link_com": 1.1380310950483443,
+   "ratio_puck_to_contact_point": 1.1379778603100406,
+   "ratio_puck_to_tooltip": 1.1378402794884324,
+   "sep_offset_x": 0.06789221519476868,
+   "mu": 0.1,
+   "mass": 1.0
+  },
+  {
+   "effort": 0.015,
+   "x": 0.7905899847220313,
+   "y": 0.018536745570103173,
+   "off_table": false,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 5,
+   "events": [
+    {
+     "step": 22,
+     "link": 13,
+     "puck_x": 0.4106824309986238,
+     "puck_y": 0.0012048711474896435,
+     "puck_speed": 0.28372053163271427,
+     "link_com_speed": 0.25778833736474627,
+     "contact_point_speed": 0.2577864805981845,
+     "tooltip_x": 0.34267762239580635,
+     "tooltip_y": 0.000420360435171169,
+     "tooltip_speed": 0.2577826640191787
+    }
+   ],
+   "sep_speed": 0.28372053163271427,
+   "d_slide": 0.38030269950015483,
+   "ratio_puck_to_link_com": 1.10059490872652,
+   "ratio_puck_to_contact_point": 1.1006028360151034,
+   "ratio_puck_to_tooltip": 1.1006191308954967,
+   "sep_offset_x": 0.06800480860281743,
+   "mu": 0.1,
+   "mass": 1.0
+  },
+  {
+   "effort": 0.02,
+   "x": 1.0404107057053178,
+   "y": 0.02163191015168697,
+   "off_table": false,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 4,
+   "events": [
+    {
+     "step": 22,
+     "link": 13,
+     "puck_x": 0.41858706796831713,
+     "puck_y": 0.0011495500508690588,
+     "puck_speed": 0.3688078480345258,
+     "link_com_speed": 0.34221935287000627,
+     "contact_point_speed": 0.3421924233974411,
+     "tooltip_x": 0.35018446495774563,
+     "tooltip_y": 0.0004088103895495431,
+     "tooltip_speed": 0.34212099125081297
+    }
+   ],
+   "sep_speed": 0.3688078480345258,
+   "d_slide": 0.6221608823477864,
+   "ratio_puck_to_link_com": 1.0776943061271562,
+   "ratio_puck_to_contact_point": 1.0777791172955693,
+   "ratio_puck_to_tooltip": 1.078004149017996,
+   "sep_offset_x": 0.0684026030105715,
+   "mu": 0.1,
+   "mass": 1.0
+  },
+  {
+   "effort": 0.03,
+   "x": 2.093708343475854,
+   "y": 0.02524784136121466,
+   "off_table": true,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 3,
+   "events": [
+    {
+     "step": 17,
+     "link": 13,
+     "puck_x": 0.42324706342514395,
+     "puck_y": 0.0009509588759225497,
+     "puck_speed": 0.5479368284008054,
+     "link_com_speed": 0.38644481322428237,
+     "contact_point_speed": 0.38633591219718316,
+     "tooltip_x": 0.3539633655863619,
+     "tooltip_y": 0.00037134167822514344,
+     "tooltip_speed": 0.38604305617186424
+    }
+   ],
+   "sep_speed": 0.5479368284008054,
+   "d_slide": 1.6706379699525449,
+   "ratio_puck_to_link_com": 1.41789153237463,
+   "ratio_puck_to_contact_point": 1.4182912100626623,
+   "ratio_puck_to_tooltip": 1.419367139599234,
+   "sep_offset_x": 0.06928369783878208,
+   "mu": 0.1,
+   "mass": 1.0
+  },
+  {
+   "effort": 0.01,
+   "x": 0.5293921679395935,
+   "y": 0.015579042625273005,
+   "off_table": false,
+   "in_goal": false,
+   "n_separations": 2,
+   "first_contact_step": 6,
+   "events": [
+    {
+     "step": 32,
+     "link": 13,
+     "puck_x": 0.41052635846805113,
+     "puck_y": 0.002590420113253307,
+     "puck_speed": 0.18925165427580065,
+     "link_com_speed": 0.17190997806739414,
+     "contact_point_speed": 0.17191164860937394,
+     "tooltip_x": 0.34231897398894834,
+     "tooltip_y": 0.0004093372879854566,
+     "tooltip_speed": 0.1719164292709071
+    },
+    {
+     "step": 61,
+     "link": 13,
+     "puck_x": 0.43213059779926827,
+     "puck_y": 0.005194823702061524,
+     "puck_speed": 0.17126548941356515,
+     "link_com_speed": 0.16845958131729358,
+     "contact_point_speed": 0.16842790070917174,
+     "tooltip_x": 0.3629677423797147,
+     "tooltip_y": 0.00018128265875979522,
+     "tooltip_speed": 0.16834210289517695
+    }
+   ],
+   "sep_speed": 0.17126548941356515,
+   "d_slide": 0.09781433958682437,
+   "ratio_puck_to_link_com": 1.016656268965709,
+   "ratio_puck_to_contact_point": 1.0168474979053093,
+   "ratio_puck_to_tooltip": 1.0173657478914144,
+   "sep_offset_x": 0.06916285541955358,
+   "mu": 0.15,
+   "mass": 1.0
+  },
+  {
+   "effort": 0.015,
+   "x": 0.6731719717214918,
+   "y": 0.016877038144826616,
+   "off_table": false,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 5,
+   "events": [
+    {
+     "step": 22,
+     "link": 13,
+     "puck_x": 0.41082415042010323,
+     "puck_y": 0.0015638398560790332,
+     "puck_speed": 0.28444497487552656,
+     "link_com_speed": 0.25778917487430747,
+     "contact_point_speed": 0.25778805030364776,
+     "tooltip_x": 0.34267756660790744,
+     "tooltip_y": 0.00041845838521903866,
+     "tooltip_speed": 0.257785660405398
+    }
+   ],
+   "sep_speed": 0.28444497487552656,
+   "d_slide": 0.2627943556917001,
+   "ratio_puck_to_link_com": 1.103401549014678,
+   "ratio_puck_to_contact_point": 1.1034063624767698,
+   "ratio_puck_to_tooltip": 1.103416592017584,
+   "sep_offset_x": 0.0681465838121958,
+   "mu": 0.15,
+   "mass": 1.0
+  },
+  {
+   "effort": 0.02,
+   "x": 0.8463547775147455,
+   "y": 0.019924681686400054,
+   "off_table": false,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 4,
+   "events": [
+    {
+     "step": 24,
+     "link": 13,
+     "puck_x": 0.4217423104843834,
+     "puck_y": 0.00174172223360407,
+     "puck_speed": 0.36627641529563126,
+     "link_com_speed": 0.3416589334815924,
+     "contact_point_speed": 0.3416258104822684,
+     "tooltip_x": 0.3530352969137241,
+     "tooltip_y": 0.00037803468684176897,
+     "tooltip_speed": 0.3415353776193025
+    }
+   ],
+   "sep_speed": 0.36627641529563126,
+   "d_slide": 0.42500160843468865,
+   "ratio_puck_to_link_com": 1.0720527971072802,
+   "ratio_puck_to_contact_point": 1.0721567400851941,
+   "ratio_puck_to_tooltip": 1.0724406292805975,
+   "sep_offset_x": 0.06870701357065928,
+   "mu": 0.15,
+   "mass": 1.0
+  },
+  {
+   "effort": 0.03,
+   "x": 1.3015811932209198,
+   "y": 0.02863952915892095,
+   "off_table": false,
+   "in_goal": true,
+   "n_separations": 1,
+   "first_contact_step": 3,
+   "events": [
+    {
+     "step": 17,
+     "link": 13,
+     "puck_x": 0.42342916418789633,
+     "puck_y": 0.0014526634851260195,
+     "puck_speed": 0.5481810718047324,
+     "link_com_speed": 0.3864334956938969,
+     "contact_point_speed": 0.38632628981514494,
+     "tooltip_x": 0.3539635199312635,
+     "tooltip_y": 0.00036892921834564033,
+     "tooltip_speed": 0.38603775320310624
+    }
+   ],
+   "sep_speed": 0.5481810718047324,
+   "d_slide": 0.8785727697578506,
+   "ratio_puck_to_link_com": 1.4185651034737412,
+   "ratio_puck_to_contact_point": 1.418958756513915,
+   "ratio_puck_to_tooltip": 1.4200193303796316,
+   "sep_offset_x": 0.06946564425663282,
+   "mu": 0.15,
+   "mass": 1.0
+  }
+ ],
+ "L2": [
+  {
+   "effort": 0.01,
+   "x": 0.598904340921382,
+   "y": 0.02646393174600226,
+   "off_table": false,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 6,
+   "events": [
+    {
+     "step": 26,
+     "link": 13,
+     "puck_x": 0.40616269775561775,
+     "puck_y": 0.002317381290826455,
+     "puck_speed": 0.19930306702759712,
+     "link_com_speed": 0.17232184787503582,
+     "contact_point_speed": 0.17232935507809707,
+     "tooltip_x": 0.3380144634653446,
+     "tooltip_y": 0.00038910668586161594,
+     "tooltip_speed": 0.172348786679068
+    }
+   ],
+   "sep_speed": 0.19930306702759712,
+   "d_slide": 0.19424828675981456,
+   "ratio_puck_to_link_com": 1.1565745695353007,
+   "ratio_puck_to_contact_point": 1.1565241855473547,
+   "ratio_puck_to_tooltip": 1.1563937923086218,
+   "sep_offset_x": 0.06814823429027317,
+   "mu": 0.1,
+   "mass": 0.1
+  },
+  {
+   "effort": 0.01,
+   "x": 0.593261974484991,
+   "y": 0.014865487303674936,
+   "off_table": false,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 6,
+   "events": [
+    {
+     "step": 26,
+     "link": 13,
+     "puck_x": 0.4059060307223665,
+     "puck_y": 0.0014312942547342817,
+     "puck_speed": 0.19610536272371903,
+     "link_com_speed": 0.1723198632945863,
+     "contact_point_speed": 0.17232792443808212,
+     "tooltip_x": 0.3380138155275978,
+     "tooltip_y": 0.00038573258042523865,
+     "tooltip_speed": 0.1723487612970487
+    }
+   ],
+   "sep_speed": 0.19610536272371903,
+   "d_slide": 0.18783696975318762,
+   "ratio_puck_to_link_com": 1.1380310950483443,
+   "ratio_puck_to_contact_point": 1.1379778603100406,
+   "ratio_puck_to_tooltip": 1.1378402794884324,
+   "sep_offset_x": 0.06789221519476868,
+   "mu": 0.1,
+   "mass": 1.0
+  },
+  {
+   "effort": 0.02,
+   "x": 1.056153684028713,
+   "y": 0.0396380706361905,
+   "off_table": false,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 4,
+   "events": [
+    {
+     "step": 22,
+     "link": 13,
+     "puck_x": 0.41907856891209583,
+     "puck_y": 0.0021374233135700886,
+     "puck_speed": 0.3739589072986613,
+     "link_com_speed": 0.3422148007567649,
+     "contact_point_speed": 0.34218670524901795,
+     "tooltip_x": 0.35018571458132297,
+     "tooltip_y": 0.00040995984865457635,
+     "tooltip_speed": 0.3421131714042993
+    }
+   ],
+   "sep_speed": 0.3739589072986613,
+   "d_slide": 0.6381778755570162,
+   "ratio_puck_to_link_com": 1.0927607645014135,
+   "ratio_puck_to_contact_point": 1.092850486480829,
+   "ratio_puck_to_tooltip": 1.0930853838910741,
+   "sep_offset_x": 0.06889285433077286,
+   "mu": 0.1,
+   "mass": 0.1
+  },
+  {
+   "effort": 0.02,
+   "x": 1.0404107057053178,
+   "y": 0.02163191015168697,
+   "off_table": false,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 4,
+   "events": [
+    {
+     "step": 22,
+     "link": 13,
+     "puck_x": 0.41858706796831713,
+     "puck_y": 0.0011495500508690588,
+     "puck_speed": 0.3688078480345258,
+     "link_com_speed": 0.34221935287000627,
+     "contact_point_speed": 0.3421924233974411,
+     "tooltip_x": 0.35018446495774563,
+     "tooltip_y": 0.0004088103895495431,
+     "tooltip_speed": 0.34212099125081297
+    }
+   ],
+   "sep_speed": 0.3688078480345258,
+   "d_slide": 0.6221608823477864,
+   "ratio_puck_to_link_com": 1.0776943061271562,
+   "ratio_puck_to_contact_point": 1.0777791172955693,
+   "ratio_puck_to_tooltip": 1.078004149017996,
+   "sep_offset_x": 0.0684026030105715,
+   "mu": 0.1,
+   "mass": 1.0
+  }
+ ],
+ "L3": [
+  {
+   "effort": 0.01,
+   "x": 0.593261974484991,
+   "y": 0.014865487303674936,
+   "off_table": false,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 6,
+   "events": [
+    {
+     "step": 26,
+     "link": 13,
+     "puck_x": 0.4059060307223665,
+     "puck_y": 0.0014312942547342817,
+     "puck_speed": 0.19610536272371903,
+     "link_com_speed": 0.1723198632945863,
+     "contact_point_speed": 0.17232792443808212,
+     "tooltip_x": 0.3380138155275978,
+     "tooltip_y": 0.00038573258042523865,
+     "tooltip_speed": 0.1723487612970487
+    }
+   ],
+   "sep_speed": 0.19610536272371903,
+   "d_slide": 0.18783696975318762,
+   "ratio_puck_to_link_com": 1.1380310950483443,
+   "ratio_puck_to_contact_point": 1.1379778603100406,
+   "ratio_puck_to_tooltip": 1.1378402794884324,
+   "sep_offset_x": 0.06789221519476868,
+   "mu": 0.1,
+   "mass": 1.0,
+   "rep": 0
+  },
+  {
+   "effort": 0.01,
+   "x": 0.593261974484991,
+   "y": 0.014865487303674936,
+   "off_table": false,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 6,
+   "events": [
+    {
+     "step": 26,
+     "link": 13,
+     "puck_x": 0.4059060307223665,
+     "puck_y": 0.0014312942547342817,
+     "puck_speed": 0.19610536272371903,
+     "link_com_speed": 0.1723198632945863,
+     "contact_point_speed": 0.17232792443808212,
+     "tooltip_x": 0.3380138155275978,
+     "tooltip_y": 0.00038573258042523865,
+     "tooltip_speed": 0.1723487612970487
+    }
+   ],
+   "sep_speed": 0.19610536272371903,
+   "d_slide": 0.18783696975318762,
+   "ratio_puck_to_link_com": 1.1380310950483443,
+   "ratio_puck_to_contact_point": 1.1379778603100406,
+   "ratio_puck_to_tooltip": 1.1378402794884324,
+   "sep_offset_x": 0.06789221519476868,
+   "mu": 0.1,
+   "mass": 1.0,
+   "rep": 1
+  },
+  {
+   "effort": 0.01,
+   "x": 0.593261974484991,
+   "y": 0.014865487303674936,
+   "off_table": false,
+   "in_goal": false,
+   "n_separations": 1,
+   "first_contact_step": 6,
+   "events": [
+    {
+     "step": 26,
+     "link": 13,
+     "puck_x": 0.4059060307223665,
+     "puck_y": 0.0014312942547342817,
+     "puck_speed": 0.19610536272371903,
+     "link_com_speed": 0.1723198632945863,
+     "contact_point_speed": 0.17232792443808212,
+     "tooltip_x": 0.3380138155275978,
+     "tooltip_y": 0.00038573258042523865,
+     "tooltip_speed": 0.1723487612970487
+    }
+   ],
+   "sep_speed": 0.19610536272371903,
+   "d_slide": 0.18783696975318762,
+   "ratio_puck_to_link_com": 1.1380310950483443,
+   "ratio_puck_to_contact_point": 1.1379778603100406,
+   "ratio_puck_to_tooltip": 1.1378402794884324,
+   "sep_offset_x": 0.06789221519476868,
+   "mu": 0.1,
+   "mass": 1.0,
+   "rep": 2
+  }
+ ]
+}

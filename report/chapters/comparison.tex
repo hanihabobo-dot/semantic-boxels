@@ -1,0 +1,298 @@
+% !TEX root = ../main.tex
+
+\chapter{The Comparison with TAMPURA}
+\label{ch:comparison}
+
+\section{Why the Comparison Had to Be Redone}
+\label{sec:why-redo}
+
+The thesis compared its own task with TAMPURA's on different environments
+(\Cref{sec:thesis-tampura}). What the paper needs is our pipeline and TAMPURA on
+the same task, the same scenes and the same success rule. Hani put it this way on
+25 October 2026: ``run this on TAMPURA's env vs the TAMPURA system on the same
+seeds and see who did better, how quickly'', and ``No welds, no oracles, no
+hardcoded solutions. The planner stays the same'' (\PW{4}).
+
+An earlier attempt had to be thrown away. The first bridge between our pipeline
+and TAMPURA reported 20 of 20, but only because the bridge code chose which cup to
+move and where to place it, parked the arm before each sensing action, declared
+shadow cells empty without an observation, welded the grasp, and wrote ``at home''
+and ``success'' into TAMPURA's own belief. Its planner only ever emitted five
+actions in a fixed order. Hani discarded it on 20 August 2026: ``that work was
+trash. we should start over'' (\PW{4}). Everything in this chapter comes from the
+restart of 25 October, on the honesty contract of \Cref{sec:honest}.
+
+\section{The Setting}
+\label{sec:setting}
+
+TAMPURA's \fdice\ task has a Franka Panda with a wrist camera, a table, one die and one
+to five upside-down cups; the die is hidden under a cup. The released code ships exactly three scene
+files, so TAMPURA's 20 seeds are 20 draws over three layouts, and in all three
+the die sits inside a cup of the larger sizes (\PW{4}). TAMPURA's world is
+kinematic: its executor moves joints and the carried die by setting poses, takes no
+physics step, and a pick cannot fail physically. Once its grasp planning succeeds, the die is
+carried by a reset of its pose to the gripper at every waypoint, and in a measured
+run the carry home made no simulation step and no motor call; ``their die cannot
+slip'' (\BF{35}). Its success test reads, from the
+abstract belief, whether the die is held and the arm is at home; holding is set
+whenever grasp and motion planning succeed, without a contact check, and being at
+home is a joint-angle comparison; the go-home step reports the home pose even when
+its motion plan failed, so the belief can read the arm as at home with the arm never
+moved. The audit file did not check whether
+this path occurs in TAMPURA's 20 seeds (\BF{35}).
+
+Our pipeline runs inside that world through an adapter, with our own perception,
+belief, planner and physical execution. Our copy of the world has gravity, a
+finger-pad friction of 1.2 and a 50-step settle; in two of the three layouts (15 of
+the 20 seeds) the die falls about 4\,cm deeper into its cup before the run starts
+(\PW{4}). The camera is fixed at the pose
+of TAMPURA's wrist camera at its home configuration, and it observes after every action
+without the arm moving, whereas TAMPURA looks only when it chooses to look, from 20 to
+30\,cm above an object (\PW{4}). Both arms get 900 seconds per episode;
+TAMPURA has its 20-step horizon and our arm has no step limit (\PW{4}, \BF{68}). The complete list
+of deviations is in \appref{ch:appendix-deviations}.
+
+\section{The Three Shipped Scenes}
+\label{sec:shipped}
+
+TAMPURA as shipped, run on the chair's cluster over seeds 0 to 19, solved 13 of
+20 (Wilson interval 0.43 to 0.82); the thesis's laptop run solved 11 of 20 (0.34
+to 0.74), which the entry calls no difference at $n = 20$. One cluster episode, seed 16,
+crashed inside TAMPURA at the first step and is counted as a failure (\BF{9}).
+Which scene a seed loads depends on the order in which the file system lists the
+scene files, so the laptop and the cluster load different scenes for the same
+seed; a per-seed comparison with the thesis holds for seven seeds only (\BF{8},
+\BF{39}).
+
+The die-slip campaign (\Cref{sec:holding-findings}) compared our pipeline with
+TAMPURA on the same seeds, three repetitions each. With the four chosen switches
+our pipeline held the die in 60 of 60 carries and solved 60 of 60 episodes, and a
+second job replicated this; the same pipeline without the switches solved 168 of
+240, and TAMPURA 40 of 60 (13, 14 and 13 per repetition; one crash, which the entry
+calls censored but which sits inside the 60) (\BF{59}). The entry says that these seeds load only three scenes, that TAMPURA runs
+PyBullet's 50 solver iterations against our 200, and that the comparison is
+planner against planner, each in its own simulation (\BF{59}). Later entries pair
+the 59 valid TAMPURA episodes with ours: both succeed in 40, only ours in 19, only
+TAMPURA in none (\BF{63}). These results hold for the three shipped layouts only.
+
+\section{Forty Generated Scenes}
+\label{sec:generated}
+
+The shipped seeds are only three layouts, and the paper publishes no seed list.
+Hani asked for ``at least 20 seeds vs 20 seeds that work'' and ``no incomparable
+results'', and agreed to scenes from TAMPURA's own generator with its code untouched
+(``yes, maximally so'') (\BF{63}). The design was declared before any run: 40
+scenes (seeds 100 to 139; 7 with one cup, 9 with two, 8 each with three, four
+and five), nothing filtered out, two repetitions, TAMPURA's planner first and ours
+second on each scene on one node, a validity rule fixed in advance, and Hani
+approved each cluster run on its own (\BF{63}). \Cref{tab:bf63} gives the results.
+
+\begin{table}[tbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}lYYYl@{}}
+\toprule
+ & ours & TAMPURA & pairs: both, only ours, only TAMPURA, neither & exact McNemar $p$ \\
+\midrule
+run 1 & 57 of 80 (0.71; 0.61 to 0.80) & 36 of 78 (0.46; 0.36 to 0.57) & 30, 25, 6, 17 & 0.00088 \\
+run 2 & 57 of 80 (0.71; 0.61 to 0.80) & 46 of 76 (0.61; 0.49 to 0.71) & 37, 18, 9, 12 & 0.12 \\
+run 2, repetition 0 only & & & 18, 9, 5, 6 & 0.42 \\
+run 2, repetition 1 only & & & 19, 9, 4, 6 & 0.27 \\
+run 2, TAMPURA's 20-step budget applied to ours & & & only ours 17, only TAMPURA 10 & 0.248 \\
+\bottomrule
+\end{tabularx}
+\caption[Ours against TAMPURA on 40 generated \fdice\ scenes: successes, Wilson
+intervals and exact McNemar tests.]{Ours against TAMPURA on 40 generated \fdice\
+scenes, with the Wilson
+interval of a success rate in brackets. Run 1 includes a one-hour slowdown of the
+cluster that hit TAMPURA's timeouts (\Cref{sec:generated}); run 2 was declared as
+the deciding run before it ran (\BF{63}, \BF{68}). Four TAMPURA runs of run 2
+crashed in TAMPURA's own code on two scenes and are left out of the pairs, which
+is why TAMPURA has 76 counted episodes (\BF{63}).}
+\label{tab:bf63}
+\end{table}
+
+\paragraph{Run 1 and the slow hour.} In run 1 ours won 25 pairs to 6 and the test
+gave $p = 0.00088$. The entry first read the slowdown of TAMPURA as busy nodes, and
+corrected this on 4 November: it was one hour, from about 21:00 to 22:00, on every
+node at once. Our planning calls ran 15 to 24 times slower while execution steps
+kept their speed, because planning writes its files on a network volume; all 14 of
+TAMPURA's timeouts began between 21:00 and 21:44. Split after the fact by that hour,
+the 45 pairs outside it read 31 of 45 for ours against 25 of 45 for TAMPURA with
+$p = 0.21$, and the 33 pairs inside it 24 of 33 against 11 of 33 with $p = 0.00098$
+(\BF{63}). The entry's rule: run 1 is cited with its slow hour or not at all.
+
+\paragraph{Run 2 decides.} Run 2 repeated the 40 scenes with the changes declared
+in advance (each job's files on the node's own disk, and a probe that logs the
+volume's latency). Ours solved 57 of 80 again, TAMPURA 46 of 76, the pairs split 18
+to 9 and the exact test gave $p = 0.12$; each repetition alone gave 0.42 and 0.27
+(\BF{63}). The entry notes that in run 2 the two repetitions of a scene are close
+to one draw (TAMPURA's outcome was the same in both repetitions on 38 of 38 scenes),
+so the 76 pairs carry about the information of 38 and the per-repetition values are
+the fairer reading (\BF{63}). Counting our episodes under TAMPURA's 20-step budget,
+which our arm did not have, moves the pairs to 17 against 10 with $p = 0.248$
+(\BF{68}). Ours is ahead; the lead is not significant.
+
+\paragraph{By number of cups.} \Cref{fig:cups} shows that the lead lies in the
+scenes with four and five cups (23 of 32 against 14 of 32, described and not
+tested, a split made after the run), while with one to three cups the two are
+level (\BF{63}).
+
+\begin{figure}[tbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  ybar, bar width=9pt,
+  width=0.95\textwidth, height=6.4cm,
+  ymin=0, ymax=125,
+  ytick={0,25,50,75,100},
+  ylabel={successes of counted episodes (\%)},
+  xlabel={cups in the scene},
+  symbolic x coords={1,2,3,4,5},
+  xtick=data,
+  enlarge x limits=0.14,
+  legend style={at={(0.5,1.03)}, anchor=south, legend columns=2, font=\small, draw=none},
+  nodes near coords, point meta=explicit symbolic,
+  nodes near coords style={font=\scriptsize, rotate=90, anchor=west},
+  ymajorgrids, grid style={black!15},
+]
+\addplot[fill=blue!55!black, draw=none] coordinates {(1,100) [14/14] (2,55.6) [10/18] (3,62.5) [10/16] (4,75) [12/16] (5,68.8) [11/16]};
+\addplot[fill=orange!85!black, draw=none] coordinates {(1,100) [12/12] (2,62.5) [10/16] (3,62.5) [10/16] (4,37.5) [6/16] (5,50) [8/16]};
+\legend{ours, TAMPURA}
+\end{axis}
+\end{tikzpicture}
+\caption[Run 2 of the generated-scene comparison by number of cups.]{Run 2 of the
+generated-scene comparison by number of cups (7, 9, 8, 8
+and 8 scenes; two repetitions each): successes of counted episodes for ours and
+for TAMPURA, with the counts above the bars (\BF{63}).}
+\label{fig:cups}
+\end{figure}
+
+\section{Published Numbers and Our Check for Partial Observability (\fdice)}
+\label{sec:published-fd}
+
+TAMPURA's paper reports the \fdice\ task as Partial Observability (task C)
+\cite{curtis2024partially}. \Cref{tab:published-fd} sets the published numbers
+beside what our runs of TAMPURA and of our pipeline measured. The paper reports a
+discounted return, not a success rate, with no seed list; a return of $r$ means a
+success rate of at least $r$, which is how the thesis reads 0.63.
+
+\begin{table}[tbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}P{2.9cm}YYY@{}}
+\toprule
+quantity & published \cite{curtis2024partially} & our run & check \\
+\midrule
+TAMPURA, discounted return ($\gamma = 0.98$) & 0.63 $\pm$ 0.07 (Table I, task C, $N = 20$) & 0.530 over the 76 counted TAMPURA episodes of run 2 (\ID{bf63step}{step-count file}) & 0.10 below; 1.4 standard errors of the published value. Reproduced within error; scenes differ (generated, 1 to 5 cups, against the paper's unpublished set) \\
+TAMPURA, success rate & at least 63\,\% implied & 11 of 20 (thesis laptop run); 13 of 20 (cluster, \BF{9}); 40 of 60 (\BF{59}); 46 of 76, 0.61 (\BF{63}) & 0.63 lies inside the Wilson interval of each run \\
+TAMPURA, actions to the first reward of 1 & 5.40 $\pm$ 2.33 executed steps (Table III) & mean 6.61, median 5, 46 successes (\ID{bf63step}{step-count file}) & 1.2 above the published mean, about half of the $\pm$ the paper prints for it (it does not say what that $\pm$ is) \\
+TAMPURA, time & 57 $\pm$ 38 s per step (Table II, task C), run on an Intel Xeon Gold 6248; the product with 5.40 steps is about 308 s per episode (our arithmetic) & loop time of a successful episode: median 98.9\,s (\BF{63}, cluster); mean 115.4\,s over 13 successes (\BF{9}); 166 $\pm$ 85\,s (thesis laptop, \PW{4}) & TAMPURA's time in our runs is shorter than the product; machines, scenes and the paper's step definition differ; no cause established \\
+\bottomrule
+\end{tabularx}
+\caption[Published numbers for TAMPURA's Partial Observability task and our check.]{Published
+numbers for TAMPURA's Partial Observability task and our check. The other approaches of the paper's Table I, column C, are: Bayes-optimistic with
+MLO 0.27 $\pm$ 0.10, with WAO 0.32 $\pm$ 0.10; $\epsilon$-greedy with LAO*
+0.45 $\pm$ 0.10; no model learning with LAO* 0.20 $\pm$ 0.09; Q-learning 0.20
+$\pm$ 0.08; MCTS 0.04 $\pm$ 0.05; DQN 0.00 $\pm$ 0.00. We ran none of them. For our
+own pipeline the paper publishes no number; it was not part of the paper.}
+\label{tab:published-fd}
+\end{table}
+
+The check has three results. First, our runs of TAMPURA reproduce its published
+reliability: the success rates of 0.55 to 0.67 across four independent runs
+(the thesis run, the cluster run, the die-slip campaign and run 2 of the generated
+scenes; run 1 of the generated scenes, 0.46, is left out because of its slow hour)
+bracket the 0.63 that the return implies, and the return of 0.530 on generated
+scenes is within 1.4 standard errors of the published 0.63. Second, the number of
+actions to success is somewhat higher in our runs. Third, TAMPURA's time per
+episode in our runs is lower than the product of the published per-step time and
+step count, which the thesis had also found for its per-step figure; hardware
+differs, and so do scenes. The audit file notes that the steps differ in meaning and
+that TAMPURA's per-step time includes 200 samples of its effects function, and drops
+the per-step comparison for that reason; it confirms no cause (\PW{4}). For our pipeline
+no published counterpart exists. Our own convention for counting its actions,
+which gives a return of 0.585 over 80 episodes, is an indicator and not a
+pre-registered number (\ID{bf63step}{step-count file}).
+
+\section{Why Our Failures Happen}
+\label{sec:why-fail}
+
+Our failures on the generated scenes are one mode. The pipeline fails on 23
+counted episodes in both runs, in the same 12 scenes and with no lost die; in run
+1, 17 end with ``all shadows searched, target not found'' while the die lay under
+a cup that held no registered shadow (\BF{63}). The reason is a property of the
+representation. Our hiding regions are the space behind an object as the camera
+sees it, never the space under it, because every shadow starts at its caster's back
+face. TAMPURA's generator puts the die at a cup's pose, and the three shipped
+layouts do the same, so in every \fdice\ scene the die starts in none of our regions
+(\BF{65}). We find it anyway, because the plan lifts a cup to look behind it and
+the refresh render then shows the die where the cup stood. Every success of ours
+on \fdice\ came this way: 57 of 57 on the generated scenes and 653 of 653 in the
+die-slip campaign on the shipped scenes, in every arm, and no sensing action found
+the die in any of them (\BF{65}). The cup over the die is lifted only because the
+space behind it is unknown, and whatever removes that reason loses the die.
+
+Where the 23 failures come from is itemised by cause. In 16 of the 17
+runs that ended with all shadows searched, the shadow behind the cup was clipped away by the
+window in which the pipeline plans free space; the fix for this (\BF{64}) is
+checked on path 3's fixes branch and waits for Go's merge (\TK{3}), and the numbers of
+the evaluation stand for the code they measured. In local reruns with that fix, 6 of the
+12 scenes succeed and 6 still fail: one because the shadow was a 2.3\,cm sliver
+seen empty, two because the reach gate refuses a shadow centre 0.826\,m and 0.845
+to 0.853\,m from the base while the dice lie at 0.761\,m and 0.774\,m, one because
+the die lay tilted 71 degrees inside a cup and only 6 pixels were visible, and two
+because of loops in the object-fitted grasp and the pose belief on a far cup
+(\BF{65}). The failures are therefore a mix of a limit of the representation and of
+five planner problems, each logged on the board of path 3 (\TK{3}). The audit file
+leaves the choice among a region under the cup, narrow fixes, or a stated
+limitation in the paper to Hani (\BF{65}).
+
+\section{TAMPURA on Our Environment}
+\label{sec:reverse}
+
+The mirror experiment, run by path 5, puts TAMPURA's planner and its \fdice\ model
+unchanged into the scenes that our system builds, with glue code only, a timer
+the only change to TAMPURA, and our fixed camera as its eye (\TK{5}). Both arms are
+scored by whether the target is held at the end in the arm's own executing world;
+TAMPURA's execution there is kinematic and noise-free, ours physical. On the ten
+seeds that build, ours solved 10 of 10 (Wilson interval 0.72 to 1.00) and
+TAMPURA 6 of 10 (0.31 to 0.83); the pairs split 4 to 0 and the exact test gave
+$p = 0.125$ (\TK{5}). TAMPURA's four failures: one place ended in a collision and
+left it holding an object, and three were look loops, in which it repeated one look
+17 to 20 times until its 20 steps were used, because our fixed camera gives its look
+action no new viewpoint (\TK{5}). The median wall time was 16.4\,s for ours against
+250.2\,s for TAMPURA (\TK{5}). Neither arm's record counts drops: the GUI runs of ours on
+seeds 3 and 4, which Hani watched, each succeeded after a drop of a tall box (TB-23,
+\Cref{sec:path3}), and whether the headless runs of the batch held drops is not
+recorded. The thesis named this experiment as the gap in its
+comparison; no published number exists for TAMPURA on our scenes. A re-run in
+which TAMPURA looks through its own hand camera for its looks (option B) stopped after
+five seeds (0, 2, 3, 4 and 5), all successes. Go read Hani's words of 7 November as
+making the version with the hand camera for every image, the first as well (option
+C), the deliverable. Its batch started at 13:18 and ended at 13:48 under the stop
+order for WSL with two seeds done, seed 0 a success and seed 2 a failure; the other
+eight seeds wait for Hani's approval under rule 15, after the watch runs of
+\Cref{sec:visual-check} (\TK{5}).
+
+\section{What the Paper May and May Not Claim}
+\label{sec:claims}
+
+The audit file states the claim effect of each result, and the report repeats them
+as a short list.
+\begin{itemize}
+  \item On generated scenes ours is ahead of TAMPURA (57 of 80 against 46 of 76)
+  and the lead is not significant ($p = 0.12$); the paper reports the numbers with
+  the test and does not call ours better there (\BF{63}). Run 1 is cited with its
+  slow hour or not at all.
+  \item The shipped-scene result stands, scoped to the three shipped layouts
+  (\BF{63}, \BF{59}).
+  \item The paper must not credit the occlusion model with modelling where the die
+  hides on \fdice\ unless a hiding region under objects is built (\BF{65}).
+  \item The comparison is planner against planner, each in its own simulation:
+  TAMPURA's world is kinematic and its die cannot slip, ours is physical
+  (\BF{59}, \BF{35}).
+  \item The thesis's parity sentences (144\,s against 166\,s, 65.6\,\% against the
+  at least 63\,\% implied) are to be deleted unless the intervals support them, and
+  a worse result is to be written as such (\PW{4}).
+\end{itemize}

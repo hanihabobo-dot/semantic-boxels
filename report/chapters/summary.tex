@@ -1,0 +1,72 @@
+% !TEX root = ../main.tex
+
+\begin{summary}
+Since the thesis \cite{alassiri2026thesis} was handed in on 10 June 2026 the work has
+removed its simplifications, put the system into the environment of TAMPURA
+\cite{curtis2024partially}, and opened a set of parallel tracks, thirteen paths with a
+fourteenth requested at the checkpoint. On 8 November 2026 Hani named the state of that day Checkpoint 1: the
+tracks pause, and this report states that state. Eight points sum it up.
+
+\emph{The system no longer cheats in grasping and perception.} The weld that held
+every object is gone and the gripper holds by friction; detection reads rendered
+images instead of the simulator's exact poses; failures of the physics are
+detected and reported as failures (\PW{1}, \PW{2}). Thirty-two field findings were
+fixed or recorded on the way (\PW{1}).
+
+\emph{Against TAMPURA in its own environment, ours is ahead; on generated scenes the
+lead is not significant.} On the three scenes that TAMPURA ships, the pipeline with four die-slip
+fixes solved 120 of 120 episodes over two jobs, against 209 of 300 without them over five
+jobs and 40 of 60 for TAMPURA (\BF{59}). On 40 scenes from TAMPURA's own generator, ours
+solved 57 of 80 and TAMPURA 46 of 76, with pairs 18 to 9 and exact McNemar $p = 0.12$
+(\BF{63}). Our run of TAMPURA lands within 1.4 standard errors of its published return:
+a mean discounted return of 0.530 against the paper's 0.63 $\pm$ 0.07
+(\Cref{sec:published-fd}). In the mirror experiment, TAMPURA's planner on our scenes
+solved 6 of 10 where ours solved 10 of 10, with TAMPURA's execution kinematic
+(\TK{5}).
+
+\emph{The success criterion is under review, because the first close look found drops.}
+The numbers above count success by each arm's own end test (ours the pipeline's goal check, TAMPURA's its reward). On 7 November Hani watched two runs of
+ours in which a tall box was dropped during a carry, and reported on 8 November that both runs still succeeded
+(TB-23, \TK{3}). Two causes were found. The carry's jerks swing the box out of the
+grip, and a switch that already exists is the candidate cure: with it none of 20 episodes lost the box
+to the swing, without it 6 of 20, at no measurable cost per carry. The other cause is
+a carry that strikes an object the robot has not seen; it goes to a new path. By rule 18 of 8
+November every evaluation must record drops and collisions and print clean success beside
+success. The fields are built in the arms of paths 4, 7 and 10, not yet in our own pipeline (TB-22), and no evaluation has run since; the numbers of this report are not re-scored (\Cref{sec:path3}, \Cref{sec:catalogue}).
+
+\emph{Our occlusion model does not model where the die hides on TAMPURA's task.}
+The die lies in none of our hiding regions, which begin at the back face of the
+object that casts them; we find it only by lifting the cup over it, which we do
+because the space behind the cup is unknown. The paper must not claim more
+(\BF{65}).
+
+\emph{The classical planner LW1 drives our robot in a 3-D Wumpus world.} It won 18
+of 18 episodes with our perception as its observations, none of the 369 percepts
+wrong; LW1 alone makes fewer planner calls and shorter runs than its paper's
+Table 2 at 5x5 (\TK{4}). A straight-line walk wins 18 and 15 of 100 of LW1's
+states at 5x5, a walker that never refuses an unknown cell 34, so the test has a luck
+floor of about a third; no published number for these walkers appears in the papers
+read for this report (\TK{10}, \Cref{sec:published}). Our own setup has no result there
+at the checkpoint and must clear this floor, not zero (\Cref{tab:wumpus-bar}).
+
+\emph{The thesis's ``timeout'' share on stack needs correcting.} Of 29 rows
+labelled ``timeout'' in the thesis sweep's semantic stack cells, 25 ended after 8
+to 21 seconds, a symbolic success that the end-of-run physics check rejected
+(\BF{68}).
+
+\emph{Two other tasks give a first result for the planning layer alone.} Our planning
+layer on TAMPURA's own execution functions reaches their reward in 18 of 20 \cuncert\
+episodes and 17 of 25 \slamcol\ episodes; neither task exercises our perception or
+physical execution (\TK{2}).
+
+\emph{What is open.} Nothing has run on the cluster. The cluster comparison of our
+code, the thesis code and TAMPURA is planned, and the amendment that makes our test the
+standard test for TAMPURA's arm is built and checked but has never run (\BF{70}). The
+new paths on the \cuncert\ task, on the single look action and on our setup in
+the Wumpus world have built code and run no episode. Hani's decisions wait in one
+round (\Cref{ch:open-questions}): the default of the acceleration-limited carry after
+Hani's visual check, the headline success criterion, the questions of paths 4 and 7 to 10,
+and what to delete. Hani's visual check under rule 15 is on record for four runs, two per
+system on path 5's scenes, and for no approved comparison (\Cref{sec:visual-check}). The
+wedge of WSL on 7 November has no established cause (\BF{69}).
+\end{summary}
