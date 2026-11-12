@@ -134,6 +134,12 @@ def test_the_pipeline_arms_the_counts_where_the_recorder_is_off():
                     for k in c.keywords)]
     assert len(armed) == 1
     assert "elif world_counts.wanted(getattr(args, 'world_counts', 'auto'), gui):" in src
+    # a run nothing watches drops an observer left armed by an earlier run in
+    # the process (its counts are not this run's), and every run starts the
+    # robot's own notices at zero
+    assert len([c for c in _calls(main, 'disable')
+                if getattr(c.func.value, 'id', None) == 'telemetry']) == 1
+    assert len(_calls(main, 'run_reset')) == 1
     # and the run's record gets the observer's counts and the robot's notices
     out = _calls(main, 'report_run_outcome')
     assert len(out) == 1
@@ -168,17 +174,68 @@ def test_only_the_release_of_a_place_opens_as_placing():
 
 
 def test_the_robots_three_checks_count_what_they_notice():
-    import execution
-    execution.noticed_drops_reset()
-    assert execution.noticed_drops() == {'entry': 0, 'lift': 0, 'carry': 0}
-    execution.noticed_drops()['carry'] = 5                  # a copy
-    assert execution.noticed_drops()['carry'] == 0
+    wc.run_reset()
+    assert wc.noticed_drops() == {'entry': 0, 'lift': 0, 'carry': 0}
+    wc.notice_drop('carry')
+    wc.notice_drop('carry')
+    wc.notice_drop('lift')
+    assert wc.noticed_drops() == {'entry': 0, 'lift': 1, 'carry': 2}
+    wc.noticed_drops()['carry'] = 5                         # a copy
+    assert wc.noticed_drops()['carry'] == 2
+    wc.run_reset()                                          # a new run starts at zero
+    assert sum(wc.noticed_drops().values()) == 0
+    # each of execution.py's three checks counts once, under its own name
     tree = ast.parse((REPO / 'execution.py').read_text(encoding='utf-8'))
-    counted = sorted(n.target.slice.value for n in ast.walk(tree)
-                     if isinstance(n, ast.AugAssign)
-                     and isinstance(n.target, ast.Subscript)
-                     and getattr(n.target.value, 'id', None) == '_noticed_drops')
+    counted = sorted(c.args[0].value for c in _calls(tree, 'notice_drop'))
     assert counted == ['carry', 'entry', 'lift']
+
+
+def test_the_executors_contact_report_is_counted_where_it_is_made():
+    wc.run_reset()
+    assert wc.collisions_reported() == 0
+    wc.report_collision()
+    wc.report_collision()
+    assert wc.collisions_reported() == 2
+    wc.run_reset()
+    assert wc.collisions_reported() == 0
+    # robot_utils.detect_execution_collisions counts a report that names a
+    # contact, once, where it prints it
+    fn = _functions('robot_utils.py')['detect_execution_collisions']
+    named = [n for n in ast.walk(fn) if isinstance(n, ast.If)
+             and getattr(n.test, 'id', None) == 'collisions']
+    assert len(named) == 1 and len(_calls(named[0], 'report_collision')) == 1
+    assert len(_calls(fn, 'report_collision')) == 1
+    # so the pipeline's two calls of it stay plain statements: nothing
+    # branches on the report
+    main = _functions('test_full_pipeline.py')['main']
+    plain = [n for n in ast.walk(main) if isinstance(n, ast.Expr)
+             and isinstance(n.value, ast.Call)
+             and getattr(n.value.func, 'id', None) == 'detect_execution_collisions']
+    assert len(plain) == len(_calls(main, 'detect_execution_collisions')) == 2
+
+
+def test_a_contact_report_that_names_a_contact_counts_once(monkeypatch):
+    pytest.importorskip('pybullet')
+    import robot_utils
+
+    class Sim:
+        contacts = []
+
+        def performCollisionDetection(self, physicsClientId=0):
+            pass
+
+        def getContactPoints(self, bodyA=None, physicsClientId=0):
+            return list(self.contacts)
+    sim = Sim()
+    monkeypatch.setattr(robot_utils, 'p', sim)
+    wc.run_reset()
+    assert robot_utils.detect_execution_collisions(0, body_names={5: 'box'}) == []
+    assert wc.collisions_reported() == 0                    # a clean report
+    sim.contacts = [(0, 0, 5, 7, -1), (0, 0, 5, 8, -1)]     # two links on one body
+    found = robot_utils.detect_execution_collisions(0, body_names={5: 'box'})
+    assert found == ['robot link 7 <-> box', 'robot link 8 <-> box']
+    assert wc.collisions_reported() == 1                    # one report, not two
+    wc.run_reset()
 
 
 # ----- the runner's rows (eval_runner.py) -------------------------------
@@ -212,8 +269,19 @@ def sweep(tmp_path, monkeypatch):
         def fake_run(argv, capture_output, text, timeout, cwd):
             return behaviour(argv, timeout, cwd)
         monkeypatch.setattr(er.subprocess, 'run', fake_run)
-        return er.run_cell(CELL, out, 60, [], skip_existing=False)
+        return er.run_cell_counted(CELL, out, 60, [], skip_existing=False)
     return out, launch
+
+
+def _stored(out):
+    return json.loads((out / 'cells' / er.cell_tag(CELL) /
+                       'timing_summary.json').read_text())
+
+
+def test_the_sweep_runs_its_cells_through_the_counted_runner():
+    main = _functions('eval_runner.py')['main']
+    assert len(_calls(main, 'run_cell_counted')) == 1
+    assert _calls(main, 'run_cell') == []
 
 
 def test_a_finished_cell_carries_its_runs_fields(sweep):
@@ -239,9 +307,7 @@ def test_a_cell_killed_at_the_budget_keeps_its_counts(sweep):
     assert row['exit_reason'] == 'timeout'
     assert (row['drops'], row['collisions'], row['clean_success']) == (1, 1, False)
     assert 'the run wrote no summary' in row['drop_detector']
-    stored = json.loads((out / 'cells' / er.cell_tag(CELL) /
-                         'timing_summary.json').read_text())
-    assert stored['drops'] == 1
+    assert _stored(out)['drops'] == 1          # the stored stub has them too
 
 
 def test_a_crashed_cell_keeps_its_counts(sweep):
@@ -279,9 +345,30 @@ def test_a_rejected_cell_says_no_episode_ran(sweep):
     assert row['drops'] is None and row['collisions'] is None
     assert 'no episode ran' in row['drop_detector']
     assert row['clean_success'] is False
+    assert 'no episode ran' in _stored(out)['drop_detector']
 
 
-def test_aggregate_gives_every_row_the_fields_and_the_csv_its_columns(sweep):
+def test_a_resumed_row_from_before_the_counts_is_not_rewritten(sweep, monkeypatch):
+    out, launch = sweep
+
+    def finished_before_the_counts(argv, timeout, cwd):
+        (_new_run_dir(cwd) / wc.SUMMARY_FILE).write_text(json.dumps(
+            _cell_summary({})))
+        return types.SimpleNamespace(returncode=0, stdout='ok\n', stderr='')
+    monkeypatch.setattr(er.subprocess, 'run',
+                        lambda argv, capture_output, text, timeout, cwd:
+                        finished_before_the_counts(argv, timeout, cwd))
+    er.run_cell(CELL, out, 60, [], skip_existing=False)   # the old runner's cell
+    path = out / 'cells' / er.cell_tag(CELL) / 'timing_summary.json'
+    before = path.read_text()
+    row = er.run_cell_counted(CELL, out, 60, [], skip_existing=True)
+    assert row['success'] is True
+    assert row['drops'] is None and row['clean_success'] is None
+    assert row['drop_detector'] == 'not detected (the record has no counts)'
+    assert path.read_text() == before          # an old sweep's file stays as it is
+
+
+def test_aggregate_gives_every_row_the_fields_and_the_csv_its_columns(sweep, monkeypatch):
     out, launch = sweep
     assert {'clean_success', 'drops', 'collisions'} <= set(er.PRIMARY_COLUMNS)
     assert {'drop_events', 'collision_events'} <= er.LIST_VALUED
@@ -290,7 +377,10 @@ def test_aggregate_gives_every_row_the_fields_and_the_csv_its_columns(sweep):
         (_new_run_dir(cwd) / wc.SUMMARY_FILE).write_text(json.dumps(
             _cell_summary({})))                  # a summary of an old sweep
         return types.SimpleNamespace(returncode=0, stdout='ok\n', stderr='')
-    launch(finished_before_the_counts)
+    monkeypatch.setattr(er.subprocess, 'run',
+                        lambda argv, capture_output, text, timeout, cwd:
+                        finished_before_the_counts(argv, timeout, cwd))
+    er.run_cell(CELL, out, 60, [], skip_existing=False)   # the old runner's cell
     (out / 'matrix.json').write_text(json.dumps({'cells': [CELL]}))
     er.aggregate(out)
     row = json.loads((out / 'aggregated.jsonl').read_text().splitlines()[0])

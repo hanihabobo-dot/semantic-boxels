@@ -24,8 +24,9 @@ counts mode (telemetry.py), which nothing in the pipeline decides on.
 counts_cost_s is the wall time that counting took in the episode, by the
 observer's own clock.
 
-This module only builds and reads the fields: it imports no simulator, so
-the runner, the bridge driver and the harnesses can use it anywhere.
+This module builds and reads the fields and keeps the two numbers the robot
+itself notices during a run.  It imports no simulator, so the runner, the
+bridge driver and the harnesses can use it anywhere.
 """
 import json
 import os
@@ -47,6 +48,49 @@ COLLISION_DETECTOR = ('telemetry counts: distinct (action, body) pairs of a '
                       'body the arm did not hold moved over 3 mm, plus the '
                       "monitor's knocked_off_table bodies not among them")
 
+
+# ----- what the robot itself notices during a run ------------------------
+# The losses of a held body that the pipeline's own checks notice, by the
+# check: 'entry' (the place and stack entry assert), 'lift' (the re-verify
+# after the post-pick lift), 'carry' (carry_hold_check); and the moves and
+# picks after which the executor's own contact report named a contact.
+# They are counted where they happen (execution.py, robot_utils.py) and
+# stand in the record beside the simulator's counts, so a report can show a
+# drop the robot missed.  Counted only: nothing reads them before the run's
+# summary is written.
+_noticed = {'entry': 0, 'lift': 0, 'carry': 0}
+_reported = {'collisions': 0}
+
+
+def run_reset():
+    """A new run in this process: test_full_pipeline.main calls this
+    before it arms the counts."""
+    for k in _noticed:
+        _noticed[k] = 0
+    _reported['collisions'] = 0
+
+
+def notice_drop(check):
+    """One of the robot's three checks found the held body gone."""
+    _noticed[check] += 1
+
+
+def report_collision():
+    """The executor's contact report named at least one contact."""
+    _reported['collisions'] += 1
+
+
+def noticed_drops():
+    """The run's noticed losses by check (a copy)."""
+    return dict(_noticed)
+
+
+def collisions_reported():
+    """How many of the run's contact reports named a contact."""
+    return _reported['collisions']
+
+
+# ----- the fields ---------------------------------------------------------
 
 def wanted(mode, gui):
     """Whether a run arms the counts: --world-counts on, off, or auto (the
