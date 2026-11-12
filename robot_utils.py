@@ -1245,10 +1245,10 @@ def close_gripper_until_contact(robot_id: int, gui: bool = False,
     zero without both pads touching, i.e. nothing was between them.
     ``squeeze`` None uses GRIP_SQUEEZE.
     """
+    telemetry.gripper_command(False)        # TB-22: a close starts a grip
     import time
     if squeeze is None:
         squeeze = GRIP_SQUEEZE
-    telemetry.gripper_command(False)        # TB-22: a close starts a grip
     fingers = robot_model().finger_joints
     target = min(p.getJointState(robot_id, fj)[0] for fj in fingers)
     for _ in range(max_steps):

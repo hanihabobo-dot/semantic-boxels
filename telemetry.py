@@ -62,9 +62,18 @@ COUNTS MODE (TB-22, tracks rule 18: drops and collisions in every record)
     does not ask how wide the fingers are, so a body that levers the
     fingers past 35 mm on its way out still counts, and so does one
     knocked out of the hand onto another body.
-  * COLLISIONS.  The DISTURBED test, counted once per (action, body).
-    The fall of a dropped body is its drop: its motion in the action of
-    the drop and in the action after it is not counted again.
+  * COLLISIONS.  A body counts as knocked in an action once it has moved
+    more than DISTURB_MM from where it was when the arm, a body in the
+    arm's grip or a body so knocked first touched it in that action.
+    Counted once per (action, body).  The arm's contacts and those of
+    the bodies in its grip are read at every step, so a touch that lasts
+    one step is seen.  Not counted: a body the gripper held in that
+    action (both pads after a close command; a pick's own body that a
+    finger shoved before both pads held it is taken off the count when
+    they do), and a body that moves with no such touch (one still
+    settling when execution starts, the fall of a dropped body).  The
+    recorder's DISTURBED line is not this count: it is a log line for
+    any body that moves while no finger touched it.
 
   Both are ground truth for the episode's record (world_counts.py);
   nothing in the pipeline reads them before the run's summary is written.
@@ -210,7 +219,12 @@ class WorldTelemetry:
         self._grip = {}                     # body -> its grip state (_drop_check)
         self._drops = []                    # counted drops, in order
         self._disturbed = {}                # (phase index, body) -> event
-        self._dropped_in = {}               # body -> phase index of its last drop
+        self._touched = {}                  # body -> (its position, by what) at the first touch this action
+        self._gripped = set()               # bodies the gripper held this action
+        self._knocked = set()               # bodies counted as knocked this action
+        self._robot_touch = {}              # this step: body -> robot links on it
+        self._load_partners = {}            # this step: gripped body -> what it touches
+        self._touch_step = -1               # the step of those two reads
         self._check_s = 0.0                 # wall time spent in the counts mode's checks
         self._closed = False
 
@@ -336,6 +350,13 @@ class WorldTelemetry:
         self._phase_peak_step_delta_idx = -1
         self._event_frames_this_phase = 0
         self._held_this_phase = set(self._held_prev)
+        # The collision count starts afresh.  A body in a grip stays the
+        # action's own body, and so does one gripped in the action before
+        # that the arm still touches (a place's body under the retreat).
+        self._gripped = set(self._grip) | {
+            bid for bid in self._gripped if bid in self._robot_touch}
+        self._touched = {}
+        self._knocked = set()
         for bid in list(self.body_names):
             try:
                 pos, _ = p.getBasePositionAndOrientation(
@@ -362,12 +383,14 @@ class WorldTelemetry:
         self.sim_time += self.timestep
 
         if self.counts_only:
+            t0 = _perf()                     # the mode's own cost, for the record
+            self._track_touches()
             if self.step_count % EVENT_STRIDE == 0:
-                t0 = _perf()                 # the mode's own cost, for the record
                 self._check_counts()
-                self._check_s += _perf() - t0
+            self._check_s += _perf() - t0
             return
 
+        self._track_touches()
         forced = False
         if self.step_count % EVENT_STRIDE == 0:
             forced = self._check_events()
@@ -386,25 +409,10 @@ class WorldTelemetry:
 
     # ----- sampling --------------------------------------------------------
 
-    def _body_state(self, bid, light: bool = False):
-        """Pose, velocity, contacts and derived quantities for one body.
-
-        ``light`` (the counts mode): only what the DISTURBED test reads,
-        the displacement this action and, for a body that moved past
-        DISTURB_MM, its speed; the velocity of a body that did not move
-        is not read (the test is false for it whatever its speed)."""
+    def _body_state(self, bid):
+        """Pose, velocity, contacts and derived quantities for one body."""
         pos, quat = p.getBasePositionAndOrientation(
             bid, physicsClientId=self.client_id)
-        if light:
-            start = self._phase_start_pos.get(bid)
-            moved_mm = (math.dist(pos, start) * 1000.0
-                        if start is not None else 0.0)
-            speed = 0.0
-            if moved_mm > DISTURB_MM:
-                lin, _ = p.getBaseVelocity(bid, physicsClientId=self.client_id)
-                speed = math.sqrt(lin[0] ** 2 + lin[1] ** 2 + lin[2] ** 2)
-            return {'id': bid, 'name': self.body_names.get(bid, str(bid)),
-                    'moved_mm': moved_mm, 'speed': speed}
         lin, ang = p.getBaseVelocity(bid, physicsClientId=self.client_id)
         pos = np.asarray(pos, dtype=float)
         lin = np.asarray(lin, dtype=float)
@@ -644,57 +652,117 @@ class WorldTelemetry:
             # never holding got knocked.  The object this action picked,
             # carried or placed is excluded (it is supposed to move, and
             # it keeps settling for a moment after release).
-            if self._is_disturbed(bid, st, held_ids):
-                self._count_disturbed(bid, st)
+            if (bid not in held_ids and bid not in self._held_this_phase
+                    and st['moved_mm'] > DISTURB_MM and st['speed'] > 0.01):
                 fired |= self._event(
                     'DISTURBED',
                     f"{name} moved {st['moved_mm']:.1f} mm this action "
                     f"though the arm never grasped it")
+        if self._collision_check():
+            fired = True
         return fired
 
     # ----- the run-level counts (TB-22) -------------------------------------
 
-    def _is_disturbed(self, bid, st, held_ids) -> bool:
-        """The DISTURBED test, shared by the recorder and the counts mode."""
-        return (bid not in held_ids and bid not in self._held_this_phase
-                and st['moved_mm'] > DISTURB_MM and st['speed'] > 0.01)
-
-    def _finger_contacts(self) -> dict:
-        """``{body: finger links touching it}`` from one read of the
-        robot's contact points (either body order of a contact pair)."""
-        fingers = self.finger_joints
-        touching = {}
+    def _track_touches(self):
+        """Once per step, in both modes: read what the arm touches and what
+        the bodies in its grip touch, and note where each touched body was
+        at its first touch of this action (the collision count measures
+        from there).  Every step and not every check, so a knock whose
+        contact lasts one step is not missed.  The drop count reads the
+        same two reads at its checks."""
+        self._touch_step = self.step_count
+        self._robot_touch = touching = {}
+        self._load_partners = {}
+        if self.robot_id is None:
+            return
         for c in p.getContactPoints(bodyA=self.robot_id,
                                     physicsClientId=self.client_id):
-            if c[1] == self.robot_id:
+            if c[1] == self.robot_id:       # either body order of a pair
                 other, link = c[2], c[3]
             else:
                 other, link = c[1], c[4]
-            if (link in fingers and other != self.robot_id
-                    and other in self.body_names):
+            if other != self.robot_id and other in self.body_names:
                 touching.setdefault(other, set()).add(link)
-        return touching
+        for bid, links in touching.items():
+            if bid not in self._touched:
+                self._touch(bid, f"arm link {min(links)}")
+        for bid in self._grip:
+            partners = self._load_partners[bid] = self._partners(bid)
+            for other in partners:
+                if other not in self._touched:
+                    self._touch(other,
+                                f"held {self.body_names.get(bid, bid)}")
+
+    def _touch(self, bid, by: str):
+        """Note a body's first touch of this action: where it was, by what."""
+        if (bid in self._touched or bid == self.robot_id
+                or bid not in self.body_names):
+            return
+        pos = self._position(bid)
+        if pos is not None:
+            self._touched[bid] = (pos, by)
+
+    def _position(self, bid):
+        """A body's position now, or None when it cannot be read: the one
+        pose read of the collision count (a touched body's, at its first
+        touch and at every check after it)."""
+        try:
+            pos, _ = p.getBasePositionAndOrientation(
+                bid, physicsClientId=self.client_id)
+        except Exception:
+            return None
+        return tuple(pos)
+
+    def _finger_contacts(self) -> dict:
+        """``{body: finger links touching it}``, from this step's read of
+        the robot's contact points."""
+        if self._touch_step != self.step_count:
+            self._track_touches()
+        fingers = set(self.finger_joints)
+        return {bid: links & fingers
+                for bid, links in self._robot_touch.items() if links & fingers}
 
     def _check_counts(self):
         """The counts mode's check: the contacts and poses the two counts
-        read, and nothing else (no joint, link, AABB or tilt read)."""
-        held_ids = set()
-        if self.robot_id is not None:
-            finger_contacts = self._finger_contacts()
-            held_ids = set(finger_contacts)
-            self._drop_check(finger_contacts)
-            self._held_prev = held_ids
-            self._held_this_phase |= held_ids
-        for bid in self.body_names:
-            if bid == self.robot_id or bid in held_ids \
-                    or bid in self._held_this_phase:
+        read, and nothing else (no joint, link, AABB, tilt or velocity
+        read; no pose of a body that nothing touched)."""
+        if self.robot_id is None:
+            return
+        self._drop_check(self._finger_contacts())
+        self._collision_check()
+
+    def _collision_check(self) -> bool:
+        """Advance the collision count by one check.  Returns True when a
+        collision was counted.
+
+        A touched body (the arm, a body in its grip or a knocked body
+        touched it in this action) that is not the gripper's own body of
+        this action counts once it is more than DISTURB_MM from where it
+        was at that first touch."""
+        self._gripped |= set(self._grip)
+        # A pick's own body, shoved by a finger before both pads held it.
+        for bid in self._gripped & self._knocked:
+            self._knocked.discard(bid)
+            if self._disturbed.pop((self._phase_index, bid), None) is not None:
+                self._save_counts()
+        # What a knocked body runs into is touched as well.
+        for bid in list(self._knocked):
+            for other in self._partners(bid):
+                if other not in self._touched:
+                    self._touch(other,
+                                f"knocked {self.body_names.get(bid, bid)}")
+        counted = False
+        for bid, (start, by) in self._touched.items():
+            if bid in self._gripped:
                 continue
-            try:
-                st = self._body_state(bid, light=True)
-            except Exception:
+            pos = self._position(bid)
+            if pos is None:
                 continue
-            if self._is_disturbed(bid, st, held_ids):
-                self._count_disturbed(bid, st)
+            moved_mm = math.dist(pos, start) * 1000.0
+            if moved_mm > DISTURB_MM and self._count_collision(bid, moved_mm, by):
+                counted = True
+        return counted
 
     def _drop_check(self, finger_contacts) -> bool:
         """Advance the drop count by one check.  Returns True when a drop
@@ -716,7 +784,10 @@ class WorldTelemetry:
             st = self._grip[bid]
             # 'off': off every support at this check (it touches nothing
             # but the robot); gripper_command reads the last one.
-            st['off'] = not self._touching_non_robot(bid)
+            partners = self._load_partners.get(bid)
+            if partners is None:            # it entered the grip at this check
+                partners = self._partners(bid)
+            st['off'] = not partners
             if bid in finger_contacts:
                 st['free'] = 0
                 if not st['carried']:
@@ -766,25 +837,32 @@ class WorldTelemetry:
         name = self.body_names.get(bid, str(bid))
         self._drops.append({'object': name, 'phase': self._phase,
                             't': round(self.sim_time, 3), 'how': how})
-        self._dropped_in[bid] = self._phase_index
         self._save_counts()
         if not self.counts_only:
             self._event('DROP', f"{name} {how} (drop {len(self._drops)} of "
                                 f"this run)")
 
-    def _count_disturbed(self, bid, st):
-        dropped = self._dropped_in.get(bid)
-        if dropped is not None and self._phase_index <= dropped + 1:
-            return      # still the fall of its drop, not a collision
+    def _count_collision(self, bid, moved_mm: float, by: str) -> bool:
+        """Count the body as knocked in this action, once; later checks
+        keep the largest displacement.  Returns True when it was new."""
         key = (self._phase_index, bid)
         seen = self._disturbed.get(key)
-        if seen is None:
-            self._disturbed[key] = {'object': st['name'], 'phase': self._phase,
-                                    't': round(self.sim_time, 3),
-                                    'moved_mm': round(st['moved_mm'], 1)}
-            self._save_counts()
-        elif st['moved_mm'] > seen['moved_mm']:
-            seen['moved_mm'] = round(st['moved_mm'], 1)
+        if seen is not None:
+            if moved_mm > seen['moved_mm']:
+                seen['moved_mm'] = round(moved_mm, 1)
+            return False
+        name = self.body_names.get(bid, str(bid))
+        self._disturbed[key] = {'object': name, 'phase': self._phase,
+                                't': round(self.sim_time, 3),
+                                'moved_mm': round(moved_mm, 1), 'by': by}
+        self._knocked.add(bid)
+        self._save_counts()
+        if not self.counts_only:
+            self._event('COLLISION',
+                        f"{name} moved {moved_mm:.1f} mm after the {by} "
+                        f"touched it (collision {len(self._disturbed)} of "
+                        f"this run)")
+        return True
 
     def counts(self) -> dict:
         """The run's counts so far: the drops and the collisions (one per
@@ -820,14 +898,19 @@ class WorldTelemetry:
         self._latched_states.discard(key)
         return False
 
-    def _touching_non_robot(self, bid) -> bool:
-        """Is this body resting on / against anything that is not the arm?"""
+    def _partners(self, bid) -> set:
+        """The bodies this body touches, the arm aside (supports too)."""
+        partners = set()
         for c in p.getContactPoints(bodyA=bid,
                                     physicsClientId=self.client_id):
             other = c[2] if c[1] == bid else c[1]
             if other != self.robot_id:
-                return True
-        return False
+                partners.add(other)
+        return partners
+
+    def _touching_non_robot(self, bid) -> bool:
+        """Is this body resting on / against anything that is not the arm?"""
+        return bool(self._partners(bid))
 
     def _event(self, kind: str, detail: str, force_frame: bool = True) -> bool:
         """Record one event; log the first few of each kind per action.
