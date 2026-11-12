@@ -35,7 +35,10 @@ every point) and no grasp reaches it.  It is not registered as an object;
 the module records "target seen under <cover>", and while that record
 holds the main loop offers the planner that one region (the others are
 withheld through known_empty_shadows; the belief itself is not changed), so
-the plan is: move the cover, look, pick.
+the plan is: move the cover, look, pick.  If no plan binds through that one
+region, the record ends (release) and is not made again for that region, so
+the planner is offered every unknown region; the target stays unregistered
+while the cover stands over it.
 
 The interior ids live in the cover's ``interior_boxel_ids``, not in
 ``shadow_boxel_ids``: the rediscovery cleanup and the lost-object
@@ -66,6 +69,9 @@ _MIN_PART_SIDE = 0.01
 # target name -> the interior region id it was seen in while the cover
 # stood (BF#65 (d)).  Per run: configure() clears it.
 _seen_under: Dict[str, str] = {}
+# Regions for which a record ended because no plan bound through them
+# (release): no record is made for them again.  Per run.
+_no_plan_regions: set = set()
 
 
 def configure(flag) -> bool:
@@ -74,6 +80,7 @@ def configure(flag) -> bool:
     global ENABLED
     ENABLED = (flag is True) or (str(flag).lower() == 'on')
     _seen_under.clear()
+    _no_plan_regions.clear()
     return ENABLED
 
 
@@ -355,6 +362,8 @@ def standing_cover(registry, point, exclude: Iterable[str] = ()
 
 def note_seen_under(target: str, cover: BoxelData, region: BoxelData,
                     pixel_count=None) -> None:
+    if region.id in _no_plan_regions:
+        return                         # released: every region is on offer
     first = _seen_under.get(target) != region.id
     _seen_under[target] = region.id
     if first:
@@ -370,6 +379,26 @@ def note_seen_under(target: str, cover: BoxelData, region: BoxelData,
 
 def seen_under(target: str) -> Optional[str]:
     return _seen_under.get(target)
+
+
+def release(target_names: Iterable[str]) -> List[str]:
+    """No plan was found while the planner was offered only the region a
+    target was seen in (its look or its pick did not bind): the record
+    ends, and none is made for that region again, so the next plan is
+    offered every unknown region.  Returns the released region ids."""
+    out = []
+    for t in [t for t in (target_names or []) if t]:
+        rid = _seen_under.pop(t, None)
+        if rid is None:
+            continue
+        _no_plan_regions.add(rid)
+        out.append(rid)
+        print(f"  [interior] no plan through {rid} alone: the record '{t} seen "
+              f"under a cover' ends; every unknown region is on offer again "
+              f"(BF#65 (d))")
+        ledger_event('seen_under_released', target=t, region=rid,
+                     reason='no_plan')
+    return out
 
 
 def withheld(registry, belief, target_names: Iterable[str]) -> List[str]:

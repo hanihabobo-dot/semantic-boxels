@@ -2891,6 +2891,27 @@ def handle_sense_action(
         robot_id=robot_id,
         support_body_ids=sense_support_ids,
     )
+    # BF#65 option 1 (never true with --interior-regions off): the grid's
+    # lowest slice sits 2 cm above the table, above a target shorter than
+    # that, so an interior region whose cover is away reads empty with the
+    # target lying in it.  When this render's detection puts the target
+    # inside the sensed interior region, the outcome is the truthful one:
+    # found.  The find came from the detection, not from the grid, and the
+    # plan's pick is bound to the region's centre with the class-prior
+    # grasp, so the loop replans and picks the target from its own box.
+    # Decided before the eye's record below, so that record, the belief and
+    # the console name one outcome.
+    _target_det = sense_detections.get(str(target_name))
+    _interior_found = bool(
+        sense_outcome == "clear_but_empty" and interior_regions.ENABLED
+        and interior_regions.holds_detection(shadow_boxel, _target_det))
+    _eye_extra = {}
+    if _interior_found:
+        _eye_extra = {"found_by": "detection", "grid_outcome": sense_outcome}
+        sense_outcome = "found_target"
+        print(f"    [interior] {target_name} is detected inside {shadow_id} "
+              f"({_target_det.pixel_count} px, below the sense grid's lowest "
+              f"slice): found (BF#65)")
     # World eye: the observation itself (camera view + detections) plus
     # how this sense classified the named fragment.
     world_eye.snapshot(
@@ -2904,25 +2925,8 @@ def handle_sense_action(
                "detected_bodies": sorted(
                    body_id_to_name.get(b, str(b)) for b in detected_bodies),
                "interceptors": {body_id_to_name.get(b, str(b)): n
-                                for b, n in interceptor_counts.items()}})
-
-    # BF#65 option 1 (never true with --interior-regions off): the grid's
-    # lowest slice sits 2 cm above the table, above a target shorter than
-    # that, so an interior region whose cover is away reads empty with the
-    # target lying in it.  When this render's detection puts the target
-    # inside the sensed interior region, the outcome is the truthful one:
-    # found.  The find came from the detection, not from the grid, and the
-    # plan's pick is bound to the region's centre with the class-prior
-    # grasp, so the loop replans and picks the target from its own box.
-    _target_det = sense_detections.get(str(target_name))
-    _interior_found = bool(
-        sense_outcome == "clear_but_empty" and interior_regions.ENABLED
-        and interior_regions.holds_detection(shadow_boxel, _target_det))
-    if _interior_found:
-        sense_outcome = "found_target"
-        print(f"    [interior] {target_name} is detected inside {shadow_id} "
-              f"({_target_det.pixel_count} px, below the sense grid's lowest "
-              f"slice): found (BF#65)")
+                                for b, n in interceptor_counts.items()},
+               **_eye_extra})
 
     if sense_outcome == "found_target":
         belief.mark_sensed(str(shadow_id), found=True)

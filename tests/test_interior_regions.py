@@ -215,6 +215,33 @@ def test_the_record_ends_when_the_target_has_its_own_boxel():
     assert ir.withheld(reg, belief, ['dice']) == []
 
 
+def test_no_plan_through_the_one_region_releases_the_record():
+    """The main loop's net: no plan while only the seen-under region was on
+    offer ends the record for good, so every unknown region is offered; the
+    target stays unregistered while the cover stands."""
+    env, reg, cup = _scene_104()
+    belief = BeliefState(['shadow_of_cup', 'interior_of_cup'], 'dice')
+    assert ir.withheld(reg, belief, ['dice']) == ['shadow_of_cup']
+    assert ir.release(['dice']) == ['interior_of_cup']
+    assert ir.seen_under('dice') is None
+    assert ir.withheld(reg, belief, ['dice']) == []
+    assert ir.release(['dice']) == []                   # nothing left to end
+    # A later frame shows the die under the cup again: still no object, and
+    # no new record for the region that had no plan.
+    dets = {'dice': _det('dice', 4, [0.320, -0.057, 0.0], [0.322, -0.055, 0.019])}
+    assert execution.register_new_detections(
+        env=env, registry=reg, belief=belief, viz=None, detections=dets,
+        target_name='dice', shadows=[], occluders=[], shadow_occluder_map={},
+        boxel_centers={}, boxel_to_pybullet={}, object_body_ids={}) == []
+    assert reg.get_boxel('dice') is None
+    assert ir.seen_under('dice') is None
+    assert ir.withheld(reg, belief, ['dice']) == []
+    # A new run starts clean.
+    ir.configure('on')
+    ir.note_seen_under('dice', cup, reg.get_boxel('interior_of_cup'))
+    assert ir.seen_under('dice') == 'interior_of_cup'
+
+
 def test_a_target_in_the_open_stays_registered():
     env = _env()
     cup = _obj('cup', 0.31, -0.06)

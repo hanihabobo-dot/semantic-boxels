@@ -1718,8 +1718,9 @@ def main(gui=True, run_logger=None, scene_config=None,
         # recorded as seen under a cover, the planner is offered that
         # cover's interior region alone; the other unknown regions are
         # withheld like the parked ones (the belief keeps them unknown).
-        known_empty = known_empty + interior_regions.withheld(
+        _withheld = interior_regions.withheld(
             registry, belief, planner_target_objects)
+        known_empty = known_empty + _withheld
 
         # Giveup parole (2026-08-21): see the pick_giveup_marked_at
         # comment above.  Runs before planner.plan() so the paroled
@@ -1953,6 +1954,15 @@ def main(gui=True, run_logger=None, scene_config=None,
 
         if gui:
             env.refresh_debug_camera_views()
+
+        # BF#65 (d) (never true with --interior-regions off, where nothing
+        # is withheld): no plan while the planner was offered only the
+        # region the target was seen in.  The record ends and the next
+        # plan is offered every unknown region; the episode does not end
+        # on a restriction the belief never held.
+        if plan is None and held_obj_name is None and _withheld:
+            interior_regions.release(planner_target_objects)
+            continue
 
         if plan is None:
             # #P1 F2: classify "pick_giveup" only when a GOAL-CRITICAL
