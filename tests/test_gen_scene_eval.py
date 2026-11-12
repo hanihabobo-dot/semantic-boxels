@@ -653,3 +653,103 @@ def test_report_prints_the_job_scripts_memory_lines(tmp_path):
     # no mem in the rows and no such file: no memory block at all
     _write_rows(tmp_path / 'j2', rows)
     assert '\nmemory' not in gse.report([str(tmp_path / 'j2')])
+
+
+# ---------------------------------------------------------------------------
+# rule 18: drops, collisions and clean success in the report (the rows carry the
+# fields since TB-22, world_counts.of_record; the report prints them)
+
+O_DET = {'drop_detector': 'telemetry counts: a carried body left both finger pads',
+         'collision_detector': 'telemetry counts: distinct (action, body) pairs'}
+T_DET = {'drop_detector': 'cannot happen (kinematic carry)',
+         'collision_detector': 'not detected (their execution reports no collision)'}
+
+
+def _r18(row, drops, collisions, det):
+    row.update(drops=drops, collisions=collisions, clean_success=None, **det)
+    return row
+
+
+def _r18_rows():
+    # O: seeds 1 to 4 succeed (seed 3 only without the action limit), seed 5 fails;
+    # seed 2 drops once, seed 4 has two collisions, seed 5 drops twice
+    o = {1: (True, True, 0, 0), 2: (True, True, 1, 0), 3: (True, False, 0, 0),
+         4: (True, True, 0, 2), 5: (False, False, 2, 0)}
+    rows = []
+    for s, (ok, capped, drops, coll) in o.items():
+        rows.append(_r18(_crow('O', s, ok, capped=capped, t=30 if ok and not capped else 10, carries=1, losses=0),
+                         drops, coll, O_DET))
+        rows.append(_r18(_crow('T', s, s <= 2, reward=s <= 2), 0, None, T_DET))
+    return rows
+
+
+def _r18_block(text):
+    return text.split('drops and collisions (rule 18', 1)[1].split('\n\n')[0]
+
+
+def test_report_prints_drops_collisions_and_clean_success_per_view(tmp_path):
+    _write_rows(tmp_path / 'j1', _r18_rows())
+    block = _r18_block(gse.report([str(tmp_path / 'j1')]))
+    # O: 2 episodes with a drop (3 drops), 1 with a collision (2 collisions)
+    assert re.search(r'^O\s+5\s+2\s+3\s+1\s+2$', block, re.M)
+    # T: its carry is kinematic and nothing detects its collisions: words, never 0
+    assert re.search(r'^T\s+5\s+cannot happen\s+-\s+not detected\s+-$', block, re.M)
+    assert '  T drop_detector (5): cannot happen (kinematic carry)' in block
+    assert '  O collision_detector (5): telemetry counts: distinct (action, body) pairs' in block
+    # clean success per view: within the limit 3 successes, 1 clean (seed 1); without it 4 and 2
+    lo, hi = gse.wilson(1, 5)
+    assert re.search(rf'^O\s+within 20 actions \(headline\)\s+5\s+3\s+1\s+\[{lo:.2f}, {hi:.2f}\]\s+0$', block, re.M)
+    assert re.search(r'^O\s+without the action limit\s+5\s+4\s+2\s+\[', block, re.M)
+    # T's successes have no collision count: clean success is not measured, 2 unknown
+    assert re.search(r'^T\s+within 20 actions \(headline\)\s+5\s+2\s+not measured\s+-\s+2$', block, re.M)
+    assert ('paired O against T on clean success (within 20 actions (headline)): not printed, 2 of 5 pairs '
+            'hold a success whose drops or collisions nothing could count') in block
+    # the counts above the block are untouched: O 3 of 5 within the limit
+    _, capped, _, _ = _views(gse.report([str(tmp_path / 'j1')]))
+    assert re.search(r'^O\s+5\s+3\s', capped, re.M)
+
+
+def test_report_pairs_two_measured_arms_on_clean_success(tmp_path):
+    rows = []
+    for s, (o_drops, o2_drops) in {1: (1, 0), 2: (0, 0), 3: (2, 0), 4: (0, 1)}.items():
+        rows += [_r18(_crow('O', s, True, t=10, carries=1, losses=0), o_drops, 0, O_DET),
+                 _r18(_crow('O2', s, True, t=10, carries=1, losses=0), o2_drops, 0, O_DET),
+                 _r18(_crow('T', s, False, reward=False), 0, None, T_DET)]
+    _write_rows(tmp_path / 'j1', rows)
+    block = _r18_block(gse.report([str(tmp_path / 'j1')]))
+    # O clean on seeds 2 and 4, O2 clean on seeds 1, 2 and 3
+    assert ('paired O2 against O on clean success (within 20 actions (headline)): 4 pairs; both clean 1, '
+            'only O2 2, only O 1, neither 0; exact McNemar p = 1') in block
+    # T failed everywhere, so its clean success is known (never clean) and its pairs print
+    assert 'paired O2 against T on clean success (without the action limit): 4 pairs; both clean 0, only O2 3' in block
+
+
+def test_report_of_an_episode_nothing_counted_is_a_lower_bound_not_a_zero(tmp_path):
+    rows = [_r18(_crow('O', 1, True, t=10, carries=1, losses=0), 0, 0, O_DET),
+            _r18(_crow('O', 2, True, t=10, carries=1, losses=0), None, None,
+                 {'drop_detector': 'not detected (no summary and no counts file)',
+                  'collision_detector': 'not detected (no summary and no counts file)'}),
+            _r18(_crow('T', 1, False, reward=False), 0, None, T_DET),
+            _r18(_crow('T', 2, False, reward=False), 0, None, T_DET)]
+    _write_rows(tmp_path / 'j1', rows)
+    block = _r18_block(gse.report([str(tmp_path / 'j1')]))
+    assert re.search(r'^O\s+2\s+0\s+0\s+0\s+0$', block, re.M)
+    assert '  O drops: 1 of 2 episodes without a count' in block
+    assert re.search(r'^O\s+within 20 actions \(headline\)\s+2\s+2\s+at least 1\s+-\s+1$', block, re.M)
+
+
+def test_report_of_rows_from_before_the_fields_says_so(tmp_path):
+    rows = [_crow('T', 1, True, reward=True), _crow('O', 1, True, t=10, carries=1, losses=0)]
+    _write_rows(tmp_path / 'j1', rows)
+    assert 'these rows carry no such fields (they were recorded before TB-22)' in gse.report([str(tmp_path / 'j1')])
+    # the old uncapped block too (BF#63 run 2's rows)
+    _write_rows(tmp_path / 'j2', [_row('T', 1, True), _row('O', 1, True, carries=1, losses=0)])
+    assert 'these rows carry no such fields' in gse.report([str(tmp_path / 'j2')])
+
+
+def test_clean_of_never_reads_a_missing_count_as_clean():
+    assert gse.clean_of({'drops': 0, 'collisions': 0}, True) is True
+    assert gse.clean_of({'drops': 1, 'collisions': 0}, True) is False
+    assert gse.clean_of({'drops': 0, 'collisions': None}, True) is None
+    assert gse.clean_of({}, True) is None
+    assert gse.clean_of({'drops': 0, 'collisions': None}, False) is False
