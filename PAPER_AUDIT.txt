@@ -9285,9 +9285,10 @@ BF#64 [FIXED on track/fixes, 51428d8; ITS A/B IS PATH 6's ARM A']  THE
   alone on seed 118's eye: W gives no shadow, their table one at y
   -0.382..-0.334 behind the cup); tracks/BUGS.md, TB-1 (the full record).
 
-BF#65 [FINDING OPEN]  THE DIE UNDER A CUP LIES IN NONE OF OUR HIDING
-  REGIONS: WE FIND IT ONLY BY LIFTING THE CUP  (BF#63's open finding; asked
-  by the BF#63 eval session, resumed by Hani, 2026-11-04 to 2026-11-06)
+BF#65 [FINDING; FIX BUILT, SWITCH OFF; WAITS FOR HANI]  THE DIE UNDER A CUP
+  LIES IN NONE OF OUR HIDING REGIONS: WE FIND IT ONLY BY LIFTING THE CUP
+  (BF#63's open finding; asked by the BF#63 eval session, resumed by Hani,
+  2026-11-04 to 2026-11-06; DECISION and RESULT at its end, 2026-11-12)
   WHAT: BF#63 left open why the pipeline held no hiding region for the
   upside-down cup over the die (17 of our 23 counted failures on the
   generated scenes).  Asked: the cause with code references and a local
@@ -9416,6 +9417,170 @@ BF#65 [FINDING OPEN]  THE DIE UNDER A CUP LIES IN NONE OF OUR HIDING
   find_dice unless option 1 is built; the measured numbers stand as
   measured.  HONESTY CLASS: diagnosis from the run records, logs and eye
   records of local reruns; no pipeline change.
+  DECISION (Hani, 2026-11-12, through the coordinator of the paper swarm):
+  "Region under the cup plus reach aim", that is option 1 behind a
+  default-off switch plus option 2(c) pipeline-wide.
+  BUILT (worker G, 2026-11-12; branch track/bf65 in ..\sb-bf65, cut from
+  track/fixes ab97ce1; commits f2d6f1e, 077a59e, 2a9ba59, f87ef71; not
+  merged, worker A integrates it into track/freeze):
+  (1) The reach aim, 2(c), always on.  streams.py region_reach_aim, called
+      by compute_kin_solution only after the reach gate refused the
+      region's centre: the pick out of a SHADOW region is aimed at the
+      centroid of the region's reachable part (a 9 x 9 lattice over the
+      footprint, inset by half the object's footprint so that the object
+      lies inside the region; for a target without a boxel by half the
+      class lower bound NOMINAL_HIDDEN_EXTENTS_MIN, F6's bound).  Where
+      the centre is reachable no code path differs; place destinations and
+      an object's own boxel are never re-aimed.
+      tests/test_region_reach_aim.py.
+  (2) The region under a cover, option 1, behind --interior-regions
+      off|on, default off (new module interior_regions.py; D6 and M2 as
+      pre-registered).  A class that declares a cavity gives each of its
+      objects one more hiding region, interior_of_<object>, region_kind
+      interior: the cavity's footprint at table height, status unknown,
+      cast only when the cavity can hold an instance of a target class,
+      and searched like every region (move the cover, look, pick).  The
+      planner, the domain and the look action are unchanged.  On find_dice
+      the five cup classes declare it (tampura_bridge/task_spec.py
+      HOLLOW_CAVITY, measured once from the collision mesh that TAMPURA's
+      model reads); our own scenes declare none and get no such region
+      with the switch on.  tests/test_interior_regions.py.
+  (3) Case (d), part of the switch.  A target that a frame shows inside
+      the box of a cover that still stands is recorded as lying under that
+      cover and is not registered as an object; the planner is offered
+      that cover's region alone; when no plan exists through it the record
+      is released for good and every unknown region is on offer again.
+  (4) The found rule of a look into an interior region, part of the
+      switch.  The sense grid's lowest slice lies 2 cm above the table and
+      the die is 17.8 mm tall, so no grid point can hit it; a look into an
+      interior region whose frame detects the target inside the region
+      ends "found" (the eye's record carries found_by detection beside the
+      grid's own outcome).  Looks into lateral regions keep the grid rule.
+  THE OPEN-UNDERNEATH ASSUMPTION is Hani's to decide (rule 12) and is not
+  decided: how the system knows that a body is hollow and open at the
+  bottom.  Built: declared per class with a measured cavity (option A in
+  tracks/bf65/FOR_HANI.md, worker G's recommendation; D6's and M2's
+  design).  The alternatives there: by the class name alone (B); any
+  object larger than the target (C, which changes our own scenes).  Until
+  his written OK the switch stays off, nothing that rests on it becomes a
+  default and no cluster run uses it.
+  CHECKS at f87ef71, each under the pipeline lock: tests/ 170 passed; the
+  bridge tests 94 passed, 3 skipped; tools/bridge_gates.py static read in
+  full, exit 0 (G1 83 hits and G2 46 hits all reviewed, G7, G11(i), G17).
+  LOCAL A/B (2026-11-12; laptop, WSL, one headless episode per cell under
+  the pipeline lock, cap 600 s; tracks/bf65/ab/ab.sh).  Arms: base =
+  ab97ce1; aim = the branch, switch off; full = the branch with
+  --interior-regions on.  Two rounds, every arm in both: round 1 (19:40
+  to 20:44) with aim and full at 2a9ba59, round 2 (21:00 to 22:11) at
+  f87ef71, whose one difference is the aim's inset for a target without a
+  boxel (half the class upper bound before).  find_dice, generated
+  scenes, round 1 / round 2 (S success, A all_searched, P planner_failed,
+  B no_plan_binding_death):
+      scene   base    aim     full
+      100     S / A   A / A   S / S
+      101     P / P   P / P   P / P
+      104     P / P   P / P   S / S
+      105     S / S   S / S   S / S
+      111     S / S   S / S   S / S
+      118     S / S   S / S   S / S
+      128     B / B   B / S   S / S
+      135     B / B   B / B   S / S
+      of 8    4 / 3   3 / 4   7 / 7
+  All 11 gate lines of the ledger (G3, G4, G5, G15, G10r, G19, G18, G19h,
+  G11, G21 and the ledger's completeness) pass in all 48 runs.
+  READINGS, by BF#65's causes:
+  (b) scene 100: without the switch chance decides.  The base succeeded in
+      round 1 because its first plan happened to lift b, the die's cup,
+      and ended all_searched in round 2, as the aim arm did twice and the
+      cluster's runs of the scene did.  With the switch b's own region
+      stays unknown until b is lifted, and both runs succeed (9 and 8
+      plans, 41.5 and 42.9 s of planning: four or five cups are lifted).
+  (c) scenes 128 and 135: the reach aim solves 128 and cannot solve 135.
+      128: the region behind b (centre 0.826 m from the base) has a strip
+      inside the 0.80 m limit.  Inset by half the class upper bound (2 cm,
+      round 1) the lattice's nearest point lay 0.801 m out and nothing
+      bound; inset by half the lower bound (1.5 cm, round 2) 3 of 81
+      points are in reach, the pick is aimed at [0.710, 0.362] (0.797 m),
+      the plan lifts b and the run succeeds.  135: the die's cup is c, and
+      the region behind c (centre 0.854 m) touches the limit with one
+      corner (0.794 m); inset by the die's own half width (0.9 cm) no
+      point of it is within 0.80 m, so no pick out of it can bind.  The
+      region under c is in reach whenever c is: with the switch both
+      scenes succeed in both rounds (2 plans each).
+  (d) scene 104: base and aim have no plan, as on the cluster.  With the
+      switch the die seen inside e's box is recorded as lying under e, the
+      plan lifts e, and both runs succeed (4 plans).  Round 1 ran as
+      designed (the look into the space under e ends "found").  In round 2
+      the die was seen while e was carried, e's release did not verify (it
+      shifted 3.4 mm) and the loop planned again, straight to the die: a
+      success with one failed step.
+  (e) scene 101 fails in every arm in both rounds (planner_failed; M9
+      parks the far cup).  Not addressed here (BF#62's switches).  Scene
+      124, the timeout, was not run.
+  HOW THE DIE WAS FOUND: with the switch on, in 9 of the 14 successes a
+  look into the space under the die's cup ended "found" (100, 111, 118 and
+  135 in both rounds, 104 in round 1); in the other 5 the frame's
+  detection registered it during a motion after the cup was lifted (105
+  and 128 in both rounds, 104 in round 2).  Without the switch all 14
+  successes of base and aim found it by that detection and no look found
+  it, as in HOW WE FIND IT ANYWAY above.
+  COST: planning time summed over the 8 scenes, base / aim / full: 121.2 /
+  110.1 / 214.2 s in round 1, 101.6 / 103.1 / 158.9 s in round 2.  On the
+  three scenes every arm solved both times (105, 111, 118): 33.6 / 28.3 /
+  47.5 s and 23.1 / 25.2 / 47.6 s.  The difference sits in 105, where the
+  planner carries five more regions (40.5 and 41.4 s against 18.5 to 28.6
+  s); on 111 and 118 the switch adds about 1 s.  Peak RSS 1.6 to 2.3 GB
+  in every arm.
+  OUR OWN TABLETOP (random-pairs, 2 occluders, goal holding, with
+  telemetry; seeds 0 and 2 in both rounds, 3 and 4 in round 2; seed 1 has
+  no scene, the generator refuses it in every arm): 6 of 6 successes in
+  each arm, and no interior region is cast with the switch on.  The reach
+  aim fired on one seed of four (seed 3: the region behind red_object,
+  its centre 0.726 m from the base, inside the flat limit and outside the
+  envelope's sphere at the pick's height; aimed at 0.631 m).  There the
+  first plan
+  of aim and full lifted red_object, and the base's lifted green_object,
+  behind which the target lay.  So the aim changes our own scenes where a
+  region's centre is out of reach: before it, no plan could search such a
+  region.  10 of the 18 runs had one failed step, the base's among them (a
+  carried object lost on the way: base 3, aim 0, full 2; a release that
+  did not verify: base 1, aim 3, full 1).  With one run per cell this
+  spread cannot be told from an effect of the change; on seeds 0, 2 and 4
+  no changed code path runs in any arm.
+  LIMITS: local, two runs per cell, eight scenes chosen for their causes
+  (five that fail on the cluster, three that succeed), so the counts are
+  not a rate; the cluster eval on the 40 generated scenes decides.  The
+  bridge runs carry no telemetry on this branch: drops and collisions are
+  counted only as far as the pipeline notices them (the failed steps
+  above); TB-22's ground-truth counts come with worker A's branch.  Where
+  the build differs from D6 and B5 as pre-registered: a footprint that
+  was observed before the body came to stand on it gets no region and a
+  ledger event, where D6 creates the region with status not_here; that
+  status rule counts free-space boxels only, so a cover the robot placed,
+  then lost and registered anew can get a region over space seen empty
+  (an extra lift, never a wrong "empty"); the post-place step does not
+  log the destination's cavity footprint; B5's synthetic tabletop episode
+  with a hollow cup is not built (unit tests cover the casting, the
+  status rule, the bookkeeping and case (d)); M7 is not part of this.
+  Beyond D6: (3) and (4) above.  The unseen die's size prior stays the
+  pipeline's (3 cm to hide, 4 cm to grasp; the die is 17.8 mm).
+  Follow-up, not done: the sense grid's lowest slice at 2 cm (a die in an
+  uncovered lateral region is found by the frame's detection and never by
+  the look's grid).
+  EVIDENCE: archive/tampura_bridge_plan_2026-10-25/tracks/bf65/ (STATE.md;
+  FOR_HANI.md with the question, the commands for the look and the
+  paragraph for the paper; checks/ with the suites' and the gates'
+  outputs; ab/ with the scripts, summary_round1.txt and
+  summary_round2.txt, round1/ and round2/ with ab.log and each cell's
+  console and time file, the gate's log gate_out.txt and mem_log.csv).
+  CLAIM EFFECT: with the switch on, the die's starting place is one of our
+  hiding regions on find_dice, by a declared class property that the
+  paper has to disclose (M2's parity sentence); with the switch off the
+  CLAIM EFFECT above stands as written.  No number of the paper changes
+  before a cluster run of the frozen code.  HONESTY CLASS: a model
+  addition behind a default-off switch plus a pipeline-wide change of the
+  pick's aim; a local A/B with two runs per cell; the assumption behind
+  the switch waits for Hani's written OK.
 
 BF#66 [LOGGED, FAR FUTURE WORK]  ATTRIBUTE BOXELIZATION: MERGE BY WHAT THE
       PLANNER READS; A PROBABILITY DISTRIBUTION AS ISO-MASS BOXELS  (user
