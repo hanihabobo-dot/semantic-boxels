@@ -1,0 +1,61 @@
+164 episode runs, 160 final (arm, scene, repetition); scenes 40, repetitions 2
+
+first runs that did not count (each ran once more): 4
+  T seed 127 rep 0: crashed: rc 1, no RolloutHistory ()
+  T seed 127 rep 1: crashed: rc 1, no RolloutHistory ()
+  T seed 138 rep 0: crashed: rc 1, no RolloutHistory ()
+  T seed 138 rep 1: crashed: rc 1, no RolloutHistory ()
+
+arm   counted  success   rate    95 % Wilson timeouts not counted median wall s (successes)
+O          80       69   0.86 [0.77, 0.92]         1           0          30.8        30.2
+T          76       46   0.61 [0.49, 0.71]         0           4         142.7       103.4
+
+paired (both arms counted on the same scene and repetition): 76 pairs; both succeed 40, only O 25, only T 6, neither 5; exact McNemar p = 0.000878
+left out of the pairs (an arm did not count twice): seed 127 rep 0, seed 127 rep 1, seed 138 rep 0, seed 138 rep 1
+
+per scene (successes / counted runs; cups from the manifest):
+  seed  cups      O      T   T's last actions when it failed
+   100     5    0/2    0/2   look(o_ph_2, o_ph_5, o_co_23)|look(o_ph_2, o_ph_5, o_co_23)|look(o_ph_2, o_ph_5, o_co_23); look(o_ph_2, o_ph_5, o_co_23)|look(o_ph_2, o_ph_5, o_co_23)|look(o_ph_2, o_ph_5, o_co_23)
+   101     5    0/2    2/2   
+   102     3    2/2    0/2   look(o_ph_2, o_ph_0, o_co_8)|look(o_ph_2, o_ph_0, o_co_8)|look(o_ph_2, o_ph_0, o_co_8); look(o_ph_2, o_ph_0, o_co_8)|look(o_ph_2, o_ph_0, o_co_8)|look(o_ph_2, o_ph_0, o_co_8)
+   103     4    2/2    2/2   
+   104     3    0/2    0/2   look(o_ph_1, o_ph_2, o_co_6)|look(o_ph_1, o_ph_2, o_co_6)|look(o_ph_1, o_ph_2, o_co_6); look(o_ph_1, o_ph_2, o_co_6)|look(o_ph_1, o_ph_2, o_co_6)|look(o_ph_1, o_ph_2, o_co_6)
+   105     5    2/2    0/2   look(o_ph_1, o_ph_2, o_co_14)|look(o_ph_1, o_ph_2, o_co_14)|look(o_ph_1, o_ph_2, o_co_14); look(o_ph_1, o_ph_2, o_co_14)|look(o_ph_1, o_ph_2, o_co_14)|look(o_ph_1, o_ph_2, o_co_14)
+   106     4    2/2    0/2   no-op()|no-op()|no-op(); no-op()|no-op()|no-op()
+   107     4    2/2    0/2   look(o_ph_2, o_ph_4, o_co_4)|look(o_ph_2, o_ph_4, o_co_4)|look(o_ph_2, o_ph_4, o_co_4); look(o_ph_2, o_ph_4, o_co_4)|look(o_ph_2, o_ph_4, o_co_4)|look(o_ph_2, o_ph_4, o_co_4)
+   108     2    2/2    0/2   look(o_ph_1, o_ph_2, o_co_2)|look(o_ph_1, o_ph_2, o_co_2)|look(o_ph_1, o_ph_2, o_co_2); look(o_ph_1, o_ph_2, o_co_2)|look(o_ph_1, o_ph_2, o_co_2)|look(o_ph_1, o_ph_2, o_co_2)
+   109     3    2/2    2/2   
+   110     4    2/2    0/2   look(o_ph_3, o_ph_4, o_co_4)|look(o_ph_3, o_ph_4, o_co_4)|look(o_ph_3, o_ph_4, o_co_4); look(o_ph_3, o_ph_4, o_co_4)|look(o_ph_3, o_ph_4, o_co_4)|look(o_ph_3, o_ph_4, o_co_4)
+   111     2    2/2    2/2   
+   112     4    2/2    2/2   
+   113     1    2/2    2/2   
+   114     2    2/2    2/2   
+   115     3    2/2    2/2   
+   116     5    2/2    0/2   look(o_ph_1, o_ph_5, o_co_17)|look(o_ph_1, o_ph_5, o_co_17)|look(o_ph_1, o_ph_5, o_co_17); look(o_ph_1, o_ph_5, o_co_17)|look(o_ph_1, o_ph_5, o_co_17)|look(o_ph_1, o_ph_5, o_co_17)
+   117     2    2/2    2/2   
+   118     2    2/2    0/2   look(o_ph_1, o_ph_2, o_co_5)|look(o_ph_1, o_ph_2, o_co_5)|look(o_ph_1, o_ph_2, o_co_5); look(o_ph_1, o_ph_2, o_co_5)|look(o_ph_1, o_ph_2, o_co_5)|look(o_ph_1, o_ph_2, o_co_5)
+   119     3    2/2    2/2   
+   120     5    2/2    2/2   
+   121     1    2/2    2/2   
+   122     5    2/2    2/2   
+   123     1    2/2    2/2   
+   124     5    1/2    0/2   look(o_ph_5, o_ph_3, o_co_9)|look(o_ph_5, o_ph_3, o_co_9)|look(o_ph_5, o_ph_3, o_co_9); look(o_ph_5, o_ph_3, o_co_9)|look(o_ph_5, o_ph_3, o_co_9)|look(o_ph_5, o_ph_3, o_co_9)
+   125     1    2/2    2/2   
+   126     5    2/2    2/2   
+   127     2    2/2    0/0   
+   128     2    0/2    2/2   
+   129     2    2/2    2/2   
+   130     3    2/2    2/2   
+   131     3    2/2    0/2   pick(o_ph_3, o_gr_15)|pick(o_ph_3, o_gr_15)|pick(o_ph_3, o_gr_15); pick(o_ph_3, o_gr_15)|pick(o_ph_3, o_gr_15)|pick(o_ph_3, o_gr_15)
+   132     4    2/2    0/2   look(o_ph_4, o_ph_3, o_co_8)|look(o_ph_4, o_ph_3, o_co_8)|look(o_ph_4, o_ph_3, o_co_8); look(o_ph_4, o_ph_3, o_co_8)|look(o_ph_4, o_ph_3, o_co_8)|look(o_ph_4, o_ph_3, o_co_8)
+   133     4    2/2    2/2   
+   134     4    2/2    0/2   look(o_ph_4, o_ph_1, o_co_1)|look(o_ph_4, o_ph_1, o_co_1)|look(o_ph_4, o_ph_1, o_co_1); look(o_ph_4, o_ph_1, o_co_1)|look(o_ph_4, o_ph_1, o_co_1)|look(o_ph_4, o_ph_1, o_co_1)
+   135     3    0/2    2/2   
+   136     1    2/2    2/2   
+   137     1    2/2    2/2   
+   138     1    2/2    0/0   
+   139     2    2/2    0/2   look(o_ph_1, o_ph_0, o_co_12)|look(o_ph_1, o_ph_0, o_co_12)|look(o_ph_1, o_ph_0, o_co_12); look(o_ph_1, o_ph_0, o_co_12)|look(o_ph_1, o_ph_0, o_co_12)|look(o_ph_1, o_ph_0, o_co_12)
+
+arm O die carries 69, lost in the hand 0
+arm T median time to success 93.0 s (their loop clock)
+failure screenshots: 49 runs, 98 images under failures/ (no image: T s106 r0, T s106 r1, T s127 r0, T s127 r0, T s127 r1, T s127 r1, T s138 r0, T s138 r0, T s138 r1, T s138 r1)

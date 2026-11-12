@@ -1,0 +1,106 @@
+== the probe per job (s, median / maximum): open on $W; write 4 kB + fsync on $W; the same write locally
+5248855 cn-112 118 rows 17:02:52 to 17:42:24: open 0.007 / 0.023 (0 rows >= 1 s); write 0.012 / 9.355 (2 rows >= 1 s); local 0.011 / 0.018
+5248856 cn-111 127 rows 17:02:52 to 17:45:24: open 0.008 / 0.024 (0 rows >= 1 s); write 0.012 / 8.541 (5 rows >= 1 s); local 0.011 / 0.013
+5248857 cn-109  90 rows 17:02:52 to 17:33:02: open 0.008 / 0.012 (0 rows >= 1 s); write 0.012 / 9.730 (2 rows >= 1 s); local 0.011 / 0.012
+5248858 cn-115  63 rows 17:02:52 to 17:23:57: open 0.007 / 0.024 (0 rows >= 1 s); write 0.012 / 9.018 (4 rows >= 1 s); local 0.011 / 0.012
+5248859 cn-104  94 rows 17:02:52 to 17:34:23: open 0.007 / 0.024 (0 rows >= 1 s); write 0.012 / 9.902 (2 rows >= 1 s); local 0.011 / 0.012
+5248860 cn-103 134 rows 17:02:52 to 17:47:37: open 0.008 / 0.029 (0 rows >= 1 s); write 0.012 / 5.155 (2 rows >= 1 s); local 0.011 / 0.013
+5248861 cn-110 190 rows 17:02:52 to 18:06:33: open 0.007 / 0.029 (0 rows >= 1 s); write 0.012 / 9.531 (4 rows >= 1 s); local 0.011 / 0.012
+5248862 cn-114  75 rows 17:02:52 to 17:27:56: open 0.008 / 0.027 (0 rows >= 1 s); write 0.012 / 7.567 (4 rows >= 1 s); local 0.011 / 0.013
+5248863 cn-113  82 rows 17:02:52 to 17:30:19: open 0.008 / 0.030 (0 rows >= 1 s); write 0.012 / 8.748 (3 rows >= 1 s); local 0.011 / 0.013
+5248864 cn-107 120 rows 17:02:52 to 17:42:59: open 0.008 / 0.020 (0 rows >= 1 s); write 0.012 / 5.900 (4 rows >= 1 s); local 0.011 / 0.012
+
+== the declared rule: two or more consecutive rows with the open on $W at 1 s or more
+  no stall
+  pairs flagged: 0 of 76 (none); not more than a tenth of the pairs
+  all pairs (the headline): 76 pairs
+    O: 65/76 = 0.86 [0.76, 0.92], timeouts 1
+    T: 46/76 = 0.61 [0.49, 0.71], timeouts 0
+    both 40, only O 25, only T 6, neither 5; exact McNemar p = 0.000878
+  without the flagged pairs: 76 pairs
+    O: 65/76 = 0.86 [0.76, 0.92], timeouts 1
+    T: 46/76 = 0.61 [0.49, 0.71], timeouts 0
+    both 40, only O 25, only T 6, neither 5; exact McNemar p = 0.000878
+
+== check of the rule only (not declared): any single row with the open or the write on $W at 1 s or more
+  job 5248855 (cn-112): 17:13:35 to 17:14:25, rows 17:13:56 open 0.007 write 9.355
+  job 5248855 (cn-112): 17:15:27 to 17:16:13, rows 17:15:48 open 0.008 write 4.886
+  job 5248856 (cn-111): 17:13:35 to 17:14:24, rows 17:13:56 open 0.008 write 8.541
+  job 5248856 (cn-111): 17:15:26 to 17:16:09, rows 17:15:46 open 0.007 write 2.046
+  job 5248856 (cn-111): 17:18:29 to 17:19:33, rows 17:18:50 open 0.007 write 1.526, 17:19:11 open 0.007 write 1.325
+  job 5248856 (cn-111): 17:19:33 to 17:20:15, rows 17:19:54 open 0.008 write 1.242
+  job 5248857 (cn-109): 17:13:36 to 17:14:26, rows 17:13:56 open 0.008 write 9.730
+  job 5248857 (cn-109): 17:15:28 to 17:16:13, rows 17:15:49 open 0.007 write 4.241
+  job 5248858 (cn-115): 17:13:35 to 17:14:46, rows 17:13:56 open 0.007 write 9.018, 17:14:25 open 0.007 write 1.052
+  job 5248858 (cn-115): 17:15:27 to 17:16:11, rows 17:15:47 open 0.008 write 3.893
+  job 5248858 (cn-115): 17:19:13 to 17:19:55, rows 17:19:33 open 0.008 write 1.230
+  job 5248859 (cn-104): 17:13:36 to 17:14:26, rows 17:13:56 open 0.008 write 9.902
+  job 5248859 (cn-104): 17:15:28 to 17:16:13, rows 17:15:49 open 0.007 write 4.170
+  job 5248860 (cn-103): 17:13:35 to 17:14:21, rows 17:13:55 open 0.008 write 5.155
+  job 5248860 (cn-103): 17:15:22 to 17:16:04, rows 17:15:43 open 0.007 write 1.159
+  job 5248861 (cn-110): 17:13:35 to 17:14:47, rows 17:13:56 open 0.007 write 9.531, 17:14:26 open 0.007 write 1.069
+  job 5248861 (cn-110): 17:15:27 to 17:16:13, rows 17:15:48 open 0.007 write 4.431
+  job 5248861 (cn-110): 17:18:55 to 17:19:37, rows 17:19:15 open 0.005 write 1.096
+  job 5248862 (cn-114): 17:13:35 to 17:14:23, rows 17:13:56 open 0.008 write 7.567
+  job 5248862 (cn-114): 17:15:25 to 17:16:07, rows 17:15:45 open 0.008 write 1.353
+  job 5248862 (cn-114): 17:18:27 to 17:19:11, rows 17:18:48 open 0.007 write 3.111
+  job 5248862 (cn-114): 17:19:32 to 17:20:14, rows 17:19:52 open 0.008 write 1.298
+  job 5248863 (cn-113): 17:13:35 to 17:14:25, rows 17:13:56 open 0.008 write 8.748
+  job 5248863 (cn-113): 17:15:26 to 17:16:10, rows 17:15:47 open 0.008 write 2.623
+  job 5248863 (cn-113): 17:19:12 to 17:19:54, rows 17:19:33 open 0.008 write 1.261
+  job 5248864 (cn-107): 17:13:35 to 17:14:22, rows 17:13:56 open 0.007 write 5.900
+  job 5248864 (cn-107): 17:15:23 to 17:16:05, rows 17:15:43 open 0.008 write 1.634
+  job 5248864 (cn-107): 17:18:26 to 17:19:09, rows 17:18:46 open 0.008 write 2.317
+  job 5248864 (cn-107): 17:19:29 to 17:20:11, rows 17:19:50 open 0.008 write 1.143
+  overlaps: T s138 r0 attempt 1 17:08:30 to 17:13:45 (314.6 s), no success, does not count, not the final run
+  overlaps: O s120 r0 attempt 1 17:09:34 to 17:16:51 (436.3 s), success, counts
+  overlaps: T s105 r0 attempt 1 17:10:06 to 17:16:21 (375.0 s), no success, counts
+  overlaps: T s115 r0 attempt 1 17:11:41 to 17:14:00 (138.9 s), success, counts
+  overlaps: T s117 r0 attempt 1 17:11:53 to 17:14:03 (129.8 s), success, counts
+  overlaps: T s110 r0 attempt 1 17:12:02 to 17:15:44 (221.1 s), no success, counts
+  overlaps: T s134 r0 attempt 1 17:12:15 to 17:14:54 (158.4 s), no success, counts
+  overlaps: T s101 r0 attempt 1 17:12:55 to 17:14:37 (101.7 s), success, counts
+  overlaps: T s125 r0 attempt 1 17:12:56 to 17:14:11 (74.6 s), success, counts
+  overlaps: O s130 r0 attempt 1 17:13:04 to 17:13:38 (33.3 s), success, counts
+  overlaps: T s138 r0 attempt 2 17:13:45 to 17:19:12 (326.7 s), no success, does not count
+  overlaps: T s131 r0 attempt 1 17:13:49 to 17:16:12 (142.3 s), no success, counts
+  overlaps: O s115 r0 attempt 1 17:14:00 to 17:14:25 (24.8 s), success, counts
+  overlaps: O s117 r0 attempt 1 17:14:03 to 17:14:24 (20.4 s), success, counts
+  overlaps: O s125 r0 attempt 1 17:14:11 to 17:14:32 (20.8 s), success, counts
+  overlaps: T s112 r1 attempt 1 17:14:31 to 17:17:17 (165.1 s), success, counts
+  overlaps: T s118 r0 attempt 1 17:14:34 to 17:17:14 (159.8 s), no success, counts
+  overlaps: O s101 r0 attempt 1 17:14:36 to 17:18:08 (211.3 s), no success, counts
+  overlaps: T s126 r0 attempt 1 17:14:39 to 17:18:45 (245.0 s), success, counts
+  overlaps: T s135 r0 attempt 1 17:15:26 to 17:16:57 (91.0 s), success, counts
+  overlaps: O s110 r0 attempt 1 17:15:44 to 17:16:09 (25.0 s), success, counts
+  overlaps: O s131 r0 attempt 1 17:16:12 to 17:16:45 (32.3 s), success, counts
+  overlaps: T s111 r0 attempt 1 17:16:17 to 17:18:40 (142.6 s), success, counts
+  overlaps: T s106 r0 attempt 1 17:17:27 to 17:18:59 (91.1 s), no success, counts
+  overlaps: T s132 r1 attempt 1 17:17:39 to 17:21:22 (223.0 s), no success, counts
+  overlaps: T s119 r0 attempt 1 17:17:41 to 17:19:09 (87.7 s), success, counts
+  overlaps: T s113 r1 attempt 1 17:17:58 to 17:19:01 (62.6 s), success, counts
+  overlaps: T s102 r0 attempt 1 17:18:19 to 17:21:41 (201.7 s), no success, counts
+  overlaps: T s122 r0 attempt 1 17:18:27 to 17:25:44 (436.7 s), success, counts
+  overlaps: T s129 r1 attempt 1 17:18:30 to 17:19:59 (88.6 s), success, counts
+  overlaps: O s111 r0 attempt 1 17:18:39 to 17:19:00 (20.5 s), success, counts
+  overlaps: O s126 r0 attempt 1 17:18:45 to 17:19:24 (38.5 s), success, counts
+  overlaps: O s106 r0 attempt 1 17:18:59 to 17:19:36 (36.2 s), success, counts
+  overlaps: O s113 r1 attempt 1 17:19:01 to 17:19:20 (18.7 s), success, counts
+  overlaps: O s119 r0 attempt 1 17:19:09 to 17:19:42 (33.0 s), success, counts
+  overlaps: O s138 r0 attempt 1 17:19:11 to 17:19:30 (18.3 s), success, counts
+  overlaps: T s108 r1 attempt 1 17:19:12 to 17:21:15 (122.9 s), no success, counts
+  overlaps: T s114 r1 attempt 1 17:19:23 to 17:20:44 (80.8 s), success, counts
+  overlaps: T s127 r0 attempt 1 17:19:24 to 17:23:54 (269.4 s), no success, does not count, not the final run
+  overlaps: T s139 r0 attempt 1 17:19:42 to 17:22:20 (157.6 s), no success, counts
+  overlaps: T s107 r0 attempt 1 17:19:48 to 17:24:45 (296.8 s), no success, counts
+  overlaps: T s116 r1 attempt 1 17:19:53 to 17:25:22 (328.2 s), no success, counts
+  overlaps: O s129 r1 attempt 1 17:19:58 to 17:20:24 (25.4 s), success, counts
+  pairs flagged: 27 of 76 (s101 r0, s102 r0, s105 r0, s106 r0, s107 r0, s108 r1, s110 r0, s111 r0, s112 r1, s113 r1, s114 r1, s115 r0, s116 r1, s117 r0, s118 r0, s119 r0, s120 r0, s122 r0, s125 r0, s126 r0, s129 r1, s130 r0, s131 r0, s132 r1, s134 r0, s135 r0, s139 r0); more than a tenth of the pairs
+  all pairs (the headline): 76 pairs
+    O: 65/76 = 0.86 [0.76, 0.92], timeouts 1
+    T: 46/76 = 0.61 [0.49, 0.71], timeouts 0
+    both 40, only O 25, only T 6, neither 5; exact McNemar p = 0.000878
+  without the flagged pairs: 49 pairs
+    O: 40/49 = 0.82 [0.69, 0.90], timeouts 1
+    T: 31/49 = 0.63 [0.49, 0.75], timeouts 0
+    both 27, only O 13, only T 4, neither 5; exact McNemar p = 0.049
