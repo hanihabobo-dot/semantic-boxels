@@ -245,6 +245,25 @@ def arm_block(label, arm, rows, keys):
     return lines
 
 
+def corridor_lines(rows, arms, labels, keys):
+    """Whether each arm ran with the corridor test its name says: the value
+    in each row's switches (the driver's bridge_episode.json, copied into
+    the row by tools/slip_eval.py).  A run the cap ended wrote no record,
+    and a driver without the pass-through records no value."""
+    lines = ["the corridor test the episodes ran with (each row's switches; an arm with "
+             "@corridor_object must show object, every other arm cell+object)"]
+    for arm in arms:
+        want = 'object' if '@corridor_object' in arm else 'cell+object'
+        vals = [(rows[(arm,) + k].get('switches') or {}).get('corridor_test') for k in keys]
+        right = sum(v == want for v in vals)
+        none = sum(v is None for v in vals)
+        wrong = len(vals) - right - none
+        lines.append(f"  {labels.get(arm, arm):10} {want} in {right} of {len(vals)}, "
+                     f"not recorded in {none}"
+                     + (f", ANOTHER VALUE in {wrong}: the arm did not run as named" if wrong else ''))
+    return lines
+
+
 def paired(test, rows, x, ref, keys):
     """(both, only ref, only x, neither, p) of a yes/no measure over keys."""
     both = only_ref = only_x = neither = 0
@@ -320,6 +339,7 @@ def set_table(name, s, names):
              f"   incomplete (an arm has no row): {_keys_text(incomplete)}", '']
     for arm in arms:
         lines += arm_block(labels.get(arm, 'arm'), arm, rows, counted) + ['']
+    lines += corridor_lines(rows, arms, labels, counted) + ['']
     have = set(arms)
     first = [k for k in counted if k[1] == 0]
     for x in ('deftrap', 'trap'):
