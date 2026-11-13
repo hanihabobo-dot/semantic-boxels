@@ -191,6 +191,12 @@ def main():
     # passed through like the switches; off is the arm that measures their
     # cost.
     ap.add_argument('--world-counts', choices=('auto', 'on', 'off'), default='auto')
+    # TB-25 (#P1 F32): how the planner tests a place cell against a look's
+    # corridor (run_logger's --corridor-test, same choices and default),
+    # passed through like the switches.  The default is the pipeline's own;
+    # 'object' is the arm of an A/B, never set by the bridge itself.
+    ap.add_argument('--corridor-test', choices=('cell+object', 'object'),
+                    default='cell+object')
     # BF#68 (run tampura -Draw): what the GUI shows besides the scene, a comma
     # list of policy.DRAW_KINDS.  Nothing here reaches the executing world or
     # a camera render; it is ignored without --vis 1.
@@ -289,6 +295,7 @@ def main():
                   'sense_over_region': a.sense_over_region,
                   'grip_squeeze_mm': str(a.grip_squeeze_mm),
                   'world_counts': a.world_counts,
+                  'corridor_test': a.corridor_test,
                   'search_effort_weight': a.search_effort_weight,
                   'search_initial_complexity': str(a.search_initial_complexity),
                   'slip_fixes': slip_fixes.resolve(a.slip_fixes),
