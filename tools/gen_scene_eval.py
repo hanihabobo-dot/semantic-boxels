@@ -274,6 +274,9 @@ def run_one(a, arm, seed, rep, attempt, scene, order):
            'success': bool(ok and success and not timed_out), 'timed_out': timed_out,
            'wall_s': wall, 'loop_s': loop, 'host': os.uname().nodename,
            'finished': time.strftime('%Y-%m-%d %H:%M:%S'), 'rec': rec}
+    # TB-22 (tracks rule 18): the record's drops and collisions, and clean
+    # success under this row's own success test
+    row.update(se.world_counts.of_record(rec, row['success']))
     if keep:
         os.makedirs(shots_dir, exist_ok=True)
         meta = {k: v for k, v in row.items() if k != 'rec'}
