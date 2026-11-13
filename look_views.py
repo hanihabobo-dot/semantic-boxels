@@ -32,6 +32,7 @@ Nothing here reads the executing world: the twin's bodies stand where the
 belief puts them (BoxelTestEnv.sync_to_plan_client with the registry).
 """
 
+import hashlib
 import math
 import time
 from dataclasses import dataclass, field
@@ -114,6 +115,19 @@ class LookGoal:
     @property
     def centre(self) -> np.ndarray:
         return (self.lo + self.hi) / 2.0
+
+
+def config_name(goal_id: str, boxel_id: str, q) -> str:
+    """look_<goal>_<boxel>_<digest of the joints>.  A RobotConfig is compared
+    and hashed by its name (streams.RobotConfig), and the configuration the
+    arm stands in keeps its name over plan calls.  A name numbered within one
+    plan call can therefore come back in the next call on other joints, and
+    the planner then takes the new configuration for the one the arm is in:
+    no move, and the look runs from the old pose (development run of
+    2026-11-13, seed 103, track/look c3d0375).  With the joints in the name,
+    equal names are equal configurations."""
+    joints = np.round(np.asarray(q, dtype=float), 6) + 0.0      # no negative zero
+    return f"look_{goal_id}_{boxel_id}_{hashlib.sha1(joints.tobytes()).hexdigest()[:8]}"
 
 
 def _corners_and_centre(lo, hi) -> np.ndarray:
@@ -448,10 +462,11 @@ class LookViews:
         return out
 
     def _certify(self, cam, goal: LookGoal, v, goals, movable, registry,
-                 name: str, require_clear: bool = False) -> Optional[Cert]:
+                 require_clear: bool = False) -> Optional[Cert]:
         """Stage 2 for one candidate pose: IK, collision, one render.
         ``require_clear``: the goal already has a clear view, so a further
-        viewpoint is only worth having if it is clear too."""
+        viewpoint is only worth having if it is clear too.  The
+        configuration is named after its joints (config_name)."""
         ee = cam @ np.linalg.inv(self.views._ee_to_camera())
         if self.reachable is not None and not self.reachable(ee[:3, 3]):
             self.last_stats['unreachable'] += 1
@@ -476,7 +491,8 @@ class LookViews:
                 require_clear and reveals[goal.id].total_frac > goal.tol):
             self.last_stats['render_rejected'] += 1
             return None
-        return Cert(RobotConfig(joint_positions=np.asarray(q), name=name),
+        return Cert(RobotConfig(joint_positions=np.asarray(q),
+                                name=config_name(goal.id, v.id, q)),
                     v.id, goal.id, reveals, cam_real)
 
     def _free_boxels(self, registry, table_z: float):
@@ -558,7 +574,6 @@ class LookViews:
                     got = None
                     for _key, i in scored[:LOOK_TRIES]:
                         got = self._certify(cands[i], goal, v, goals, movable, registry,
-                                            f"look_{goal.id}_{v.id}_{len(certs)}",
                                             require_clear)
                         if got is not None:
                             break

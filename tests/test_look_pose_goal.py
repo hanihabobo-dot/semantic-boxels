@@ -17,6 +17,16 @@ Two rules, both in look_views:
      revealing that body (LookViews.refute), until the body is re-posed
      (LookViews.forget): the counterpart of the centred look removing its own
      configuration.
+
+A third, found when C first ran (seed 103, track/look c3d0375,
+logs/run_2026-11-13_04-01-10): the view was withdrawn, and a new view in the
+same boxel was certified under the name the withdrawn one had
+(look_<goal>_<boxel>_<index in this plan call>).  A RobotConfig is compared by
+its name, the arm's configuration keeps its name over plan calls, so the
+planner took the new view for the spot the arm stood in, planned no move, and
+the look ran from the withdrawn pose three times.
+  D  a look configuration is named after its joints (look_views.config_name):
+     equal names are equal configurations.
 """
 import math
 import sys
@@ -159,6 +169,47 @@ def test_forgetting_a_body_gives_its_views_back(world):
     world.lv.forget('die')
     assert any(q is here for q in _die_views(world, here)[0])
     world.lv.forget('die')                                      # nothing to forget is no error
+
+
+def test_a_configurations_name_follows_its_joints():
+    """RobotConfig is compared and hashed by name: equal names must be equal
+    joints, and other joints another name."""
+    q = np.array([0.1, -0.5, 0.2, -2.0, 0.0, 1.6, 0.8])
+    a = look_views.config_name('die', 'free_014', q)
+    assert a.startswith('look_die_free_014_')
+    assert look_views.config_name('die', 'free_014', q.copy()) == a
+    assert look_views.config_name('die', 'free_014', q + 1e-9) == a      # below the rounding
+    assert look_views.config_name('die', 'free_014', q + 1e-3) != a
+    assert look_views.config_name('die', 'free_015', q) != a
+    assert look_views.config_name('cup', 'free_014', q) != a
+    zero = np.zeros(7)
+    assert look_views.config_name('die', 'v', zero) == look_views.config_name('die', 'v', -zero)
+
+
+def test_a_new_view_is_never_taken_for_the_spot_the_arm_stands_in(world):
+    """Seed 103's case (track/look c3d0375): the arm stands in a look
+    configuration, keeps its name over the plan call (the loop's readback
+    does), and that view is refuted.  A configuration certified now must not
+    be equal to the arm's unless it has its joints: the planner would skip
+    the move and look from the old pose."""
+    from test_look_views import _home
+    world.reg.get_boxel('die').pose_radius = 0.005
+    first, _ = _die_views(world, _home())
+    assert first, 'the fixture has a view of the die'
+    here = RobotConfig(joint_positions=np.array(first[0].joint_positions, dtype=float),
+                       name=first[0].name)                      # the name it was planned under
+    world.lv.refute('die', here.joint_positions)
+    die = world.reg.get_boxel('die')
+    facts, _ = world.lv.facts(world.reg, [], [die], here)
+    configs = [f[1] for f in facts if f[0] == 'Config']
+    for q in configs:
+        if q == here:                                           # by name, as the planner compares
+            assert np.allclose(q.joint_positions, here.joint_positions, atol=1e-5)
+    for a in configs:                                           # and among themselves
+        for b in configs:
+            if a == b:
+                assert np.allclose(a.joint_positions, b.joint_positions, atol=1e-5)
+    assert not any(f[0] == 'reveals' and f[2] == 'die' and f[1] == here for f in facts)
 
 
 def test_a_refuted_view_is_never_a_stage_two_result(world):
