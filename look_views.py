@@ -67,6 +67,15 @@ LOOK_BOXELS_RANKED = 4                       # boxels tried per goal to get ther
 LOOK_BOXEL_TOL_M = 0.01                      # the executor's inflation of the boxel
 LOOK_TOL_REGION = SENSE_MARGINAL_BLOCKED_FRACTION
 LOOK_TOL_OBJECT = 0.0
+# Declared before measuring (PLAN.md 11.13, after the development run of
+# 2026-11-13, seed 100).  An object's look goal is its believed box grown in x
+# and y by its pose radius; a radius that is not finite, or beyond this cap
+# (the gripper's half opening), counts as the cap.
+LOOK_OBJECT_GROW_MAX_M = 0.04
+# Two camera poses are one view when their positions lie this close and their
+# optical axes this near (LookViews.refute).
+LOOK_SAME_VIEW_M = 0.01
+LOOK_SAME_VIEW_RAD = math.radians(2.0)
 
 _FOV_V_HALF_TAN = 240.0 / 525.0              # the wrist camera, robot_utils
 
@@ -123,8 +132,18 @@ def region_goal(boxel) -> LookGoal:
 
 
 def object_goal(boxel) -> LookGoal:
-    lo = np.asarray(boxel.min_corner, dtype=float)
-    hi = np.asarray(boxel.max_corner, dtype=float)
+    """The believed box grown in x and y by the pose radius: a view of the
+    goal holds the body wherever the belief allows it.  A body registered on
+    a sliver (a look past the edge of a block) has a box that the same view
+    sees whole by construction; the body it belongs to may reach behind the
+    block (PLAN.md 11.13)."""
+    lo = np.array(boxel.min_corner, dtype=float)
+    hi = np.array(boxel.max_corner, dtype=float)
+    r = float(getattr(boxel, 'pose_radius', 0.0))
+    grow = (LOOK_OBJECT_GROW_MAX_M if not math.isfinite(r)
+            else min(max(r, 0.0), LOOK_OBJECT_GROW_MAX_M))
+    lo[:2] -= grow
+    hi[:2] += grow
     return LookGoal(boxel.id, 'object', lo, hi, [lattice(lo, hi)],
                     LOOK_TOL_OBJECT, LOOK_IMAGE_MARGIN_PX,
                     _corners_and_centre(lo, hi))
@@ -167,6 +186,35 @@ class LookViews:
         self.reachable = reachable               # callable(ee xyz) -> bool
         self.last_stats: Dict[str, object] = {}
         self.last_certs: List[Cert] = []
+        # {goal id: camera poses whose executed image did not give its pose}
+        self.refuted: Dict[str, List[np.ndarray]] = {}
+
+    # ----- views the executor's image refuted -----------------------------
+
+    def refute(self, goal_id: str, q) -> None:
+        """The executor's image from joint positions ``q`` did not give
+        ``goal_id``'s pose: that view no longer counts as revealing it, until
+        forget().  The counterpart of the centred look removing its own
+        configuration (PLAN.md 11.13)."""
+        self.refuted.setdefault(str(goal_id), []).append(self._camera_pose_at(q))
+
+    def forget(self, goal_id: str) -> None:
+        """The body was re-registered or re-posed: its views count again."""
+        self.refuted.pop(str(goal_id), None)
+
+    def _is_refuted(self, goal_id: str, cam) -> bool:
+        for old in self.refuted.get(str(goal_id), ()):
+            if (float(np.linalg.norm(cam[:3, 3] - old[:3, 3])) <= LOOK_SAME_VIEW_M
+                    and float(cam[:3, 2] @ old[:3, 2]) >= math.cos(LOOK_SAME_VIEW_RAD)):
+                return True
+        return False
+
+    def _withdraw(self, reveals: Dict[str, Reveal], cam) -> None:
+        """A refuted view does not reveal the goal it failed on."""
+        for gid, rv in list(reveals.items()):
+            if rv.revealed and self._is_refuted(gid, cam):
+                reveals[gid] = Reveal(rv.hard_frac, rv.total_frac, False, [])
+                self.last_stats['refuted'] = int(self.last_stats.get('refuted', 0)) + 1
 
     # ----- the render's rule ----------------------------------------------
 
@@ -229,7 +277,9 @@ class LookViews:
                full: bool) -> Tuple[float, float]:
         """Stage 1's analytic rule: (hard fraction, total fraction) from the
         projection and the believed boxes alone.  ``boxes`` are the
-        registered bodies that do not overlap the goal."""
+        registered bodies; the goal's own content does not hide it: for a
+        region every body that overlaps it, for an object the body itself
+        (the render's rule, _content)."""
         h, w = robot_utils.WRIST_CAMERA_HEIGHT, robot_utils.WRIST_CAMERA_WIDTH
         slices = goal.slices if full else [goal.probe]
         worst_hard = worst_total = 0.0
@@ -241,8 +291,10 @@ class LookViews:
                 inside &= ((rows >= m) & (cols >= m)
                            & (rows <= h - 1 - m) & (cols <= w - 1 - m))
             hit = np.zeros(len(pts), dtype=bool)
-            for _bid, lo, hi in boxes:
-                if _overlaps(lo, hi, goal.lo, goal.hi):
+            for bid, lo, hi in boxes:
+                own = (bid == goal.id if goal.kind == 'object'
+                       else _overlaps(lo, hi, goal.lo, goal.hi))
+                if own:
                     continue
                 hit |= segment_aabb_hit_mask(cam_pos, pts, lo, hi)
             n = len(pts)
@@ -419,6 +471,7 @@ class LookViews:
             self.last_stats['left_boxel'] += 1
             return None
         reveals = self._statuses(goals, render, movable, registry)
+        self._withdraw(reveals, cam_real)
         if not reveals[goal.id].revealed or (
                 require_clear and reveals[goal.id].total_frac > goal.tol):
             self.last_stats['render_rejected'] += 1
@@ -457,7 +510,8 @@ class LookViews:
         placed at (the placement facts)."""
         self.last_stats = {'twin_render_s': 0.0, 'twin_renders': 0, 'look_ik': 0,
                            'ik_fail': 0, 'collide': 0, 'unreachable': 0,
-                           'left_boxel': 0, 'render_rejected': 0, 'stage1': 0,
+                           'left_boxel': 0, 'render_rejected': 0, 'refuted': 0,
+                           'stage1': 0,
                            'goals': 0, 'certified': 0, 'no_view': [],
                            'placement_facts': 0, 'build_s': 0.0}
         t_start = time.perf_counter()
@@ -521,13 +575,16 @@ class LookViews:
         self.last_stats['build_s'] = time.perf_counter() - t_start
         return facts, self.last_stats
 
-    def _camera_at(self, q) -> np.ndarray:
+    def _camera_pose_at(self, q) -> np.ndarray:
         saved = self.views._arm()
         try:
             self.views._set_arm(q)
-            return robot_utils.wrist_camera_pose(self.robot, self.client)[:3, 3]
+            return robot_utils.wrist_camera_pose(self.robot, self.client)
         finally:
             self.views._set_arm(saved)
+
+    def _camera_at(self, q) -> np.ndarray:
+        return self._camera_pose_at(q)[:3, 3]
 
     def _certify_current(self, current_config, free, goals, movable, registry):
         cam_real, render = self._render_at(current_config.joint_positions)
@@ -535,6 +592,7 @@ class LookViews:
         if v is None:
             return None
         reveals = self._statuses(goals, render, movable, registry)
+        self._withdraw(reveals, cam_real)
         if not any(r.revealed for r in reveals.values()):
             return None
         return Cert(current_config, v.id, None, reveals, cam_real)

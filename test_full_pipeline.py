@@ -1784,6 +1784,8 @@ def main(gui=True, run_logger=None, scene_config=None,
                     planner.m8_views.parked.discard(_obj)
                     planner.m8_views.removed = {r for r in planner.m8_views.removed
                                                 if r[0] != _obj}
+                    if getattr(planner, 'look_views', None) is not None:
+                        planner.look_views.forget(_obj)
                     print(f"  [M8] observe strikes of {_obj} reset (re-registered "
                           f"or re-posed)")
 
@@ -2438,6 +2440,15 @@ def main(gui=True, run_logger=None, scene_config=None,
                         _k = observe_views.look_index(look_q.name, obj_str)
                         if _k is not None:
                             planner.m8_views.removed.add((obj_str, _k))
+                        elif (look_mode == 'boxel'
+                              and planner.look_views is not None):
+                            # The boxel look's counterpart (PLAN.md 11.13):
+                            # the view whose image did not give the pose no
+                            # longer counts as revealing this body.
+                            planner.look_views.refute(
+                                obj_str, look_q.joint_positions)
+                            print(f"    [look] the view from {look_q.name} is "
+                                  f"withdrawn for {obj_str}")
                         _left = (len(observe_views.LOOK_STANDOFFS)
                                  * len(observe_views.LOOK_WRIST_YAWS)
                                  - sum(1 for r in planner.m8_views.removed
