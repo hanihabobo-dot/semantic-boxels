@@ -59,6 +59,9 @@ ARM_NAME = 'tampura_run_planner_cu_read_v1'
 GAMMA = 0.98
 CONFIG = './env_configs/class_uncertain.yml'
 ROWS = 'rows_T.jsonl'
+ROWS_SMOKE = 'rows_T_smoke.jsonl'     # --smoke only; --report never reads it
+# --smoke: their own arguments that cut an episode to two steps and a small sample count
+SMOKE_ARGS = ('--max-steps', '2', '--num-samples', '30', '--batch-size', '10')
 FINAL_NAME = 'cu_final_world.json'
 SPANS_NAME = 'get_action_spans.jsonl'
 DROPS_WORDS = 'cannot happen (kinematic carry)'
@@ -101,10 +104,16 @@ def hashseed_for(mode, seed, rep):
     return int(mode)
 
 
-def child_env(base, tampura_work, hashseed):
-    """The environment of an episode: the caller's, with the variables `run cu -System tampura`
-    sets (their two packages on PYTHONPATH and nothing of ours) and the hash seed as declared."""
+def child_env(base, tampura_work, hashseed, venv):
+    """The environment of an episode: the caller's, with their two packages on PYTHONPATH and
+    nothing of ours, the hash seed as declared, and their venv active (its bin first on PATH,
+    VIRTUAL_ENV set, as find_dice's arm T has it in tools/_bridge_campaign.py).  The venv on PATH
+    is needed: their solver starts the translator and the search as a bare `python`
+    (tampura/solvers/symk.py), and without it the first get_action dies with FileNotFoundError
+    (seen in the two-step smoke of 2026-11-13)."""
     env = dict(base)
+    env['PATH'] = os.path.join(venv, 'bin') + os.pathsep + env.get('PATH', '')
+    env['VIRTUAL_ENV'] = venv
     env['PYTHONPATH'] = os.pathsep.join([os.path.join(tampura_work, 'tampura'),
                                          os.path.join(tampura_work, 'tampura_environments')])
     env['PYTHONDONTWRITEBYTECODE'] = '1'
@@ -118,11 +127,14 @@ def child_env(base, tampura_work, hashseed):
 
 
 def command(a, seed, save_dir):
+    """Their driver through cu_t.py with their config.  --smoke adds their own arguments that cut
+    the episode short (a check of the mechanics, never a result)."""
     return [os.path.join(a.venv_t, 'bin', 'python'), '-u',
             os.path.join(a.snapshot, 'tools', 'cluster', 'cu_t.py'),
             '--run-planner', os.path.join(a.tampura_work, 'tampura_environments', 'run_planner.py'),
             '--world-test-dir', os.path.join(a.snapshot, 'tasks_probe'),
-            '--config', CONFIG, '--global-seed', str(seed), '--save-dir', save_dir]
+            '--config', CONFIG, '--global-seed', str(seed), '--save-dir', save_dir] \
+        + (list(SMOKE_ARGS) if getattr(a, 'smoke', False) else [])
 
 
 def make_scratch(path, tampura_work):
@@ -211,7 +223,7 @@ def run_one(a, seed, rep, order, base_env=None, popen=subprocess.Popen):
     scratch = os.path.join(a.scratch, f"cu_{ARM}_{os.path.basename(os.path.normpath(a.out))}_{name}")
     make_scratch(scratch, a.tampura_work)
     hashseed = hashseed_for(a.hashseed, seed, rep)
-    env = child_env(os.environ if base_env is None else base_env, a.tampura_work, hashseed)
+    env = child_env(os.environ if base_env is None else base_env, a.tampura_work, hashseed, a.venv_t)
     cmd = command(a, seed, save_dir)
     t0 = time.time()
     timed_out = False
@@ -301,7 +313,8 @@ def run(a):
             print(f"[cu] {need} is missing: nothing run")
             return 2
     os.makedirs(a.out, exist_ok=True)
-    path = os.path.join(a.out, ROWS)
+    # a smoke's rows go to their own file: --report reads ROWS alone, so a cut episode is never counted
+    path = os.path.join(a.out, ROWS_SMOKE if a.smoke else ROWS)
     rows = load_rows(path)
     done = {(r['seed'], r['rep']) for r in rows}
     min_kb = mw.limit_kb(mw.MIN_AVAIL_GB if a.min_avail_gb is None else a.min_avail_gb)
@@ -309,6 +322,7 @@ def run(a):
     with open(os.path.join(a.out, 'cu_eval.json'), 'w', encoding='utf-8') as f:
         json.dump({'task': TASK, 'arm': ARM, 'arm_name': ARM_NAME, 'seeds': a.seed_list, 'reps': a.reps,
                    'cap_s': a.cap, 'hashseed': a.hashseed, 'snapshot': a.snapshot, 'venv_t': a.venv_t,
+                   'smoke': bool(a.smoke), 'smoke_args': list(SMOKE_ARGS) if a.smoke else None,
                    'tampura_work': a.tampura_work, 'scratch': a.scratch, 'host': os.uname().nodename
                    if hasattr(os, 'uname') else None, 'job': os.environ.get('SLURM_JOB_ID'),
                    'min_avail_limit_kb': min_kb, 'peak_limit_kb': peak_kb,
@@ -327,6 +341,8 @@ def run(a):
                 with mw.EpisodeWatch(min_kb, peak_kb) as w:
                     row = run_one(a, seed, rep, order)
                 row.update(mw.row_fields(w.as_row()))
+                if a.smoke:
+                    row['smoke'] = True
                 order += 1
                 append_row(path, row)
                 rows.append(row)
@@ -359,6 +375,9 @@ def main(argv=None):
     ap.add_argument('--hashseed', default='episode',
                     help="PYTHONHASHSEED: 'episode' (1000 * seed + repetition + 1, the default), a number for all, or 'unset'")
     ap.add_argument('--dry-run', action='store_true', help='print the episodes and their commands, run nothing')
+    ap.add_argument('--smoke', action='store_true',
+                    help='a check of the mechanics, never a result: their run cut to ' + ' '.join(SMOKE_ARGS)
+                         + '; the rows go to ' + ROWS_SMOKE + ' and are never counted')
     ap.add_argument('--min-avail-gb', type=float, default=None)
     ap.add_argument('--peak-report-gb', type=float, default=None)
     a = ap.parse_args(argv)
@@ -374,7 +393,7 @@ def main(argv=None):
         ap.error('--reps must be at least 1')
     a.seed_list = parse_seeds(a.seeds)
     if a.dry_run:
-        env = child_env({}, a.tampura_work, None)
+        env = child_env({'PATH': '$PATH'}, a.tampura_work, None, a.venv_t)
         print(f"{len(a.seed_list) * a.reps} episode(s), cap {a.cap:.0f} s each, hash seed {a.hashseed}, environment " +
               ' '.join(f"{k}={v}" for k, v in sorted(env.items())))
         for rep in range(a.reps):

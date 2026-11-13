@@ -22,7 +22,7 @@ def args(tmp_path, **kw):
     a = types.SimpleNamespace(snapshot=str(tmp_path / 'sb'), out=str(tmp_path / 'out' / '77'),
                               venv_t=str(tmp_path / 'tw' / '.venv'), tampura_work=str(tmp_path / 'tw'),
                               scratch=str(tmp_path / 'scratch'), hashseed='0', cap=5.0, reps=1,
-                              seed_list=[0], min_avail_gb=0.0, peak_report_gb=0.0)
+                              seed_list=[0], min_avail_gb=0.0, peak_report_gb=0.0, smoke=False)
     for k, v in kw.items():
         setattr(a, k, v)
     return a
@@ -48,13 +48,22 @@ def test_seeds_are_parsed_and_a_seed_named_twice_is_refused():
 
 def test_the_episodes_environment_holds_their_two_packages_and_nothing_of_ours(tmp_path):
     base = {'PATH': '/usr/bin', 'PYTHONPATH': '/snap/sb:/w/pddlstream_lib', 'PYTHONHOME': '/x', 'PYTHONHASHSEED': '5'}
-    env = ce.child_env(base, '/w/tw', '0')
+    env = ce.child_env(base, '/w/tw', '0', '/w/tw/.venv')
     assert env['PYTHONPATH'].split(os.pathsep) == [os.path.join('/w/tw', 'tampura'),
                                                     os.path.join('/w/tw', 'tampura_environments')]
     assert env['PYTHONHASHSEED'] == '0' and env['MPLBACKEND'] == 'Agg' and env['PYTHONDONTWRITEBYTECODE'] == '1'
-    assert 'PYTHONHOME' not in env and env['PATH'] == '/usr/bin'
-    assert base['PYTHONPATH'] == '/snap/sb:/w/pddlstream_lib'          # the caller's is not edited
-    assert 'PYTHONHASHSEED' not in ce.child_env(base, '/w/tw', None)
+    assert 'PYTHONHOME' not in env
+    assert base['PYTHONPATH'] == '/snap/sb:/w/pddlstream_lib' and base['PATH'] == '/usr/bin'   # the caller's is not edited
+    assert 'PYTHONHASHSEED' not in ce.child_env(base, '/w/tw', None, '/w/tw/.venv')
+
+
+def test_their_venv_is_first_on_the_path_because_their_solver_starts_a_bare_python():
+    # tampura/solvers/symk.py runs ["python", fast-downward.py, ...]: without their venv's bin on PATH the
+    # first get_action dies with FileNotFoundError (the two-step smoke of 2026-11-13)
+    env = ce.child_env({'PATH': '/usr/bin'}, '/w/tw', None, '/w/tw/.venv')
+    assert env['PATH'].split(os.pathsep) == [os.path.join('/w/tw/.venv', 'bin'), '/usr/bin']
+    assert env['VIRTUAL_ENV'] == '/w/tw/.venv'
+    assert ce.child_env({}, '/w/tw', None, '/v')['PATH'].split(os.pathsep)[0] == os.path.join('/v', 'bin')
 
 
 def test_the_hash_seed_is_the_episodes_own_unless_a_number_or_unset_is_asked():
@@ -177,6 +186,7 @@ def test_one_episode_runs_in_its_own_scratch_which_is_gone_afterwards(tmp_path, 
     assert os.path.basename(call['cwd']) == 'cu_T_77_seed7_rep1'
     assert os.path.dirname(call['cwd']) == a.scratch
     assert call['env']['PYTHONHASHSEED'] == '0' and 'tampura_environments' in call['env']['PYTHONPATH']
+    assert call['env']['PATH'].split(os.pathsep) == [os.path.join(a.venv_t, 'bin'), 'p']
     ep = os.path.join(a.out, 'T', 'seed7_rep1')
     assert os.path.isfile(os.path.join(ep, 'console.txt')) and os.path.isfile(os.path.join(ep, 'save', ce.FINAL_NAME))
     assert row['seed'] == 7 and row['rep'] == 1 and row['order'] == 3 and row['success'] is True and row['rc'] == 0
@@ -229,6 +239,29 @@ def test_a_job_runs_repetitions_outside_seeds_inside_and_resumes_without_running
     assert log == [(0, 2), (13, 2)]                       # only the new repetition ran
     out = capsys.readouterr().out
     assert 'world-state test at the end (primary): 6 of 6' in out
+
+
+def test_a_smoke_cuts_their_run_with_their_own_arguments_and_its_rows_are_never_counted(tmp_path, plain_scratch, monkeypatch, capsys):
+    a = args(tmp_path)
+    assert not set(ce.SMOKE_ARGS) & set(ce.command(a, 0, '/s'))          # an eval's command carries none of them
+    a.smoke = True
+    cmd = ce.command(a, 0, '/s')
+    assert tuple(cmd[-len(ce.SMOKE_ARGS):]) == ce.SMOKE_ARGS and cmd[cmd.index('--max-steps') + 1] == '2'
+    _ready(tmp_path, a)
+    monkeypatch.setattr(ce, 'run_one', lambda a_, seed, rep, order: ce.build_row(
+        seed, rep, order, 0, False, 20.0, dict(FINAL_OK, max_steps=2, steps=2), SPANS, '0'))
+    assert ce.run(a) == 0
+    assert not os.path.exists(os.path.join(a.out, ce.ROWS))               # nothing in the eval's rows
+    rows = ce.load_rows(os.path.join(a.out, ce.ROWS_SMOKE))
+    assert len(rows) == 1 and rows[0]['smoke'] is True
+    meta = json.load(open(os.path.join(a.out, 'cu_eval.json')))
+    assert meta['smoke'] is True and meta['smoke_args'] == list(ce.SMOKE_ARGS)
+    assert '0 episode(s), 0 counted' in ce.report([a.out])               # the report does not see a smoke
+    capsys.readouterr()
+    a.smoke = False
+    assert ce.run(a) == 0                                                 # the eval's episode still runs afterwards
+    assert len(ce.load_rows(os.path.join(a.out, ce.ROWS))) == 1
+    assert 'smoke' not in ce.load_rows(os.path.join(a.out, ce.ROWS))[0]
 
 
 def test_a_missing_file_stops_the_job_before_the_first_episode(tmp_path, plain_scratch, monkeypatch, capsys):
@@ -447,5 +480,6 @@ def test_the_job_script_is_marked_not_run_and_calls_the_harness_as_declared():
     assert "need the seeds as one range A-B" in text and '[ $HRC != 4 ]' in text
     assert 'TREE CHANGED' in text and 'tree_hash tree_before.txt' in text and 'tree_hash tree_after.txt' in text
     assert 'prune_work.sh --apply' in text and 'STOPPED_LOW_MEMORY' in text
+    assert '--smoke' not in text                              # a job never cuts their run short
     assert 'bridge_gates' not in text                         # find_dice's gates do not apply to this task
     assert 'sbatch -w cn-1xx' in text and 'pkill' not in text and 'killall' not in text
