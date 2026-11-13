@@ -76,6 +76,7 @@ G2 | telemetry.py | WorldTelemetry.register_bodies | 228 | write-only | world te
 G2 | telemetry.py | WorldTelemetry.phase | 269 | write-only | world telemetry, off unless armed | pos, _ = p.getBasePositionAndOrientation(
 G2 | telemetry.py | WorldTelemetry._body_state | 310 | write-only | world telemetry, off unless armed | pos, quat = p.getBasePositionAndOrientation(
 G2 | telemetry.py | WorldTelemetry._body_state | 316 | write-only | world telemetry, off unless armed | aabb_min, aabb_max = p.getAABB(bid, physicsClientId=self.client_id)
+G2 | telemetry.py | WorldTelemetry._position | 711 | write-only | TB-22 collision count, armed in every headless run (counts mode) and under the recorder: where a body the arm or its load touched stands, at the touch and at the checks after it; goes into the run's counts for the record (world_counts.json, rule 18) and nowhere else, nothing in the pipeline reads the counts before the summary is written | pos, _ = p.getBasePositionAndOrientation(
 G2 | test_full_pipeline.py | _verify_cube_on | 181 | write-only | scoring-only verifier, recorded and not acted on (test_full_pipeline.py:2219-2225) | o_min, o_max = p.getAABB(env.objects[obj_name].object_id)
 G2 | test_full_pipeline.py | _verify_cube_on | 182 | write-only | scoring-only verifier, recorded and not acted on (test_full_pipeline.py:2219-2225) | s_min, s_max = p.getAABB(env.objects[support_name].object_id)
 G2 | test_full_pipeline.py | _verify_on_table | 220 | write-only | scoring-only verifier | o_min, _ = p.getAABB(env.objects[obj_name].object_id)

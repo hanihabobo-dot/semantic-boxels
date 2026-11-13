@@ -67,6 +67,15 @@ def _commands(text):
     return [ln for ln in text.splitlines() if '--global-seed' in ln or 'test_full_pipeline' in ln]
 
 
+def _own(cmd):
+    """The run's own command.  Since TB-17 the launcher's line is
+    `export SB_RUN=1; ...; exec flock $L bash -c '<the run's command>'` (the
+    run waits for the pipeline lock, rule 7), so the driver's last flag is
+    followed by the closing quote; before TB-17 the line was the command."""
+    m = re.search(r"; exec flock \$L bash -c '(.*)'$", cmd)
+    return m.group(1).replace("'\\''", "'") if m else cmd
+
+
 @needs_pwsh
 def test_without_draw_the_command_has_no_draw_flag(out):
     assert _commands(out['plain']) and '--draw' not in out['plain'], out['plain']
@@ -75,7 +84,7 @@ def test_without_draw_the_command_has_no_draw_flag(out):
 @needs_pwsh
 def test_draw_boxels_reaches_the_driver_and_only_there(out):
     (cmd,) = _commands(out['draw'])
-    assert cmd.endswith(' --draw boxels') and '--vis 1' in cmd, cmd
+    assert _own(cmd).endswith(' --draw boxels') and '--vis 1' in cmd, cmd
     # the base command and the drawing one differ by that flag alone
     (base,) = _commands(out['plain'])
     stamp = re.compile(r'(watch|headless)_s\d+_[\d_-]+')
@@ -85,13 +94,13 @@ def test_draw_boxels_reaches_the_driver_and_only_there(out):
 @needs_pwsh
 def test_case_and_repeats_are_normalised(out):
     (cmd,) = _commands(out['case'])
-    assert cmd.count('--draw') == 1 and cmd.endswith(' --draw boxels'), cmd
+    assert cmd.count('--draw') == 1 and _own(cmd).endswith(' --draw boxels'), cmd
 
 
 @needs_pwsh
 def test_a_seed_list_and_a_generated_scene_carry_it_too(out):
     assert len(_commands(out['list'])) == 2
-    assert all(c.endswith(' --draw boxels') for c in _commands(out['list']))
+    assert all(_own(c).endswith(' --draw boxels') for c in _commands(out['list']))
     assert '--draw boxels' in out['gen'] and 'BRIDGE_SCENE_MANIFEST' in out['gen']
 
 

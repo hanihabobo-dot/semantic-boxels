@@ -14,6 +14,7 @@ import numpy as np
 import pybullet as p
 
 import telemetry          # #P1 F17 world telemetry (no-op unless armed)
+import world_counts       # TB-22: the run's record of the robot's own notices
 
 logger = logging.getLogger(__name__)
 
@@ -710,6 +711,9 @@ def detect_execution_collisions(robot_id: int,
         for msg in collisions:
             print(f"    *** COLLISION{tag}: {msg} ***")
         logger.warning("execution collisions%s: %s", tag, collisions)
+        # TB-22: counted for the run's record (collisions_reported), beside
+        # the simulator's own count; nothing decides on it.
+        world_counts.report_collision()
 
     return collisions
 
@@ -1039,9 +1043,13 @@ def hold_at_config(robot_id: int, target_joints, step_cap: int,
             time.sleep(1 / 120)
 
 
-def open_gripper(robot_id: int, gui: bool = False):
+def open_gripper(robot_id: int, gui: bool = False, placing: bool = False):
     """Open the Panda gripper to URDF max (0.04 m per finger) through
     the finger motors — a real release, no teleport.
+
+    ``placing`` (TB-22): True when this open is the release of a place or
+    a stack.  It changes nothing here; it tells the world observer's drop
+    count (telemetry.gripper_command) that the hand lets go on purpose.
 
     #P1 friction grasp (2026-08-20): the audit-#81 resetJointState
     teleport is removed.  It existed because the JOINT_FIXED weld
@@ -1064,6 +1072,7 @@ def open_gripper(robot_id: int, gui: bool = False):
     fails the release if the fingers did not physically open.
     """
     import time
+    telemetry.gripper_command(True, placing)
     fingers = robot_model().finger_joints
     for _ in range(160):
         p.setJointMotorControl2(robot_id, fingers[0],
@@ -1115,6 +1124,7 @@ def close_gripper(robot_id: int, gui: bool = False,
     weld stopped carrying the load, hence 40 N.
     """
     import time
+    telemetry.gripper_command(False)        # TB-22: a close starts a grip
     fingers = robot_model().finger_joints
     for _ in range(60):
         p.setJointMotorControl2(robot_id, fingers[0],
@@ -1235,6 +1245,7 @@ def close_gripper_until_contact(robot_id: int, gui: bool = False,
     zero without both pads touching, i.e. nothing was between them.
     ``squeeze`` None uses GRIP_SQUEEZE.
     """
+    telemetry.gripper_command(False)        # TB-22: a close starts a grip
     import time
     if squeeze is None:
         squeeze = GRIP_SQUEEZE
