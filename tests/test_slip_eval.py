@@ -138,8 +138,11 @@ print('Loading scene from ' + os.path.join(problems, scene))
 print('config: ' + open(os.path.join('env_configs', 'find_dice.yml')).read().strip())
 with open(os.path.join(a.save_dir, 'argv.json'), 'w') as f:
     json.dump({'argv': sys.argv[1:], 'cwd': os.getcwd(), 'scenes': files}, f)
+switches = {'slip_fixes': a.slip_fixes}
+if hasattr(a, 'corridor_test'):
+    switches['corridor_test'] = a.corridor_test
 with open(os.path.join(a.save_dir, 'bridge_episode.json'), 'w') as f:
-    json.dump({'outcome': {'status': 'success'}, 'rewards': [1.0],
+    json.dump({'outcome': {'status': 'success'}, 'rewards': [1.0], 'switches': switches,
                'scene_file': os.path.join(problems, scene)}, f)
 '''
 STUB_FIXES = '''
@@ -217,9 +220,12 @@ def test_scenes_flag_arm_and_rotation_end_to_end(tmp_path, monkeypatch):
         if r['arm'] == co:
             assert seen['argv'][i:i + 4] == ['--slip-fixes', 'a,b', '--corridor-test', 'object']
             assert r['arm_args'] == ['--corridor-test', 'object'] and r['fixes'] == 'a,b'
+            # the driver's own record of what it ran with reaches the row
+            assert r['switches'] == {'slip_fixes': 'a,b', 'corridor_test': 'object'}
         else:
             assert seen['argv'][i:i + 2] == ['--slip-fixes', 'a'] and '--corridor-test' not in seen['argv']
             assert 'arm_args' not in r
+            assert r['switches'] == {'slip_fixes': 'a', 'corridor_test': 'cell+object'}
         # rule 18's fields are in every row (not detected here: the stub ran no pipeline)
         assert {'drops', 'collisions', 'clean_success'} <= set(r)
     # the episodes' folders are gone, the records stay

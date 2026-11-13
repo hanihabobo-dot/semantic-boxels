@@ -323,6 +323,11 @@ def run_episode(a, arm, seed, rep, extra_args=(), extra_env=None):
         rec['bridge_status'] = (bj.get('outcome') or {}).get('status')
         rec['reward'] = (bj.get('rewards') or [None])[-1]
         rec['scene_file'] = os.path.basename(str(bj.get('scene_file')))
+        # The switches the driver ran with (BF#41: they travel with the
+        # episode, a bridge run leaves the pipeline's own run config empty),
+        # so a row shows that an arm's fixes and its flag arrived.
+        if isinstance(bj.get('switches'), dict):
+            rec['switches'] = bj['switches']
     except Exception as e:                       # no episode file: a crash or a kill
         rec['bridge_status'] = None
         rec['bridge_error'] = f"{type(e).__name__}: {e}"

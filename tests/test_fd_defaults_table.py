@@ -127,6 +127,22 @@ def test_set_g_another_scene_is_void_and_the_first_repetition_stands_alone(tmp_p
     assert 'success, by seed and repetition, 5 pairs: both 4, only def 1, only trap 0' in text
 
 
+def test_the_corridor_test_each_arm_ran_with(tmp_path):
+    rows = base_rows(range(3))
+    for (arm, _, _), r in rows.items():
+        r['switches'] = {'corridor_test': 'object' if arm == t.CO else 'cell+object'}
+    rows[(t.CO, 1, 0)]['switches'] = {'corridor_test': 'cell+object'}    # the flag did not arrive
+    del rows[(t.TRAP, 2, 0)]['switches']                                  # a run that left no record
+    text = flat(t.table([job(tmp_path, 'S_1', list(rows.values()))], NAMES))
+    assert ' def cell+object in 3 of 3, not recorded in 0' in text
+    assert ' trap cell+object in 2 of 3, not recorded in 1' in text
+    assert ('deftrap_co object in 2 of 3, not recorded in 0, ANOTHER VALUE in 1: '
+            'the arm did not run as named') in text
+    # a driver without the pass-through records no value: nothing is called wrong
+    plain = flat(t.table([job(tmp_path, 'S_2', list(base_rows(range(2)).values()))], NAMES))
+    assert 'deftrap_co object in 0 of 2, not recorded in 2' in plain and 'ANOTHER VALUE' not in plain
+
+
 def test_the_sets_are_separate_and_other_code_is_refused(tmp_path):
     s = job(tmp_path, 'S_1', list(base_rows(range(2)).values()))
     g = job(tmp_path, 'G_1', list(base_rows((100,), scene_ok=True).values()), scenes='/x/gen')
