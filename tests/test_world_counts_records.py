@@ -583,12 +583,23 @@ def test_a_generated_scene_row_of_our_arm_carries_the_fields(tmp_path, monkeypat
 
 @needs_uname
 def test_a_generated_scene_row_of_their_arm_carries_the_fields(tmp_path, monkeypatch):
+    # DV-1 (track/eval, path 6): arm T's success is the standard test, read from their final world by the
+    # reviewed rollout wrapper (episode_t's 'final_world', 'standard_read', 'standard_success'); their own
+    # reward stays beside it as t_reward_success
     rec = {'scene_ok': True, 'status': 'success', 'wall_s': 30.0,
            'loop_s': 25.0, 'save_dir': str(tmp_path),
+           'final_world': {'ok': True, 'standard_success': True},
+           'standard_read': True, 'standard_success': True,
            **wc.kinematic_arm_fields(True)}
     row = _gen_row(tmp_path, monkeypatch, 'T', rec)
-    assert row['success'] is True
+    assert row['success'] is True and row['t_reward_success'] is True
     assert row['drops'] == 0 and row['collisions'] is None
     assert row['drop_detector'].startswith(wc.CANNOT_HAPPEN)
     assert row['collision_detector'].startswith(wc.NOT_DETECTED)
     assert row['clean_success'] is None
+    # their reward with no readable final world does not count under DV-1: no success, never clean,
+    # and the arm's detector words stay
+    unread = dict(rec, final_world=None, standard_read=False, standard_success=False)
+    row = _gen_row(tmp_path, monkeypatch, 'T', unread)
+    assert row['counts'] is False and row['success'] is False and row['t_reward_success'] is True
+    assert row['drop_detector'].startswith(wc.CANNOT_HAPPEN) and row['clean_success'] is False
