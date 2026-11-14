@@ -56,3 +56,10 @@
 \newcommand*{\puckslide}{\texttt{puck\_slide}}
 % report only: a reference to an appendix chapter reads "Appendix B", not "Chapter B"
 \newcommand*{\appref}[1]{\hyperref[#1]{Appendix~\ref*{#1}}}
+% report only: the fixed validity note at every place that sets our arm against TAMPURA
+% (Hani, 14 November 2026: "1-9: use r recommendation"; the wording is REVIEW.md section
+% 5.6 item 1 of the code review, word for word; the argument fills its bracket per place).
+% One macro, so that the wording is the same everywhere.
+\DeclareRobustCommand*{\validitynote}[1]{\emph{Validity note:} Each arm is scored by its own
+  end test. TAMPURA's world is kinematic and it stops after 20 actions; ours is physical and
+  has no action limit. TAMPURA episodes that crashed in its own code are counted here as #1.}

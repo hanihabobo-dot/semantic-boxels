@@ -86,10 +86,12 @@ November Hani watched our arm drop a tall occluder during a carry in two runs of
 acceleration limit, so every junction kicks the box until it levers the fingers apart;
 and the carry's motion check treats space the robot has not seen as free, so the box can
 strike a hidden object. The first has a candidate cure that already exists, the
-acceleration-limited carry of \BF{59}, which removed the swing losses in the probes (6
-of 20 episodes lost to the swing without it, none of 20 with it); the second goes to
-path 14. The four-fix set of \BF{59} loses these boxes where the base setting keeps them
-on seed 3 (3 of 3 against 0 of 3), a limit of that set that the die measurements could
+acceleration-limited carry of \BF{59}, which removed the swing losses (a lost-grip record
+in 20 of 48 episodes without it and in none of 48 with it, in the A/B of 12 November; 4
+seeds build no scene); the second goes to path 14. The four-fix set of \BF{59} loses these
+boxes where the base setting keeps them: in that A/B on 8 of the 16 seeds, the reverse on
+none ($p = 0.008$; seed 3: 2 of 3 against 0 of 3, and 3 of 3 against 0 of 3 in the first
+probe), a limit of that set that the die measurements could
 not show (\Cref{sec:path3}, \TK{3}). The success count of our arm does not tell a
 success with such a drop from a clean one, which is why rule 18 records drops and
 collisions (\Cref{sec:catalogue}).
@@ -150,6 +152,24 @@ must carry, per episode, the drops and collisions with the detector that saw eac
 clean success (no drop, no collision) must be printed beside success. The arms of paths 4, 7 and 10 have the fields built, our own pipeline does not yet (TB-22), and no evaluation has run since. The numbers of this
 report, whose records hold no such counts, are not re-scored (rule 18,
 \ID{tracksstate}{tracks state file}; \Cref{sec:catalogue}).
+
+\paragraph{How the code counts drops and collisions.} Added on 14 November: since the
+state of this report the fields were built into our pipeline (TB-22), and the review
+of the code found that the code counts two of them in another way than the written
+rule names them (\ID{review}{code review}). \texttt{drops} is the count of the
+pipeline's own drop detector: a body counts as carried once both finger pads hold it
+and it touches nothing but the robot, and as dropped when it then has no finger
+contact for three checks in a row, or when the gripper opens on it, outside the
+release of a place. The rule names the telemetry's grip-lost event instead. The
+detector sees more than that event, because it does not ask how wide the fingers
+are: a body that pushes the fingers open on its way out still counts, and so does one
+knocked out of the hand onto another body. \texttt{collisions} counts the bodies that
+the arm or a body in its grip touched in an action and that then moved more than
+3\,mm from where the first touch found them, a body knocked off the table among them;
+each body counts once per action. The rule also counts what the executor itself
+reports as a contact; the code keeps that apart, in \texttt{collisions\_reported}, and
+it does not spoil a clean success. On 14 November Hani judged the difference not
+significant, and the code's way of counting stands.
 
 \paragraph{Noise and the test for plan counts.} Run to run, the unchanged pipeline
 on our holding scene gave 31 of 40 and 30 of 40 successes, three outcome flips and
@@ -324,10 +344,11 @@ Our wall clock of 144.4\,s per successful episode is on par with TAMPURA's 166\,
 and 65.6\,\% against at least 63\,\% (comparison) &
 The parity sentences are to be deleted unless the intervals support them. On
 generated scenes ours is ahead and the lead is not significant (57 of 80 against 46
-of 76, $p = 0.12$) & \PW{4}, \BF{63} \\
+of 80, four of TAMPURA's runs crashed, $p = 0.061$) & \PW{4}, \BF{63} \\
 TAMPURA's laptop baseline of 11 of 20 (comparison) &
 The tree it ran on had one import fix; seeds load different scenes on laptop and
-cluster; as shipped on the cluster TAMPURA solved 13 of 20 & \BF{3}, \BF{8}, \BF{9} \\
+cluster; as shipped on the cluster TAMPURA solved 13 of 20, 1 crashed & \BF{3},
+\BF{8}, \BF{9} \\
 Shadow cells under-cover the region an object hides (limitations) &
 Our regions begin at the object's back face and never cover the space under it, so
 a die at a cup's pose lies in none of them & \BF{65} \\
@@ -335,7 +356,8 @@ Holding is scored by one physical test &
 It is scored by two: the weld in the thesis sweep, the pads at 0.5\,N now & \TK{6} \\
 \bottomrule
 \end{tabularx}
-\caption{Statements of the thesis that the record qualifies.}
+\caption[Statements of the thesis that the record qualifies.]{Statements of the thesis
+that the record qualifies. \validitynote{failures}}
 \label{tab:qualify}
 \end{table}
 
@@ -363,7 +385,8 @@ figure it uses and does not smooth the rest over.
   \texttt{grip\_squeeze\_mm} 3.0. The report follows \BF{48}.
   \item \BF{59} counts TAMPURA's 60 episodes on the shipped scenes as 40 successes, the
   one crash included as a censored failure; \BF{63} counts 40 of 59 valid episodes for
-  the same scenes. The report gives both where it uses them.
+  the same scenes. The report uses 40 of 60: on 14 November Hani decided that the crash
+  is a failure.
   \item Our mean discounted return on run 2 of the generated scenes is 0.585 over 80
   episodes by the step-equivalence convention, 0.592 over the 76 pairs, 0.600 over 80
   without the observes, and 0.698 over 80 under the one-action harness of today
