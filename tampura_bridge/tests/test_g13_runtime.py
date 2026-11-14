@@ -150,6 +150,38 @@ def test_arm_t_passes_on_the_real_setup():
     assert rec['ok'], rec['failures']
 
 
+def test_arm_t_records_the_reviewed_wrapper_and_its_three_methods():
+    # DV-1's amendment: rollout is the one reviewed wrapper, nothing else is added
+    policy, name, cls = _timed()
+    rec = g13_runtime.check_arm_t(policy, types.SimpleNamespace(action_schemas=[]), name, cls)
+    assert rec['policy_methods'] == ['__init__', 'get_action', 'rollout']
+    assert 'reviewed wrapper' in rec['rollout']
+
+
+def test_arm_t_another_rollout_fails():
+    from tampura_bridge.timed_policy import PLANNER_NAME, TampuraPolicyTimed
+
+    class Sneaky(TampuraPolicyTimed):
+        def rollout(self, env, b, store):
+            return None
+
+    rec = g13_runtime.check_arm_t(object.__new__(Sneaky), types.SimpleNamespace(action_schemas=[]),
+                                  PLANNER_NAME, TampuraPolicyTimed)
+    assert any('is not the reviewed wrapper' in f for f in rec['failures'])
+
+
+def test_arm_t_an_extra_method_fails():
+    from tampura_bridge.timed_policy import PLANNER_NAME, TampuraPolicyTimed
+
+    class Extra(TampuraPolicyTimed):
+        def helper(self):
+            return None
+
+    rec = g13_runtime.check_arm_t(object.__new__(Extra), types.SimpleNamespace(action_schemas=[]),
+                                  PLANNER_NAME, TampuraPolicyTimed)
+    assert any("not only __init__, get_action and rollout" in f for f in rec['failures'])
+
+
 def test_arm_t_extra_planner_of_ours_fails(monkeypatch):
     from tampura.config import config as tconfig
     policy, name, cls = _timed()
