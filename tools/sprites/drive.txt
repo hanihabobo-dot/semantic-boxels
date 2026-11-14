@@ -1,0 +1,93 @@
+key: drive
+width: 12
+period_ms: 130
+pingpong: no
+notes: the camera robot rolls east across the floor: its wheels turn, speed lines trail behind and the cell borders slide past under it
+frame 1
+      ◉
+      │
+══ ╭──┴──╮
+ · ╰◐───◐╯
+▔▔▔▔▔▔▔┃▔▔▔▔
+      C
+      c
+kk cccCccc
+ K cwcccwc
+kkkkkkkwkkkk
+frame 2
+      ◉
+      │
+ ═ ╭──┴──╮
+· ·╰◓───◓╯
+▔▔▔▔▔▔┃▔▔▔▔▔
+      C
+      c
+ k cccCccc
+k Kcwcccwc
+kkkkkkwkkkkk
+frame 3
+      ◉
+      │
+══ ╭──┴──╮
+ · ╰◑───◑╯
+▔▔▔▔▔┃▔▔▔▔▔▔
+      C
+      c
+kk cccCccc
+ K cwcccwc
+kkkkkwkkkkkk
+frame 4
+      ◉
+      │
+ ═ ╭──┴──╮
+· ·╰◒───◒╯
+▔▔▔▔┃▔▔▔▔▔▔▔
+      C
+      c
+ k cccCccc
+k Kcwcccwc
+kkkkwkkkkkkk
+frame 5
+      ◉
+      │
+══ ╭──┴──╮
+ · ╰◐───◐╯
+▔▔▔┃▔▔▔▔▔▔▔┃
+      C
+      c
+kk cccCccc
+ K cwcccwc
+kkkwkkkkkkkw
+frame 6
+      ◉
+      │
+ ═ ╭──┴──╮
+· ·╰◓───◓╯
+▔▔┃▔▔▔▔▔▔▔┃▔
+      C
+      c
+ k cccCccc
+k Kcwcccwc
+kkwkkkkkkkwk
+frame 7
+      ◉
+      │
+══ ╭──┴──╮
+ · ╰◑───◑╯
+▔┃▔▔▔▔▔▔▔┃▔▔
+      C
+      c
+kk cccCccc
+ K cwcccwc
+kwkkkkkkkwkk
+frame 8
+      ◉
+      │
+ ═ ╭──┴──╮
+· ·╰◒───◒╯
+┃▔▔▔▔▔▔▔┃▔▔▔
+      C
+      c
+ k cccCccc
+k Kcwcccwc
+wkkkkkkkwkkk

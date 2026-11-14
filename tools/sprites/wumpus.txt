@@ -1,0 +1,93 @@
+key: wumpus
+width: 12
+period_ms: 150
+pingpong: no
+notes: the robot rolls up to the wumpus, whose eyes open on a mouth of fangs; it lunges with a spark of impact, the robot knocked back and red
+frame 1
+       ▄███▄
+ ◉     █─█─█
+╭┴╮    █▀▀▀█
+╰◐╯    ▀███▀
+▔▔▔▔▔▔▔▔▔▔▔▔
+       rrrrr
+ C     rnrnr
+ccc    rrrrr
+ccc    rrrrr
+kkkkkkkkkkkk
+frame 2
+       ▄███▄
+  ◉    █─█─█
+ ╭┴╮   █▀▀▀█
+ ╰◐╯   ▀███▀
+▔▔▔▔▔▔▔▔▔▔▔▔
+       rrrrr
+  C    rnrnr
+ ccc   rrrrr
+ ccc   rrrrr
+kkkkkkkkkkkk
+frame 3
+       ▄███▄
+   ◉   █·█·█
+  ╭┴╮  █▀▀▀█
+  ╰◐╯  ▀███▀
+▔▔▔▔▔▔▔▔▔▔▔▔
+       rrrrr
+   C   rnrnr
+  ccc  rrrrr
+  ccc  rrrrr
+kkkkkkkkkkkk
+frame 4
+       ▄███▄
+    ◉  █●█●█
+   ╭┴╮ █▼▼▼█
+   ╰◐╯ ▀███▀
+▔▔▔▔▔▔▔▔▔▔▔▔
+       rrrrr
+    C  rWrWr
+   ccc rWWWr
+   ccc rrrrr
+kkkkkkkkkkkk
+frame 5
+      ▄███▄
+    ◉ █●█●█
+   ╭┴╮✸▼▼▼█
+   ╰◐╯▀███▀
+▔▔▔▔▔▔▔▔▔▔▔▔
+      RRRRR
+    R RWRWR
+   RRROWWWR
+   RRRRRRRR
+kkkkkkkkkkkk
+frame 6
+       ▄███▄
+  ◉  ✧ █●█●█
+ ╭┴╮   █▼▼▼█
+ ╰◐╯   ▀███▀
+▔▔▔▔▔▔▔▔▔▔▔▔
+       RRRRR
+  R  Y RWRWR
+ RRR   RWWWR
+ RRR   RRRRR
+kkkkkkkkkkkk
+frame 7
+       ▄███▄
+ ◉     █●█●█
+╭┴╮    █████
+╰◐╯    ▀███▀
+▔▔▔▔▔▔▔▔▔▔▔▔
+       RRRRR
+ R     RWRWR
+RRR    RKKKR
+RRR    RRRRR
+kkkkkkkkkkkk
+frame 8
+       ▄███▄
+ ◉     █●█●█
+╭┴╮✦   █▼▼▼█
+╰◐╯    ▀███▀
+▔▔▔▔▔▔▔▔▔▔▔▔
+       rrrrr
+ R     rWrWr
+RRRO   rWWWr
+RRR    rrrrr
+kkkkkkkkkkkk

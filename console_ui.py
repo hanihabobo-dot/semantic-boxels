@@ -193,6 +193,15 @@ def context():
     return dict(_console.context) if _console is not None else {}
 
 
+def set_task(task):
+    """Plug in another task's words (the Wumpus world: wumpus/console_words.py).
+    `task` is an object whose optional methods take the console first and
+    answer None to leave the default words in place (see Console._tw); the
+    ledger rows it names itself (on_ledger_event returning True) are its
+    own.  boxels and tampura never set one, and then nothing here changes."""
+    _call(Console.set_task, task)
+
+
 def _call(method, *args, **kw):
     """The event API never raises into the pipeline."""
     if _console is None:
@@ -1043,6 +1052,7 @@ class Console:
         self._art, self._art_palette, self._ascii = _load_art()
         self._art_w = max([_CUBE_W] + [int(s.get('width', 0)) for s in self._art.values()])
         self._audio = None            # console_audio.Audio when SB_AUDIO or SB_VOICE asks for it
+        self._task = None             # another task's words (set_task); None for boxels and tampura
 
         # what the robot knows for its narration (nothing here feeds back)
         self._goal_text = None
@@ -1180,6 +1190,40 @@ class Console:
     @staticmethod
     def _parts(parts):
         return list(parts)
+
+    # ----- another task's words (set_task) ------------------------------------
+
+    def set_task(self, task):
+        self._task = task
+
+    def _tw(self, name, *args):
+        """What the task says for `name` (its method of that name called with
+        this console and `args`), or None: no task, no such method, a None
+        answer or an error all leave the default words in place."""
+        task = self._task
+        if task is None:
+            return None
+        fn = getattr(task, name, None)
+        if fn is None:
+            return None
+        try:
+            return fn(self, *args)
+        except Exception:
+            return None
+
+    def _describe(self, action, args):
+        """describe_step, or the task's words for the action."""
+        text = self._tw('describe_step', action, args)
+        return text if text is not None else describe_step(action, args)
+
+    def _set_sprite(self, key):
+        """Change the drawing of the activity that is live now (the task shows
+        what a step found while the step is still on)."""
+        with self._lock:
+            if self._live is not None:
+                self._live['sprite'] = key
+                self._live['frame0'] = self._frame
+                self._redraw_live()
 
     # ----- lifecycle -------------------------------------------------------
 
@@ -1415,6 +1459,8 @@ class Console:
         spoken, the others dropped while the robot is ahead of its voice."""
         if self._audio is not None:
             try:
+                if self._task is not None:
+                    text = self._tw('speech', text) or text
                 self._audio.say(text, important=important)
             except Exception:
                 pass
@@ -1919,17 +1965,23 @@ class Console:
                     what = 'the tower stands as planned'
                 else:
                     what = 'the mission is accomplished'
+                if self._task is not None:
+                    what = self._tw('summary_done', rows) or what
                 self._emit([(self.g('ok') + ' ', 'bgreen'), ('Done. ', 'bgreen')]
                            + _mark(what + '.'))
                 self._sfx('success')
                 self._say(f'Done. {what}.', important=True)
             else:
                 text = self._result[1] if self._result and self._result[0] == 'failed' else ''
+                if self._task is not None:
+                    text = self._tw('summary_failed', exit_reason) or text
                 self._emit([(self.g('bad') + ' ', 'bred'), ('Failed. ', 'bred'),
                             (text, None), (f'  ({exit_reason})' if exit_reason else '', 'dim')])
                 self._sfx('failure')
                 self._say(f'Failed. {text}', important=True)
             stats = []
+            if self._task is not None:
+                stats.extend(self._tw('summary_stats', rows) or [])
             found = _found_in(self._found_region or rows.get('Found in'))
             if found:
                 stats.append(found)
@@ -1956,6 +2008,13 @@ class Console:
 
     def on_ledger_event(self, kind, row):
         try:
+            if self._task is not None:
+                # another task's own rows come first (its on_ledger_event answers
+                # True for a row it has dealt with); the shared kinds fall through
+                # to the words below, which ask the task for its phrasing
+                handler = getattr(self._task, 'on_ledger_event', None)
+                if handler is not None and handler(self, kind, row):
+                    return
             if kind == 'plan':
                 self._plan(row)
             elif kind == 'step':
@@ -2021,6 +2080,13 @@ class Console:
     def _start_thinking(self, plan_no, disposal=None):
         self._plan_no = plan_no
         self._thinking = {'disposal': disposal}
+        if self._task is not None:
+            custom = self._tw('think_lines', plan_no)     # (head parts, info lines) or None
+            if custom is not None:
+                self._start_live('think', custom[0], list(custom[1]))
+                self._music('think')
+                self._sfx('plan')
+                return
         self._start_live('think', self._think_head(disposal), [self._think_info(disposal)])
         self._music('think')
         self._sfx('plan')
@@ -2045,7 +2111,9 @@ class Console:
         self._known_loc = False
         self._progress = None
         if actions:
-            plan_text = intention(actions)
+            plan_text = self._tw('intention', actions)
+            if plan_text is None:
+                plan_text = intention(actions)
             if plan_text:
                 self.note(f'I will {plan_text}')
                 self._say(f'I will {plan_text}.', important=True)
@@ -2062,9 +2130,11 @@ class Console:
         self._observe_text = None
         self._dispatched += 1
         where = (f'step {idx} of {n}' if n else f'step {idx}') + f' in plan {pid}'
-        text = describe_step(action, row.get('args'))
+        text = self._describe(action, row.get('args'))
         head = ([(self.g('bullet') + ' ', 'cyan')] + _mark(text) + [(f' {self.g("ell")}', 'dim')])
-        self._start_live('act', head, [where], sprite=self._sprite_for(action, row.get('args')))
+        sprite = self._tw('sprite_for', action, row.get('args'))
+        self._start_live('act', head, [where],
+                         sprite=sprite or self._sprite_for(action, row.get('args')))
         self._music('act')
         self._sfx('step')
         self._say(text)
@@ -2104,13 +2174,17 @@ class Console:
         style = ('green' if text in ('done', 'found it', 'seen')
                  else 'red' if text.startswith(('failed', 'skipped', 'not at home', 'ended'))
                  else 'yellow')
+        if self._task is not None:
+            custom = self._tw('step_end', row, action, self._step.get('args'), text, style, dt)
+            if custom is not None:
+                text, style, dt = custom
         if style == 'green':
             self._sfx('found' if text == 'found it' else 'done')
             if text == 'found it':
                 self._say('Found it.', important=True)
         else:
             self._sfx('fail' if style == 'red' else 'warn')
-            self._say(f'{describe_step(action, self._step.get("args"))}: {text}', important=True)
+            self._say(f'{self._describe(action, self._step.get("args"))}: {text}', important=True)
         completion = _mark(text, style) + ([(f'  ({_secs(dt)})', 'dim')] if dt is not None else [])
         self._end_live(completion)
         self._step = None
