@@ -1,7 +1,10 @@
-"""Path 9 (b), provisional: the geometry of the arm-camera-only mode (arm_eye.py).
+"""Path 9: the geometry of the arm-camera-only mode (arm_eye.py).
 
-No episode, no planner: a camera pose, the image's frame test and the split of
-the table into cells the first image shows and cells it does not.
+No episode, no planner: a camera pose, the image's frame test, and the part of
+the table the first image does not show as hidden regions: the fine cells out
+of the frame merged into few boxes, minus the first scan's boxes (PLAN 11.16,
+the first image's own cut).  The wired case, on a scene of ours, is in
+tests/test_eye_switch.py.
 """
 import math
 import sys
@@ -17,7 +20,7 @@ sys.path.insert(0, str(ROOT))
 import arm_eye  # noqa: E402
 import observe_views  # noqa: E402
 import robot_utils  # noqa: E402
-from boxel_data import BoxelType  # noqa: E402
+from boxel_data import BoxelData, BoxelType  # noqa: E402
 from test_look_views import world  # noqa: E402,F401
 
 W, H = robot_utils.WRIST_CAMERA_WIDTH, robot_utils.WRIST_CAMERA_HEIGHT
@@ -113,146 +116,254 @@ def test_straight_down_the_frame_is_the_rectangle_under_the_camera():
     assert not arm_eye.box_in_frame(pose, [0.15, 0.05, cam_z + 0.1], [0.25, 0.15, cam_z + 0.2])
 
 
-FINE = 0.10     # a finer tiling than one look needs, so that the image holds whole cells
+# ----- the part of the table the first image does not show ---------------------------
+
+HEIGHT = 0.05            # the regions' height over the table in these cases
+EPS = 1e-9
+F = (H / 2.0) / math.tan(math.radians(robot_utils.WRIST_CAMERA_FOV_DEG) / 2.0)
+# Straight down over the window's middle, 0.525 m over the box tops: there the
+# frame holds x -0.012 to 0.612 and y -0.232 to 0.232, so the fine cells of
+# x 0 to 0.6, y -0.2 to 0.2 are seen.
+DOWN = _down(0.3, 0.0, TABLE_Z + HEIGHT + 0.525)
+# The four strips around that rectangle as (x0, y0, x1, y1), first row first.
+STRIPS = [(-0.1, -0.4, 0.0, 0.4), (0.0, -0.4, 0.6, -0.2),
+          (0.0, 0.2, 0.6, 0.4), (0.6, -0.4, 0.7, 0.4)]
+# Case 3's known boxes: an object box taller than the regions, from the image
+# into the far strip, and a shadow fragment lower than the regions, from the
+# image into a side strip.
+OBJ = ((0.50, -0.05, TABLE_Z), (0.65, 0.05, TABLE_Z + 0.10))
+SHADOW = ((0.20, 0.15, TABLE_Z), (0.40, 0.30, TABLE_Z + 0.03))
 
 
-def test_the_cells_tile_the_workspace_and_none_is_larger_than_asked():
-    unseen, seen = arm_eye.unseen_cells(POSE_A, WORKSPACE[0], WORKSPACE[1], TABLE_Z, 0.05,
-                                        max_side=FINE)
-    cells = unseen + seen
-    assert len(cells) == 64 and len(seen) >= 1 and len(unseen) >= 1
-    area = sum((hi[0] - lo[0]) * (hi[1] - lo[1]) for lo, hi in cells)
-    assert area == pytest.approx(0.8 * 0.8)
-    for lo, hi in cells:
-        assert hi[0] - lo[0] <= FINE + 1e-9 and hi[1] - lo[1] <= FINE + 1e-9
-        assert lo[2] == TABLE_Z and hi[2] == pytest.approx(TABLE_Z + 0.05)
-    keys = {(round(lo[0], 6), round(lo[1], 6)) for lo, _ in cells}
-    assert len(keys) == 64                                    # no cell twice
-    for lo, hi in seen:
-        assert arm_eye.box_in_frame(POSE_A, lo, hi)
-    for lo, hi in unseen:
-        assert not arm_eye.box_in_frame(POSE_A, lo, hi)
-    again = arm_eye.unseen_cells(POSE_A, WORKSPACE[0], WORKSPACE[1], TABLE_Z, 0.05,
-                                 max_side=FINE)
-    assert all(np.array_equal(a[0], b[0]) and np.array_equal(a[1], b[1])
-               for a, b in zip(unseen + seen, again[0] + again[1]))
+def _known(kind, lo, hi):
+    return BoxelData(boxel_type=kind, min_corner=np.array(lo, dtype=float),
+                     max_corner=np.array(hi, dtype=float))
 
 
-def test_at_the_look_cells_size_the_home_view_holds_no_whole_cell():
-    """A finding for the design, kept as a test (2026-11-12): with cells of
-    UNSEEN_MAX_SIDE_M anchored at the workspace corner, TAMPURA's home view
-    cuts every cell it touches, so all 16 count as unseen although the image
-    shows the table's middle.  Before this is wired, seen and unseen have to
-    be told apart on a finer tiling than the cells a look is planned for."""
-    unseen, seen = arm_eye.unseen_cells(POSE_A, WORKSPACE[0], WORKSPACE[1], TABLE_Z, 0.05)
-    assert len(unseen) == 16 and seen == []
-    for lo, hi in unseen:
-        assert hi[0] - lo[0] <= arm_eye.UNSEEN_MAX_SIDE_M + 1e-9
-        assert hi[1] - lo[1] <= arm_eye.UNSEEN_MAX_SIDE_M + 1e-9
+def _cells(pose, height=HEIGHT):
+    """The window's fine cells told apart by box_in_frame alone, as
+    (x0, y0, x1, y1, seen): the reference the regions are checked against."""
+    side = arm_eye.UNSEEN_FINE_SIDE_M
+    return [(x0, y0, x1, y1,
+             arm_eye.box_in_frame(pose, (x0, y0, TABLE_Z), (x1, y1, TABLE_Z + height)))
+            for x0, x1 in arm_eye._tiles(WORKSPACE[0][0], WORKSPACE[0][1], side)
+            for y0, y1 in arm_eye._tiles(WORKSPACE[1][0], WORKSPACE[1][1], side)]
 
 
-def test_the_seen_cells_are_in_front_of_the_arm_and_the_far_ones_are_unseen():
-    """TAMPURA's home view covers the table's middle in front of the robot
-    (measured footprint x -0.16 to 0.30, at most 0.34 to either side); a cell
-    0.9 m out is not in it."""
-    unseen, seen = arm_eye.unseen_cells(POSE_A, WORKSPACE[0], WORKSPACE[1], TABLE_Z, 0.05,
-                                        max_side=FINE)
-    for lo, hi in seen:
-        assert hi[0] <= 0.30 + 1e-9 and max(abs(lo[1]), abs(hi[1])) <= 0.34
-    assert any(lo[0] >= 0.5 - 1e-9 for lo, _ in unseen)
+def _overlap(a, b):
+    """True when the boxes a and b, each (lo, hi), share a volume; touching
+    faces do not."""
+    return bool(np.all(np.minimum(a[1], b[1]) - np.maximum(a[0], b[0]) > EPS))
+
+
+def _in_any(pts, boxes, dims=3):
+    """For each point, whether it lies strictly inside one of the boxes, each
+    (lo, hi), on the first ``dims`` coordinates."""
+    if len(boxes) == 0:
+        return np.zeros(len(pts), dtype=bool)
+    lo = np.array([b[0][:dims] for b in boxes], dtype=float)
+    hi = np.array([b[1][:dims] for b in boxes], dtype=float)
+    q = pts[:, None, :dims]
+    return np.any(np.all((q > lo[None]) & (q < hi[None]), axis=2), axis=1)
+
+
+def _xy(boxes):
+    return np.array([[lo[0], lo[1], hi[0], hi[1]] for lo, hi in boxes], dtype=float)
+
+
+def _assert_exact(boxes, cells, height=HEIGHT):
+    """The boxes are the unseen fine cells' union exactly: each unseen cell
+    lies in one box and no seen cell's centre in any, no two boxes share a
+    volume, and their area is the unseen cells' area."""
+    for lo, hi in boxes:
+        assert lo[2] == pytest.approx(TABLE_Z) and hi[2] == pytest.approx(TABLE_Z + height)
+    for x0, y0, x1, y1, seen in cells:
+        if seen:
+            centre = np.array([[(x0 + x1) / 2.0, (y0 + y1) / 2.0]])
+            assert not _in_any(centre, boxes, dims=2)[0], (x0, y0)
+        else:
+            holders = [1 for lo, hi in boxes
+                       if lo[0] - EPS <= x0 and x1 <= hi[0] + EPS
+                       and lo[1] - EPS <= y0 and y1 <= hi[1] + EPS]
+            assert len(holders) == 1, (x0, y0)
+    for i, a in enumerate(boxes):
+        for b in boxes[i + 1:]:
+            assert not _overlap(a, b)
+    area = sum((hi[0] - lo[0]) * (hi[1] - lo[1]) for lo, hi in boxes)
+    assert area == pytest.approx(sum((x1 - x0) * (y1 - y0)
+                                     for x0, y0, x1, y1, seen in cells if not seen))
+
+
+def test_the_fine_cells_tile_the_window_and_the_frame_splits_them():
+    """The window in equal cells of at most UNSEEN_FINE_SIDE_M, x outer, y
+    inner, unseen exactly where box_in_frame refuses the cell's whole box.
+    TAMPURA's home view covers the table's middle in front of the robot
+    (measured footprint x -0.16 to 0.30, at most 0.34 to either side): the
+    seen cells lie there, and the cells from x 0.5 on are unseen."""
+    xs, ys, unseen = arm_eye.unseen_fine_cells(POSE_A, WORKSPACE[0], WORKSPACE[1],
+                                               TABLE_Z, HEIGHT)
+    assert len(xs) == len(ys) == 16 and [len(row) for row in unseen] == [16] * 16
+    for tiles, (lo, hi) in ((xs, WORKSPACE[0]), (ys, WORKSPACE[1])):
+        assert tiles[0][0] == lo and tiles[-1][1] == pytest.approx(hi)
+        assert all(a[1] == b[0] for a, b in zip(tiles, tiles[1:]))     # no gap, no overlap
+        assert all(t1 - t0 <= arm_eye.UNSEEN_FINE_SIDE_M + EPS for t0, t1 in tiles)
+    seen = []
+    for i, (x0, x1) in enumerate(xs):
+        for j, (y0, y1) in enumerate(ys):
+            inside = arm_eye.box_in_frame(POSE_A, (x0, y0, TABLE_Z), (x1, y1, TABLE_Z + HEIGHT))
+            assert unseen[i][j] == (not inside)
+            if inside:
+                seen.append((x0, y0, x1, y1))
+    assert seen
+    for x0, y0, x1, y1 in seen:
+        assert x1 <= 0.30 + EPS and max(abs(y0), abs(y1)) <= 0.34
+    assert all(unseen[i][j] for i, (x0, _) in enumerate(xs) if x0 >= 0.5 - EPS
+               for j in range(len(ys)))
 
 
 def test_a_taller_target_leaves_fewer_seen_cells():
     """The whole box up to the target's height must be in the image, so a
     taller target can only turn seen cells into unseen ones."""
-    low = arm_eye.unseen_cells(POSE_A, WORKSPACE[0], WORKSPACE[1], TABLE_Z, 0.02, max_side=FINE)
-    tall = arm_eye.unseen_cells(POSE_A, WORKSPACE[0], WORKSPACE[1], TABLE_Z, 0.15, max_side=FINE)
-    key = lambda cells: {(round(lo[0], 6), round(lo[1], 6)) for lo, _ in cells}
-    assert len(low[1]) >= 1
-    assert key(tall[1]) <= key(low[1])
+    _, _, low = arm_eye.unseen_fine_cells(POSE_A, WORKSPACE[0], WORKSPACE[1], TABLE_Z, 0.02)
+    _, _, tall = arm_eye.unseen_fine_cells(POSE_A, WORKSPACE[0], WORKSPACE[1], TABLE_Z, 0.15)
+    seen = lambda m: {(i, j) for i, row in enumerate(m) for j, u in enumerate(row) if not u}
+    assert seen(low)
+    assert seen(tall) <= seen(low)
 
 
-def test_regions_straight_down_are_the_parts_outside_the_frame():
-    """A camera straight down over the table: the seen part is a rectangle,
-    so the regions are known by hand.  With 0.20 m look cells and 0.05 m fine
-    cells the frame (x -0.012 to 0.612, y -0.232 to 0.232 at the box tops)
-    shows the fine cells of x 0 to 0.6, y -0.2 to 0.2."""
-    f = (H / 2.0) / math.tan(math.radians(robot_utils.WRIST_CAMERA_FOV_DEG) / 2.0)
+def test_straight_down_the_unseen_part_is_four_strips_around_the_image():
+    """Case 1: rows run along y and stack along x, so the part out of the
+    frame is two full strips at the window's x ends and two strips between
+    them, before and after the image."""
     d = 0.525
-    pose = _down(0.3, 0.0, TABLE_Z + 0.05 + d)
-    assert (W / 2.0 - arm_eye.FRAME_MARGIN_PX) * d / f == pytest.approx(0.312, abs=1e-3)
-    assert (H / 2.0 - arm_eye.FRAME_MARGIN_PX) * d / f == pytest.approx(0.232, abs=1e-3)
-    regions = arm_eye.unseen_regions(pose, WORKSPACE[0], WORKSPACE[1], TABLE_Z, 0.05,
-                                     max_side=0.20, fine_side=0.05)
-    got = [tuple(round(float(v), 6) for v in (lo[0], lo[1], hi[0], hi[1])) for lo, hi in regions]
-    want = [(-0.1, -0.4, 0.1, -0.2), (-0.1, -0.2, 0.0, 0.0), (-0.1, 0.0, 0.0, 0.2), (-0.1, 0.2, 0.1, 0.4),
-            (0.1, -0.4, 0.3, -0.2), (0.1, 0.2, 0.3, 0.4),
-            (0.3, -0.4, 0.5, -0.2), (0.3, 0.2, 0.5, 0.4),
-            (0.5, -0.4, 0.7, -0.2), (0.6, -0.2, 0.7, 0.0), (0.6, 0.0, 0.7, 0.2), (0.5, 0.2, 0.7, 0.4)]
-    assert got == pytest.approx(want)                         # x outer, y inner
-    area = sum((hi[0] - lo[0]) * (hi[1] - lo[1]) for lo, hi in regions)
+    assert (W / 2.0 - arm_eye.FRAME_MARGIN_PX) * d / F == pytest.approx(0.312, abs=1e-3)
+    assert (H / 2.0 - arm_eye.FRAME_MARGIN_PX) * d / F == pytest.approx(0.232, abs=1e-3)
+    boxes = arm_eye.unseen_regions(DOWN, WORKSPACE[0], WORKSPACE[1], TABLE_Z, HEIGHT)
+    assert len(boxes) == 4
+    assert np.allclose(_xy(boxes), STRIPS, atol=EPS)
+    _assert_exact(boxes, _cells(DOWN))
+    area = sum((hi[0] - lo[0]) * (hi[1] - lo[1]) for lo, hi in boxes)
     assert area == pytest.approx(0.8 * 0.8 - 0.6 * 0.4)
-    for lo, hi in regions:
-        assert lo[2] == TABLE_Z and hi[2] == pytest.approx(TABLE_Z + 0.05)
 
 
-def _fine_cells(max_side, fine):
-    """The fine cells of unseen_regions' own two tilings, with the index of
-    the look cell each lies in."""
-    out = []
-    k = 0
-    for x0, x1 in arm_eye._tiles(WORKSPACE[0][0], WORKSPACE[0][1], max_side):
-        for y0, y1 in arm_eye._tiles(WORKSPACE[1][0], WORKSPACE[1][1], max_side):
-            for fx0, fx1 in arm_eye._tiles(x0, x1, fine):
-                for fy0, fy1 in arm_eye._tiles(y0, y1, fine):
-                    out.append((k, (x0, y0, x1, y1), (fx0, fy0, fx1, fy1)))
-            k += 1
-    return out
+def test_at_the_home_view_the_regions_are_the_unseen_cells_exactly_and_replay():
+    """Case 2: TAMPURA's home view, tilted 38.5 degrees: the same exactness,
+    fewer boxes than unseen cells, a fixed order, the same list twice."""
+    cells = _cells(POSE_A)
+    n_unseen = sum(1 for *_, seen in cells if not seen)
+    assert 0 < n_unseen < len(cells)
+    boxes = arm_eye.unseen_regions(POSE_A, WORKSPACE[0], WORKSPACE[1], TABLE_Z, HEIGHT)
+    _assert_exact(boxes, cells)
+    assert len(boxes) < n_unseen
+    keys = [(round(float(lo[0]), 9), round(float(lo[1]), 9)) for lo, _ in boxes]
+    assert keys == sorted(keys) and len(set(keys)) == len(keys)     # first row, then first y tile
+    again = arm_eye.unseen_regions(POSE_A, WORKSPACE[0], WORKSPACE[1], TABLE_Z, HEIGHT)
+    assert len(again) == len(boxes)
+    assert all(np.array_equal(a[0], b[0]) and np.array_equal(a[1], b[1])
+               for a, b in zip(boxes, again))
 
 
-def test_regions_at_the_home_view_hold_every_unseen_fine_cell_and_no_more_than_a_look():
-    """TAMPURA's home view (slanted): every fine cell the image does not hold
-    lies in the region of its own look cell; a region stays inside its look
-    cell, so none is larger than one look holds and no two overlap; each side
-    of a region touches an unseen fine cell (the box is tight); a look cell
-    wholly seen has no region."""
-    side = observe_views.look_cell_side()
-    fine = arm_eye.UNSEEN_FINE_SIDE_M
-    regions = arm_eye.unseen_regions(POSE_A, WORKSPACE[0], WORKSPACE[1], TABLE_Z, 0.05,
-                                     max_side=side)
-    by_cell = {}
-    for k, cell, (fx0, fy0, fx1, fy1) in _fine_cells(side, fine):
-        seen = arm_eye.box_in_frame(POSE_A, (fx0, fy0, TABLE_Z), (fx1, fy1, TABLE_Z + 0.05))
-        by_cell.setdefault(k, (cell, []))[1].append(((fx0, fy0, fx1, fy1), seen))
-    with_unseen = [(cell, [c for c, s in fines if not s]) for cell, fines in by_cell.values()
-                   if any(not s for _, s in fines)]
-    assert len(regions) == len(with_unseen)
-    assert len(with_unseen) < len(by_cell), "the home view should hold at least one look cell"
-    eps = 1e-9
-    for (lo, hi), (cell, unseen) in zip(regions, with_unseen):
-        assert hi[0] - lo[0] <= side + eps and hi[1] - lo[1] <= side + eps
-        assert cell[0] - eps <= lo[0] and hi[0] <= cell[2] + eps
-        assert cell[1] - eps <= lo[1] and hi[1] <= cell[3] + eps
-        for fx0, fy0, fx1, fy1 in unseen:
-            assert lo[0] - eps <= fx0 and fx1 <= hi[0] + eps
-            assert lo[1] - eps <= fy0 and fy1 <= hi[1] + eps
-        assert lo[0] == pytest.approx(min(c[0] for c in unseen))
-        assert lo[1] == pytest.approx(min(c[1] for c in unseen))
-        assert hi[0] == pytest.approx(max(c[2] for c in unseen))
-        assert hi[1] == pytest.approx(max(c[3] for c in unseen))
-    area = sum((hi[0] - lo[0]) * (hi[1] - lo[1]) for lo, hi in regions)
-    assert 0.0 < area < 0.8 * 0.8
+def test_known_boxes_out_of_the_frame_take_their_part_of_the_unseen_regions():
+    """Case 3, traced: the side strip loses the shadow fragment's volume and
+    leaves four pieces (beside it in x, behind it in y, over it), the far
+    strip loses the object box's and leaves three.  No region shares a volume
+    with a known box or another region, and a point lies in a region exactly
+    when its fine cell is unseen and no known box holds it."""
+    known = [_known(BoxelType.OBJECT, *OBJ), _known(BoxelType.SHADOW, *SHADOW)]
+    boxes = arm_eye.unseen_regions(DOWN, WORKSPACE[0], WORKSPACE[1], TABLE_Z, HEIGHT,
+                                   known=known)
+    t, z = TABLE_Z, TABLE_Z + HEIGHT
+    want = [(-0.1, -0.4, t, 0.0, 0.4, z), (0.0, -0.4, t, 0.6, -0.2, z),
+            (0.0, 0.2, t, 0.2, 0.4, z), (0.4, 0.2, t, 0.6, 0.4, z),
+            (0.2, 0.3, t, 0.4, 0.4, z), (0.2, 0.2, t + 0.03, 0.4, 0.3, z),
+            (0.65, -0.4, t, 0.7, 0.4, z), (0.6, -0.4, t, 0.65, -0.05, z),
+            (0.6, 0.05, t, 0.65, 0.4, z)]
+    got = np.array([np.r_[lo, hi] for lo, hi in boxes])
+    assert got.shape == (9, 6) and np.allclose(got, want, atol=EPS)
+    claimed = [(k.min_corner, k.max_corner) for k in known]
+    for i, a in enumerate(boxes):
+        assert not any(_overlap(a, c) for c in claimed)
+        assert not any(_overlap(a, b) for b in boxes[i + 1:])
+    rng = np.random.RandomState(0)
+    n = 20000
+    pts = np.c_[rng.uniform(WORKSPACE[0][0], WORKSPACE[0][1], n),
+                rng.uniform(WORKSPACE[1][0], WORKSPACE[1][1], n),
+                rng.uniform(TABLE_Z, TABLE_Z + HEIGHT, n)]
+    unseen_cells = [((x0, y0), (x1, y1)) for x0, y0, x1, y1, seen in _cells(DOWN) if not seen]
+    expected = _in_any(pts, unseen_cells, dims=2) & ~_in_any(pts, claimed)
+    assert np.array_equal(_in_any(pts, boxes), expected)
 
 
 def test_the_unseen_boxels_are_the_regions_with_fixed_names_and_no_parent():
-    side = observe_views.look_cell_side()
-    regions = arm_eye.unseen_regions(POSE_A, WORKSPACE[0], WORKSPACE[1], TABLE_Z, 0.05,
-                                     max_side=side)
-    boxels = arm_eye.unseen_boxels(POSE_A, WORKSPACE[0], WORKSPACE[1], TABLE_Z, 0.05,
-                                   max_side=side)
-    assert [b.id for b in boxels] == [f"unseen_{i:03d}" for i in range(len(regions))]
+    known = [_known(BoxelType.OBJECT, *OBJ), _known(BoxelType.SHADOW, *SHADOW)]
+    regions = arm_eye.unseen_regions(DOWN, WORKSPACE[0], WORKSPACE[1], TABLE_Z, HEIGHT,
+                                     known=known)
+    boxels = arm_eye.unseen_boxels(DOWN, WORKSPACE[0], WORKSPACE[1], TABLE_Z, HEIGHT,
+                                   known=known)
+    assert len(boxels) == len(regions) == 9
+    assert [b.id for b in boxels] == [f"unseen_{i:03d}" for i in range(9)]
     for b, (lo, hi) in zip(boxels, regions):
         assert np.array_equal(b.min_corner, lo) and np.array_equal(b.max_corner, hi)
         assert b.boxel_type == BoxelType.SHADOW
         assert b.created_by_object is None and b.created_by_boxel_id is None
         assert b.on_surface == 'table' and b.surface_z == TABLE_Z
+
+
+def test_a_camera_that_holds_the_whole_window_leaves_no_unseen_region():
+    """Case 4: from 1.2 m over the box tops the frame holds 0.71 by 0.53 m to
+    either side of the window's middle; the window reaches 0.4 by 0.4."""
+    d = 1.2
+    pose = _down(0.3, 0.0, TABLE_Z + HEIGHT + d)
+    assert (W / 2.0 - arm_eye.FRAME_MARGIN_PX) * d / F > 0.4
+    assert (H / 2.0 - arm_eye.FRAME_MARGIN_PX) * d / F > 0.4
+    assert all(seen for *_, seen in _cells(pose))
+    known = [_known(BoxelType.OBJECT, *OBJ)]
+    assert arm_eye.unseen_regions(pose, WORKSPACE[0], WORKSPACE[1], TABLE_Z, HEIGHT,
+                                  known=known) == []
+    assert arm_eye.unseen_boxels(pose, WORKSPACE[0], WORKSPACE[1], TABLE_Z, HEIGHT) == []
+
+
+def test_a_remainder_under_a_millimetre_is_dropped():
+    """Case 5: box_minus keeps a 1.1 mm remainder and drops a 0.9 mm one; a
+    box that only touches the other's face stays whole.  In the whole cut an
+    object box that leaves 0.5 mm of the near strip leaves only the strip's
+    far 20 mm."""
+    lo, hi = (0.0, 0.0, 0.0), (0.1, 0.1, 0.1)
+    assert arm_eye.box_minus(lo, hi, (0.0009, -1.0, -1.0), (1.0, 1.0, 1.0)) == []
+    kept = arm_eye.box_minus(lo, hi, (0.0011, -1.0, -1.0), (1.0, 1.0, 1.0))
+    assert len(kept) == 1
+    assert np.allclose(kept[0][0], lo) and np.allclose(kept[0][1], (0.0011, 0.1, 0.1))
+    whole = arm_eye.box_minus(lo, hi, (0.1, 0.0, 0.0), (0.2, 0.1, 0.1))
+    assert len(whole) == 1
+    assert np.array_equal(whole[0][0], lo) and np.array_equal(whole[0][1], hi)
+    obj = _known(BoxelType.OBJECT, (-0.0995, -0.5, TABLE_Z), (-0.02, 0.5, TABLE_Z + 0.10))
+    boxes = arm_eye.unseen_regions(DOWN, WORKSPACE[0], WORKSPACE[1], TABLE_Z, HEIGHT,
+                                   known=[obj])
+    assert len(boxes) == 4
+    assert np.allclose(_xy(boxes), [(-0.02, -0.4, 0.0, 0.4)] + STRIPS[1:], atol=EPS)
+
+
+def test_a_known_box_inside_a_region_leaves_five_pieces_in_a_fixed_order():
+    """Case 8: a shadow fragment wholly inside the far strip and lower than
+    the regions.  The strip becomes the pieces beside it in x, beside it in y
+    and over it, in that order, named after the strips before it.  A known
+    box in the seen part that meets a strip at its face takes nothing."""
+    t, z = TABLE_Z, TABLE_Z + HEIGHT
+    inner = _known(BoxelType.SHADOW, (0.63, -0.02, t), (0.67, 0.02, t + 0.03))
+    boxels = arm_eye.unseen_boxels(DOWN, WORKSPACE[0], WORKSPACE[1], TABLE_Z, HEIGHT,
+                                   known=[inner])
+    want = [(-0.1, -0.4, t, 0.0, 0.4, z), (0.0, -0.4, t, 0.6, -0.2, z),
+            (0.0, 0.2, t, 0.6, 0.4, z),
+            (0.6, -0.4, t, 0.63, 0.4, z), (0.67, -0.4, t, 0.7, 0.4, z),
+            (0.63, -0.4, t, 0.67, -0.02, z), (0.63, 0.02, t, 0.67, 0.4, z),
+            (0.63, -0.02, t + 0.03, 0.67, 0.02, z)]
+    got = np.array([np.r_[b.min_corner, b.max_corner] for b in boxels])
+    assert got.shape == (8, 6) and np.allclose(got, want, atol=EPS)
+    assert [b.id for b in boxels] == [f"unseen_{i:03d}" for i in range(8)]
+    vol = sum(float(np.prod(b.max_corner - b.min_corner)) for b in boxels[3:])
+    assert vol == pytest.approx(0.1 * 0.8 * HEIGHT - 0.04 * 0.04 * 0.03)
+    beside = _known(BoxelType.OBJECT, (0.55, -0.1, t), (0.6, 0.1, t + 0.10))
+    boxes = arm_eye.unseen_regions(DOWN, WORKSPACE[0], WORKSPACE[1], TABLE_Z, HEIGHT,
+                                   known=[beside])
+    assert len(boxes) == 4
+    assert np.allclose(_xy(boxes), STRIPS, atol=EPS)

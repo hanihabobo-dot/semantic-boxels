@@ -7,9 +7,9 @@ Hani, 2026-11-14 04:40, via the coordinator (verbatim): "so look should be an
 eyle in the hand. no need for a third option".
 
 This module holds the switch's rule, the start of an arm-camera run and the
-geometry of the mode.  Wired so far (step 1 of three, 2026-11-14): the switch
-and the first image.  The unseen regions are not wired yet (step 2), and the
-checks after an action still render the start view from wherever the arm
+geometry of the mode.  Wired so far (steps 1 and 2 of three, 2026-11-14): the
+switch, the first image and the part of the table that image does not show.
+The checks after an action still render the start view from wherever the arm
 stands (step 3), so no episode runs in this mode yet.
 
   check_mode         the switch's rule: --eye arm needs a look;
@@ -25,15 +25,20 @@ stands (step 3), so no episode runs in this mode yet.
   project            world points to pixels of a camera pose, the convention
                      of robot_utils.wrist_camera_matrices;
   box_in_frame       whether a box lies wholly inside the image with a margin;
-  unseen_cells       the table cells the first image does not show: the
-                     workspace tiled into cells one look can hold, minus the
-                     cells whose whole volume (up to the hidden target's
-                     height) is inside the image.  Bodies inside the image
-                     hide what is behind them; that part is the shadow code's,
-                     unchanged;
-  unseen_regions     the same split told on a finer tiling and grouped into
-                     regions one look holds: what the wiring will use;
-  unseen_boxels      those regions as hidden-region boxels with fixed names.
+  unseen_fine_cells  the window tiled into fine cells, and which of them the
+                     first image does not show: a cell is seen only when its
+                     whole volume (up to the hidden target's height) is inside
+                     the image.  Bodies inside the image hide what is behind
+                     them; that part is the shadow code's, unchanged;
+  merge_cells        marked fine cells merged into few boxes: runs in each
+                     row, equal runs of consecutive rows stacked;
+  box_minus          a plain axis-aligned box difference;
+  minus_known        boxes minus what the first scan's boxes claim;
+  unseen_regions     the first image's own cut (PLAN 11.16): the unseen fine
+                     cells merged, minus the first scan's boxes, cut to no
+                     look's size;
+  unseen_boxels      those regions as hidden-region boxels with fixed names:
+                     what test_full_pipeline.main adds to the first scan.
 """
 import math
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -56,12 +61,12 @@ CAMERA_ATTRIBUTES = ('camera_position', 'camera_target', 'camera_up', 'fov',
 ARM_HOLD_FORCE = 240
 _NOT_TASK_BODIES = ('plane', 'table', 'robot')
 
-# No side of an unseen cell is longer than this: the arm camera sees 0.37 by
-# 0.27 m of the table from 0.30 m above it, so one look holds one cell.
-UNSEEN_MAX_SIDE_M = 0.20
-# Seen and unseen are told apart on cells of at most this side; the unseen
-# ones are then grouped into regions one look holds (unseen_regions).
+# Seen and unseen are told apart on fine cells of at most this side, the
+# window tiled from its corner (PLAN 11.16).
 UNSEEN_FINE_SIDE_M = 0.05
+# A piece of an unseen region with a side under this is dropped: it holds no
+# target, and the box arithmetic leaves such slivers where faces meet.
+UNSEEN_MIN_SIDE_M = 0.001
 # The frame margin of the look's own certification (observe_views: every
 # lattice point in the frame "with 8 px to spare").
 FRAME_MARGIN_PX = 8
@@ -205,77 +210,146 @@ def _tiles(lo: float, hi: float, max_side: float) -> List[Tuple[float, float]]:
     return [(lo + i * step, lo + (i + 1) * step) for i in range(n)]
 
 
-def unseen_cells(camera_pose: np.ndarray, x_range: Sequence[float],
-                 y_range: Sequence[float], table_z: float, height: float,
-                 max_side: float = UNSEEN_MAX_SIDE_M,
-                 margin_px: float = FRAME_MARGIN_PX
-                 ) -> Tuple[List[Tuple[np.ndarray, np.ndarray]],
-                            List[Tuple[np.ndarray, np.ndarray]]]:
-    """Tile the workspace rectangle into equal cells no longer than
-    ``max_side`` and split them by the first image: (unseen, seen), each a
-    list of (min corner, max corner) boxes from the table top to ``height``
-    above it.  A cell is seen only when its whole box is inside the image; a
-    cell the image cuts counts as unseen (the cautious side).  Together the
-    two lists tile the rectangle with no overlap, in a fixed order (x outer,
-    y inner), so a seed replays."""
-    unseen, seen = [], []
-    for x0, x1 in _tiles(float(x_range[0]), float(x_range[1]), max_side):
-        for y0, y1 in _tiles(float(y_range[0]), float(y_range[1]), max_side):
-            lo = np.array([x0, y0, table_z])
-            hi = np.array([x1, y1, table_z + height])
-            (seen if box_in_frame(camera_pose, lo, hi, margin_px) else unseen).append((lo, hi))
-    return unseen, seen
+def unseen_fine_cells(camera_pose: np.ndarray, x_range: Sequence[float],
+                      y_range: Sequence[float], table_z: float, height: float,
+                      fine_side: float = UNSEEN_FINE_SIDE_M,
+                      margin_px: float = FRAME_MARGIN_PX
+                      ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]],
+                                 List[List[bool]]]:
+    """The window tiled into equal fine cells no longer than ``fine_side``
+    and which of them the first image does not show: (x tiles, y tiles,
+    unseen), unseen[i][j] for x tile i and y tile j.  A cell is seen only
+    when its whole box, from the table top to ``height`` above it, is inside
+    the image with ``margin_px`` to spare (box_in_frame); a cell the image's
+    edge cuts counts as unseen (the cautious side)."""
+    xs = _tiles(float(x_range[0]), float(x_range[1]), fine_side)
+    ys = _tiles(float(y_range[0]), float(y_range[1]), fine_side)
+    top = float(table_z) + float(height)
+    unseen = [[not box_in_frame(camera_pose, (x0, y0, table_z), (x1, y1, top), margin_px)
+               for y0, y1 in ys]
+              for x0, x1 in xs]
+    return xs, ys, unseen
+
+
+def merge_cells(xs: Sequence[Tuple[float, float]], ys: Sequence[Tuple[float, float]],
+                marked: Sequence[Sequence[bool]], table_z: float, height: float
+                ) -> List[Tuple[np.ndarray, np.ndarray]]:
+    """The marked fine cells merged into boxes from the table top to
+    ``height`` above it.  In each row (one x tile) consecutive marked cells
+    are joined into runs along y; a run that is the same in consecutive rows
+    is stacked into one box along x.  So every box holds marked cells only,
+    no two boxes share a volume, and the boxes' union is the marked cells'
+    union.  The order is fixed (by a box's first row, then its first y
+    tile), so the same cells give the same list."""
+    spans = []          # (first row, last row, first y tile, last y tile)
+    open_runs = {}      # (first y tile, last y tile) -> first row
+    for i, row in enumerate(marked):
+        runs, start = [], None
+        for j, mark in enumerate(row):
+            if mark and start is None:
+                start = j
+            if not mark and start is not None:
+                runs.append((start, j - 1))
+                start = None
+        if start is not None:
+            runs.append((start, len(row) - 1))
+        for run in [r for r in open_runs if r not in runs]:
+            spans.append((open_runs.pop(run), i - 1) + run)
+        for run in runs:
+            open_runs.setdefault(run, i)
+    for run, first in open_runs.items():
+        spans.append((first, len(marked) - 1) + run)
+    spans.sort(key=lambda s: (s[0], s[2]))
+    bottom = float(table_z)
+    top = float(table_z) + float(height)
+    return [(np.array([xs[i0][0], ys[j0][0], bottom]),
+             np.array([xs[i1][1], ys[j1][1], top]))
+            for i0, i1, j0, j1 in spans]
+
+
+def box_minus(lo: Sequence[float], hi: Sequence[float], other_lo: Sequence[float],
+              other_hi: Sequence[float], min_side: float = UNSEEN_MIN_SIDE_M
+              ) -> List[Tuple[np.ndarray, np.ndarray]]:
+    """The box [lo, hi] minus the box [other_lo, other_hi], a plain
+    axis-aligned difference (the idea of ShadowCalculator._subtract_aabb):
+    up to six boxes, made in a fixed order, below and above the other box in
+    x, then in y, then in z.  Boxes that share no volume (touching faces
+    included) leave [lo, hi] whole.  A remainder with a side under
+    ``min_side`` is dropped."""
+    lo = np.array(lo, dtype=float)
+    hi = np.array(hi, dtype=float)
+    o_lo = np.asarray(other_lo, dtype=float)
+    o_hi = np.asarray(other_hi, dtype=float)
+    if not np.all(np.minimum(hi, o_hi) - np.maximum(lo, o_lo) > 0.0):
+        return [(lo, hi)]
+    out = []
+    for axis in range(3):
+        if lo[axis] < o_lo[axis]:
+            part_hi = hi.copy()
+            part_hi[axis] = o_lo[axis]
+            out.append((lo.copy(), part_hi))
+            lo[axis] = o_lo[axis]
+        if hi[axis] > o_hi[axis]:
+            part_lo = lo.copy()
+            part_lo[axis] = o_hi[axis]
+            out.append((part_lo, hi.copy()))
+            hi[axis] = o_hi[axis]
+    return [(a, b) for a, b in out if np.all(b - a >= min_side)]
+
+
+def minus_known(boxes: Sequence[Tuple[np.ndarray, np.ndarray]],
+                known: Sequence[BoxelData], min_side: float = UNSEEN_MIN_SIDE_M
+                ) -> List[Tuple[np.ndarray, np.ndarray]]:
+    """Each box minus every OBJECT box and SHADOW fragment in ``known``, in
+    the order of ``known``, so no box shares a volume with what the first
+    scan claims and every table point is in at most one hidden region (audit
+    #68's rule).  The pieces of a box take its place in the list, in the
+    order box_minus makes them."""
+    claimed = [(np.asarray(b.min_corner, dtype=float), np.asarray(b.max_corner, dtype=float))
+               for b in known if b.boxel_type in (BoxelType.OBJECT, BoxelType.SHADOW)]
+    out = []
+    for lo, hi in boxes:
+        pieces = [(lo, hi)]
+        for o_lo, o_hi in claimed:
+            pieces = [part for a, b in pieces
+                      for part in box_minus(a, b, o_lo, o_hi, min_side)]
+        out.extend(pieces)
+    return out
 
 
 def unseen_regions(camera_pose: np.ndarray, x_range: Sequence[float],
-                   y_range: Sequence[float], table_z: float, height: float,
-                   max_side: float, fine_side: float = UNSEEN_FINE_SIDE_M,
-                   margin_px: float = FRAME_MARGIN_PX
+                   y_range: Sequence[float], table_z: float, height: float, *,
+                   known: Sequence[BoxelData] = (),
+                   fine_side: float = UNSEEN_FINE_SIDE_M,
+                   margin_px: float = FRAME_MARGIN_PX,
+                   min_side: float = UNSEEN_MIN_SIDE_M
                    ) -> List[Tuple[np.ndarray, np.ndarray]]:
-    """The regions of the table the first image does not show, each one small
-    enough for one look (no side over ``max_side``).
-
-    Two tilings, because the image's edge cuts every look-sized cell it
-    touches (measured 2026-11-12: at 0.20 m no whole cell lies inside
-    TAMPURA's home view).  The workspace is tiled into look cells; each look
-    cell is tiled into fine cells (no side over ``fine_side``), and a fine
-    cell is seen when its whole box, from the table top to ``height`` above
-    it, is inside the image.  A look cell's region is the box around its
-    unseen fine cells: no region for a cell wholly seen, the whole cell for a
-    cell wholly unseen, the unseen part's box otherwise.  Where the image's
-    edge crosses a look cell at a slant that box also holds seen fine cells
-    (the cautious side).  Regions of different look cells never overlap, and
-    the order is fixed (x outer, y inner), so a seed replays."""
-    regions = []
-    for x0, x1 in _tiles(float(x_range[0]), float(x_range[1]), max_side):
-        for y0, y1 in _tiles(float(y_range[0]), float(y_range[1]), max_side):
-            box = None
-            for fx0, fx1 in _tiles(x0, x1, fine_side):
-                for fy0, fy1 in _tiles(y0, y1, fine_side):
-                    if box_in_frame(camera_pose, (fx0, fy0, table_z),
-                                    (fx1, fy1, table_z + height), margin_px):
-                        continue
-                    box = ([fx0, fy0, fx1, fy1] if box is None else
-                           [min(box[0], fx0), min(box[1], fy0),
-                            max(box[2], fx1), max(box[3], fy1)])
-            if box is not None:
-                regions.append((np.array([box[0], box[1], table_z]),
-                                np.array([box[2], box[3], table_z + height])))
-    return regions
+    """The part of the window the first image does not show, as that image's
+    own cut (PLAN 11.16): the unseen fine cells merged into boxes
+    (merge_cells), each minus what an object box or a shadow fragment of the
+    first scan claims (minus_known).  No box is cut to a look's size (PLAN
+    11.16: a region is cut only by what an image saw).  The boxes lie between
+    the table top and ``height`` above it (a piece over a known box lower than
+    that starts at the known box's top), in a fixed order, so a seed replays."""
+    xs, ys, unseen = unseen_fine_cells(camera_pose, x_range, y_range, table_z, height,
+                                       fine_side, margin_px)
+    return minus_known(merge_cells(xs, ys, unseen, table_z, height), known, min_side)
 
 
 def unseen_boxels(camera_pose: np.ndarray, x_range: Sequence[float],
-                  y_range: Sequence[float], table_z: float, height: float,
-                  max_side: float, fine_side: float = UNSEEN_FINE_SIDE_M,
-                  margin_px: float = FRAME_MARGIN_PX) -> List[BoxelData]:
+                  y_range: Sequence[float], table_z: float, height: float, *,
+                  known: Sequence[BoxelData] = (),
+                  fine_side: float = UNSEEN_FINE_SIDE_M,
+                  margin_px: float = FRAME_MARGIN_PX,
+                  min_side: float = UNSEEN_MIN_SIDE_M) -> List[BoxelData]:
     """unseen_regions as hidden-region boxels named unseen_000, unseen_001, ...
-    in the regions' fixed order.  They stand on the table and have no parent
-    body: nothing the camera saw casts them, the image just ends there."""
-    out = []
-    for i, (lo, hi) in enumerate(unseen_regions(camera_pose, x_range, y_range, table_z,
-                                                height, max_side, fine_side, margin_px)):
-        b = BoxelData(boxel_type=BoxelType.SHADOW, min_corner=lo, max_corner=hi,
+    in the regions' fixed order.  Each carries the table as its surface
+    (on_surface 'table'; a piece over a lower known box starts at that box's
+    top) and has no parent body: nothing the camera saw casts it, the image
+    just ends there."""
+    regions = unseen_regions(camera_pose, x_range, y_range, table_z, height, known=known,
+                             fine_side=fine_side, margin_px=margin_px, min_side=min_side)
+    return [BoxelData(id=f"unseen_{i:03d}", boxel_type=BoxelType.SHADOW,
+                      min_corner=lo, max_corner=hi,
                       on_surface='table', surface_z=float(table_z))
-        b.id = f"unseen_{i:03d}"
-        out.append(b)
-    return out
+            for i, (lo, hi) in enumerate(regions)]

@@ -122,6 +122,7 @@ import look_domain
 import look_views
 from look_action import handle_look_action
 import arm_eye
+import streams
 from streams import HOME_PSEUDO_BOXEL
 import logging
 import math
@@ -948,6 +949,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     env.update_object_positions()
     if eye == 'arm':
         _cam = arm_eye.use_start_view(env)
+        eye_camera_pose = _cam['camera_pose']
         print(f"  [eye] the overview camera is the arm camera at the start "
               f"configuration: {np.round(_cam['camera_position'], 3).tolist()}")
 
@@ -1000,16 +1002,20 @@ def main(gui=True, run_logger=None, scene_config=None,
     # table surface: where objects are, where shadows are, and where
     # the robot can safely place things.
     print("\n--- Phase 2: Calculating Boxels ---")
-    if look_on:
-        # Path 9 (PLAN 11.12): a look can only be planned for a region one
-        # arm-camera image holds, so in a look mode every hidden region is
-        # cut into cells of that size, here and wherever a fragment is made
-        # later.  Without --look the attribute stays None.
-        env.shadow_calculator.max_fragment_side = observe_views.look_cell_side()
-        print(f"  [look] hidden regions are cut into cells of at most "
-              f"{env.shadow_calculator.max_fragment_side:.3f} m (one look holds a cell)")
     obs = env.get_camera_observation()
     all_known = obs.boxels
+    if eye == 'arm':
+        # Path 9, --eye arm (PLAN 11.16): the part of the safe window the
+        # first image does not show joins the known boxels as hidden regions,
+        # as tall as the planner's prior for a hidden target, so free space at
+        # the table top is made only where the image showed the table.
+        _unseen = arm_eye.unseen_boxels(
+            eye_camera_pose, env._SAFE_TABLE_X_RANGE, env._SAFE_TABLE_Y_RANGE,
+            env.table_surface_height, float(streams.NOMINAL_HIDDEN_EXTENTS[2]),
+            known=all_known)
+        all_known = all_known + _unseen
+        print(f"  [eye] {len(_unseen)} unseen regions: the part of the table "
+              f"the first image does not show")
     free_boxels = env.generate_free_space(all_known, visualize=False)
     # audit #10 — uniform baseline produces a strict static lattice;
     # CellMerger would collapse adjacent uniform cubes back into
@@ -3405,7 +3411,6 @@ if __name__ == "__main__":
         "m8": args.m8, "m9": args.m9, "m10": args.m10,
         **({"look": look_domain.mode_of(getattr(args, 'look', 'off'))}
            if look_domain.mode_of(getattr(args, 'look', 'off')) != 'off' else {}),  # path 9
-        **({"eye": "arm"} if getattr(args, 'eye', 'fixed') == 'arm' else {}),  # path 9
         "pick_aperture_from_pose": args.pick_aperture_from_pose,
         "grip_squeeze_mm": getattr(args, 'grip_squeeze_mm', '0.5'),
         "save_screenshots": getattr(args, 'save_screenshots', 'off'),   # BF#50
@@ -3424,6 +3429,8 @@ if __name__ == "__main__":
         "show_free":    args.show_free,
         "log_level":    args.log_level,
     }
+    if getattr(args, 'eye', 'fixed') == 'arm':     # path 9
+        run_config["eye"] = "arm"
 
     # RunLogger captures all artefacts (PDDL files, boxel data, logs)
     # regardless of console verbosity for post-mortem analysis.

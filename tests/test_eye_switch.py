@@ -1,6 +1,7 @@
-"""Path 9, the arm camera only, step 1 of three (tracks/look/ARM_ONLY_DESIGN.md,
-the switch and part 1): --eye fixed|arm, the start configuration and the first
-image.  No episode, no planner.
+"""Path 9, the arm camera only, steps 1 and 2 of three (tracks/look/
+ARM_ONLY_DESIGN.md, the switch, part 1 and part 2): --eye fixed|arm, the start
+configuration, the first image and the part of the table it does not show.  No
+episode, no planner.
 
 1. The flag: fixed by default; arm needs a look; a start configuration from the
    command line.
@@ -12,7 +13,15 @@ image.  No episode, no planner.
    moves nothing in an adopted one.
 5. The launcher: without -Eye the command is the one of before; -Eye arm adds
    one flag and needs -Look.
+6. The unseen regions after the first scan, on a scene of ours: none shares a
+   volume with an object box, a shadow fragment or another region; each lies
+   in the safe window; free space made with them enters none.
+7. The wiring in main(): with --eye arm the unseen regions join the first
+   scan's boxels before free space is made; with --eye fixed none of it runs
+   and the run's record has no eye key; main() cuts no region to a look's
+   cell side (PLAN 11.16: a region is cut only by what an image saw).
 """
+import ast
 import subprocess
 import sys
 from pathlib import Path
@@ -29,6 +38,8 @@ import arm_eye  # noqa: E402
 import observe_views  # noqa: E402
 import robot_utils  # noqa: E402
 import run_logger  # noqa: E402
+import streams  # noqa: E402
+from boxel_data import BoxelType  # noqa: E402
 from boxel_env import BoxelTestEnv  # noqa: E402
 from test_look_correspondence import _PWSH, _dry, needs_pwsh  # noqa: E402
 
@@ -222,3 +233,130 @@ def test_the_launcher_refuses_the_arm_camera_where_it_cannot_run(args):
     said = proc.stdout + proc.stderr
     assert proc.returncode == 2, said
     assert '-Eye arm' in said and '--eye' not in said
+
+
+# ----- 6. the unseen regions on a scene of ours ------------------------------------
+
+# TAMPURA's home joints, their DEFAULT_ARM_POS, as recorded in
+# tracks/look/evidence/arm_camera_home_pose_20261112.txt.
+THEIR_HOME = [-0.0806406098426434, -1.6722951504174777, 0.07069076842695393,
+              -2.7449419709102822, 0.08184716251979611, 1.7516337599063168,
+              0.7849295270972781]
+
+
+def _overlap(a_lo, a_hi, b_lo, b_hi):
+    """True when two boxes share a volume; touching faces do not."""
+    return bool(np.all(np.minimum(a_hi, b_hi) - np.maximum(a_lo, b_lo) > 1e-9))
+
+
+@pytest.mark.parametrize('joints', [START, THEIR_HOME], ids=['rest_poses', 'their_home'])
+def test_the_unseen_regions_after_the_first_scan(env, joints):
+    """The env fixture's scene, boxel_env.default_scene (seven blocks at x 0.0
+    to 0.3, none taller than 0.075 m): neither start configuration touches a
+    body in it.  Main()'s steps up to free space: the arm at the start
+    configuration, the settle, the arm camera, the first scan, the unseen
+    regions over the safe window at the planner's prior height."""
+    assert arm_eye.place_arm(env, joints)
+    env.step_simulation(50)
+    env.update_object_positions()
+    cam = arm_eye.use_start_view(env)
+    known = env.get_camera_observation().boxels
+    if joints == THEIR_HOME:
+        assert known, 'blocks of this scene stand in the home view'
+    table_z = env.table_surface_height
+    height = float(streams.NOMINAL_HIDDEN_EXTENTS[2])
+    (x_lo, x_hi), (y_lo, y_hi) = env._SAFE_TABLE_X_RANGE, env._SAFE_TABLE_Y_RANGE
+    unseen = arm_eye.unseen_boxels(cam['camera_pose'], env._SAFE_TABLE_X_RANGE,
+                                   env._SAFE_TABLE_Y_RANGE, table_z, height, known=known)
+    assert unseen, 'the window is larger than the start view'
+    assert [u.id for u in unseen] == [f"unseen_{i:03d}" for i in range(len(unseen))]
+    eps = 1e-9
+    for i, u in enumerate(unseen):
+        assert u.boxel_type == BoxelType.SHADOW
+        assert u.created_by_object is None and u.created_by_boxel_id is None
+        assert x_lo - eps <= u.min_corner[0] < u.max_corner[0] <= x_hi + eps
+        assert y_lo - eps <= u.min_corner[1] < u.max_corner[1] <= y_hi + eps
+        assert table_z - eps <= u.min_corner[2] < u.max_corner[2] <= table_z + height + eps
+        for k in known:
+            assert not _overlap(u.min_corner, u.max_corner, k.min_corner, k.max_corner), (u.id, k.id)
+        for v in unseen[i + 1:]:
+            assert not _overlap(u.min_corner, u.max_corner, v.min_corner, v.max_corner), (u.id, v.id)
+    free = env.generate_free_space(known + unseen, visualize=False)
+    assert free
+    for fb in free:
+        for u in unseen:
+            assert not _overlap(fb.min_corner, fb.max_corner, u.min_corner, u.max_corner), u.id
+
+
+# ----- 7. the wiring in main() ------------------------------------------------------
+
+PIPELINE = ast.parse((ROOT / 'test_full_pipeline.py').read_text(encoding='utf-8'))
+MAIN = next(n for n in ast.walk(PIPELINE) if isinstance(n, ast.FunctionDef) and n.name == 'main')
+
+
+def _under(tree, test):
+    """The ids of every node in the body (not the else) of an ``if`` whose
+    test reads ``test``."""
+    out = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.If) and ast.unparse(node.test) == test:
+            for stmt in node.body:
+                out.update(id(n) for n in ast.walk(stmt))
+    return out
+
+
+def _calls(tree, name):
+    return [c for c in ast.walk(tree) if isinstance(c, ast.Call)
+            and getattr(c.func, 'attr', getattr(c.func, 'id', None)) == name]
+
+
+def _assigns(tree, target):
+    return [n for n in ast.walk(tree) if isinstance(n, ast.Assign)
+            and len(n.targets) == 1 and ast.unparse(n.targets[0]) == target]
+
+
+def test_with_the_arm_camera_the_unseen_regions_join_the_first_scan_before_free_space():
+    arm = _under(MAIN, "eye == 'arm'")
+    (call,) = _calls(MAIN, 'unseen_boxels')
+    assert id(call) in arm
+    assert [ast.unparse(a) for a in call.args] == [
+        'eye_camera_pose', 'env._SAFE_TABLE_X_RANGE', 'env._SAFE_TABLE_Y_RANGE',
+        'env.table_surface_height', 'float(streams.NOMINAL_HIDDEN_EXTENTS[2])']
+    assert [(k.arg, ast.unparse(k.value)) for k in call.keywords] == [('known', 'all_known')]
+    (scan,) = [n for n in _assigns(MAIN, 'all_known') if ast.unparse(n.value) == 'obs.boxels']
+    (join,) = [n for n in _assigns(MAIN, 'all_known')
+               if ast.unparse(n.value) == 'all_known + _unseen']
+    (free,) = _calls(MAIN, 'generate_free_space')
+    assert id(join) in arm and ast.unparse(free.args[0]) == 'all_known'
+    assert scan.lineno < call.lineno < join.lineno < free.lineno
+    # The camera pose is the one use_start_view returned, kept in the settle block.
+    (pose,) = _assigns(MAIN, 'eye_camera_pose')
+    (start_view,) = _calls(MAIN, 'use_start_view')
+    assert id(pose) in arm and ast.unparse(pose.value) == "_cam['camera_pose']"
+    assert start_view.lineno < pose.lineno < scan.lineno
+    assert any(isinstance(n, ast.Import)
+               and [(a.name, a.asname) for a in n.names] == [('streams', None)]
+               for n in PIPELINE.body)
+    # main() cuts no region to a look's cell side (PLAN 11.16).
+    text = ast.unparse(MAIN)
+    assert 'max_fragment_side' not in text and 'look_cell_side' not in text
+
+
+def test_with_the_fixed_camera_main_makes_no_unseen_region_and_records_no_eye():
+    """Case 7: every path-9 call in main() is under ``if eye == 'arm':``, so
+    with --eye fixed (the default) none runs; the record's literal has no eye
+    key, and one plain ``if`` after it adds the key for --eye arm alone."""
+    arm = _under(MAIN, "eye == 'arm'")
+    for name in ('place_arm', 'use_start_view', 'unseen_boxels'):
+        calls = _calls(MAIN, name)
+        assert calls and all(id(c) in arm for c in calls), name
+    (literal,) = [n for n in _assigns(PIPELINE, 'run_config') if isinstance(n.value, ast.Dict)]
+    keys = [k.value for k in literal.value.keys if isinstance(k, ast.Constant)]
+    spread = [ast.unparse(v) for k, v in zip(literal.value.keys, literal.value.values)
+              if k is None]
+    assert 'eye' not in keys and not any("'eye'" in s for s in spread)
+    assert any("'look'" in s for s in spread)          # the look entry beside it stays
+    (record,) = _assigns(PIPELINE, "run_config['eye']")
+    assert ast.unparse(record.value) == "'arm'"
+    assert id(record) in _under(PIPELINE, "getattr(args, 'eye', 'fixed') == 'arm'")
+    assert literal.lineno < record.lineno
