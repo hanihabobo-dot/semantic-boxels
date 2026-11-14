@@ -145,9 +145,9 @@ def test_an_unknown_kind_exits_2_and_prints_no_command(out):
 @needs_pwsh
 def test_draw_cameras_reaches_the_driver_and_starts_no_window_in_a_dry_run(out):
     (cmd,) = _commands(out['cameras'])           # any case: Cameras
-    assert cmd.endswith(' --draw cameras') and '--vis 1' in cmd, cmd
+    assert _own(cmd).endswith(' --draw cameras') and '--vis 1' in cmd, cmd
     (both,) = _commands(out['both'])
-    assert both.endswith(' --draw boxels,cameras'), both
+    assert _own(both).endswith(' --draw boxels,cameras'), both
     assert 'exit=0' in out['cameras']
 
 
@@ -168,9 +168,9 @@ def test_kinds_with_only_spaces_between_them_join_like_a_comma_list(out):
     for name in ('spaced', 'spaced_case'):
         (cmd,) = _commands(out[name])
         assert cmd.count('--draw') == 1, (name, cmd)
-        assert cmd.endswith((' --draw boxels,cameras', ' --draw cameras,boxels')), (name, cmd)
+        assert _own(cmd).endswith((' --draw boxels,cameras', ' --draw cameras,boxels')), (name, cmd)
         assert ' boxels cameras' not in cmd and 'exit=0' in out[name], (name, out[name])
-    assert cmd.endswith(' --draw cameras,boxels')            # in the order typed (any case)
+    assert _own(cmd).endswith(' --draw cameras,boxels')            # in the order typed (any case)
 
 
 def test_the_launcher_and_the_policy_know_the_same_draw_kinds():
