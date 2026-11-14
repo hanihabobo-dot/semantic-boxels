@@ -1,0 +1,96 @@
+"""Phase 0 pins, group "low" (the low-cost and AST pins of the readable
+migration): a fresh generation by tools/readable/pin_outputs.py compared,
+pin by pin and file by file, with a stored folder named by the environment
+variable READABLE_GOLDEN.
+
+No golden output is stored before tag refactor-checkpoint-2 (R's condition
+on the Phase 0 plan), so without READABLE_GOLDEN the pin tests skip.  Make
+the folder on the checkpoint with
+
+    python tools/readable/pin_outputs.py --group low --out <folder>
+
+and run, in WSL under the pipeline lock (R's rule 5):
+
+    READABLE_GOLDEN=<folder> PYTHONHASHSEED=0 flock /root/sb_pipeline.lock \
+        /root/armO-venvA/bin/python -m pytest -q tests/readable/test_pins_low.py
+
+Files named INFO_* (line numbers and other information) are not compared.
+The two small tests at the end check the comparator itself and need no
+golden folder.
+"""
+import difflib
+import json
+import os
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / 'tools' / 'readable'))
+import pin_outputs as po  # noqa: E402
+
+GOLDEN = os.environ.get('READABLE_GOLDEN')
+PINS = list(po.GROUPS['low'])
+needs_golden = pytest.mark.skipif(
+    not GOLDEN,
+    reason='READABLE_GOLDEN is not set: no stored golden output exists before tag '
+           'refactor-checkpoint-2 (R\'s condition); set it to a folder written by '
+           '"pin_outputs.py --group low --out <folder>" on that tag')
+
+
+@pytest.fixture(scope='module')
+def fresh(tmp_path_factory):
+    """One generation of the whole group (each pin in its own child process)."""
+    out = tmp_path_factory.mktemp('pins_low')
+    po.run_group('low', out, log=lambda s: None)
+    return out
+
+
+def _first_difference(a, b):
+    la = a.read_text(encoding='utf-8', errors='replace').splitlines()
+    lb = b.read_text(encoding='utf-8', errors='replace').splitlines()
+    diff = list(difflib.unified_diff(la, lb, 'golden', 'fresh', lineterm='', n=2))
+    return '\n'.join(diff[:40])
+
+
+@needs_golden
+@pytest.mark.parametrize('pin_id', PINS)
+def test_pin_equals_golden(fresh, pin_id):
+    golden = Path(GOLDEN) / pin_id
+    assert golden.is_dir(), f'the golden folder {GOLDEN} has no {pin_id}'
+    manifest = json.loads((fresh / 'MANIFEST.json').read_text(encoding='utf-8'))
+    status = manifest['pins'][pin_id]['status']
+    err = fresh / pin_id / 'ERROR.txt'
+    assert status == 'ok', f'{pin_id} did not run: {status}\n' + (
+        err.read_text(encoding='utf-8') if err.exists() else '')
+    want, have = po.pin_files(golden), po.pin_files(fresh / pin_id)
+    assert sorted(want) == sorted(have), f'file sets differ: golden {sorted(want)}, fresh {sorted(have)}'
+    for name in sorted(want):
+        if want[name].read_bytes() != have[name].read_bytes():
+            pytest.fail(f'{pin_id}/{name} differs from the golden copy:\n'
+                        + _first_difference(want[name], have[name]))
+
+
+def test_compare_reports_equal_and_differs(tmp_path):
+    """The comparator: equal folders are equal, INFO_* files are ignored,
+    a changed byte is a difference."""
+    for side in ('a', 'b'):
+        d = tmp_path / side / 'p00_demo'
+        d.mkdir(parents=True)
+        (d / 'out.json').write_text('[1, 2.5]\n')
+        (d / 'INFO_lines.json').write_text(f'[{len(side)}{side!r}]\n')
+        (tmp_path / side / 'MANIFEST.json').write_text(
+            json.dumps({'pins': {'p00_demo': {'status': 'ok'}}}))
+    assert po.compare(tmp_path / 'a', tmp_path / 'b', log=lambda s: None) == {'p00_demo': 'equal'}
+    (tmp_path / 'b' / 'p00_demo' / 'out.json').write_text('[1, 2.50000001]\n')
+    v = po.compare(tmp_path / 'a', tmp_path / 'b', log=lambda s: None)
+    assert v['p00_demo'].startswith('differs: out.json')
+
+
+def test_plain_refuses_a_set_and_keeps_floats_exact():
+    """R's rule 4 (a set must be sorted by the pin) and rule 3 (floats as
+    json.dumps writes them, inf included)."""
+    with pytest.raises(TypeError):
+        po.plain({'a': {1, 2}})
+    assert po.dumps(po.plain([0.1 + 0.2, float('inf')])) == '[\n 0.30000000000000004,\n Infinity\n]\n'

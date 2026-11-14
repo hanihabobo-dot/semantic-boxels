@@ -88,3 +88,53 @@ and `ast.dump`, so spaces inside `{...}` do not count.
 
 Tests: `python -m pytest -q tests/readable/test_move_check.py` (Windows
 Python 3.12 or `/root/armO-venvA/bin/python` 3.11 in WSL).
+
+## pin_outputs.py: the pin generator (group `low`)
+
+One generator for every pin group. A pin is a function, registered with
+`@pin(group, pin_id, about)`, that calls today's code on fixed inputs and
+writes what comes back as files. Later builds add their groups (`world`,
+`episode`) with the same decorator.
+
+```
+python tools/readable/pin_outputs.py --group low --out DIR [--only p05_registry,p08_domain]
+python tools/readable/pin_outputs.py --list [--group low]
+python tools/readable/pin_outputs.py --compare DIR_A DIR_B     # exit 0 when every pin is equal
+```
+
+`--out DIR` gets `DIR/<pin id>/` per pin (JSON and text, plus `NOTES.txt`
+with the Python version and every sorting or masking the pin does),
+`DIR/MANIFEST.json` (status and file sha256 per pin) and `DIR/_logs/`.
+Each pin runs in a child process of its own: a fresh interpreter, cwd and
+HOME a fresh temporary folder, `PYTHONHASHSEED=0`, `COLUMNS=80`,
+`LC_ALL=LANG=C.UTF-8`, no console switches inherited. Paths are masked as
+`<REPO>`, `<WORK>`, `<OUT>`. Files named `INFO_*` (line numbers, file
+lists) are information only: `--compare` and the test skip them.
+
+R's rules as applied: no stored golden output before tag
+refactor-checkpoint-2; two passes must be equal; exact comparison (floats
+as `json.dumps` writes them, big float arrays as the sha256 of their
+float64 bytes and the shape); a list that comes from a set is sorted and
+the pin's NOTES say so (`plain()` refuses a set); run in WSL with
+`/root/armO-venvA/bin/python` under `flock /root/sb_pipeline.lock`. No pin
+starts a physics client or an episode, and none edits pipeline code; a few
+replace a module attribute inside their own child process (the ledger
+hooks of `boxel_data` and `belief`, `eval_runner.subprocess` and `.time`,
+`console_ui.REPO`), as test code does.
+
+Group `low` (31 pins, the index `phase0/index/pins_low.md`): R's 4, 5, 8,
+11, 12, 17, 18, 19, 20, 22, 23, 24, 25, 26, 28, 29, 30, 31, 32, 33, 36,
+37, 38 and the plan's AST pins 39, 40, 41, 42, 43, 44, 45, 48. Pin 32 needs
+`pwsh.exe` through WSL interop; pins 20, 26, 33, 36, 38 read the tracked
+BF45_46, BF38_q14, BF2_b0, BF59 and tb25_ab records under `archive/`. The
+AST pins scan root `*.py`, `tampura_bridge/*.py` and `tools/*.py`. A whole
+generation takes about three minutes.
+
+Test: `tests/readable/test_pins_low.py` generates the group afresh and
+compares it pin by pin with the folder named by `READABLE_GOLDEN`; without
+it the pin tests skip with that message:
+
+```
+READABLE_GOLDEN=<folder> PYTHONHASHSEED=0 flock /root/sb_pipeline.lock \
+    /root/armO-venvA/bin/python -m pytest -q tests/readable/test_pins_low.py
+```
