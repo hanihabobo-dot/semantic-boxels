@@ -8,10 +8,17 @@ kinematically (their Attachment), so for arm T the same facts are read from
 its live world in a geometric form:
 
   attached   their SceneState.grasp holds a body of the target category;
-  pads       both finger pads within PAD_GAP_MAX_M of that body (their
-             get_grasp closes the fingers to (1 + closed_fraction) times the
-             contact position, closed_fraction 5e-2, so each pad can sit up
-             to about 2 mm off the body: a 1 mm bound would sit on that gap);
+  pads       both finger pads within PAD_GAP_MAX_M of that body.  Their
+             get_grasp keeps the last collision-free step of the closing
+             fingers (steps of 1.11 mm per finger) and opens it by 5 % more
+             (closed_fraction 5e-2), and a saved grasp need not centre the
+             body: over their 43 saved die grasps the larger pad gap is 0.93
+             to 4.39 mm (tracks/eval/checks/bf70_gaps, 2026-11-12).  5 mm
+             passes every grasp their code builds and still fails a body
+             that is not between the fingers.  Hani settled the bound
+             (C-Q1, tracks/eval/FOR_HANI.md) on 2026-11-14: "go with your
+             recomendations for the stuf i didnt adress this far".  It was
+             2 mm, which fails 24 of the 43 grasps;
   at home    the arm's 7 joints equal DEFAULT_ARM_POS under their own
              at-home test (np.allclose, rtol 1e-4, atol 1e-4), read from the
              joints, not from their belief (their go-home reports the home
@@ -30,7 +37,7 @@ import os
 
 FILE = 'final_world.json'
 SCHEMA = 1
-PAD_GAP_MAX_M = 0.002       # DV-1: each pad within 2 mm of the held body
+PAD_GAP_MAX_M = 0.005       # DV-1, BF#70 reopened: each pad within 5 mm of the held body (C-Q1, Hani 2026-11-14)
 SEARCH_DISTANCE_M = 0.05    # getClosestPoints radius; no point inside it = no gap
 HOME_RTOL = 1e-4            # their at-home test, SceneBelief.abstract
 HOME_ATOL = 1e-4
