@@ -1940,6 +1940,9 @@ def main(gui=True, run_logger=None, scene_config=None,
                 print(f"ERROR: no disposal plan for {held_obj_name} either — "
                       f"ending the episode honestly while holding (no blind "
                       f"drop; user directive 2026-08-21).")
+                # C-07: the round called the planner twice; count its time.
+                total_plan_time += plan_dt
+                plan_times.append(plan_dt)
                 break
         total_plan_time += plan_dt
         plan_times.append(plan_dt)
@@ -3121,7 +3124,7 @@ def main(gui=True, run_logger=None, scene_config=None,
         target_name=target_name,
         on_relations=on_relations,
         belief=belief,
-        plan_count=plan_count,
+        plan_count=len(plan_times),  # C-07: the rounds that called plan()
         sense_count=sense_count,
         m8_stats=({"n_observe_actions": observe_count,
                    "parked": sorted(planner.m8_views.parked),
