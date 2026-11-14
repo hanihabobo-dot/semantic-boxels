@@ -282,9 +282,26 @@ def read_history_t(a, save_dir):
     return {'history': False, 'read_error': (out.stderr or out.stdout)[-800:]}
 
 
+def move_stale_dir(path):
+    """D-15: a folder that already holds an earlier run (an episode cut by a
+    kill and run again on resume, or a relaunch into the same --out) is
+    renamed to the first free sibling <name>.stale<k>, k = 1, 2, ..., so the
+    new run starts empty and reads nothing of the old one.  Renamed, never
+    deleted: the retention sweeps own run data.  Returns the new path, or
+    None when nothing was moved (no folder, an empty one, or a file there)."""
+    if not os.path.isdir(path) or not os.listdir(path):
+        return None
+    k = 1
+    while os.path.lexists(f'{path}.stale{k}'):
+        k += 1
+    os.rename(path, f'{path}.stale{k}')
+    return f'{path}.stale{k}'
+
+
 def episode_t(a, rep, seed, order, scene_map, others, stall_rerun=False):
     save_dir = os.path.join(a.out, f'rep{rep}', 'T', f'seed{seed}'
                             + ('_rerun' if stall_rerun else ''))
+    stale = move_stale_dir(save_dir)        # D-15: every run starts empty
     os.makedirs(save_dir, exist_ok=True)
     console = os.path.join(save_dir, 'console.txt')
     cmd = [os.path.join(a.venv_t, 'bin', 'python'), '-u',
@@ -298,6 +315,9 @@ def episode_t(a, rep, seed, order, scene_map, others, stall_rerun=False):
     rec = base_record('T', rep, seed, order, a, cmd, save_dir, console)
     rec['machine_check_others'] = others
     rec['stall_rerun'] = stall_rerun
+    rec['stale_dir_moved_to'] = stale
+    if stale:
+        rec['note'] += f'this folder held an earlier run, moved to {stale}; '
     rc, wall, wall_clock, timed_out = run_capped(cmd, a.their_envs, env, a.cap, console)
     rec.update(returncode=rc, wall_s=wall, wall_clock_s=wall_clock, timed_out=timed_out)
     text = read_text(console)
