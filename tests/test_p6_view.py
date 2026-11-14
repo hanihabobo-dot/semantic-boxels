@@ -2,8 +2,13 @@
 
 It prints only (no window, no wsl call, no episode); the cell's own command is
 the argv of the arm's own eval_runner, and the line to watch it passes the same
-flags through run.ps1.  Windows Python; the one test that runs run.ps1 needs
-PowerShell 7 and skips without it.
+flags through run.ps1.  The tool is run with Windows Python, and these tests
+are meant for it; the one test that runs run.ps1 needs PowerShell 7 and skips
+without it.  Under WSL (the integration trial of 14 Nov ran them there) two
+kinds of test skip, each with its reason: the ones that read the pinned commits
+when git here cannot read them (WSL git cannot open a Windows worktree; an
+export has no history), and the recipe test, whose lines are Windows
+PowerShell with Windows paths.
 """
 import io
 import os
@@ -26,6 +31,24 @@ RP, STACK = (c for _, c in pv.WAVE1)
 _PWSH = shutil.which('pwsh') or shutil.which('pwsh.exe')
 
 
+def _git_reads(commit):
+    """Can git, as this interpreter finds it, read the commit from this checkout?"""
+    try:
+        return subprocess.run(['git', '-C', REPO, 'cat-file', '-e', f'{commit}^{{commit}}'],
+                              capture_output=True, timeout=60).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+needs_pinned = pytest.mark.skipif(
+    not all(_git_reads(c) for c in (pv.THESIS, pv.APRIME)),
+    reason=f'git here cannot read the pinned commits {pv.THESIS} and {pv.APRIME} from this checkout '
+           '(WSL git cannot open a Windows worktree; an export has no history); the tool runs with Windows Python')
+windows_only = pytest.mark.skipif(
+    os.name != 'nt', reason='the recipe is Windows PowerShell with Windows paths, printed by Windows Python')
+
+
+@needs_pinned
 def test_cells_are_the_arms_own_runner_argv():
     # arm A: this checkout's runner (the tag's, with TB-8 and TB-20)
     assert pv.cell_argv('A', RP) == [
@@ -61,6 +84,7 @@ def test_watching_drops_only_the_window_and_the_quiet_console():
     assert watch == [f for f in flags if f not in (('--no-gui', None), ('--log-level', 'quiet'))]
 
 
+@needs_pinned
 def test_run_boxels_lines():
     def line(arm, cell):
         return pv.run_boxels_line('X\\run.ps1', pv.watch_flags(pv.flags_of(pv.cell_argv(arm, cell))))
@@ -94,6 +118,7 @@ def test_run_ps1_passes_exactly_the_cells_flags(arm):
         assert '--no-gui' not in printed and '--log-level' not in printed
 
 
+@windows_only
 def test_recipes():
     b = pv.export_recipe(pv.THESIS, pv.B_DIR, True)
     leave_out = "-- . ':(exclude)eval_results' ':(exclude)thesis' ':(exclude)archive' ':(exclude)notes'"
@@ -106,6 +131,7 @@ def test_recipes():
     assert os.path.dirname(pv.B_DIR) == os.path.dirname(REPO)       # beside the checkouts: ..\pddlstream_lib is found
 
 
+@needs_pinned
 @pytest.mark.parametrize('commit,has_launcher', [(pv.THESIS, False), (pv.APRIME, True)])
 def test_the_export_leaves_out_the_result_folders_and_keeps_the_code(commit, has_launcher):
     """The recipe's pathspecs, run for real on the commit (as a tar): the big folders are gone, the pipeline is there."""
@@ -145,6 +171,7 @@ def test_wave2_lines_and_arm_ts_command():
         assert token in episode_t, token
 
 
+@needs_pinned
 def test_it_prints_only(monkeypatch):
     calls = []
     real = subprocess.run
@@ -167,6 +194,7 @@ def test_it_prints_only(monkeypatch):
     assert not any('wsl' in ln.lower() for ln in code)                # the wrapper's code lines never name wsl
 
 
+@needs_pinned
 def test_arms_belong_to_their_waves(capsys):
     with pytest.raises(SystemExit):
         pv.main(['--wave', '1', '--arm', 'T'])
