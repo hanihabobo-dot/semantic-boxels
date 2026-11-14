@@ -40,16 +40,18 @@ when and what & headline & caveat \\
 18 Sept 2026. Our tabletop, goal holding, random pairs. The fixes for re-detecting
 newly visible objects (F20) and for the shadow carve (F21) against the baseline,
 seed for seed, seeds 0 to 19 and 100 to 119. &
-27 of 40 for both; 15 against 13 on seeds 0 to 19, 12 against 14 on seeds 100 to
-119. The fixes buy correctness, not a headline gain, and raised mean planning time
-and plans per episode (\PW{1}). &
-Five seeds fail the pre-flight on both arms; success is within the noise of
-$n = 20$. \\
+27 of 35 for both (seeds 4, 6, 12, 106 and 115 build no scene; 1 baseline run timed
+out); 15 against 13 on seeds 0 to 19, 12 against 14 on seeds 100 to 119; four seeds
+go each way. The fixes buy correctness, not a headline gain, and raised mean planning
+time and plans per episode (\PW{1}). &
+The baseline's seeds 0 to 19 ran on 23 August, the rest on 18 September; success is
+within the noise of $n = 20$. \\
 27 Oct. Our holding scene, the unchanged pipeline run twice on the cluster (A/A),
 seeds 0 to 19 and 100 to 119. &
-31 of 40 and 30 of 40, three outcome flips, plan counts differ on 16 of 35 seeds
-(\BF{7}). The main-pipeline change B3 then scored 31 of 40 and was accepted on
-this evidence (\BF{10}). &
+31 of 35 and 30 of 35 (seeds 4, 6, 12, 106 and 115 build no scene), three outcome
+flips, plan counts differ on 16 of the 35 seeds (\BF{7}). The main-pipeline change B3
+then scored 31 of 35 against 31 of 35 for the unchanged code (two flips, one each way);
+Hani accepted it on diagnostic runs after a rerun clause failed (\BF{10}). &
 The noise floor for every later A/B claim. \\
 27 Oct. TAMPURA as shipped on the cluster, seeds 0 to 19, 900\,s per episode. &
 13 of 20 (Wilson 0.43 to 0.82), 1 crashed; the thesis's laptop run had 11 of 20
@@ -57,13 +59,16 @@ The noise floor for every later A/B claim. \\
 One TAMPURA crash counted as a failure; the entry calls it no difference at
 $n = 20$; seeds load different scenes on laptop and cluster (\BF{8}). \\
 30 Oct. First two campaigns of our arm against TAMPURA (B8). &
-TAMPURA 14 of 20 in each repetition; our arm crashed on every episode (\BF{54}). &
+TAMPURA 14 and 14 of 20 in campaign 1 (1 crashed in each repetition), 11 and 16 of 20
+in campaign 2 (1 crashed in the first); our arm crashed on every episode, 0 of 80
+(\BF{54}, \ID{recount}{recount of 14 November}). &
 Our arm's results are void (a write into a read-only folder); no comparison
 exists from these. \\
 30 to 31 Oct. Four time cuts alone and together, 24 seeds in 8 arms (192
 episodes), cluster. &
-Only the planner's search settings shortened episodes: median wall time 34.6\,s
-against 23.2\,s (\BF{53}). &
+Only the planner's search settings shortened episodes: median wall time 40.1\,s
+against 31.8\,s over all 24 seeds, 2 and 1 runs timed out (\BF{53}, \ID{recount}{recount
+of 14 November}). &
 A shared node; 11 to 15 seeds in each pairwise set, short of the 20 asked; our arm
 alone. \\
 31 Oct to 2 Nov. The die-slip campaign: six fixes alone and in sets, three
@@ -146,33 +151,35 @@ and its initial complexity) (\BF{53}). \Cref{tab:timecuts} gives the results.
 \small
 \begin{tabular}{lrrr}
 \toprule
-arm & successes of 24 & median wall (s) & median planning (s) \\
+arm & successes of 24 (timed out) & median wall (s) & median planning (s) \\
 \midrule
-none (base)                       & 18 & 34.6 & 19.4 \\
-fold (1)                          & 18 & 51.6 & 36.3 \\
-cache (2)                         & 17 & 40.2 & 23.2 \\
-folds and cache (1, 2)            & 15 & 52.3 & 36.6 \\
-continuation (3)                  & 16 & 38.5 & 20.0 \\
-(1, 2, 3)                         & 21 & 53.6 & 34.8 \\
-search settings (4)               & 19 & 23.2 & 10.5 \\
-all four (1, 2, 3, 4)             & 14 & 26.6 & 11.9 \\
+none (base)                       & 18 (2) & 40.1 & 23.4 \\
+fold (1)                          & 18 (3) & 57.6 & 41.0 \\
+cache (2)                         & 17 (2) & 41.5 & 24.9 \\
+folds and cache (1, 2)            & 15 (3) & 60.5 & 42.9 \\
+continuation (3)                  & 16 (3) & 41.5 & 23.9 \\
+(1, 2, 3)                         & 21 (2) & 57.7 & 39.5 \\
+search settings (4)               & 19 (1) & 31.8 & 14.1 \\
+all four (1, 2, 3, 4)             & 14 (2) & 28.5 & 12.8 \\
 \bottomrule
 \end{tabular}
 \caption[The per-fix evaluation: successes of 24 seeds and median times.]{The
-per-fix evaluation: successes of 24 seeds, and medians over the 18
-seeds that every arm ran to the close (\BF{53}). The times come from a shared node,
+per-fix evaluation: successes of 24 seeds, with the runs stopped at the 600\,s cap in brackets,
+and medians over all 24 seeds, a stopped run counted at 600\,s (\BF{53}, \ID{recount}{recount of 14 November}). The times come from a shared node,
 so the comparison between arms holds and the absolute values carry the node.}
 \label{tab:timecuts}
 \end{table}
 
 The search settings alone cut the per-seed wall time to 0.89 of the base's at the
-median (planning 20.4 to 13.0\,s, successes 18 to 19). The fold made episodes
-slower: 1.11 of the base's wall time at the median, slower on 12 of 20 seeds and
-faster on one; its planning median is 36.3\,s against 19.4\,s. The cache
-and the continuation changed nothing measurable (0.99 each). Added to the other
-three cuts, the search settings brought the wall time to 0.55 of that arm's and
-the successes from 21 to 14 on 20 seeds; all four together gave 0.78 of the base's
-wall time and 14 successes against 18. The entry's own conclusion is that the
+median over the 24 seeds (planning 23.4 to 14.1\,s, successes 18 to 19; 2 and 1 runs
+timed out). The fold made episodes slower: 1.11 of the base's wall time at the
+median, slower on 14 of 24 seeds and faster on 2; its planning median is 41.0\,s
+against 23.4\,s. The cache and the continuation changed nothing measurable (0.99 and
+1.00). Added to the other three cuts, the search settings brought the wall time to
+0.55 of that arm's and the successes from 21 to 14 of 24 ($p = 0.065$); all four
+together gave 0.83 of the base's wall time and 14 successes against 18 ($p = 0.34$).
+The shortest median wall is that of all four (28.5\,s), which contain the search
+settings. The entry's own conclusion is that the
 search settings are the time cut, that the fold costs planning time and, with the
 others, successes, and that the cache and the continuation do nothing measurable
 (\BF{53}). The slow episodes are replan loops of observe, replan, observe, one
@@ -347,9 +354,10 @@ approach & published \cite{curtis2024partially}, task A & our run \\
 TAMPURA &
 return 0.87 $\pm$ 0.01 (Table I); 28 $\pm$ 26\,s per step (Table II); 6.44
 $\pm$ 1.21 executed steps (Table III) &
-laptop probe, seeds 0 to 2 only: succeeded on 2 of 3 with 6 and 8 actions
-on seeds 0 and 1; 66.5 to 139.8\,s of planning per real step and 445 to 754\,s per
-episode (\TK{2}) \\
+laptop probe, seeds 0 to 2 only: 0 of 3 on first attempts (our probe script ended
+the first launches of seeds 0 and 1; seed 2 failed); the second launches of seeds 0
+and 1 succeeded with 6 and 8 actions; 66.5 to 139.8\,s of planning per real step and
+445 to 754\,s per episode (\TK{2}, \ID{recount}{recount of 14 November}) \\
 Bayes-optimistic, MLO &  0.66 $\pm$ 0.09 & not run \\
 Bayes-optimistic, WAO &  0.78 $\pm$ 0.06 & not run \\
 $\epsilon$-greedy, LAO* & 0.69 $\pm$ 0.08 & not run \\
@@ -361,10 +369,13 @@ our planning layer in mode S &
 none published &
 their reward in 18 of 20 (Wilson 0.70 to 0.97), mean return 0.788; world-state
 test in 17 of 20 (0.64 to 0.95), mean return 0.744; 1 crashed (seed 5, inside
-TAMPURA's inspect function), counted as a failure (\TK{2}) \\
+TAMPURA's inspect function), counted as a failure (\TK{2}). Every number is that of
+the second version (v2), which retires a failed grasp and was written after the first
+version lost seed 4 (v1: 4 of 5 on seeds 0 to 4); an earlier call failed in every row on
+a bug of ours, and its rows were deleted \\
 baseline policies, same task &
 none published &
-their random policy: 0 of 5 on seeds 0 to 4; no action: 0; pick and drop
+their random policy: 0 of 20, 15 did not run (seeds 5 to 19, cancelled); no action: 0; pick and drop
 everything without inspecting: mean success 0.39, mean return 0.346; inspect all,
 then move each fruit: mean return 0.872 (\TK{2}) \\
 \bottomrule
@@ -379,8 +390,8 @@ with its reading of the task's reward.}
 
 The check has three parts. First, our planning layer does not reproduce
 TAMPURA's 0.87 and is not meant to: it is a different system on the same task. Its
-mean return is 0.788 under the task's own reward. Its success rate of 18 of 20
-(0.90, interval 0.70 to 0.97) is compatible with the success rate of at least 0.87
+mean return is 0.788 under the task's own reward. Its success rate of 18 of 20, 1
+crashed (0.90, interval 0.70 to 0.97), not paired with TAMPURA's, is compatible with the success rate of at least 0.87
 that TAMPURA's published return implies. Second, the published return is the
 task's ceiling: a scripted policy that inspects every fruit and then moves each
 one reaches 0.872 (\TK{2}), and the track's reading is that only time and steps can
@@ -430,19 +441,22 @@ scripted rules, predictive &
 none published &
 their reward 19 of 25 (0.57 to 0.89), 0.618; world test 22 of 25 (0.70 to 0.96),
 0.713 (\TK{2}) \\
-their random policy, 60 episodes &
+their random policy &
 none published &
-0 of 60 under both tests (\TK{2}) \\
+on the same 25 episodes 0 of 25 under both tests (0 of 60 over all its runs) (\TK{2}) \\
 never look &
 none published &
-mean return 0.34 under their reward, 0.38 by the world test (\TK{2}) \\
+on the same 25 episodes: mean return 0.34 under their reward, 0.42 by the world test
+(\TK{2}, \ID{recount}{recount of 14 November}) \\
 \bottomrule
 \end{tabularx}
 \caption[Published numbers for SLAM Collection and our runs.]{Published numbers for
 SLAM Collection and our runs. Our planning layer
 looked 2.44 times and acted 9.5 times per episode, in 18 to 96\,s of wall time
 (median 30\,s); the two scripted rule sets were written by the track as controls
-(\TK{2}).}
+(\TK{2}). Our numbers are those of the declared batch; our first two calls failed in
+every row on faults of ours, and their rows were deleted. Paired with ours on the same
+25 maps and noise seeds, no difference reaches 5\,\%.}
 \label{tab:published-sl}
 \end{table}
 
@@ -451,8 +465,8 @@ sits at the paper's WAO row (0.56 $\pm$ 0.08) and 0.24 below TAMPURA's published
 0.81; by the world-state test it is 0.693, still 0.12 below. Which of the two tests
 is the standard moves the number by 0.13, which is why the track reports both;
 Hani decided that the world-state test is primary (\TK{2}, \BF{68}). The paper's
-weakest approaches score 0.00 to 0.03, and their random policy scores 0 of 60 in
-our runs, so the task is not one that chance solves. No TAMPURA run on this task
+weakest approaches score 0.00 to 0.03, and their random policy scores 0 of 25 on our
+episodes (0 of 60 in all its runs), so the task is not one that chance solves. No TAMPURA run on this task
 exists in our tracks: the pilot is a cluster question that is still open
 (\TK{2}); the paper's per-step time of 129 s over 9.22 steps is about 20 minutes
 per episode (our arithmetic). Nothing of ours is set against the paper's time,

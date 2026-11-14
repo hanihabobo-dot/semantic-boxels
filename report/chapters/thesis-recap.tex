@@ -23,7 +23,7 @@ when an assumption fails. It runs on a simulated Franka Panda in PyBullet
 
 The thesis measured the representation by ablation: the same planner on the
 adaptive partition against a uniform grid at the same cell scale. Its headline
-table, reproduced in \Cref{tab:thesis-headline}, shows that the adaptive
+table, reproduced in \Cref{tab:thesis-headline} with four rows recounted, shows that the adaptive
 partition solved more scenes in every goal, most sharply on finding a hidden
 cube and stacking it on a tray.
 
@@ -34,13 +34,13 @@ cube and stacking it on a tray.
 \toprule
 goal & variant & success rate & mean plan time (s) \\
 \midrule
-find-and-tray-stack & semantic         & 75.6\,\% & 124.62 \\
-find-and-tray-stack & semantic+mbs0.05 & 72.2\,\% &  82.14 \\
-find-and-tray-stack & uniform          & 34.4\,\% & 692.11 \\
+find-and-tray-stack & semantic         & 62 of 90, 68.9\,\% &  99.99 \\
+find-and-tray-stack & semantic+mbs0.05 & 58 of 90, 64.4\,\% &  79.42 \\
+find-and-tray-stack & uniform          & 27 of 90, 30.0\,\% & 705.07 \\
 \midrule
 holding             & semantic         & 65.6\,\% & 134.30 \\
 holding             & semantic+mbs0.05 & 66.7\,\% &  56.64 \\
-holding             & uniform          & 47.8\,\% & 438.53 \\
+holding             & uniform          & 40 of 90, 44.4\,\% & 401.32 \\
 \midrule
 stack               & semantic         & 64.4\,\% &  17.16 \\
 stack               & semantic+mbs0.05 & 64.4\,\% &   3.10 \\
@@ -49,7 +49,12 @@ stack               & uniform          & 35.6\,\% & 924.13 \\
 \end{tabular}
 \caption{The thesis's headline table \cite{alassiri2026thesis}: success rate and
 mean success-only planning time per goal and variant, 90 episodes each (30 seeds
-and three difficulty levels).}
+and three difficulty levels). Four rows are recounted on the first attempt of each
+declared cell (\ID{recount}{recount of 14 November}): where the declared scene failed to
+build, a re-rolled scene ran in its place (5, 7 and 4 cells of find-and-tray-stack, all
+successes), and two runs of find-and-tray-stack semantic and four of holding uniform were
+cut by our runner's restart; these count as failures. The thesis printed 75.6, 72.2 and
+34.4\,\% and 47.8\,\%. The other rows are as printed.}
 \label{tab:thesis-headline}
 \end{table}
 

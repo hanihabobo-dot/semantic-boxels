@@ -553,8 +553,8 @@ holds by friction, detection reads rendered images, and failures of the physics 
 thrown away on 20 August; four adversarial reviewers found no cheat (\BF{14} to \BF{25}). The die no longer slips
 out of the hand: the chosen four fixes gave 120 of 120 episodes on the three scenes that TAMPURA ships, against
 209 of 300 without them and 40 of 60 for TAMPURA, one of them crashed (\BF{59}, \BF{62}). Of
-four time cuts only the planner's search settings helped: the median wall time fell from 34.6 to 23.2\,s
-(\BF{53}, \BF{57}). Our runs of TAMPURA land near its paper: a return of 0.504 over 80 episodes, four of them
+four time cuts only the planner's search settings helped: the median wall time over all 24 seeds fell from 40.1
+to 31.8\,s (\BF{53}, \BF{57}). Our runs of TAMPURA land near its paper: a return of 0.504 over 80 episodes, four of them
 crashed, against the published 0.63 $\pm$ 0.07 (\BF{63}). And a correction of the
 thesis: 25 of the 29 ``timeouts'' on stack ended after 8 to 21\,s, rejected by the end-of-run physics check
 (\BF{68}). \validitynote{failures}
@@ -605,7 +605,7 @@ as failures: 1, 1, 4 and 4 crashed in the last four runs.}
 \begin{subfigure}[t]{0.30\linewidth}\centering
 \begin{tikzpicture}
 \begin{axis}[sb, xbar, bar width=4.6pt, width=0.74\linewidth, height=4.4cm,
-  xmin=0, xmax=78, xtick={0,20,40,60},
+  xmin=0, xmax=84, xtick={0,20,40,60},
   xlabel={median wall time of an episode (s)},
   symbolic y coords={all,search,three,cont,foldcache,cache,fold,none},
   ytick={all,search,three,cont,foldcache,cache,fold,none},
@@ -615,11 +615,11 @@ as failures: 1, 1, 4 and 4 crashed in the last four runs.}
   nodes near coords style={font=\scriptsize, anchor=west},
   xmajorgrids,
 ]
-\addplot[fill=black!50, draw=none] coordinates {(26.6,all) [14/24] (23.2,search) [19/24] (53.6,three) [21/24] (38.5,cont) [16/24] (52.3,foldcache) [15/24] (40.2,cache) [17/24] (51.6,fold) [18/24] (34.6,none) [18/24]};
+\addplot[fill=black!50, draw=none] coordinates {(28.5,all) [14/24] (31.8,search) [19/24] (57.7,three) [21/24] (41.5,cont) [16/24] (60.5,foldcache) [15/24] (41.5,cache) [17/24] (57.6,fold) [18/24] (40.1,none) [18/24]};
 \end{axis}
 \end{tikzpicture}
-\caption{The four time cuts (\BF{53}), with successes of 24 seeds. One shared node: only the comparison between
-arms holds.}
+\caption{The four time cuts (\BF{53}), with successes of 24 seeds; medians over all 24, a run stopped at the
+600\,s cap (1 to 3 per arm) counted at 600\,s. One shared node: only the comparison between arms holds.}
 \end{subfigure}
 \caption{Results from before Checkpoint 1 that still stand: holding the die, TAMPURA's own reliability, and the
 time cuts. All on the cluster. \validitynote{failures}}
@@ -769,15 +769,15 @@ the result files, not audited. \Cref{fig:timeline} shows when and where the runs
    \textbf{after Checkpoint 1, to 13 Nov} \\
 \midrule
 cluster &
-\sq{vok}TAMPURA as shipped: 13 of 20, 1 crashed\par \sq{vnarrow}our pipeline twice: 31 and 30 of 40 &
-\sq{vnot}first two campaigns against TAMPURA: our arm void\par \sq{vnarrow}time cuts: 34.6 to 23.2\,s\par
+\sq{vok}TAMPURA as shipped: 13 of 20, 1 crashed\par \sq{vnarrow}our pipeline twice: 31 and 30 of 35 &
+\sq{vnot}first two campaigns against TAMPURA: our arm void\par \sq{vnarrow}time cuts: 40.1 to 31.8\,s\par
 \sq{vnarrow}die-slip campaign: 120 of 120 against 40 of 60, 1 crashed &
 \sq{vnarrow}run 1: a slow hour\par \sq{vnarrow}run 2: 57 of 80 against 46 of 80, 4 crashed, $p = 0.061$ &
 \emph{Nothing ran on the cluster.} &
 \sq{vnew}run 3 with the shadow fix: 69 of 80 against 46 of 80, 4 crashed, $p = 0.00012$ \\
 \midrule
 laptop &
-\sq{vnarrow}A/B of two perception fixes (18 Sept, the thesis's harness): 27 of 40 for both &
+\sq{vnarrow}A/B of two perception fixes (18 Sept, the thesis's harness): 27 of 35 for both &
 \sq{vnarrow}squeeze probe: 0.5\,mm holds the die in 93 of 96 trials &
 \sq{vnarrow}shadow fix on scene 118: solved &
 \sq{vok}check of the tag; walkers: the luck floor; merge checks of the Wumpus branch\par
@@ -852,7 +852,7 @@ today's flow 7 of 9, centred look 3 of 9, boxel look 2 of 9 (first attempt; 0 cr
 Development runs on the seeds the look was fixed on; both looks keep the fixed camera; today's flow lost its two
 scenes in the carry. After a look the pick lands a finger on the taller block beside the target. \\
 The grip probe on \cuncert & L &
-the lemon and the strawberry slip out, 3 of 3 tries each &
+the lemon and the strawberry slip out at the lift: one run each, all 3 picks lost &
 15 of the 20 seeds hold one of the two; the physical route is stopped. \\
 \bottomrule
 \end{tabularx}
@@ -889,7 +889,7 @@ evaluation up to 8 November & result as reported & verdict & what stands, and wh
 \midrule
 TAMPURA as shipped, seeds 0 to 19 (27 Oct) & 13 of 20, 1 crashed & \vOK &
 One system alone on an exclusive node. \\
-Four time cuts, 8 arms on 24 seeds (31 Oct) & search settings: median wall 34.6 to 23.2\,s & \vNA &
+Four time cuts, 8 arms on 24 seeds (31 Oct) & search settings: median wall 40.1 to 31.8\,s over all 24 & \vNA &
 A node shared with other users. Only the ratio between arms holds (0.89 of the base per seed). \\
 The die-slip campaign, three shipped scenes (31 Oct to 2 Nov) & chosen set 120 of 120; base 209 of 300; TAMPURA
 40 of 60, 1 crashed & \vNA &
