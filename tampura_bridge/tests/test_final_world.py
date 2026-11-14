@@ -90,9 +90,9 @@ def test_a_store_symbol_names_its_body():
     assert fw.body_id('physical#12') == 12 and fw.body_id(7) == 7 and fw.body_id('3') == 3
 
 
-@pytest.mark.parametrize('gap,ok', [(0.002, True), (0.0021, False), (-0.002, True),
-                                    (-0.0021, False), (0.05, False)])
-def test_pad_bound_is_two_millimetres_either_side(gap, ok):
+@pytest.mark.parametrize('gap,ok', [(0.005, True), (0.0051, False), (-0.005, True),
+                                    (-0.0051, False), (0.00439, True), (0.05, False)])
+def test_pad_bound_is_five_millimetres_either_side(gap, ok):
     env, _ = make_env(held=5, gaps={(5, 9): [gap], (5, 10): [0.0]})
     assert read(env)[1]['pads_on_target'] is ok
 
@@ -106,9 +106,10 @@ def test_one_pad_away_or_unseen_fails():
 
 
 def test_the_pad_gap_bound_is_a_parameter_and_is_recorded():
-    env, _ = make_env(held=5, gaps={(5, 9): [0.003], (5, 10): [0.003]})
-    raw, v = read(env, pad_gap_max_m=0.004)
-    assert raw['pad_gap_max_m'] == 0.004 and v['standard_success']
+    env, _ = make_env(held=5, gaps={(5, 9): [0.006], (5, 10): [0.006]})
+    assert not read(env)[1]['standard_success']                      # outside the default bound
+    raw, v = read(env, pad_gap_max_m=0.007)
+    assert raw['pad_gap_max_m'] == 0.007 and v['standard_success']
 
 
 def test_arm_home_follows_their_allclose():

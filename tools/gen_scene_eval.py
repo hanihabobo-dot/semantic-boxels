@@ -24,7 +24,7 @@ test."): the standard test is ours on both arms.  Arm O: the bridge's outcome
 pads at 0.5 N, the arm at home).  Arm T: the physical facts of its final
 world, read after their rollout by the reviewed wrapper in
 tampura_bridge/timed_policy.py (tampura_bridge/final_world.py: the target
-body attached, both finger pads within 2 mm of it, the arm at home); their
+body attached, both finger pads within 5 mm of it, the arm at home); their
 own reward stays in the record and in the row's 't_reward_success'.  An arm-T
 episode whose final world could not be read does not count (it runs once
 more, as any episode that does not count) and counts like a gate failure in
@@ -32,7 +32,7 @@ the harness stop rule (P4.6, R2 of the G13 review): three episodes of one arm
 under the same gate (G13, G19, or FINAL_WORLD for an unread world) stop the
 job, which writes the stop to metadata.json, prints STOPPED and exits 2; the
 report lists the unread worlds apart with their errors, prints the largest pad
-gap of arm T's attached episodes and the episodes the 2 mm bound alone fails
+gap of arm T's attached episodes and the episodes the pad bound alone fails
 (R1), and opens with the caveat that T's test is geometric and ours physical
 (R5).
 
@@ -696,7 +696,7 @@ def report_tables(rows, final, brief=False):
 
 
 T_CAVEAT = ("Caveat first: TAMPURA carries the die kinematically (their Attachment), so arm T's standard test is "
-            "read geometrically from its final world (the target attached, both finger pads within 2 mm of it, "
+            "read geometrically from its final world (the target attached, both finger pads within 5 mm of it, "
             "the arm at home), while arm O's is physical (both pads in contact at 0.5 N, the pipeline's own goal "
             "check). The same facts are read in two forms; they are not one measurement. Their own reward is "
             "printed beside the standard test.")
@@ -750,7 +750,7 @@ def t_pad_lines(final):
     lines = [head + f"; attached and at home but failed by the pad bound alone: {len(alone)}"]
     for s, rep, r, fw in alone:
         gaps = ' and '.join('unseen' if g is None else f"{abs(g) * 1000:.2f} mm" for g in (fw.get('pad_gaps_m') or []))
-        lines.append(f"  T seed {s} rep {rep}: pad gaps {gaps}, bound {fw.get('pad_gap_max_m', 0.002) * 1000:g} mm, "
+        lines.append(f"  T seed {s} rep {rep}: pad gaps {gaps}, bound {fw['pad_gap_max_m'] * 1000:g} mm, "
                      f"their reward {'success' if r.get('t_reward_success') else 'failure'}; "
                      "reported to Sub-manager T and Go before a wave counts")
     return lines

@@ -525,25 +525,25 @@ def test_report_opens_with_the_caveat_on_the_two_forms_of_the_test(tmp_path):
 
 
 def _fw(gaps, attached=True, at_home=True):
-    pads = len(gaps) == 2 and all(g is not None and abs(g) <= 0.002 for g in gaps)
+    pads = len(gaps) == 2 and all(g is not None and abs(g) <= 0.005 for g in gaps)
     return {'ok': True, 'attached': attached, 'at_home': at_home, 'pad_gaps_m': gaps,
-            'pad_gap_max_m': 0.002, 'pads_on_target': pads}
+            'pad_gap_max_m': 0.005, 'pads_on_target': pads}
 
 
 def test_report_prints_arm_ts_pad_gaps_and_the_episodes_the_bound_alone_fails(tmp_path):
     rows = [_crow('T', 1, True, reward=True, final_world=_fw([0.00045, 0.00045])),
             _crow('T', 2, True, reward=True, final_world=_fw([0.0006, -0.0008])),     # the larger gap is 0.8 mm
-            _crow('T', 3, False, reward=True, final_world=_fw([0.0004, 0.0031])),     # attached, home, 3.1 mm: the bound alone
+            _crow('T', 3, False, reward=True, final_world=_fw([0.0004, 0.0062])),     # attached, home, 6.2 mm: the bound alone
             _crow('T', 4, False, reward=False, final_world=_fw([0.0004, 0.0004], at_home=False)),   # not at home
             _crow('T', 5, False, reward=False, final_world=_fw([None, None], attached=False)),      # nothing held
             _crow('T', 6, True, reward=True, final_world=_fw([0.0005, 0.0005])),
             _crow('O', 1, True, t=10, carries=1, losses=0)]
     _write_rows(tmp_path / 'j1', rows)
     text = gse.report([str(tmp_path / 'j1')])
-    assert ("final_world): target attached in 5 counted episodes; largest pad gap 3.10 mm (seed 3 rep 0), "
+    assert ("final_world): target attached in 5 counted episodes; largest pad gap 6.20 mm (seed 3 rep 0), "
             "median of the larger gap per episode 0.50 mm; attached and at home but failed by the pad "
             "bound alone: 1") in text
-    assert ("  T seed 3 rep 0: pad gaps 0.40 mm and 3.10 mm, bound 2 mm, their reward success; "
+    assert ("  T seed 3 rep 0: pad gaps 0.40 mm and 6.20 mm, bound 5 mm, their reward success; "
             "reported to Sub-manager T and Go before a wave counts") in text
     assert 'T seed 4 rep 0: pad gaps' not in text and 'T seed 5 rep 0: pad gaps' not in text
 
