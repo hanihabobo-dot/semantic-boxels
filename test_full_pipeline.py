@@ -3338,6 +3338,7 @@ if __name__ == "__main__":
 
     # Single real-pipeline run with the validated scene_cfg.
     logger = RunLogger(verbosity=args.log_level)
+    crash = None
     try:
         success = main(
             gui=not args.no_gui,
@@ -3356,12 +3357,25 @@ if __name__ == "__main__":
             telemetry_period=args.telemetry_period,
             telemetry_heartbeat=args.telemetry_heartbeat,
         )
+    except Exception:
+        # C-01: an exception out of main() is a crash, not a failed
+        # episode, so it ends with an exit code of its own (below).
+        # Ctrl-C and SystemExit are not caught: they end as before.
+        crash = sys.exc_info()
     finally:
         # #P1 F17: flush the final action summary before the log file
         # closes; a no-op when telemetry was never armed.
         telemetry.disable()
         world_eye.disable()
         logger.close()
+    if crash is not None:
+        # Shown as before, by the same hook and after the clean-up above:
+        # the console's "Crashed:" line and the traceback on stderr.
+        # Then exit 70, a code nothing else here uses (0 success, 1 a
+        # failed episode or a pre-flight rejection, 2 no numpy or a bad
+        # command line, 130 Ctrl-C); eval_runner files it as crash_exit70.
+        sys.excepthook(*crash)
+        console_ui.finish(70)
     # sys.exit, except that with the console installed the process ends
     # right after the flush: pybullet's GUI teardown segfaults at
     # interpreter exit (bash's 'Segmentation fault' line under the console).

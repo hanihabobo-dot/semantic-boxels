@@ -580,6 +580,11 @@ def _another_cells_run(cell_dir: Path, claims: Dict[str, int]) -> bool:
             and claims.get(run_dir_txt.read_text().strip(), 0) > 1)
 
 
+# C-01: how many of the last lines of a crashed cell's stderr its row
+# keeps (the end of the traceback; the whole output is in stdout.log).
+STDERR_TAIL_LINES = 20
+
+
 def run_cell(
     cell: Dict,
     sweep_dir: Path,
@@ -657,12 +662,17 @@ def run_cell(
 
     # test_full_pipeline.py exits 0 on success, 1 on run-level failure
     # (exit_reason set by report_run_outcome).  Anything else = crash.
+    # C-01: an exception in main() exits 70 (crash_exit70).  The exit
+    # code is read before any summary, so a crash after the summary was
+    # written is a crash row too, and that summary is not banked.
     if proc.returncode not in (0, 1):
+        tail = (proc.stderr or "").splitlines()[-STDERR_TAIL_LINES:]
         stub = {
             **cell,
             "success": False,
             "exit_reason": f"crash_exit{proc.returncode}",
             "wall_clock_s": round(wall, 3),
+            "stderr_tail": tail,
         }
         summary_path.write_text(json.dumps(stub, indent=2))
         print(f"[runner] {tag}: CRASH exit={proc.returncode}")
@@ -805,6 +815,8 @@ LIST_VALUED = {
     "boxel_counts_per_replan",
     # TB-22: what the drop and collision counts counted, jsonl-only.
     "drop_events", "collision_events", "drops_noticed_by",
+    # C-01: a crashed cell's last stderr lines, jsonl-only.
+    "stderr_tail",
 }
 
 
