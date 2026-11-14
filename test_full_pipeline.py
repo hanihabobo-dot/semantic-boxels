@@ -121,6 +121,7 @@ import observe_views
 import look_domain
 import look_views
 from look_action import handle_look_action
+import arm_eye
 from streams import HOME_PSEUDO_BOXEL
 import logging
 import math
@@ -785,6 +786,19 @@ def main(gui=True, run_logger=None, scene_config=None,
     look_on = look_mode != 'off'
     if look_on and not pose_belief.SWITCHES['M8']:
         raise ValueError(f"--look {look_mode} needs --m8 on")
+    # Path 9, the arm camera only (arm_eye): --eye arm needs a look, and its
+    # start configuration is q_home (the caller's, or --eye-start-joints).
+    eye = getattr(args, 'eye', 'fixed')
+    arm_eye.check_mode(eye, look_mode)
+    if eye == 'arm':
+        _start = arm_eye.parse_joints(getattr(args, 'eye_start_joints', ''))
+        if _start is not None and home_joints is not None and \
+                not np.allclose(_start, home_joints):
+            raise ValueError("--eye-start-joints differs from the caller's home "
+                             "joints: the start configuration is q_home")
+        home_joints = _start if _start is not None else home_joints
+        eye_start = list(home_joints if home_joints is not None
+                         else robot_utils.REST_POSES)
     if domain_file is None and look_on:
         domain_file = look_domain.domain_file(look_mode, True)
     elif domain_file is None and pose_belief.SWITCHES['M8']:
@@ -922,11 +936,20 @@ def main(gui=True, run_logger=None, scene_config=None,
     if run_config is not None:
         run_config["effective_min_boxel_size"] = round(effective_cell, 4)
 
+    # Path 9, --eye arm: the arm stands at its start configuration before the
+    # settle (scene construction; an adopted world is not moved), and after it
+    # the overview camera is the arm camera there, for every image and cast.
+    if eye == 'arm':
+        arm_eye.place_arm(env, eye_start)
     # Let settle: 50 steps at 240 Hz ≈ 0.2 s.  Enough for the loaded
     # Panda + cubes to reach static equilibrium after spawning.
     for _ in range(50):
         env.step_simulation()
     env.update_object_positions()
+    if eye == 'arm':
+        _cam = arm_eye.use_start_view(env)
+        print(f"  [eye] the overview camera is the arm camera at the start "
+              f"configuration: {np.round(_cam['camera_position'], 3).tolist()}")
 
     # Audit #29: single-shot sanity log.  Placement in
     # ``_hidden_xy_positions`` already uses 8-corner raycasts against
@@ -3382,6 +3405,7 @@ if __name__ == "__main__":
         "m8": args.m8, "m9": args.m9, "m10": args.m10,
         **({"look": look_domain.mode_of(getattr(args, 'look', 'off'))}
            if look_domain.mode_of(getattr(args, 'look', 'off')) != 'off' else {}),  # path 9
+        **({"eye": "arm"} if getattr(args, 'eye', 'fixed') == 'arm' else {}),  # path 9
         "pick_aperture_from_pose": args.pick_aperture_from_pose,
         "grip_squeeze_mm": getattr(args, 'grip_squeeze_mm', '0.5'),
         "save_screenshots": getattr(args, 'save_screenshots', 'off'),   # BF#50

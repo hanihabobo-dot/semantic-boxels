@@ -879,6 +879,19 @@ def parse_pipeline_args(argv=None):
              "pddl/domain_pddlstream_look.pddl; `on` is the same) or centred "
              "(the object-centred look, pddl/domain_pddlstream_look_centred."
              "pddl); needs --m8 on.")
+    # Path 9, the arm camera only (tracks/look/ARM_ONLY_DESIGN.md): every
+    # image comes from the arm camera, the first one at the start
+    # configuration, which is q_home.  fixed keeps the overview camera.
+    parser.add_argument(
+        '--eye', choices=['fixed', 'arm'], default='fixed',
+        help="Path 9: arm: the overview camera is the arm camera at the start "
+             "configuration (needs --look boxel or --look centred); fixed: "
+             "the fixed overview camera, as before.")
+    parser.add_argument(
+        '--eye-start-joints', default='',
+        help="Path 9, --eye arm: the start configuration, one angle per arm "
+             "joint in radians, comma separated; it becomes q_home.  Empty: "
+             "the run's q_home.")
     # BF#53 (2026-10-30), the optimistic search's settings.  pddlstream
     # weighs a stream result's effort into the search's costs only with
     # effort_weight set; without it every attempt of the adaptive loop may

@@ -1,14 +1,23 @@
-"""Path 9 (b), PROVISIONAL: ours with the arm camera only (--eye arm).
+"""Path 9: ours with the arm camera only (--eye arm).
 
 Design: archive/tampura_bridge_plan_2026-10-25/tracks/look/ARM_ONLY_DESIGN.md.
 The overview camera of this mode is the arm camera at the arm's start
 configuration, so an overview image exists only while the arm stands there.
+Hani, 2026-11-14 04:40, via the coordinator (verbatim): "so look should be an
+eyle in the hand. no need for a third option".
 
-This module holds the geometry of that mode and nothing else.  Nothing in the
-pipeline imports it yet (2026-11-12): the wiring comes behind a switch that is
-off by default, and Hani has not answered the two questions it rests on
-(tracks/look/FOR_HANI.md, Q1 and Q2).
+This module holds the switch's rule, the start of an arm-camera run and the
+geometry of the mode.  Wired so far (step 1 of three, 2026-11-14): the switch
+and the first image.  The unseen regions are not wired yet (step 2), and the
+checks after an action still render the start view from wherever the arm
+stands (step 3), so no episode runs in this mode yet.
 
+  check_mode         the switch's rule: --eye arm needs a look;
+  parse_joints       a start configuration from the command line;
+  place_arm          scene construction in a world of our own: the arm stands
+                     at the start configuration before the first image;
+  use_start_view     the env's observation camera becomes the arm camera at
+                     the arm's current joints;
   start_camera       the env's observation-camera attributes for the arm
                      camera at the arm's current joints (the hand's forward
                      kinematics times the declared mount: proprioception,
@@ -27,12 +36,25 @@ off by default, and Hani has not answered the two questions it rests on
   unseen_boxels      those regions as hidden-region boxels with fixed names.
 """
 import math
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
+import pybullet as p
 
 import robot_utils
 from boxel_data import BoxelData, BoxelType
+
+EYE_MODES = ('fixed', 'arm')
+# The env attributes every fixed-camera path reads: boxel_env's
+# _view_and_projection_matrices, detect_objects, _depth_buffer_to_meters and
+# the oracle's rays; execution.py and world_eye through the env.  The shadow
+# calculator keeps its own copy of the position (use_start_view sets both).
+CAMERA_ATTRIBUTES = ('camera_position', 'camera_target', 'camera_up', 'fov',
+                     'image_width', 'image_height', 'near_plane', 'far_plane')
+# The force that holds the arm at the start configuration: the one
+# robot_utils.move_robot_smooth and hold_at_config command.
+ARM_HOLD_FORCE = 240
+_NOT_TASK_BODIES = ('plane', 'table', 'robot')
 
 # No side of an unseen cell is longer than this: the arm camera sees 0.37 by
 # 0.27 m of the table from 0.30 m above it, so one look holds one cell.
@@ -49,6 +71,81 @@ def _focal_px() -> float:
     """Focal length in pixels (square pixels) of the arm camera."""
     return (robot_utils.WRIST_CAMERA_HEIGHT / 2.0) / math.tan(
         math.radians(robot_utils.WRIST_CAMERA_FOV_DEG) / 2.0)
+
+
+def check_mode(eye: str, look_mode: str) -> None:
+    """The switch's rule.  --eye arm needs --look centred or --look boxel:
+    sense is the fixed camera's action, so without a look nothing in the
+    domain could put the arm camera anywhere."""
+    if eye not in EYE_MODES:
+        raise ValueError(f"--eye is one of {EYE_MODES}, not {eye!r}")
+    if eye == 'arm' and look_mode not in ('boxel', 'centred'):
+        raise ValueError(f"--eye arm needs --look centred or --look boxel (got "
+                         f"--look {look_mode}): sense is the fixed camera's action")
+
+
+def parse_joints(text) -> Optional[List[float]]:
+    """A start configuration from the command line: one joint angle per arm
+    joint, in radians, separated by commas.  Empty or None: None (the caller
+    takes the run's home configuration)."""
+    if text is None or not str(text).strip():
+        return None
+    try:
+        joints = [float(v) for v in str(text).split(',')]
+    except ValueError:
+        raise ValueError(f"--eye-start-joints takes joint angles in radians "
+                         f"separated by commas, not {text!r}") from None
+    if len(joints) != len(robot_utils.REST_POSES):
+        raise ValueError(f"--eye-start-joints takes {len(robot_utils.REST_POSES)} "
+                         f"joint angles, got {len(joints)}")
+    return joints
+
+
+def place_arm(env, joints: Sequence[float]) -> bool:
+    """Scene construction in a world of our own: the arm stands at ``joints``
+    in the executing client and in the plan twin before the first image, and
+    is held there, as _setup_scene opens the fingers.  A start configuration
+    that touches a task body is refused.  An adopted world is its owner's:
+    nothing is moved in it (the bridge's arm stands at its home already), and
+    the camera is taken from where the arm is.  True when the arm was put."""
+    if getattr(env, '_adopted', False):
+        return False
+    robot = env.objects['robot'].object_id
+    arm = robot_utils.robot_model().arm_joints
+    if len(joints) != len(arm):
+        raise ValueError(f"the start configuration has {len(joints)} joints, "
+                         f"the arm has {len(arm)}")
+    for j, q in zip(arm, joints):
+        p.resetJointState(robot, j, float(q), physicsClientId=env.client_id)
+        p.setJointMotorControl2(robot, j, p.POSITION_CONTROL,
+                                targetPosition=float(q), force=ARM_HOLD_FORCE,
+                                physicsClientId=env.client_id)
+        if env.plan_robot_id is not None:
+            p.resetJointState(env.plan_robot_id, j, float(q), physicsClientId=env.plan_client_id)
+    touched = sorted(
+        name for name, info in env.objects.items()
+        if name not in _NOT_TASK_BODIES
+        and p.getClosestPoints(robot, info.object_id, 0.0,
+                               physicsClientId=env.client_id))
+    if touched:
+        raise ValueError(f"the arm's start configuration touches {touched}: "
+                         f"--eye arm needs a start configuration that is free")
+    return True
+
+
+def use_start_view(env, robot_id: Optional[int] = None) -> Dict[str, object]:
+    """The env's observation camera becomes the arm camera at the arm's
+    current joints in the executing client: its pose and its own image
+    (CAMERA_ATTRIBUTES), and the shadow calculator's copy of the position.
+    From here on every path that rendered or cast from the fixed camera does
+    so from this view, with today's code.  Returns start_camera's dict."""
+    if robot_id is None:
+        robot_id = env.objects['robot'].object_id
+    cam = start_camera(robot_id, env.client_id)
+    for name in CAMERA_ATTRIBUTES:
+        setattr(env, name, cam[name])
+    env.shadow_calculator.camera_position = cam['camera_position']
+    return cam
 
 
 def start_camera(robot_id: int, physics_client: int = 0) -> Dict[str, object]:
