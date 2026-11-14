@@ -46,6 +46,15 @@ BREEZE_OFF = (-0.38, 0.38)
 STENCH_OFF = (0.38, 0.38)
 GOLD_OFF = (0.38, -0.38)
 MARKER_SIDE, MARKER_THICK = 0.12, 0.004
+# the painter's frame round a pit opening (GUI or paint only): its width in cell sizes,
+# inside the cell's edge and clear of the markers (they end 0.44 from the centre), and
+# its thickness, under the markers' MARKER_THICK
+PIT_RIM, PIT_RIM_THICK = 0.06, 0.002
+# a label's anchor, in cell sizes from the centre: near the cell's front-left corner
+# (the side toward the GUI camera), far enough inside that the label reads as this
+# cell's and not the one in front: no marker, pedestal or wumpus body there, and in
+# front of the wumpus box and the robot's chassis as the camera sees them
+LABEL_OFF = (-0.42, -0.37)
 PEDESTAL_HALF, PEDESTAL_H = 0.07, 0.10
 BAR_SIZE = (0.10, 0.025, 0.025)    # x, y, z of the bar
 BAR_MASS = 0.05
@@ -114,6 +123,11 @@ class WumpusEnv:
         self._held_seen = self._ever_held = self._bar_off = False
         self._build_scene()
         self._build_robot()
+        # the painter's rim round every pit opening (GUI or paint only, made after
+        # every other body, so a headless run's scene and body ids stay as they were)
+        self.pit_rim: Dict[str, List[int]] = {}
+        if self.gui or self.paint:
+            self._build_pit_rims()
         self._label_ids: List[int] = []
         self._stamp_knowledge = None
         if gui:
@@ -228,6 +242,29 @@ class WumpusEnv:
         for pos, half in (([L / 2, -t, h], [L / 2 + t, t, h]), ([L / 2, L + t, h], [L / 2 + t, t, h]),
                           ([-t, L / 2, h], [t, L / 2, h]), ([L + t, L / 2, h], [t, L / 2, h])):
             self._box(half, pos, (0.3, 0.2, 0.15, 1), kind='wall', cell='')
+
+    def _build_pit_rims(self):
+        """A pit has no floor tile (its shaft), so the painter had nothing to colour
+        there and a known pit's red never showed (path 4's frames, 2026-11-08).  Each
+        pit gets a thin frame round its opening at floor level, PIT_RIM cell sizes
+        wide, which show_knowledge colours like a tile.  Visual only: no collision,
+        not in `bodies` (no contact, no chassis check), and lower than the markers
+        and clear of their quadrants, so perceive() sees the same pixels."""
+        s = self.s
+        r = PIT_RIM * s
+        for cell in self._cells:
+            if cell not in self.world.pits:
+                continue
+            ctr = self.cell_center(cell)
+            i, j = cell_ij(cell)
+            grey = (0.62, 0.62, 0.62, 1) if (i + j) % 2 == 0 else (0.45, 0.45, 0.47, 1)
+            bars = []
+            for dx, dy, hx, hy in ((0, -s / 2 + r / 2, s / 2, r / 2), (0, s / 2 - r / 2, s / 2, r / 2),
+                                   (-s / 2 + r / 2, 0, r / 2, s / 2 - r), (s / 2 - r / 2, 0, r / 2, s / 2 - r)):
+                bars.append(self._box([hx, hy, PIT_RIM_THICK / 2],
+                                      [ctr[0] + dx, ctr[1] + dy, PIT_RIM_THICK / 2],
+                                      grey, collide=False))
+            self.pit_rim[cell] = bars
 
     def _build_wumpus(self, cell, ctr):
         c = self.cid
@@ -691,7 +728,13 @@ class WumpusEnv:
         """Where a cell's knowledge label starts: the GUI's debug text, and the
         label paint_render draws into its pictures."""
         ctr = self.cell_center(cell)
-        return [float(ctr[0]) - 0.35, float(ctr[1]), 0.02]
+        return [float(ctr[0]) + LABEL_OFF[0] * self.s, float(ctr[1]) + LABEL_OFF[1] * self.s, 0.02]
+
+    def label_rgb(self, cell: str) -> List[float]:
+        """The GUI label's colour: white over a pit's dark shaft, black on a tile.
+        (Display only; the label's words are the controller's knowledge.  The
+        pictures put every label on a light box instead, paint_render.py.)"""
+        return [1, 1, 1] if cell in self.world.pits else [0, 0, 0]
 
     def show_knowledge(self, knowledge: Dict):
         """GUI only (or paint=True): paint what the controller knows on the
@@ -702,7 +745,8 @@ class WumpusEnv:
         danger red, visited green, safe light green, one hazard ruled out
         amber, nothing known blue-grey; none of them the floor's grey) and a
         label with its name and W?, P?, G? (maybe) or W!, P!, G! (known
-        present).  A pit has no tile (its shaft), only the label.  Tiles are
+        present).  A pit has no tile (its shaft): its rim (_build_pit_rims)
+        takes the colour instead.  Tiles are
         no percept: perceive() reads the segmentation by body id.  The labels
         are debug text, which only the GUI shows; with paint=True and no GUI
         the tiles are painted and `painted` keeps the knowledge for
@@ -716,13 +760,13 @@ class WumpusEnv:
             p.removeUserDebugItem(lid, physicsClientId=self.cid)
         self._label_ids = []
         for cell, e in view.items():
-            tile = self.floor_tile.get(cell)
-            if tile is not None:
-                p.changeVisualShape(tile, -1, rgbaColor=kn.TILE_RGBA[kn.tile_state(e)],
-                                    physicsClientId=self.cid)
+            rgba = kn.TILE_RGBA[kn.tile_state(e)]
+            for body in [self.floor_tile.get(cell)] + self.pit_rim.get(cell, []):
+                if body is not None:
+                    p.changeVisualShape(body, -1, rgbaColor=rgba, physicsClientId=self.cid)
             if self.gui:
                 self._label_ids.append(p.addUserDebugText(
-                    kn.label(cell, e), self.label_anchor(cell), textColorRGB=[0, 0, 0],
+                    kn.label(cell, e), self.label_anchor(cell), textColorRGB=self.label_rgb(cell),
                     textSize=1.0, physicsClientId=self.cid))
 
     def close(self):
