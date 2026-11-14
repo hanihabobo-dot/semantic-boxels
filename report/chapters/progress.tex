@@ -23,8 +23,9 @@ so.
 
 The base is the tag \texttt{stable-2026-11-06} on commit d6a9715 of the branch
 \texttt{tampura-bridge}. Its pipeline code is what run 2 of the generated-scene
-evaluation measured, so its numbers are those: ours 57 of 80, TAMPURA 46 of 76, pairs
-18 to 9, exact McNemar $p = 0.122$ (\BF{68}). On the laptop the tag passes 130
+evaluation measured, so its numbers are those: ours 57 of 80, TAMPURA 46 of 80, four of
+its episodes crashed, pairs 20 to 9, exact McNemar $p = 0.061$ (with a scene as the unit
+10 to 5, $p = 0.30$) (\BF{68}, \ID{recount}{recount of 14 November}). \validitynote{failures (4 of 80)} On the laptop the tag passes 130
 unit tests and 89 bridge tests (3 skipped), solves seed 0 in 36 seconds and a
 generated seed (106) in 60 seconds; its known failures are \BF{64} and \BF{65}
 (\BF{68}). Each track works on its own branch and in its own copy of the checkout;
@@ -107,8 +108,9 @@ sent. &
 Hani's decisions on the open items of its report, and Hani's own look at the painter; Go's
 merge \\
 5 & TAMPURA's planner on our scenes &
-Ten seeds: ours 10 of 10, TAMPURA 6 of 10 with our fixed camera. Hani watched seeds 3
-and 4 on both systems (7 November, 16:24 to 16:38). &
+Ten seeds: ours 9 of 10 (1 crashed), TAMPURA 6 of 10 with our fixed camera. Hani watched seeds 3
+and 4 on both systems (7 November, 16:24 to 16:38). \validitynote{failures (none
+crashed)} &
 Hani's written approval under rule 15; the runs with TAMPURA's hand camera \\
 6 & cluster evaluation &
 The amendment that reads TAMPURA's final world after its rollout (\BF{70}) is built,
@@ -225,8 +227,9 @@ bug & what it is, in plain words, and where it stands \\
 \bottomrule
 \endfoot
 TB-1 & The shadow caster took the planning window for the table, so a cup outside it
-casts no shadow (\BF{64}). Fixed and checked on the fixes branch (51428d8): 18 seeds show
-no regression; waits for Go's merge, and its cluster A/B is arm A$'$ of path 6 after
+casts no shadow (\BF{64}). Fixed and checked on the fixes branch (51428d8): 14 of 18
+local seeds; the 13 generated scenes the tag solved stay solved, and 4 of 5 shipped seeds
+were not scored, which count as failures (the tag has no run on them); waits for Go's merge, and its cluster A/B is arm A$'$ of path 6 after
 Hani's visual check. \\
 TB-2 & The die under an upside-down cup lies in none of our hiding regions (\BF{65}).
 Waits for Hani's choice. \\
@@ -303,16 +306,16 @@ seconds, then 28 more on seed 2 and in a batch that measured the wall time (\TK{
   Each jerk swings the box, whose weight hangs 55 to 60\,mm below the middle of the
   strip of about 16\,mm that the pads hold, until it levers the fingers apart. The
   switch \texttt{carry\_trapezoid} of \BF{59}, one acceleration-limited schedule per
-  held move, is the candidate cure: it removes the jerks. Over the 40 episodes of the
-  two settings, the four-fix
-  set of \BF{59} lost the box in 9 of 20 episodes, 6 to the swing and 3 to collisions;
-  with the switch added the box was lost in 4 of 20, none to the swing and 4 to
-  collisions. A held move takes 0.39 seconds in both settings, so no cost per carry is
-  measurable. Whether the switch
-  becomes a default is Hani's call after Hani's visual check of seeds 3 and 4 with and
-  without it; the A/B on seeds 0 to 19, with three arms (the four-fix set, the set with
-  the switch, and the base without the fixes; about 170 episodes, 50 minutes), is
-  prepared and not run.
+  held move, is the candidate cure: it removes the jerks. In the batch that ran both
+  settings on seeds 0 to 5 (two repetitions; seed 1 builds no scene, so 10 episodes
+  each), the four-fix set of \BF{59} lost the box in 3 of 10, 2 to the swing and 1 to a
+  collision; with the switch added in 1 of 10, to a collision ($p = 0.63$). A held move
+  takes 0.39 seconds in both settings, so no cost per carry is measurable. The A/B on
+  seeds 0 to 19 with three arms (the four-fix set, the set with the switch, and the base
+  without the fixes) ran on 12 November: a lost-grip record in 20 of 48 episodes without
+  the switch and in none of 48 with it (seeds 1, 8, 12 and 14 build no scene;
+  \ID{recount}{recount of 14 November}). Whether the switch becomes a default is Hani's
+  call after Hani's visual check of seeds 3 and 4 with and without it.
   \item \emph{The carried box hits an object the robot has not seen.} The carry's
   motion check treats unknown space as free, so on seed 4 the box strikes the hidden
   target at about 1\,m/s in every setting; the four-fix set then loses the box and
@@ -324,7 +327,8 @@ seconds, then 28 more on seed 2 and in a batch that measured the wall time (\TK{
 \end{enumerate}
 Two further findings follow. The four-fix set of \BF{59}, which brought the die to no
 loss in 60 carries, loses these tall boxes where the base setting keeps them (seed 3:
-3 of 3 against 0 of 3), so the board's owed check of that set on our own scenes fails
+3 of 3 against 0 of 3 in the first probe, 2 of 3 against 0 of 3 in the A/B of 12
+November), so the board's owed check of that set on our own scenes fails
 on this scene. And the telemetry takes a gripper opened past 35\,mm for an opening
 one, so a drop caused by a strike has no lost-grip record, which rule 18's drop count
 must not inherit (\TK{3}).
@@ -353,7 +357,8 @@ merge checks at the branch's tip (bff1818) passed under the lock between 14:56 a
 15:03 (269 unit tests, 96 bridge tests with 3 skipped, the static gates, a replay of 48
 of 48 pairs), and the merge request is ready and not sent (\TK{4}). Three items are
 Hani's: (a) the drafted question to LW1's authors about the miss, which is Hani's own
-action and has not been sent; (b) LW1 alone on all 100 hidden states at 10x10; (c) what
+action and has not been sent; (b) LW1 alone on all 100 hidden states at 10x10, done on
+12 November: 100 of 100, 42.1 calls and 48.9 actions (\Cref{tab:published-lw1}); (c) what
 to run at 15x15, a replay of LW1's actions only, LW1 driving the robot, or neither.
 Hani's own look at the painter in the GUI is also owed before any comparison
 (\TK{4}). On 7 November at 11:22 Hani asked for a visual cue for the cells the
@@ -505,10 +510,13 @@ above that keeps a region of 0.27\,m in the frame needs more camera height than 
 arm can give at 0.48\,m from the base, and the boxel look keeps its camera in a
 free-space boxel under a ceiling of 0.5\,m (\TK{9}). The track then gave both looks
 look-at candidates from the robot's side, lower and tilted, and filters out poses the
-arm cannot reach before they are ranked. On three synthetic tall boxes the straight
-ladder of heights passes 0 of 8 poses on each, and the new grid certifies 3, 4 and 4
-views. At the last commit 238 tests and the static gates pass (\TK{9}). No episode
-has run on the change, so there is no performance number. If the boxel look still has
+arm cannot reach before they are ranked. On three synthetic tall boxes a box has a
+certified view from the straight ladder of heights on 0 of 3 and from the new grid on
+3 of 3 (0 of 24 against 11 of 240 poses). This is a design check of the centred look,
+not an evaluation: the boxes stand 0.4535\,m tall from the floor while the real region
+is 0.13\,m tall over the table, and the block that casts the region is missing
+(\TK{9}). On 12 November, in a development run, the grid found 0 of 80 views on seed
+0's real region; there is no performance number. If the boxel look still has
 no view of tall shadows, raising its ceiling is a change of the shared partition and
 Hani's decision (\TK{9}). The plan proposes three arms on the same seeds, the tag, the
 object-centred look and the boxel look, first on the tabletop and only after Hani's

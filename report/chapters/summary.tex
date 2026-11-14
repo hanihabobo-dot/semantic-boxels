@@ -16,20 +16,22 @@ fixed or recorded on the way (\PW{1}).
 \emph{Against TAMPURA in its own environment, ours is ahead; on generated scenes the
 lead is not significant.} On the three scenes that TAMPURA ships, the pipeline with four die-slip
 fixes solved 120 of 120 episodes over two jobs, against 209 of 300 without them over five
-jobs and 40 of 60 for TAMPURA (\BF{59}). On 40 scenes from TAMPURA's own generator, ours
-solved 57 of 80 and TAMPURA 46 of 76, with pairs 18 to 9 and exact McNemar $p = 0.12$
-(\BF{63}). Our run of TAMPURA lands within 1.4 standard errors of its published return:
-a mean discounted return of 0.530 against the paper's 0.63 $\pm$ 0.07
-(\Cref{sec:published-fd}). In the mirror experiment, TAMPURA's planner on our scenes
-solved 6 of 10 where ours solved 10 of 10, with TAMPURA's execution kinematic
-(\TK{5}).
+jobs and 40 of 60 for TAMPURA, one of them crashed (\BF{59}). On 40
+scenes from TAMPURA's own generator, ours solved 57 of 80 and TAMPURA 46 of 80, four of
+its episodes crashed, with pairs 20 to 9 and exact McNemar $p = 0.061$ (with a scene as
+the unit 10 to 5, $p = 0.30$) (\BF{63}). Our run
+of TAMPURA lands within 1.8 standard errors of its published return: a mean discounted
+return of 0.504 against the paper's 0.63 $\pm$ 0.07 (\Cref{sec:published-fd}). In the mirror experiment, TAMPURA's planner on our scenes
+solved 6 of 10 where ours solved 9 of 10 (1 crashed), with TAMPURA's execution kinematic
+(\TK{5}). \validitynote{failures}
 
 \emph{The success criterion is under review, because the first close look found drops.}
 The numbers above count success by each arm's own end test (ours the pipeline's goal check, TAMPURA's its reward). On 7 November Hani watched two runs of
 ours in which a tall box was dropped during a carry, and reported on 8 November that both runs still succeeded
 (TB-23, \TK{3}). Two causes were found. The carry's jerks swing the box out of the
-grip, and a switch that already exists is the candidate cure: with it none of 20 episodes lost the box
-to the swing, without it 6 of 20, at no measurable cost per carry. The other cause is
+grip, and a switch that already exists is the candidate cure: in the A/B of 12 November none of 48
+episodes lost its grip on the box with it, 20 of 48 without it (4 seeds build no scene), at no
+measurable cost per carry. The other cause is
 a carry that strikes an object the robot has not seen; it goes to a new path. By rule 18 of 8
 November every evaluation must record drops and collisions and print clean success beside
 success. The fields are built in the arms of paths 4, 7 and 10, not yet in our own pipeline (TB-22), and no evaluation has run since; the numbers of this report are not re-scored (\Cref{sec:path3}, \Cref{sec:catalogue}).
