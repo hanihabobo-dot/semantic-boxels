@@ -3009,6 +3009,9 @@ def handle_sense_action(
                 sense_detections[_nm] = ObjectDetection(
                     name=_nm, body_id=_det.body_id,
                     pixel_count=_det.pixel_count,
+                    # A first registration's pose radius reads the pixel
+                    # step (pose_belief.pose_radius): the sliver's own.
+                    pixel_steps=_det.pixel_steps,
                     est_min=_lo, est_max=_hi)
                 print(f"    [F15] {_nm} renders {_det.pixel_count} px — under "
                       f"the {DETECTION_MIN_PIXELS} px detection minimum, but "
