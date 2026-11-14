@@ -12,7 +12,7 @@ GUI's own lens and window size are not known off screen, so the GUI frames
 the board differently, by a zoom (a reviewer reads the GUI's vertical field
 of view as 90 degrees).  It draws each cell's label at the GUI's anchor
 (env.label_anchor; the GUI shows the labels as debug text, which no camera
-image holds), adds a title and the colour legend, and writes
+image holds) on a light box, adds a title and the colour legend, and writes
 DIR/frame_NNN.png.  DIR/frames.json lists every frame: the actions so far, the
 robot's cell, the counts, each cell's tile state and label, and render_s.
 
@@ -44,6 +44,9 @@ W, H = 1600, 1200            # the rendered board, pixels
 BAND = 110                   # the legend band below it
 FOV = 50.0                   # vertical field of view, degrees: our lens, not the GUI's
 FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+LABEL_PX, LABEL_MIN_PX = 17, 11                     # a label's font size, the largest and the least
+LABEL_PAD, LABEL_BOX = 3, (250, 250, 245)           # its box's margin and fill
+LABEL_ROOM = 0.72        # of a cell's width: from the anchor to the gold's pedestal (env.GOLD_OFF)
 LEGEND = (('unknown', 'nothing known'), ('possible', 'one hazard ruled out'),
           ('safe', 'both hazards ruled out'), ('visited', 'visited'), ('danger', 'hazard known'))
 LABEL_KEY = 'label: the cell, then W? P? G? for what it may hold, W! P! G! for what it holds'
@@ -89,11 +92,26 @@ def picture(env, view_k: Dict, title: str) -> Image.Image:
     img = Image.new('RGB', (W, H + BAND), (255, 255, 255))
     img.paste(board, (0, 0))
     d = ImageDraw.Draw(img)
-    f = _font(15)
     for cell, e in view_k.items():
-        at = project(view, proj, env.label_anchor(cell))
+        anchor = env.label_anchor(cell)
+        at = project(view, proj, anchor)
         if at is not None:
-            d.text(at, kn.label(cell, e), fill=(0, 0, 0), font=f, anchor='lm')
+            # black on a light box with a thin outline, so a label reads on any ground:
+            # a pit's shaft, the wumpus, the robot (path 4's frames, 2026-11-08); the
+            # largest font up to LABEL_PX whose box fits in LABEL_ROOM of its cell's width there,
+            # so the far row's labels do not run into each other and the gold stays in view
+            text = kn.label(cell, e)
+            right = project(view, proj, [anchor[0] + env.s, anchor[1], anchor[2]])
+            room = LABEL_ROOM * (right[0] - at[0]) if right is not None else W
+            f = _font(LABEL_MIN_PX)
+            for px in range(LABEL_PX, LABEL_MIN_PX - 1, -1):
+                f = _font(px)
+                if d.textlength(text, font=f) + 2 * LABEL_PAD <= room:
+                    break
+            x0, y0, x1, y1 = d.textbbox(at, text, font=f, anchor='lm')
+            d.rectangle([x0 - LABEL_PAD, y0 - LABEL_PAD, x1 + LABEL_PAD, y1 + LABEL_PAD],
+                        fill=LABEL_BOX, outline=(60, 60, 60))
+            d.text(at, text, fill=(0, 0, 0), font=f, anchor='lm')
     ft = _font(22)
     d.rectangle([0, 0, W, 40], fill=(255, 255, 255))
     d.text((12, 20), title, fill=(0, 0, 0), font=ft, anchor='lm')
