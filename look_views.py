@@ -36,7 +36,7 @@ import hashlib
 import math
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -77,6 +77,12 @@ LOOK_OBJECT_GROW_MAX_M = 0.04
 # optical axes this near (LookViews.refute).
 LOOK_SAME_VIEW_M = 0.01
 LOOK_SAME_VIEW_RAD = math.radians(2.0)
+# Declared before measuring (PLAN.md 11.14, after the development run of
+# 2026-11-13, seed 107).  A registered body standing in or at a region (its
+# believed box overlaps or touches it) is seen at the endpoints inside its
+# believed box grown by this, for the pose error; the endpoints behind it are
+# hidden by it as by any other body.  look_action applies the same test.
+LOOK_CONTENT_TOL_M = 0.005
 
 _FOV_V_HALF_TAN = 240.0 / 525.0              # the wrist camera, robot_utils
 
@@ -168,6 +174,15 @@ def _overlaps(lo_a, hi_a, lo_b, hi_b) -> bool:
                 and np.all(np.asarray(hi_a) >= np.asarray(lo_b)))
 
 
+def points_in_box(pts, lo, hi, tol: float = LOOK_CONTENT_TOL_M) -> np.ndarray:
+    """Which of the points lie inside the box [lo, hi] grown by ``tol`` on
+    every side.  The one test of PLAN.md 11.14, for the plan twin and the
+    executor (look_action) alike."""
+    pts = np.asarray(pts, dtype=float).reshape(-1, 3)
+    return (np.all(pts >= np.asarray(lo, dtype=float) - tol, axis=1)
+            & np.all(pts <= np.asarray(hi, dtype=float) + tol, axis=1))
+
+
 @dataclass
 class Reveal:
     """What one view shows of one goal: whether it reveals it (the hard
@@ -233,14 +248,18 @@ class LookViews:
     # ----- the render's rule ----------------------------------------------
 
     def _evaluate(self, goal: LookGoal, depth_m, seg, view, proj,
-                  movable: Dict[int, str], content: Iterable[int]) -> Reveal:
+                  movable: Dict[int, str],
+                  content: Dict[int, Optional[tuple]]) -> Reveal:
         """The executor's own render rule for one goal: an endpoint is lost
         when it is outside the frame (or the margin) or a surface other than
         a registered body stands in front of it; a registered body in front
-        is a blocker (a plan may relocate it); the goal's own content is
-        seen.  The worst slice decides, as sense_shadow_from_render does."""
+        is a blocker (a plan may relocate it).  The goal's own content is
+        seen (``content``, _content): an object's own body wherever it stands
+        in front, a body standing in or at a region at the endpoints inside
+        its believed box (points_in_box); the endpoints behind it are hidden
+        by it as by any other body (PLAN.md 11.14).  The worst slice decides,
+        as sense_shadow_from_render does."""
         h, w = np.asarray(depth_m).shape
-        content = set(content)
         worst_hard = worst_total = 0.0
         counts: Dict[int, int] = {}
         needed: set = set()
@@ -254,12 +273,19 @@ class LookViews:
                 inside &= ((rows >= m) & (cols >= m)
                            & (rows <= h - 1 - m) & (cols <= w - 1 - m))
             icp, hids, _ = first_surface_interceptors(pts, depth_m, seg, view, proj)
+            # The goal's own content at an endpoint, seen: an object's own
+            # body wherever it stands in front, a body in or at a region where
+            # the endpoint lies inside its believed box (points_in_box).
+            seen = np.zeros(n, dtype=bool)
+            for hid, box in content.items():
+                at = hids == hid
+                seen |= at if box is None else at & points_in_box(pts, *box)
             hard = ~inside
             mov = np.zeros(n, dtype=bool)
             slice_counts: Dict[int, int] = {}
             for i in np.nonzero(inside & icp)[0]:
                 hid = int(hids[i])
-                if hid in content:
+                if seen[i]:
                     continue
                 if hid in movable:
                     mov[i] = True
@@ -291,9 +317,10 @@ class LookViews:
                full: bool) -> Tuple[float, float]:
         """Stage 1's analytic rule: (hard fraction, total fraction) from the
         projection and the believed boxes alone.  ``boxes`` are the
-        registered bodies; the goal's own content does not hide it: for a
-        region every body that overlaps it, for an object the body itself
-        (the render's rule, _content)."""
+        registered bodies.  The render's rule (_content, _evaluate): an
+        object's own body does not hide it; a body standing in or at a
+        region hides the endpoints behind it and not the ones inside its
+        box; any other body hides every endpoint behind it."""
         h, w = robot_utils.WRIST_CAMERA_HEIGHT, robot_utils.WRIST_CAMERA_WIDTH
         slices = goal.slices if full else [goal.probe]
         worst_hard = worst_total = 0.0
@@ -306,11 +333,12 @@ class LookViews:
                            & (rows <= h - 1 - m) & (cols <= w - 1 - m))
             hit = np.zeros(len(pts), dtype=bool)
             for bid, lo, hi in boxes:
-                own = (bid == goal.id if goal.kind == 'object'
-                       else _overlaps(lo, hi, goal.lo, goal.hi))
-                if own:
+                if goal.kind == 'object' and bid == goal.id:
                     continue
-                hit |= segment_aabb_hit_mask(cam_pos, pts, lo, hi)
+                body_hit = segment_aabb_hit_mask(cam_pos, pts, lo, hi)
+                if goal.kind == 'region' and _overlaps(lo, hi, goal.lo, goal.hi):
+                    body_hit &= ~points_in_box(pts, lo, hi)
+                hit |= body_hit
             n = len(pts)
             worst_hard = max(worst_hard, float(np.count_nonzero(~inside)) / n)
             worst_total = max(worst_total,
@@ -437,19 +465,25 @@ class LookViews:
         return cam, (depth_m, seg, view, proj)
 
     @staticmethod
-    def _content(goal: LookGoal, movable: Dict[int, str], registry) -> List[int]:
-        """Twin ids of the registered bodies that are the goal's own content:
-        the object itself, or a body standing inside the region.  A view sees
-        them; they do not hide it."""
-        out = []
+    def _content(goal: LookGoal, movable: Dict[int, str],
+                 registry) -> Dict[int, Optional[tuple]]:
+        """{twin id: believed box or None} of the registered bodies that are
+        the goal's own content.  An object's goal: the body itself, None (it
+        never hides itself).  A region: every body standing in or at it (its
+        box overlaps or touches the region), with its box: a view sees it
+        where it stands and it hides what lies behind it (_evaluate).  A cell
+        cut from a shadow touches its caster, so a view from the caster's
+        side is a view through the caster (PLAN.md 11.14)."""
+        out: Dict[int, Optional[tuple]] = {}
         for tid, bid in movable.items():
             if goal.kind == 'object':
-                inside = bid == goal.id
-            else:
-                bd = registry.get_boxel(bid)
-                inside = _overlaps(bd.min_corner, bd.max_corner, goal.lo, goal.hi)
-            if inside:
-                out.append(tid)
+                if bid == goal.id:
+                    out[tid] = None
+                continue
+            bd = registry.get_boxel(bid)
+            if _overlaps(bd.min_corner, bd.max_corner, goal.lo, goal.hi):
+                out[tid] = (np.asarray(bd.min_corner, dtype=float),
+                            np.asarray(bd.max_corner, dtype=float))
         return out
 
     def _statuses(self, goals, render, movable, registry) -> Dict[str, Reveal]:
@@ -457,8 +491,7 @@ class LookViews:
         out = {}
         for g in goals:
             content = self._content(g, movable, registry)
-            mov = {t: b for t, b in movable.items() if t not in content}
-            out[g.id] = self._evaluate(g, depth_m, seg, view, proj, mov, content)
+            out[g.id] = self._evaluate(g, depth_m, seg, view, proj, movable, content)
         return out
 
     def _certify(self, cam, goal: LookGoal, v, goals, movable, registry,
@@ -635,7 +668,7 @@ class LookViews:
                         floor_z = float(cell.min_corner[2])
                         vmin = np.array([cx - ext[0] / 2.0, cy - ext[1] / 2.0, floor_z])
                         vmax = np.array([cx + ext[0] / 2.0, cy + ext[1] / 2.0, floor_z + ext[2]])
-                        if _overlaps(vmin, vmax, g.lo, g.hi):
+                        if g.kind == 'object' and _overlaps(vmin, vmax, g.lo, g.hi):
                             continue
                         if self._placed_blocks(cam, g, vmin, vmax):
                             for x in members:
@@ -647,9 +680,14 @@ class LookViews:
     @staticmethod
     def _placed_blocks(cam, goal: LookGoal, vmin, vmax) -> bool:
         """Would a body filling [vmin, vmax] hide more of the goal than the
-        view may lose?  Analytic, from the camera position."""
+        view may lose?  Analytic, from the camera position.  A body placed in
+        or at a region hides the endpoints behind it and not the ones inside
+        its box (PLAN.md 11.14, _evaluate)."""
+        at_region = goal.kind == 'region' and _overlaps(vmin, vmax, goal.lo, goal.hi)
         for pts in goal.slices:
             hits = segment_aabb_hit_mask(cam, pts, vmin, vmax)
+            if at_region:
+                hits = hits & ~points_in_box(pts, vmin, vmax)
             if float(np.count_nonzero(hits)) / len(pts) > goal.tol:
                 return True
         return False

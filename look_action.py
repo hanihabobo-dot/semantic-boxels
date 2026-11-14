@@ -45,6 +45,9 @@ import robot_utils
 from boxel_data import BoxelData, BoxelType
 from execution import (detection_complete, register_new_detections,
                        sense_shadow_from_render)
+from look_views import _overlaps, points_in_box
+from perception import (SENSE_MARGINAL_BLOCKED_FRACTION,
+                        first_surface_interceptors, sense_ray_slices)
 from run_logger import provenance, provenance_channel
 
 AT_CONFIG_TOL_RAD = 0.05        # the arm readback against ?q, per joint
@@ -189,18 +192,93 @@ def check_preconditions(*, env, registry, robot_id, held_body_id, params,
     return None
 
 
+def _stands_at(bd, region) -> bool:
+    """A registered body stands in or at ``region``: its believed box
+    overlaps or touches it: look_views._overlaps, the plan twin's test in
+    look_views._content."""
+    return _overlaps(bd.min_corner, bd.max_corner,
+                     region.min_corner, region.max_corner)
+
+
 def _occluder_ids(registry, region, env):
     """The executing client's ids of the registered bodies that do not stand
-    inside ``region``: what may hide it.  A body inside it is content."""
+    in or at ``region``: what may hide it.  A body in or at it is content
+    (_content_boxes)."""
     ids = set()
     for bd in registry.get_boxels_by_type(BoxelType.OBJECT):
-        if np.all(np.asarray(bd.min_corner) <= np.asarray(region.max_corner)) \
-                and np.all(np.asarray(bd.max_corner) >= np.asarray(region.min_corner)):
+        if _stands_at(bd, region):
             continue
         info = env.objects.get(bd.object_name or bd.id)
         if info is not None:
             ids.add(info.object_id)
     return ids
+
+
+def _content_boxes(registry, region, env):
+    """{executing client id: believed (lo, hi)} of the registered bodies that
+    stand in or at ``region``, the ones _occluder_ids leaves out.  Such a body
+    is seen where it stands and hides what lies behind it (PLAN.md 11.14)."""
+    out = {}
+    for bd in registry.get_boxels_by_type(BoxelType.OBJECT):
+        if not _stands_at(bd, region):
+            continue
+        info = env.objects.get(bd.object_name or bd.id)
+        if info is not None:
+            out[info.object_id] = (np.asarray(bd.min_corner, dtype=float),
+                                   np.asarray(bd.max_corner, dtype=float))
+    return out
+
+
+def _hidden_fraction(region, render, occluder_ids, content, robot_id) -> float:
+    """The worst sense slice's fraction of the region's endpoints that the
+    render does not show, by the look's rule: outside the frame (always, as
+    the plan twin counts them; the sense counts them only when an occluder or
+    the robot hides an endpoint of the region), or behind an occluder or the
+    robot, or behind a body standing in or at the region (a support such as a
+    tray too) and outside its believed box grown by
+    look_views.LOOK_CONTENT_TOL_M (points_in_box); an endpoint inside that box
+    is the body itself, seen.  The plan twin applies the same test to such a
+    body (look_views.LookViews._evaluate); the twin also counts a surface the
+    sense ignores and no boxel names (the table)."""
+    depth_m, seg, view, proj = render
+    slices, _ = sense_ray_slices(region.min_corner, region.max_corner)
+    hiders = set(occluder_ids) | ({robot_id} if robot_id is not None else set())
+    worst = 0.0
+    for sl in slices:
+        icp, hids, in_view = first_surface_interceptors(sl.points, depth_m, seg,
+                                                        view, proj)
+        in_view = np.asarray(in_view, dtype=bool)
+        hit = in_view & np.asarray(icp, dtype=bool)
+        hids = np.asarray(hids)
+        hidden = ~in_view | (hit & np.isin(hids, list(hiders)))
+        for pid, (lo, hi) in content.items():
+            hidden |= hit & (hids == pid) & ~points_in_box(sl.points, lo, hi)
+        worst = max(worst, float(np.count_nonzero(hidden)) / len(sl.points))
+    return worst
+
+
+def _judge(region, target_pid, render, registry, env, robot_id, supports):
+    """One named region against the look's one render: the outcome of
+    sense_shadow_from_render, and one rule more (PLAN.md 11.14).  The sense
+    takes every surface of a body standing in or at the region for the body
+    in it, and ignores the surface of a support (a tray, in ``supports``)
+    altogether; the look counts the endpoints behind such a body, outside its
+    box, as hidden, so a region the render does not show beyond the sense
+    tolerance is still_blocked (a strike), not contains_nontarget or
+    clear_but_empty (removed).  Only a region with such a body is counted
+    again, on the same render.  Returns the sense's five values."""
+    depth_m, seg, view, proj = render
+    occ = _occluder_ids(registry, region, env)
+    outcome, frac, bodies, bbox, counts = sense_shadow_from_render(
+        region, target_pid, depth_m, seg, view, proj, occ,
+        robot_id=robot_id, support_body_ids=supports)
+    if outcome in ('contains_nontarget', 'clear_but_empty'):
+        content = _content_boxes(registry, region, env)
+        if content:
+            hidden = _hidden_fraction(region, render, occ, content, robot_id)
+            if hidden > SENSE_MARGINAL_BLOCKED_FRACTION:
+                return 'still_blocked', hidden, set(), None, counts
+    return outcome, frac, bodies, bbox, counts
 
 
 def _remove_fragment(sid, registry, belief, viz, shadows, shadow_occluder_map,
@@ -298,7 +376,6 @@ def handle_look_action(*, action_params, named, env, registry, belief, viz,
 
     # One wrist render in the executing client; detections of every task body.
     dets, render = observe_views.wrist_observation(env, robot_id)
-    depth_m, seg, view, proj = render
     supports = frozenset(support_body_ids or ()) | {
         info.object_id for info in env.objects.values()
         if getattr(info, 'is_tray', False)}
@@ -319,10 +396,8 @@ def handle_look_action(*, action_params, named, env, registry, belief, viz,
     found_here = False
     for sid in regions:
         region = registry.get_boxel(sid)
-        outcome, frac, bodies, _bbox, _counts = sense_shadow_from_render(
-            region, target_pid, depth_m, seg, view, proj,
-            _occluder_ids(registry, region, env),
-            robot_id=robot_id, support_body_ids=supports)
+        outcome, frac, bodies, _bbox, _counts = _judge(
+            region, target_pid, render, registry, env, robot_id, supports)
         res.outcomes[sid] = outcome
         res.hidden[sid] = round(float(frac), 4)
         print(f"    look {sid}: {outcome}"

@@ -256,14 +256,27 @@ def test_a_clear_view_and_a_region_outside_the_frame(world):
     assert not lost.revealed and lost.hard_frac > 0.9
 
 
-def test_content_of_a_region_is_seen_not_a_blocker(world):
-    box = _boxel('shadow_c', BoxelType.SHADOW, [0.04, -0.06, 0.0], [0.16, 0.06, 0.2])
-    goal = look_views.region_goal(box)                  # encloses the occluder
+def test_a_body_in_a_region_is_seen_where_it_stands_and_hides_what_lies_behind_it(world):
+    """PLAN.md 11.14.  The endpoints inside the body's believed box (grown by
+    LOOK_CONTENT_TOL_M) are the body, seen; the ones it hides beside it are
+    hidden by it, from straight above too: low down, the strip beside a tall
+    block is under its top edge as the camera sees it."""
     movable, _ = world.lv._movable(world.reg)
-    depth_m, seg, view, proj = _render(world, (0.10, 0.0, 0.35), (0.10, 0.0, 0.0),
-                                       up=(1.0, 0.0, 0.0))
-    st = world.lv._statuses([goal], (depth_m, seg, view, proj), movable, world.reg)['shadow_c']
-    assert st.revealed and st.blockers == []
+    render = _render(world, (0.10, 0.0, 0.35), (0.10, 0.0, 0.0), up=(1.0, 0.0, 0.0))
+    occ = world.reg.get_boxel('occluder')
+    # a region the block fills in x and y: every endpoint lies inside its box
+    filled = look_views.region_goal(_boxel('shadow_f', BoxelType.SHADOW,
+                                           occ.min_corner, [*occ.max_corner[:2], 0.2]))
+    st = world.lv._statuses([filled], render, movable, world.reg)['shadow_f']
+    assert st.revealed and st.blockers == [] and st.total_frac == 0.0
+    # 1 cm wider on every side: the strip beside the block is hidden by it
+    goal = look_views.region_goal(_boxel('shadow_c', BoxelType.SHADOW,
+                                         [0.04, -0.06, 0.0], [0.16, 0.06, 0.2]))
+    st = world.lv._statuses([goal], render, movable, world.reg)['shadow_c']
+    assert st.revealed and st.blockers == ['occluder']
+    outside = max(float(np.mean(~look_views.points_in_box(pts, occ.min_corner, occ.max_corner)))
+                  for pts in goal.slices)
+    assert look_views.LOOK_TOL_REGION < st.total_frac <= outside + 1e-9
 
 
 # ----- placement facts ---------------------------------------------------------
@@ -295,3 +308,21 @@ def test_facts_of_names_the_cells_that_would_block(world):
     assert ('blocks_look_at', 'x2', 'free_between', cfg, 'shadow_a') in facts
     assert not any(f[2] == 'free_beside' for f in facts if f[0] == 'blocks_look_at')
     assert ('reveals', cfg, 'shadow_a') in facts and ('Config', cfg) in facts
+
+
+def test_a_body_placed_against_a_region_blocks_the_view_through_it(world):
+    """PLAN.md 11.14: a body placed so that its box touches the region hides
+    the endpoints behind it (not the ones inside its box), as a body standing
+    there would; the placement fact names the cell."""
+    goal = look_views.region_goal(world.reg.get_boxel('shadow_a'))
+    cam = np.eye(4)
+    cam[:3, 3] = [0.45, 0.0, 0.20]
+    cfg = _home()
+    cert = look_views.Cert(cfg, 'free_up_shadow', 'shadow_a',
+                           {'shadow_a': look_views.Reveal(0.0, 0.0, True, [])}, cam)
+    world.lv.last_stats = {'placement_facts': 0}
+    touching = _boxel('free_touch', BoxelType.FREE_SPACE, [0.26, -0.05, 0.0],
+                      [0.30, 0.05, 0.3], on_surface='table')    # x 0.26: shadow_a's face toward the camera
+    facts = world.lv._facts_of([cert], [goal], None, world.reg,
+                               {(40, 40, 200): ['x1']}, [touching])
+    assert ('blocks_look_at', 'x1', 'free_touch', cfg, 'shadow_a') in facts
