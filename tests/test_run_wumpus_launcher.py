@@ -67,13 +67,22 @@ def _commands(text):
     return [ln.strip() for ln in text.splitlines() if 'run_wumpus.py' in ln]
 
 
+def _own(cmd):
+    """The run's own command.  Since TB-17 the launcher's line is
+    `export SB_RUN=1; ...; exec flock $L bash -c '<the run's command>'` (the
+    run waits for the pipeline lock, rule 7), as in
+    tests/test_run_draw_launcher.py; before TB-17 the line was the command."""
+    m = re.search(r"; exec flock \$L bash -c '(.*)'$", cmd)
+    return m.group(1).replace("'\\''", "'") if m else cmd
+
+
 @needs_pwsh
 def test_a_headless_run_names_this_checkout_its_size_seed_and_folder(out):
     (cmd,) = _commands(out['headless'])
-    assert cmd.startswith(f'cd {ROOT} && '), cmd
+    assert _own(cmd).startswith(f'cd {ROOT} && '), cmd
     assert ' --size 10 --seed 3 --vis 0 ' in cmd, cmd
     runs = re.escape(f'{ROOT}/archive/tampura_bridge_plan_2026-10-25/tracks/wumpus/runs/')
-    assert re.search(rf' --save-dir {runs}wumpus_headless_n10_s3_{STAMP}$', cmd), cmd
+    assert re.search(rf' --save-dir {runs}wumpus_headless_n10_s3_{STAMP}$', _own(cmd)), cmd
     assert 'exit=0' in out['headless']
 
 
@@ -83,7 +92,7 @@ def test_a_seed_list_gives_one_gui_command_per_seed(out):
     assert len(cmds) == 2, out['list']
     for seed, cmd in zip((3, 4), cmds):
         assert f' --size 5 --seed {seed} --vis 1 ' in cmd, cmd
-        assert re.search(rf'/wumpus_watch_n5_s{seed}_{STAMP}$', cmd), cmd
+        assert re.search(rf'/wumpus_watch_n5_s{seed}_{STAMP}$', _own(cmd)), cmd
 
 
 @needs_pwsh
