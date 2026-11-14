@@ -33,6 +33,7 @@ run tampura -Seed [118, 102, 103] -Gen   # several seeds, one run after another 
 run tampura -Headless        # no GUI, the console only; a diagnostic run, never scored
 run tampura -Seed 118 -Gen   # a scene from TAMPURA's own generator (BF#63's seeds 100 to 139)
 run tampura -Draw boxels     # the GUI also draws the boxels, as lines and labels that follow the registry
+run tampura -Draw cameras    # its own window: what each of our cameras saw at its latest render
 boxels                       # our own random-pairs scene, seed 0, in the GUI (same as: run boxels)
 run boxels -Seed 3 -Headless
 run boxels -Scene stack -Goal stack -Occluders 0
@@ -50,6 +51,7 @@ run help                     # the usage header of run.ps1
 | `-Squeeze MM` | The pick squeeze in mm (`--grip-squeeze-mm`) |
 | `-Screenshots` | Also save the eye PNGs (`--save-screenshots on`) |
 | `-Draw boxels` | `run tampura` in the GUI also draws the registry's boxels (`--draw boxels`): wireframes and labels by kind (shadows grey, occluders red, other objects blue), redrawn as the registry changes. Debug lines only, so the run, its world and its camera images are the same with and without it; `-Headless` ignores it (and says so), and `run boxels` draws its boxels without it |
+| `-Draw cameras` | `run tampura` in the GUI also opens its own window (`tools/camera_view.ps1`: flush right on the primary screen, at low priority, free to move; it closes 20 s after the run ends, and in a seed list the window of the seed before closes when the next starts) with what each of our cameras saw at its latest render: the eye and the wrist camera, each as its image, its depth (near bright) and its segmentation (one colour per body), captioned with the render count and the plan, step and action it belongs to. The GUI also shows each camera's view volume (eight debug lines and a label). The run reads what each render returns and writes the pictures under its `cameras/` folder (`--draw cameras`); it renders nothing and changes no body, random number or result, so the run, its world and its images are the same with and without it (a planner that decides by wall clock can still answer differently from one run to the next, with or without it). The plan twin's test renders are not shown. `-Draw boxels,cameras` (or a space between the two) does both; `-Headless` ignores it |
 | `-Gen` | `run tampura` on a find_dice scene from TAMPURA's own generator (`tampura_bridge/gen_scenes/`, seeds 100 to 139), started in a directory that holds only that scene |
 | `-Music` / `-Sfx` / `-Voice` | Sound that follows the run: music and effects, the effects only, and Windows' voice reading the narration as well |
 | `-DryRun` | Print the command instead of running it |
