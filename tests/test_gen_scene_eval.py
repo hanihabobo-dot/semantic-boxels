@@ -393,6 +393,57 @@ def test_report_prints_the_capped_headline_and_the_uncapped_view(tmp_path):
             "both say success 1, only the standard test 2, only their reward 1") in text
 
 
+def _two_criteria_rows():
+    o = {1: (True, True, 12), 2: (True, True, 18), 3: (True, True, 20),
+         4: (True, False, 21), 5: (True, False, 30), 6: (False, False, 25)}
+    t = {1: (True, True), 2: (True, False), 3: (False, True), 4: (False, False),
+         5: (False, False), 6: (True, False)}              # standard test on seeds 1, 2, 6; their reward on 1, 3
+    rows = []
+    for s in range(1, 7):
+        rows.append(_crow('O', s, o[s][0], capped=o[s][1], t=o[s][2], carries=1, losses=0))
+        rows.append(_crow('T', s, t[s][0], reward=t[s][1], final_world=_fw([0.001, 0.003])))
+    return rows
+
+
+def test_report_prints_both_criteria_per_t_episode_and_counts_both(tmp_path):
+    _write_rows(tmp_path / 'j1', _two_criteria_rows())
+    text = gse.report([str(tmp_path / 'j1')])
+    assert ("arm T, both criteria counted (6 counted episodes, first attempts, a crash a failure): the standard test "
+            "3/6 [0.19, 0.81], their own reward 2/6 [0.10, 0.70] (95 % Wilson); the headline above uses the standard "
+            "test (T_HEADLINE = standard)") in text
+    assert 'one episode\'s grasp can lie between 2 and 5 mm of the pad bound' in text
+    rows = {int(l.split()[0]): l for l in text.splitlines()
+            if re.match(r'^\s+\d+\s+0\s+(success|failure)\s+(success|failure|unknown)\s', l)}
+    assert set(rows) == {1, 2, 3, 4, 5, 6}
+    assert 'the two differ' not in rows[1] and 'the two differ' in rows[2] and 'the two differ' in rows[3]
+    assert '1.00 mm and 3.00 mm' in rows[2] and rows[2].split()[2:4] == ['success', 'failure']
+    # nowhere does the report say the pad bound changes no result
+    assert 'no result' not in text and 'changes nothing' not in text
+
+
+def test_t_headline_reward_swaps_arm_ts_success_but_keeps_both_counted(tmp_path, monkeypatch):
+    _write_rows(tmp_path / 'j1', _two_criteria_rows())
+    monkeypatch.setattr(gse, 'T_HEADLINE', 'reward')
+    text = gse.report([str(tmp_path / 'j1')])
+    head, capped, uncapped, tail = _views(text)
+    assert 'TAMPURA\'s own reward for arm T (T_HEADLINE = reward)' in head
+    assert re.search(r'^O\s+6\s+3\s', capped, re.M) and re.search(r'^T\s+6\s+2\s', capped, re.M)    # their reward: 2 of 6
+    # pairs on their reward: O within the limit on 1, 2, 3; T on 1, 3
+    assert ("both succeed 2, only O 1, only T 0, neither 3; exact McNemar p = 1") in capped
+    # both criteria still counted both ways, from the standard-test view
+    assert "the standard test 3/6" in text and "their own reward 2/6" in text and '(T_HEADLINE = reward)' in text
+    assert ("arm T, the standard test against their own reward (6 counted episodes): "
+            "both say success 1, only the standard test 2, only their reward 1") in text
+
+
+def test_the_cli_t_headline_switch_resets_itself(tmp_path, capsys):
+    _write_rows(tmp_path / 'j1', _two_criteria_rows())
+    assert gse.main(['--report', str(tmp_path / 'j1'), '--t-headline', 'reward']) == 0
+    assert 'T_HEADLINE = reward' in capsys.readouterr().out and gse.T_HEADLINE == 'standard'
+    assert gse.main(['--report', str(tmp_path / 'j1')]) == 0
+    assert 'the headline above uses the standard test' in capsys.readouterr().out
+
+
 def test_report_of_rows_without_cap_fields_is_the_old_uncapped_block(tmp_path):
     rows = [_row('T', 1, True), _row('O', 1, True, carries=1, losses=0)]
     _write_rows(tmp_path / 'j1', rows)

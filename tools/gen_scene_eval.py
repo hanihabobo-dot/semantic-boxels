@@ -34,7 +34,11 @@ job, which writes the stop to metadata.json, prints STOPPED and exits 2; the
 report lists the unread worlds apart with their errors, prints the largest pad
 gap of arm T's attached episodes and the episodes the pad bound alone fails
 (R1), and opens with the caveat that T's test is geometric and ours physical
-(R5).
+(R5).  The report prints, for every counted arm T episode, the standard test and
+their own reward side by side and counts both (the coordinator's order of 15 Nov,
+from R's recount: the two criteria can differ on a real run); which of the two is
+the headline sits in one place, T_HEADLINE (--report --t-headline standard|reward;
+default standard until Hani's 13:51 "no" is confirmed).
 
 ACTION CAP (DV-2, Hani 2026-11-07: "add the cap to us as well and make sure it
 is documented."): arm O is held to T's 20-step horizon on a proxy, the
@@ -731,6 +735,55 @@ def job_memory_lines(dirs):
     return out
 
 
+# THE ONE PLACE the choice of arm T's headline criterion sits (Hani 2026-11-15 13:51, "no" to the shared test
+# deciding TAMPURA's success, is a reading the coordinator still confirms).  'standard' (default, DV-1): success
+# is the standard test, their own reward beside it.  'reward': arm T's success in the headline tables and pairs is
+# their own reward, the standard test beside it.  Whichever it is, both criteria are printed per episode and
+# counted both ways (t_both_criteria_lines); the 5 mm bound is not claimed to change no result.
+T_HEADLINE = 'standard'
+
+
+def apply_t_headline(final):
+    """final with arm T's success (and capped_success) replaced by their own reward when T_HEADLINE is 'reward'.
+    An episode with no recorded reward keeps the standard test (and the report says how many)."""
+    if T_HEADLINE != 'reward':
+        return final
+    out = {}
+    for key, r in final.items():
+        if key[0] == 'T' and r.get('t_reward_success') is not None:
+            r = dict(r, success=bool(r['t_reward_success']), capped_success=bool(r['t_reward_success']))
+        out[key] = r
+    return out
+
+
+def t_both_criteria_lines(final):
+    """Arm T, both criteria for every counted episode and counted both ways: the standard test (the geometric
+    final-world test, pad bound included) and their own reward.  `final` is the standard-test view."""
+    eps = sorted(((s, rep), r) for (x, s, rep), r in final.items() if x == 'T' and r['counts'])
+    if not eps:
+        return []
+    n = len(eps)
+    k_std = sum(1 for _, r in eps if r['success'])
+    k_rew = sum(1 for _, r in eps if r.get('t_reward_success'))
+    (l1, h1), (l2, h2) = wilson(k_std, n), wilson(k_rew, n)
+    no_reward = sum(1 for _, r in eps if r.get('t_reward_success') is None)
+    lines = [f"arm T, both criteria counted ({n} counted episodes, first attempts, a crash a failure): the standard test "
+             f"{k_std}/{n} [{l1:.2f}, {h1:.2f}], their own reward {k_rew}/{n} [{l2:.2f}, {h2:.2f}] (95 % Wilson); "
+             f"the headline above uses {'their own reward' if T_HEADLINE == 'reward' else 'the standard test'} "
+             f"(T_HEADLINE = {T_HEADLINE}); the two tests can differ on a real run, one episode's grasp can lie between "
+             f"2 and 5 mm of the pad bound"
+             + (f"; {no_reward} episodes have no recorded reward" if no_reward else '')]
+    lines.append(f"  {'seed':>6} {'rep':>3} {'standard test':>13} {'their reward':>12}  pad readings, final world")
+    for (s, rep), r in eps:
+        fw = (r.get('rec') or {}).get('final_world') or {}
+        gaps = ' and '.join('unseen' if g is None else f"{abs(g) * 1000:.2f} mm" for g in (fw.get('pad_gaps_m') or [])) or '-'
+        rew = r.get('t_reward_success')
+        lines.append(f"  {s:6} {rep:3} {('success' if r['success'] else 'failure'):>13} "
+                     f"{('unknown' if rew is None else ('success' if rew else 'failure')):>12}  {gaps}"
+                     + ('   <- the two differ' if rew is not None and bool(rew) != bool(r['success']) else ''))
+    return lines
+
+
 def t_pad_lines(final):
     """R1 of the G13 review: how far arm T's finger pads end from the held body in its final world (the raw
     readings), and the episodes that the pad bound alone fails."""
@@ -899,12 +952,16 @@ def report(dirs):
         return 'no episodes'
     stops = stop_lines(dirs)
     stops = stops + [''] if stops else []
+    std_final = final                    # success = the standard test, for the both-criteria lines
+    final = apply_t_headline(final)
     if not all('capped_success' in r for r in final.values()):
         # no cap fields (BF#63 run 2 and earlier): an uncapped block, printed as before
         return '\n'.join(stops + [report_tables(rows, final), ''] + clean_lines(final))
     capped = {k: dict(r, success=r['capped_success']) for k, r in final.items()}
     out = [T_CAVEAT, ''] + stops
-    out += [f"success = the standard test (DV-1). Arms O and O2 are held to T's {CAP_ACTIONS}-action horizon "
+    out += [("success = the standard test (DV-1)" if T_HEADLINE != 'reward' else
+             "success = the standard test for arms O and O2 and TAMPURA's own reward for arm T (T_HEADLINE = reward)")
+            + f". Arms O and O2 are held to T's {CAP_ACTIONS}-action horizon "
             f"(DV-2): the headline view counts as a failure every episode whose proxy count exceeds "
             f"{CAP_ACTIONS}; the second view is the same episodes without the limit.",
             '',
@@ -915,13 +972,14 @@ def report(dirs):
             report_tables(rows, final, brief=True),
             '',
             with_vs_without(final)]
-    t_rows = [r for (x, _, _), r in final.items() if x == 'T' and r['counts']]
+    t_rows = [r for (x, _, _), r in std_final.items() if x == 'T' and r['counts']]
     both = sum(1 for r in t_rows if r['success'] and r.get('t_reward_success'))
     t_only = sum(1 for r in t_rows if r['success'] and not r.get('t_reward_success'))
     r_only = sum(1 for r in t_rows if not r['success'] and r.get('t_reward_success'))
     out += ['', f"arm T, the standard test against their own reward ({len(t_rows)} counted episodes): "
                 f"both say success {both}, only the standard test {t_only}, only their reward {r_only}"]
-    out += t_pad_lines(final)
+    out += t_both_criteria_lines(std_final)
+    out += t_pad_lines(std_final)
     out += [''] + clean_lines(final, views=(('capped_success', f'within {CAP_ACTIONS} actions (headline)'),
                                             ('success', 'without the action limit')))
     mem = [{'label': f"{r['arm']} seed {r['seed']} rep {r['rep']} attempt {r['attempt']}", 'mem': r['mem'],
@@ -953,9 +1011,17 @@ def main(argv=None):
                     help="rule 16: MemAvailable under this stops the job after the episode (default 4; 0 only records)")
     ap.add_argument('--peak-report-gb', type=float, default=None,
                     help="rule 16: a peak RSS over this is flagged peak_over_6gb (default 6; 0 only records)")
+    ap.add_argument('--t-headline', choices=('standard', 'reward'), default='standard',
+                    help="--report only: arm T's headline criterion, the standard test (default, DV-1) or their own "
+                         "reward; both are printed per episode and counted either way (T_HEADLINE)")
     a = ap.parse_args(argv)
     if a.report:
-        print(report(a.report))
+        global T_HEADLINE
+        T_HEADLINE = a.t_headline
+        try:
+            print(report(a.report))
+        finally:
+            T_HEADLINE = 'standard'
         return 0
     for name in ('snapshot', 'out', 'seeds', 'python_o', 'venv_t', 'tampura_work'):
         if not getattr(a, name):

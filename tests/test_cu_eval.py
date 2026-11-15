@@ -301,6 +301,41 @@ def test_the_report_counts_the_folders_together_and_names_what_does_not_count(tm
     assert 'appear more than once: [(0, 0)]' in ce.report([str(d1), str(d2)])
 
 
+def _headline_rows(tmp_path):
+    d = tmp_path / 'j1'
+    d.mkdir()
+    ce.append_row(str(d / ce.ROWS), ce.build_row(0, 0, 0, 0, False, 600.0, dict(FINAL_OK), SPANS, '0'))     # both true
+    ce.append_row(str(d / ce.ROWS), ce.build_row(1, 0, 1, 0, False, 800.0, dict(FINAL_OK, world_success_end=False), SPANS, '0'))
+    ce.append_row(str(d / ce.ROWS), ce.build_row(2, 0, 2, 0, False, 700.0, dict(FINAL_OK, success_first_goal=False), SPANS, '0'))
+    return d
+
+
+def test_the_report_default_headline_is_the_world_test_with_their_reward_beside_it(tmp_path):
+    d = _headline_rows(tmp_path)
+    text = ce.report([str(d)])
+    assert 'headline criterion: the world-state test at the end (DV-1) (T_HEADLINE = standard)' in text
+    assert 'world-state test at the end (primary): 2 of 3' in text and 'their reward reached: 2 of 3' in text
+    assert ('the two criteria differ on 2 of 3 counted episodes: seed 1 rep 0 (world test False, their reward True), '
+            'seed 2 rep 0 (world test True, their reward False)') in text
+
+
+def test_t_headline_reward_changes_only_the_labels_and_both_numbers_stay(tmp_path, monkeypatch):
+    d = _headline_rows(tmp_path)
+    monkeypatch.setattr(ce, 'T_HEADLINE', 'reward')
+    text = ce.report([str(d)])
+    assert 'headline criterion: their own reward (T_HEADLINE = reward)' in text
+    assert 'world-state test at the end (shared test, beside the headline): 2 of 3' in text
+    assert 'their reward reached (headline): 2 of 3' in text and 'differ on 2 of 3' in text
+
+
+def test_the_cli_t_headline_switch_resets_itself(tmp_path, capsys):
+    d = _headline_rows(tmp_path)
+    assert ce.main(['--report', str(d), '--t-headline', 'reward']) == 0
+    assert 'T_HEADLINE = reward' in capsys.readouterr().out and ce.T_HEADLINE == 'standard'
+    assert ce.main(['--report', str(d)]) == 0
+    assert 'T_HEADLINE = standard' in capsys.readouterr().out
+
+
 def test_the_dry_run_prints_every_episode_and_runs_nothing(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr(ce, 'run', lambda a: pytest.fail('the dry run ran'))
     rc = ce.main(['--snapshot', '/w/sb_1', '--out', '/w/out/5', '--seeds', '0-1', '--reps', '2', '--venv-t', '/w/tw/.venv',
