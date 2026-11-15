@@ -213,6 +213,15 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 fov=task_spec.EYE_FOV_DEG,
                 aspect=task_spec.EYE_WIDTH / task_spec.EYE_HEIGHT,
                 nearVal=task_spec.EYE_NEAR, farVal=task_spec.EYE_FAR)
+            camera_view = tuple(view)
+            camera_proj = tuple(proj)
+            if cfg.switches.get('eye', 'fixed') == 'arm':
+                # Path 9, --eye arm: no fixed eye.  Empty matrices match no
+                # render (gate_hooks._close compares lengths), so G20 lets
+                # through only the wrist cameras at their FK pose; None would
+                # leave every render unchecked (gate_hooks._make_camera).
+                camera_view = ()
+                camera_proj = ()
             # B4 / M8: the domain the planner loads (the generated one
             # with M8 on), the same path for main() and G10's runtime pin.
             if look_domain.mode_of(cfg.switches.get('look', 'off')) != 'off':
@@ -226,7 +235,7 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 arm_joints=tuple(model.arm_joints),
                 task_body_ids=frozenset(world.objects),
                 has_object_boxel=has_object_boxel,
-                camera_view=tuple(view), camera_proj=tuple(proj),
+                camera_view=camera_view, camera_proj=camera_proj,
                 wrist_robots={c: robot},
                 mission_goal=('and', ('holding', target[0]),
                               ('at_config', 'q_home')),

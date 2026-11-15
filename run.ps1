@@ -16,7 +16,7 @@
 #   run tampura -Off           without M8-M10 (the old pipeline);  -Squeeze 1   a pick squeeze in mm
 #   run boxels -Look boxel     one look action from a free-space boxel instead of sense and observe (path 9)
 #   run boxels -Look centred   the object-centred look instead (no boxel model in the look; path 9's reference)
-#   run boxels -Look boxel -Eye arm   every image from the arm camera (path 9; being built, no episode yet)
+#   run boxels -Look boxel -Eye arm   every image from the arm camera (path 9; run tampura takes it too)
 #   run tampura -Screenshots   also save the eye PNGs at every snapshot (debugging only; off since BF#50)
 #   run tampura -Draw boxels   the GUI also draws the boxels (lines and labels, changing as the registry
 #                              changes); adds nothing to the world and nothing to a camera image; with
@@ -113,14 +113,11 @@ if ($What -eq 'tampura' -and $Gen) {
 $sw = if ($Off) { ' --m8 off --m9 off --m10 off --pick-aperture-from-pose off' } else { '' }
 if ($Look) { $sw += " --look $Look" }
 # -Eye arm (path 9): every image from the arm camera.  It needs a look (sense is
-# the fixed camera's action) and is for run boxels until the bridge takes it.
+# the fixed camera's action); run boxels passes it to the pipeline, run tampura
+# to the bridge's driver.
 if ($Eye -eq 'arm') {
     if (-not $Look) {
         Write-Host "run: -Eye arm needs -Look boxel or -Look centred (sense is the fixed camera's action)" -ForegroundColor Yellow
-        exit 2
-    }
-    if ($What -ne 'boxels') {
-        Write-Host "run: -Eye arm is for run boxels so far; the bridge does not take the arm camera yet" -ForegroundColor Yellow
         exit 2
     }
     $sw += ' --eye arm'

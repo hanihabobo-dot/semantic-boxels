@@ -218,10 +218,10 @@ def test_the_eye_switch_appends_one_flag(look):
 
 @needs_pwsh
 @pytest.mark.parametrize('args', ['boxels -Seed 3 -Headless -Eye arm',
-                                  'tampura -Seed 5 -Look boxel -Eye arm'])
+                                  'tampura -Seed 5 -Eye arm'])
 def test_the_launcher_refuses_the_arm_camera_where_it_cannot_run(args):
-    """Without a look (sense is the fixed camera's action), and on the bridge,
-    whose driver and gates do not know the arm camera yet (step 3)."""
+    """Without a look (sense is the fixed camera's action), on either
+    target."""
     ps1 = ROOT / 'run.ps1'
     win = subprocess.run(['wslpath', '-w', str(ps1)], capture_output=True, text=True,
                          check=True).stdout.strip()

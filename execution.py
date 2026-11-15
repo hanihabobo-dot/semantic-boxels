@@ -53,6 +53,7 @@ from reboxelize import reboxelize_free_space
 from streams import NOMINAL_HIDDEN_EXTENTS, RobotConfig
 import pose_belief
 import slip_fixes
+import arm_eye            # path 9, --eye arm: the arm camera's frame rule (step 3)
 from robot_utils import (robot_model, solve_ik,
                          move_robot_smooth, open_gripper, close_gripper,
                          close_gripper_until_contact, pinch_axis,
@@ -847,16 +848,29 @@ def _observe_release(env, dropped_name, expected_top_z=None, rigid_ext=None,
     the run log says so; the dispatcher's post-action refresh keeps
     correcting the belief.  Returns (ok, diag, observed_centre) — the
     centre is None when the object was not observed or the check failed.
+    With --eye arm (arm_eye.following) each render is the arm camera where
+    the arm stands, and the released object is judged only when both of
+    its detections lie wholly in their images; otherwise the release is
+    accepted on the tactile checks, as for an object the render does not
+    show.  Its registry box is the pick-time one, so the detections are
+    the boxes an image can hold.
     """
+    following = arm_eye.following(env)
     dets_a = env.detect_objects()[0]
+    view_a = env._view_and_projection_matrices()[0] if following else None
     for _ in range(settle_steps):
         env.step_simulation()
     dets_b = env.detect_objects()[0]
+    view_b = env._view_and_projection_matrices()[0] if following else None
     da, db = dets_a.get(dropped_name), dets_b.get(dropped_name)
     if da is None or db is None or db.pixel_count < DETECTION_MIN_PIXELS:
         return True, (f"unobserved after the lift "
                       f"({'no detection' if db is None else f'{db.pixel_count} px'}) — "
                       f"accepted on the tactile checks"), None
+    if following and not (arm_eye.in_frame(view_a, (da.est_min, da.est_max))
+                          and arm_eye.in_frame(view_b, (db.est_min, db.est_max))):
+        return True, (f"not wholly in the arm camera's image after the lift "
+                      f"({db.pixel_count} px): accepted on the tactile checks"), None
     top = float(db.est_max[2])
     ext = db.est_max - db.est_min
     shift = float(np.hypot(*((db.est_center - da.est_center)[:2])))
@@ -977,10 +991,12 @@ def release_held_object_in_place(
     # Free space and shadows must be refreshed: the dropped object now
     # occupies new ground and may block different camera lines of sight.
     setattr(registry, "_dirty", True)
-    state_updates["shadow_occluder_map"] = compute_shadow_blockers(
-        env.camera_position, registry, shadows, occluders, env
-    )
-    planner.shadow_occluder_map = state_updates["shadow_occluder_map"]
+    # Path 9, --eye arm: no blocker census (a look mode reads none of it).
+    if not arm_eye.following(env):
+        state_updates["shadow_occluder_map"] = compute_shadow_blockers(
+            env.camera_position, registry, shadows, occluders, env
+        )
+        planner.shadow_occluder_map = state_updates["shadow_occluder_map"]
 
     actual_joints = np.array(
         [p.getJointState(robot_id, i)[0] for i in robot_model().arm_joints]
@@ -1135,6 +1151,13 @@ def execute_pick(robot_id, env, obj_name, obj_pos, grasp, config, gui,
     elif abs(float(fresh.est_max[2]) - float(est_max[2])) > 0.01:
         _why = (f"top {abs(float(fresh.est_max[2]) - float(est_max[2])) * 1000:.0f} mm "
                 f"from the known top — partly hidden")
+    elif arm_eye.following(env) and not arm_eye.in_frame(
+            env._view_and_projection_matrices()[0],
+            (fresh.est_min, fresh.est_max)):
+        # Path 9, --eye arm: a re-aim is a re-pose, so it needs the
+        # detection wholly in the arm camera's image, wherever the
+        # believed box is (frame_judgement's presence rule).
+        _why = "not wholly in the arm camera's image"
     else:
         _why = None
     if _why is None:
@@ -2018,6 +2041,16 @@ def world_integrity_check(*, env, registry, belief, viz, shadows, occluders,
     not end "all searched" on it).  Mutates the registry, belief,
     shadows, boxel_centers, on_relations and shadow_occluder_map
     exactly as the sense action's discovery paths do.
+
+    Path 9, --eye arm (arm_eye.following): the render is the arm camera
+    where the arm stands, and frame_judgement says what each body may be
+    judged for.  A body whose detection lies wholly in the frame is judged
+    as above, wherever its believed box is.  A body whose detection is
+    missing or cut by the frame, and whose believed box lies wholly in it,
+    is judged as a body with no detection: the refresh's lost check on its
+    believed region, never a re-pose from the cut detection.  Every other
+    body keeps its belief, its support relation included.  No blocker
+    census is run in that mode.
     """
     dets, _, depth_buf, seg = env.detect_objects()
     render = (env._depth_buffer_to_meters(depth_buf), seg,
@@ -2026,6 +2059,17 @@ def world_integrity_check(*, env, registry, belief, viz, shadows, occluders,
     obj_boxels = [bd for bd in registry.get_boxels_by_type(BoxelType.OBJECT)
                   if bd.id != held_name
                   and not getattr(env.objects.get(bd.id), "is_tray", False)]
+    following = arm_eye.following(env)
+    # Path 9, --eye arm: ``outside`` keeps its belief; ``absent`` is judged
+    # as a body with no detection (frame_judgement).
+    outside, absent = set(), set()
+    if following:
+        for bd in obj_boxels:
+            verdict = frame_judgement(render[2], bd, dets.get(bd.id))
+            if verdict == 'keep':
+                outside.add(bd.id)
+            elif verdict == 'absence':
+                absent.add(bd.id)
     before = {bd.id: (np.asarray(bd.center, dtype=float).copy(),
                       np.asarray(bd.max_corner, dtype=float)
                       - np.asarray(bd.min_corner, dtype=float))
@@ -2034,6 +2078,8 @@ def world_integrity_check(*, env, registry, belief, viz, shadows, occluders,
     floor = []
     toppled = []
     for bd in obj_boxels:
+        if bd.id in outside or bd.id in absent:
+            continue
         det = dets.get(bd.id)
         if det is None or det.pixel_count < DETECTION_MIN_PIXELS:
             continue
@@ -2049,7 +2095,7 @@ def world_integrity_check(*, env, registry, belief, viz, shadows, occluders,
         if (raw_ext[2] < rigid[2] - 0.03
                 and max(raw_ext[0], raw_ext[1]) > max(rigid[0], rigid[1]) + 0.03):
             toppled.append(bd.id)
-    exclude = set(floor)
+    exclude = set(floor) | outside
     if held_name is not None:
         exclude.add(held_name)
     lost = refresh_object_aabbs(env, registry, viz, detections=dets,
@@ -2058,7 +2104,7 @@ def world_integrity_check(*, env, registry, belief, viz, shadows, occluders,
     for name in lost:
         events.append({"kind": "lost", "object": name, "label": label})
     for bd in obj_boxels:
-        if bd.id in floor or bd.id in lost:
+        if bd.id in floor or bd.id in lost or bd.id in outside:
             continue
         shift = float(np.hypot(*((np.asarray(bd.center, dtype=float)
                                   - before[bd.id][0])[:2])))
@@ -2094,6 +2140,8 @@ def world_integrity_check(*, env, registry, belief, viz, shadows, occluders,
         if obj in floor or obj in lost or obj == held_name:
             on_relations.pop(obj, None)
             continue
+        if obj in outside:
+            continue      # path 9, --eye arm: it keeps its belief, its relation too
         obd, sbd = registry.get_boxel(obj), registry.get_boxel(sup)
         if obd is None or sbd is None:
             continue
@@ -2107,26 +2155,60 @@ def world_integrity_check(*, env, registry, belief, viz, shadows, occluders,
     gone = floor + lost
     if gone:
         retire_lost_objects(gone, registry, viz, shadows, shadow_occluder_map,
-                            boxel_centers, occluders, belief, render=render)
+                            boxel_centers, occluders, belief, render=render,
+                            env=env)
     if events:
         setattr(registry, "_dirty", True)
         for bd in registry.get_boxels_by_type(BoxelType.OBJECT):
             boxel_centers[bd.id] = bd.center
-        new_map = compute_shadow_blockers(env.camera_position, registry,
-                                          shadows, occluders, env)
-        shadow_occluder_map.clear()
-        shadow_occluder_map.update(new_map)
+        if not arm_eye.following(env):        # path 9, --eye arm: no census
+            new_map = compute_shadow_blockers(env.camera_position, registry,
+                                              shadows, occluders, env)
+            shadow_occluder_map.clear()
+            shadow_occluder_map.update(new_map)
         for e in events:
             extra = {k: v for k, v in e.items()
                      if k not in ("kind", "object", "label")}
             print(f"    [integrity] {e['kind']}: {e['object']} after {label}"
                   f"{' ' + str(extra) if extra else ''}")
     else:
-        n_obs = sum(1 for bd in obj_boxels
-                    if bd.id in dets and dets[bd.id].pixel_count >= DETECTION_MIN_PIXELS)
-        print(f"    [integrity] after {label}: {n_obs}/{len(obj_boxels)} "
+        # Path 9, --eye arm: only the bodies this image judged are counted,
+        # and a detection the frame cuts is not an observation of a body.
+        judged = [bd for bd in obj_boxels if bd.id not in outside]
+        n_obs = sum(1 for bd in judged
+                    if bd.id not in absent and bd.id in dets
+                    and dets[bd.id].pixel_count >= DETECTION_MIN_PIXELS)
+        print(f"    [integrity] after {label}: {n_obs}/{len(judged)} "
               f"believed bodies observed where believed, none disturbed")
+    if outside:
+        print(f"    [integrity] after {label}: neither the believed box nor "
+              f"the detection wholly in the arm camera's image, kept as "
+              f"believed: {sorted(outside)}")
     return events, dets, render
+
+
+def frame_judgement(view, bd, det) -> str:
+    """Path 9, --eye arm: what a check after an action may judge the
+    registered body ``bd`` for, from the render whose view matrix is
+    ``view`` and its detection ``det`` (None when it shows none).  The look
+    manager's rule (2026-11-14): absence verdicts need the believed box
+    wholly in the frame, presence verdicts need the detection wholly in the
+    frame, and nothing is re-posed from a cut detection.
+
+      'presence': the detection lies wholly in the frame (arm_eye.in_frame).
+          The body is judged as with the fixed camera, wherever its
+          believed box is: re-posed, disturbed, toppled, off its support,
+          knocked off the table when the detection lies below it.
+      'absence': no detection, or one the frame cuts, and the believed box
+          wholly in the frame.  The body is judged as one with no
+          detection: the lost check on its believed region decides.
+      'keep': neither.  The body keeps its belief, its support relation
+          included."""
+    if det is not None and arm_eye.in_frame(view, (det.est_min, det.est_max)):
+        return 'presence'
+    if arm_eye.in_frame(view, (bd.min_corner, bd.max_corner)):
+        return 'absence'
+    return 'keep'
 
 
 def detection_complete(env, box_min, box_max, det, render) -> bool:
@@ -2196,6 +2278,15 @@ def refresh_object_aabbs(env, registry, viz=None, detections=None,
     mid-manipulation: its region is legitimately empty and its
     detection is in the air).  Returns the list of LOST boxel ids; the
     caller owns the retirement bookkeeping (retire_lost_objects).
+
+    Path 9, --eye arm (arm_eye.following): the render is the arm camera
+    where the arm stands, and frame_judgement decides.  A body whose
+    detection lies wholly in the frame is re-posed as above, wherever its
+    believed box is.  A body whose detection is missing or cut by the
+    frame, and whose believed box lies wholly in it, is stale: the lost
+    check looks at its believed region, and nothing is re-posed from the
+    cut detection.  Every other body keeps its last estimate and is not
+    lost-checked.
     """
     _aabb_tol = 1e-4
     if detections is None or render is None:
@@ -2213,6 +2304,9 @@ def refresh_object_aabbs(env, registry, viz=None, detections=None,
     # point behind the robot in this render keeps its last estimate.
     _robot_id = env.objects["robot"].object_id if "robot" in env.objects else None
     _depth_m, _seg_m, _view_m, _proj_m = render
+    _following = arm_eye.following(env)
+    _outside = []
+    _cut = []
     stale = []
     for obj_boxel in registry.get_boxels_by_type(BoxelType.OBJECT):
         obj_info = env.objects.get(obj_boxel.id)
@@ -2226,6 +2320,17 @@ def refresh_object_aabbs(env, registry, viz=None, detections=None,
             # block into a 20 cm one in the first #P2 monitor smoke.
             continue
         det = detections.get(obj_boxel.id)
+        if _following:
+            # Path 9, --eye arm: what this image may judge the body for.
+            _verdict = frame_judgement(_view_m, obj_boxel, det)
+            if _verdict == 'keep':
+                _outside.append(obj_boxel.id)
+                continue
+            if _verdict == 'absence':
+                if det is not None:
+                    _cut.append(obj_boxel.id)
+                stale.append(obj_boxel.id)
+                continue
         if det is None:
             stale.append(obj_boxel.id)
             continue
@@ -2308,10 +2413,20 @@ def refresh_object_aabbs(env, registry, viz=None, detections=None,
         print(f"    [perception] LOST object(s) — believed region "
               f"renders empty on every slice: {sorted(lost)} "
               f"(#P1 step 3c; caller retires their boxels/shadows)")
-    if stale:
-        print(f"    [perception] {len(stale)} object(s) not visible in "
+    _unseen = [oid for oid in stale if oid not in _cut]
+    if _unseen:
+        print(f"    [perception] {len(_unseen)} object(s) not visible in "
               f"the refresh render — keeping last estimate: "
-              f"{sorted(stale)}")
+              f"{sorted(_unseen)}")
+    _cut_kept = [oid for oid in stale if oid in _cut]
+    if _cut_kept:
+        print(f"    [perception] {len(_cut_kept)} object(s) seen only in part "
+              f"in the arm camera's image: keeping last estimate: "
+              f"{sorted(_cut_kept)}")
+    if _outside:
+        print(f"    [perception] {len(_outside)} object(s) with neither the "
+              f"believed box nor the detection wholly in the arm camera's "
+              f"image: keeping last estimate: {sorted(_outside)}")
     return lost
 
 
@@ -2352,12 +2467,15 @@ def retire_lost_objects(lost_ids, registry, viz, shadows,
     left to the sense action.  Without either, every fragment is removed
     as before (the pre-review behaviour, now only for callers that have
     no observation at hand).  The object may re-enter later through
-    detection or a contains_nontarget discovery.
+    detection or a contains_nontarget discovery.  With --eye arm
+    (arm_eye.following(env)) a fragment the render's image does not hold
+    wholly is not observed empty by it and is kept.
     """
     if render is None and env is not None:
         _, _, _depth_buf, _seg = env.detect_objects()
         render = (env._depth_buffer_to_meters(_depth_buf), _seg,
                   *env._view_and_projection_matrices())
+    _following = arm_eye.following(env)
     for oid in lost_ids:
         bd = registry.get_boxel(oid)
         if bd is None:
@@ -2367,6 +2485,10 @@ def retire_lost_objects(lost_ids, registry, viz, shadows,
             sbd = registry.get_boxel(sid)
             if sbd is not None and render is not None \
                     and not _fragment_renders_empty(sbd, render):
+                kept.append(sid)
+                continue
+            if (_following and sbd is not None and render is not None
+                    and not arm_eye.in_frame(render[2], (sbd.min_corner, sbd.max_corner))):
                 kept.append(sid)
                 continue
             if sbd is not None:
@@ -2545,10 +2667,23 @@ def register_new_detections(*, env, registry, belief, viz, detections,
     a sense cannot see resting anywhere).  ``camera``: the detections'
     source for the pose belief ('eye', or 'wrist' for a look's render).
     Returns the registered names.
+
+    Path 9, --eye arm (arm_eye.following): a body seen by an env check's
+    image (camera 'eye', the arm camera where the arm stands) is registered
+    only when its detection lies wholly in that image's frame; a look's
+    render (camera 'wrist') registers as before.  Every new body casts its
+    shadow from the camera of the image it was seen in (the render's view
+    matrix; the env's, which follows the arm, when no render is given), and
+    no blocker census is run.
     """
     registered = []
     table_z = env.table_surface_height
     _robot_id = env.objects["robot"].object_id if "robot" in env.objects else None
+    _following = arm_eye.following(env)
+    _view = None
+    if _following:
+        _view = (render[2] if render is not None
+                 else env._view_and_projection_matrices()[0])
     for name in sorted(detections):
         if name in skip_names or registry.get_boxel(name) is not None:
             continue
@@ -2573,6 +2708,11 @@ def register_new_detections(*, env, registry, belief, viz, detections,
                       f"partly behind the arm — not registered from this "
                       f"render")
                 continue
+        if (_following and camera == 'eye'
+                and not arm_eye.in_frame(_view, (aabb_min, aabb_max))):
+            print(f"    [F20] {name} is visible ({det.pixel_count} px) but not "
+                  f"wholly in the arm camera's image: not registered from it")
+            continue
         # A body seen BELOW the table surface is on the floor (knocked
         # off, #P2 territory): it is not a workspace object any more and
         # must not get on_table facts or a shadow.  Logged, not
@@ -2624,6 +2764,9 @@ def register_new_detections(*, env, registry, belief, viz, detections,
             if env.shadow_raycast_client is not None:
                 env.sync_to_plan_client(held_body_id=held_body_id,
                                         registry=registry)
+            if _following:
+                # Path 9, --eye arm: cast from the camera that took the image.
+                env.shadow_calculator.camera_position = arm_eye.view_pose(_view)[:3, 3]
             shadow_parts = env.shadow_calculator.calculate_shadow_boxel(
                 obj_bd, obstacles,
                 physics_client=env.shadow_raycast_client)
@@ -2662,7 +2805,8 @@ def register_new_detections(*, env, registry, belief, viz, detections,
               f"[{c[0]:.3f},{c[1]:.3f},{c[2]:.3f}] ({det.pixel_count} px); "
               f"{role}.")
         registered.append(name)
-    if registered:
+    # Path 9, --eye arm: no blocker census (a look mode reads none of it).
+    if registered and not arm_eye.following(env):
         # A newly registered body may stand between the camera and an
         # EXISTING fragment.  The blocker census only maps listed bodies
         # and is otherwise re-run after a place, so without this the

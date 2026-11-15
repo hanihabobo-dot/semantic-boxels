@@ -939,7 +939,8 @@ def main(gui=True, run_logger=None, scene_config=None,
 
     # Path 9, --eye arm: the arm stands at its start configuration before the
     # settle (scene construction; an adopted world is not moved), and after it
-    # the overview camera is the arm camera there, for every image and cast.
+    # the overview camera is the arm camera: there for the first image, and
+    # where the arm stands for every later image and cast (follow_arm).
     if eye == 'arm':
         arm_eye.place_arm(env, eye_start)
     # Let settle: 50 steps at 240 Hz ≈ 0.2 s.  Enough for the loaded
@@ -952,6 +953,7 @@ def main(gui=True, run_logger=None, scene_config=None,
         eye_camera_pose = _cam['camera_pose']
         print(f"  [eye] the overview camera is the arm camera at the start "
               f"configuration: {np.round(_cam['camera_position'], 3).tolist()}")
+        arm_eye.follow_arm(env)
 
     # Audit #29: single-shot sanity log.  Placement in
     # ``_hidden_xy_positions`` already uses 8-corner raycasts against
@@ -1265,21 +1267,27 @@ def main(gui=True, run_logger=None, scene_config=None,
     # (e.g. a second occluder drifts into the line of sight after spawning).
     # Raycasting from the camera through each shadow volume catches all
     # actual blockers, not just the geometrically-derived creator.
-    shadow_occluder_map = compute_shadow_blockers(
-        env.camera_position, registry, shadows, occluders, env
-    )
-    # compute_shadow_blockers applies the tolerance-aligned census plus
-    # the (adjacency-gated) parent-relationship fallback internally, so
-    # an EMPTY blocker list is now a legitimate state: nothing blocks
-    # more of the shadow's rays than the sense itself would tolerate,
-    # the planner derives view_clear, and a direct (move, sense) plan
-    # is schedulable — exactly what happens for marginal grazers and
-    # far-displaced carve fragments post-F5.  Log it as information,
-    # not as the broken-linkage warning it used to be.
-    for shadow_id in shadows:
-        if not shadow_occluder_map.get(shadow_id):
-            print(f"  Shadow {shadow_id}: no blocker above sense "
-                  f"tolerance — view-clear, directly sensable")
+    # Path 9, --eye arm: no census (ARM_ONLY_DESIGN, step 3, part 3).  A look
+    # mode reads none of the map for its facts (pddlstream_planner
+    # _build_init names what hides a view per configuration), and its render
+    # would be one more image with no reader.
+    shadow_occluder_map = {}
+    if eye != 'arm':
+        shadow_occluder_map = compute_shadow_blockers(
+            env.camera_position, registry, shadows, occluders, env
+        )
+        # compute_shadow_blockers applies the tolerance-aligned census plus
+        # the (adjacency-gated) parent-relationship fallback internally, so
+        # an EMPTY blocker list is now a legitimate state: nothing blocks
+        # more of the shadow's rays than the sense itself would tolerate,
+        # the planner derives view_clear, and a direct (move, sense) plan
+        # is schedulable — exactly what happens for marginal grazers and
+        # far-displaced carve fragments post-F5.  Log it as information,
+        # not as the broken-linkage warning it used to be.
+        for shadow_id in shadows:
+            if not shadow_occluder_map.get(shadow_id):
+                print(f"  Shadow {shadow_id}: no blocker above sense "
+                      f"tolerance — view-clear, directly sensable")
 
     # Bridge between the symbolic (PDDL) and physical (PyBullet) worlds.
     # The planner reasons about boxel IDs like "obj_000"; execution needs
@@ -1403,12 +1411,19 @@ def main(gui=True, run_logger=None, scene_config=None,
     belief = BeliefState(shadows, target_name)
     tray_name = next((name for name, info in env.objects.items()
                       if info.is_tray), None)
+    # Path 9, --eye arm: the planner gets no camera.  Its camera facts
+    # (placement_hides, the placement view blocks) keep a camera that stands
+    # still in view, and in this mode none does; the sense gate's hide test
+    # takes the box test (streams.test_target_can_hide_in_shadow).
+    planner_camera_pos = env.camera_position
+    if eye == 'arm':
+        planner_camera_pos = None
     planner = PDDLStreamPlanner(registry, robot_id=env.plan_robot_id,
                                 shadow_occluder_map=shadow_occluder_map,
                                 physics_client=env.plan_client_id,
                                 object_body_ids=object_body_ids,
                                 support_body_ids=planner_support_body_ids,
-                                camera_pos=env.camera_position,
+                                camera_pos=planner_camera_pos,
                                 tray_name=tray_name,
                                 domain_file=domain_file)
     planner.search_options = dict(search_options)          # BF#53
@@ -2502,6 +2517,19 @@ def main(gui=True, run_logger=None, scene_config=None,
                     dispatch_end('look_outcome')
                     break
                 observe_strikes.pop(obj_str, None)
+                # Q5 (Hani's decision, tracks/look/Q4_Q6_CHECK.md): a look
+                # whose image registered a body the belief did not hold (M-1)
+                # ends the plan for a replan, as _integrity_after does for
+                # the other actions (the hand is empty at a look: handempty is
+                # its precondition).  In every look mode and with either eye,
+                # the replan is the loop's rule, not the handler's.  A look
+                # that registered nothing goes on with the plan.
+                if look_result.registered:
+                    print(f"    [look] the image from {look_q.name} registered "
+                          f"{sorted(look_result.registered)}: the plan is made "
+                          f"again")
+                    dispatch_end('look_outcome')
+                    break
 
             elif action_name == 'pick':
                 # PICK: approach → open gripper → lower to contact →
@@ -2851,6 +2879,18 @@ def main(gui=True, run_logger=None, scene_config=None,
                         _det = _pdets.get(placed_name)
                         _prender = (env._depth_buffer_to_meters(_pbuf), _pseg,
                                     *env._view_and_projection_matrices())
+                        _frame_cut = False
+                        if (_det is not None and eye == 'arm'
+                                and not arm_eye.in_frame(
+                                    _prender[2], (_det.est_min, _det.est_max))):
+                            # Path 9, --eye arm: a detection the frame cuts
+                            # is a partial view; the placed body's box is
+                            # the commanded placement.
+                            print(f"    [eye] {placed_name} not wholly in the "
+                                  f"post-place image: its box is the commanded "
+                                  f"placement")
+                            _det = None
+                            _frame_cut = True
                         _commanded = _det is None
                         _prev_bd = registry.get_boxel(obj_str)
                         _prev_ext = (
@@ -2874,9 +2914,10 @@ def main(gui=True, run_logger=None, scene_config=None,
                                 _cc[1] - _prev_ext[1] / 2.0,
                                 env.table_surface_height])
                             aabb_max = aabb_min + _prev_ext
-                            print(f"    [perception] {placed_name} occluded "
-                                  f"in the post-place render — carving its "
-                                  f"known-size box at the destination cell")
+                            if not _frame_cut:      # a frame cut is not an occlusion
+                                print(f"    [perception] {placed_name} occluded "
+                                      f"in the post-place render — carving its "
+                                      f"known-size box at the destination cell")
                         else:
                             aabb_min = aabb_max = None
                             print(f"    WARNING: {placed_name} has neither "
@@ -2914,10 +2955,12 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # Rebuild shadow_occluder_map from current physics state so
                 # blocks_view_at facts reflect the relocated occluder's new
                 # position on the next replan (audit #73, #24 fixed).
-                shadow_occluder_map = compute_shadow_blockers(
-                    env.camera_position, registry, shadows, occluders, env
-                )
-                planner.shadow_occluder_map = shadow_occluder_map
+                # Path 9, --eye arm: no census (see Phase 3).
+                if eye != 'arm':
+                    shadow_occluder_map = compute_shadow_blockers(
+                        env.camera_position, registry, shadows, occluders, env
+                    )
+                    planner.shadow_occluder_map = shadow_occluder_map
 
                 # Record the relocation in belief state so the planner
                 # knows this occluder is no longer blocking its original
@@ -3106,6 +3149,17 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # pre-pick table spot and mislead the next replan.
                 if obj_str in env.objects:
                     _det = env.detect_objects()[0].get(obj_str)
+                    _frame_cut = False
+                    if (_det is not None and eye == 'arm'
+                            and not arm_eye.in_frame(
+                                env._view_and_projection_matrices()[0],
+                                (_det.est_min, _det.est_max))):
+                        # Path 9, --eye arm: a detection the frame cuts is a
+                        # partial view; the box goes on the support's top.
+                        print(f"    [eye] {obj_str} not wholly in the post-stack "
+                              f"image: its box goes on {on_obj_str}'s top")
+                        _det = None
+                        _frame_cut = True
                     bd = registry.get_boxel(obj_str)
                     if bd is not None:
                         _cur_ext = (np.asarray(bd.max_corner, dtype=float)
@@ -3131,9 +3185,10 @@ def main(gui=True, run_logger=None, scene_config=None,
                                               _sc[1] - _cur_ext[1] / 2.0,
                                               _sz])
                             a_max = a_min + _cur_ext
-                            print(f"    [perception] {obj_str} occluded in "
-                                  f"the post-stack render — re-posing its "
-                                  f"known-size box on {on_obj_str}'s top")
+                            if not _frame_cut:      # a frame cut is not an occlusion
+                                print(f"    [perception] {obj_str} occluded in "
+                                      f"the post-stack render — re-posing its "
+                                      f"known-size box on {on_obj_str}'s top")
                         # M8 A: the occluded re-pose is inferred (pose
                         # unknown); a seen stack is a commanded placement.
                         if _det is None:

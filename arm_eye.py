@@ -1,16 +1,17 @@
 """Path 9: ours with the arm camera only (--eye arm).
 
 Design: archive/tampura_bridge_plan_2026-10-25/tracks/look/ARM_ONLY_DESIGN.md.
-The overview camera of this mode is the arm camera at the arm's start
-configuration, so an overview image exists only while the arm stands there.
-Hani, 2026-11-14 04:40, via the coordinator (verbatim): "so look should be an
-eyle in the hand. no need for a third option".
+The overview camera of this mode is the arm camera: at the arm's start
+configuration for the first image, and where the arm stands for every later
+image.  Hani, 2026-11-14 04:40, via the coordinator (verbatim): "so look
+should be an eyle in the hand. no need for a third option".  The look
+manager, 2026-11-14: "the first image, the regions and every check come from
+the arm camera, and the fixed camera feeds nothing to the robot."
 
 This module holds the switch's rule, the start of an arm-camera run and the
-geometry of the mode.  Wired so far (steps 1 and 2 of three, 2026-11-14): the
-switch, the first image and the part of the table that image does not show.
-The checks after an action still render the start view from wherever the arm
-stands (step 3), so no episode runs in this mode yet.
+geometry of the mode.  Wired (steps 1 to 3, 2026-11-14): the switch, the
+first image, the part of the table that image does not show, and every later
+image taken where the arm stands and judged only on what it holds wholly.
 
   check_mode         the switch's rule: --eye arm needs a look;
   parse_joints       a start configuration from the command line;
@@ -18,6 +19,11 @@ stands (step 3), so no episode runs in this mode yet.
                      at the start configuration before the first image;
   use_start_view     the env's observation camera becomes the arm camera at
                      the arm's current joints;
+  follow_arm         from the first image on, every env render takes
+                     use_start_view's camera again first, so it is the arm
+                     camera where the arm stands; marks the env;
+  following          whether an env is so marked: the one name every path of
+                     step 3 outside main() reads the switch through;
   start_camera       the env's observation-camera attributes for the arm
                      camera at the arm's current joints (the hand's forward
                      kinematics times the declared mount: proprioception,
@@ -25,6 +31,9 @@ stands (step 3), so no episode runs in this mode yet.
   project            world points to pixels of a camera pose, the convention
                      of robot_utils.wrist_camera_matrices;
   box_in_frame       whether a box lies wholly inside the image with a margin;
+  view_pose          the camera pose a render's view matrix was made from;
+  in_frame           whether boxes lie wholly in a render's image: what a
+                     check after an action may judge;
   unseen_fine_cells  the window tiled into fine cells, and which of them the
                      first image does not show: a cell is seen only when its
                      whole volume (up to the hidden target's height) is inside
@@ -68,8 +77,12 @@ UNSEEN_FINE_SIDE_M = 0.05
 # target, and the box arithmetic leaves such slivers where faces meet.
 UNSEEN_MIN_SIDE_M = 0.001
 # The frame margin of the look's own certification (observe_views: every
-# lattice point in the frame "with 8 px to spare").
+# lattice point in the frame "with 8 px to spare").  Step 3's checks after an
+# action take the same margin (in_frame).
 FRAME_MARGIN_PX = 8
+# The switch's mark on an env: set by follow_arm (test_full_pipeline.main,
+# under --eye arm alone) and read through following().
+FOLLOW_FLAG = 'arm_eye_follows'
 
 
 def _focal_px() -> float:
@@ -142,8 +155,9 @@ def use_start_view(env, robot_id: Optional[int] = None) -> Dict[str, object]:
     """The env's observation camera becomes the arm camera at the arm's
     current joints in the executing client: its pose and its own image
     (CAMERA_ATTRIBUTES), and the shadow calculator's copy of the position.
-    From here on every path that rendered or cast from the fixed camera does
-    so from this view, with today's code.  Returns start_camera's dict."""
+    Every path that renders or casts from the env's camera does so from this
+    view, with today's code, until the arm moves; follow_arm takes the view
+    again before every env render.  Returns start_camera's dict."""
     if robot_id is None:
         robot_id = env.objects['robot'].object_id
     cam = start_camera(robot_id, env.client_id)
@@ -151,6 +165,36 @@ def use_start_view(env, robot_id: Optional[int] = None) -> Dict[str, object]:
         setattr(env, name, cam[name])
     env.shadow_calculator.camera_position = cam['camera_position']
     return cam
+
+
+def follow_arm(env, robot_id: Optional[int] = None) -> None:
+    """--eye arm, once the first image's camera is set (step 3): every env
+    render from here on is the arm camera where the arm stands.  Each env
+    render computes its matrices with env._view_and_projection_matrices()
+    just before pybullet.getCameraImage (BoxelTestEnv's detect_objects,
+    get_camera_observation and refresh_debug_camera_views, and every caller
+    that renders with the env's matrices).  On this env alone that method
+    first takes use_start_view's camera again at the arm's current joints,
+    so the env's camera attributes and the shadow calculator's position
+    follow the arm; the class's method then computes the matrices from the
+    attributes as before.  Marks the env (following)."""
+    if robot_id is None:
+        robot_id = env.objects['robot'].object_id
+    matrices = type(env)._view_and_projection_matrices
+
+    def view_and_projection_matrices():
+        use_start_view(env, robot_id)
+        return matrices(env)
+
+    env._view_and_projection_matrices = view_and_projection_matrices
+    setattr(env, FOLLOW_FLAG, True)
+
+
+def following(env) -> bool:
+    """True on an env follow_arm marked (--eye arm), False on any other (None
+    included).  Every path of step 3 outside main() reads the switch through
+    this name."""
+    return bool(getattr(env, FOLLOW_FLAG, False))
 
 
 def start_camera(robot_id: int, physics_client: int = 0) -> Dict[str, object]:
@@ -202,6 +246,35 @@ def box_in_frame(camera_pose: np.ndarray, lo: Sequence[float], hi: Sequence[floa
     w, h = robot_utils.WRIST_CAMERA_WIDTH, robot_utils.WRIST_CAMERA_HEIGHT
     return bool(np.all(px[:, 0] >= margin_px) and np.all(px[:, 0] <= w - margin_px)
                 and np.all(px[:, 1] >= margin_px) and np.all(px[:, 1] <= h - margin_px))
+
+
+def view_pose(view) -> np.ndarray:
+    """The camera pose (4 x 4, project's convention) a render's view matrix
+    was made from.  p.computeViewMatrix gives 16 numbers in column order; the
+    rows of the matrix's rotation R are image right, image up and the optical
+    axis backwards, and the camera sits at -R^T t.  The pose's +y column is
+    image down: the up vector wrist_camera_matrices and start_camera pass is
+    the pose's -y."""
+    m = np.asarray(view, dtype=float).reshape(4, 4).T
+    r = m[:3, :3]
+    pose = np.eye(4)
+    pose[:3, 0] = r[0]
+    pose[:3, 1] = -r[1]
+    pose[:3, 2] = -r[2]
+    pose[:3, 3] = -r.T @ m[:3, 3]
+    return pose
+
+
+def in_frame(view, *boxes, margin_px: float = FRAME_MARGIN_PX) -> bool:
+    """True when every box (lo, hi) lies wholly in the image of the render
+    whose view matrix is ``view``: box_in_frame on view_pose's pose, with the
+    arm camera's own image and the look's frame margin.  A check after an
+    action gives an absence verdict (lost, a fragment observed empty) only
+    when this holds for the believed box, and a presence verdict (re-pose,
+    disturbed, toppled, a registration) only when it holds for the
+    detection's box (execution.frame_judgement)."""
+    pose = view_pose(view)
+    return all(box_in_frame(pose, lo, hi, margin_px) for lo, hi in boxes)
 
 
 def _tiles(lo: float, hi: float, max_side: float) -> List[Tuple[float, float]]:
