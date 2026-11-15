@@ -168,19 +168,17 @@ level (\BF{63}).
   xtick=data,
   enlarge x limits=0.14,
   legend style={at={(0.5,1.03)}, anchor=south, legend columns=2, font=\small, draw=none},
-  nodes near coords, point meta=explicit symbolic,
-  nodes near coords style={font=\scriptsize, rotate=90, anchor=west},
   ymajorgrids, grid style={black!15},
 ]
-\addplot[fill=blue!55!black, draw=none] coordinates {(1,100) [14/14] (2,55.6) [10/18] (3,62.5) [10/16] (4,75) [12/16] (5,68.8) [11/16]};
-\addplot[fill=orange!85!black, draw=none] coordinates {(1,85.7) [12/14] (2,55.6) [10/18] (3,62.5) [10/16] (4,37.5) [6/16] (5,50) [8/16]};
+\addplot[fill=blue!55!black, draw=none] coordinates {(1,100) (2,55.6) (3,62.5) (4,75) (5,68.8)};
+\addplot[fill=orange!85!black, draw=none] coordinates {(1,85.7) (2,55.6) (3,62.5) (4,37.5) (5,50)};
 \legend{ours, TAMPURA}
 \end{axis}
 \end{tikzpicture}
 \caption[Run 2 of the generated-scene comparison by number of cups.]{Run 2 of the
 generated-scene comparison by number of cups (7, 9, 8, 8
 and 8 scenes; two repetitions each): successes of all 80 episodes for ours and for
-TAMPURA, the first attempt of each, with the counts above the bars (\BF{63},
+TAMPURA, the first attempt of each (\BF{63},
 \ID{recount}{recount of 14 November}). \validitynote{failures (4 of 80)}}
 \label{fig:cups}
 \end{figure}

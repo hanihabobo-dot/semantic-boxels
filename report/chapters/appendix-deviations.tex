@@ -240,3 +240,101 @@ action and waits for Hani's written yes; SL-15's cells are 10/64 = 0.15625\,m, n
 while the new code uses the registry's names and readout. CU-19 follows the answer to
 the question whether class\_uncertain's registry
 needs geometry, which is open (\TK{7}).
+
+\section{Seeds and Scenes That Never Became an Episode}
+\label{sec:rejections}
+
+Some planned seeds and scenes never become a scored episode. \Cref{tab:rejections} gives
+every kind on record, read from the raw files of each evaluation and from the code that
+applies the criterion (trunk of 15 November; \ID{rejections}{rejection record}). Two rules
+of 14 November decide the count. A scene that never exists for any system (our scene
+builder cannot build it, the same for every arm) stays out of the success rate and is
+named beside it. A run that started and then failed, crashed, hung, was cut by our own
+side, or received another run's record is a failure of that arm, with its cause named; a
+re-rolled replacement, a rerun or a retry never counts. No record shows TAMPURA's own
+scene generator rejecting a seed: every rejection on record is made by our scene builder
+or our harness.
+
+\begin{footnotesize}
+\begin{longtable}{@{}P{2.3cm}P{3.0cm}P{6.0cm}P{1.6cm}@{}}
+\caption[Kinds of seed and scene rejection.]{Kinds of seed and scene rejection: who
+rejects and by which criterion, the evaluations and seeds, and how the report counts
+them. ``Same'' says whether the same scenes drop for every arm.}
+\label{tab:rejections}\\
+\toprule
+kind & who, and the criterion & evaluations and rejected seeds & counted \\
+\midrule
+\endfirsthead
+\toprule
+kind & who, and the criterion & evaluations and rejected seeds & counted \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+K2 hidden-target placement (``Could not place H hidden targets with O occluders'') &
+our scene builder in the pre-flight: no placement of the hidden targets behind the
+occluders within 4000 draws (boxel\_\allowbreak env.py:\allowbreak 1421 to 1497, raise 1539 to 1551) &
+the A/A (\BF{7}), B3 (\BF{10}) and F20/F21: 5 of 40 (seeds 4, 6, 12, 106, 115); TB-23's
+A/B: 4 of 20 (1, 8, 12, 14); the swing batch: 1 of 6 (1); batch4\_read: 2 of 12 (1, 8);
+the new slip scenes: 4 of 20 (27, 30, 32, 35); the planner flag's new scenes: 6 of 20
+(47, 52, 54, 55, 56, 58); the look: 1 of 10 (101); \BF{65} tabletop: seed 1; the hide
+probes: 4 of 20 with the fixed camera, 14 of 40 in the switch probe. Same for every arm &
+out, named \\
+K1 tray-stack role split (\texttt{preflight\_\allowbreak rejected}) &
+our pre-flight: the scene leaves no hidden target with a visible tray, or the reverse
+(test\_full\_\allowbreak pipeline.py:\allowbreak 3287 to 3308) &
+CB\#113, find-and-tray-stack: 15 scenes, 43 rows; semantic 15 of 90, semantic+mbs0.05
+15 of 90, uniform 13 of 65 (it never reached two of them); 33 rows are empty stubs and 10
+hold the summary of the cell run just before. Same for every arm &
+out, named: 55 of 75, 51 of 75, 40 of 52 rows remain \\
+K8 role split in the goal builder &
+our goal builder, the same test before planning (test\_full\_\allowbreak pipeline.py:\allowbreak 1182 to 1189) &
+the scalability sweep of 20 May: 18 scenes, 36 rows; three pilots: 3, 1 and 3 scenes; no
+number of this report rests on them. Same for every arm &
+out, named \\
+K3 re-roll to a replacement seed (removed 23 August) &
+the thesis-era run script: on a failed placement it re-seeded and ran another scene &
+the thesis sweep, find-and-tray-stack: 7 declared scenes never built; 34 cells ran a
+replacement (semantic 5, semantic+mbs0.05 7, uniform 4 of them), 14 timed out, 8 never
+ran; four pilot sweeps: 6, 8, 11 and 8 cells; early A/B pairs. Same for every arm &
+the replacement never counts \\
+K4 corpus vetting &
+our scene builder through collect\_eval\_corpus.py (lines 56 to 69, 92 to 114) before a corpus
+is fixed &
+old corpus: 398 of 600 candidates rejected; new corpus: 108 of 300; of the thesis's 30
+seeds, 8 no longer pass (4, 20, 28, 36, 50, 53, 75, 89) &
+a selection, not a denominator \\
+K5 \texttt{gate\_failed} (G19) &
+our driver's gate: the machine's listing gave another problem file than the pinned one
+(run\_bridge\_on\_finddice.py:256 to 279) &
+24 records, none in a scored evaluation: the check of TB-1's fix 4 of 18 (seeds 1, 2, 5,
+6), the freeze's cost check 6, diagnostic and GUI runs 13, one control &
+in a scored eval a failure of that arm \\
+K7 \texttt{scene\_\allowbreak changed\_\allowbreak by\_\allowbreak settle} (D9) &
+a flag of our driver, not a rejection: the target became visible while the scene
+settled (tampura\_bridge/policy.py:166 to 174) &
+scene 104: \BF{65}'s rounds (6 episodes) and \BF{63} arm O (6 episodes) &
+counted by its outcome \\
+\end{longtable}
+\end{footnotesize}
+
+Four further paths exist in the code and never fired in any record: dropping or
+re-running a stalled cell, the campaign stop rules, a generated \fdice\ scene that does
+not appear in time, and a build that depends on the code version (planned for the
+cluster evaluation P6, where the tag fails on 5 of 90 scenes and the thesis commit on 32
+of 90; its report script still counts re-rolls and reruns and must follow the rules
+above before P6 runs). The plan-count acceptance test drops seeds with incomplete
+counts; that touches the test, not a success rate.
+
+Not rejections, and counted as failures: \texttt{summary\_mismatch}, a cell that holds
+another run's record (a failure since 14 November, D-08); runs cut by a restart of our
+runner (in the thesis sweep, find-and-tray-stack semantic on scenes (2,0) and (2,53) and
+holding uniform on four scenes, which is why the thesis table reads 62 of 90 and 40 of
+90); crashes, hangs and timeouts. The harness rows of \BF{63} marked ``does not count''
+(25 crashes of TAMPURA's arm, one hang of ours) are failures of the first attempt.
+Cells that never ran and the declared clock stop of the planner flag's new scenes are
+named as not run.
+
+One count is open: the 7 thesis scenes that never built exist for no arm, so the rule
+for scenes would print find-and-tray-stack as 62, 58 and 27 of 83; the recap prints them
+of 90, as decided on 14 November, until the coordinator chooses.
