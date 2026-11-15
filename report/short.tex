@@ -845,7 +845,7 @@ as it is 41, 22, 21 and 12 of 100 (5x5 to 15x15); with rules 100 of 100 at 5x5, 
 Before Hani's look. The sets are the grid world without physics. \\
 The shared success test on TAMPURA's final world (\BF{70}) & L &
 about 2\,ms an episode; on scene 113, 24 of TAMPURA's 43 saved die grasps fail a 2\,mm pad bound and pass at 5\,mm; a number beside TAMPURA's reward, not its success count &
-The die is attached in those 24. With 5\,mm, 0 of 6 recorded episodes of TAMPURA's arm change outcome. \\
+The die is attached in those 24. The recorded episodes of TAMPURA's arm hold one grasp on scene 113, recorded six times, so they test the bound once. \\
 The look action, 9 development scenes & L &
 today's flow 7 of 9, centred look 3 of 9, boxel look 2 of 9 (first attempt; 0 crashed; seed 101 builds no scene in any arm) &
 Development runs on the seeds the look was fixed on; both looks keep the fixed camera; today's flow lost its two
@@ -867,9 +867,15 @@ then every record of ours carries drops, collisions and clean success (TB-22); T
 physics, so nothing can be counted on its side.
 \emph{Every number of ours against TAMPURA rests on two end tests, and ours is the stricter.} TAMPURA counts by
 its own reward, read from its belief after a kinematic carry; ours counts the die physically held between both pads
-(Hani, 15 November). The shared test reads TAMPURA's final world (\BF{70}) with a pad bound of 5\,mm (24 of 43 saved
-die grasps on scene 113 pass that fail at 2\,mm; 0 of 6 recorded episodes of TAMPURA's arm change outcome); it is a
-second number beside TAMPURA's own, never its success count, and no comparison has been scored with it.
+(Hani, 15 November). The shared test reads TAMPURA's final world (\BF{70}) with a pad bound of 5\,mm (of 43 sampled
+TAMPURA die grasps on scene 113, 24 lie between 2 and 5\,mm; the recorded episodes hold one grasp, on that scene); it is
+a second number beside TAMPURA's own, never its success count, and no comparison has been scored with it.
+\emph{Every counted run of ours saw through the fixed camera, the user's view.} The first image, the detection and
+every shadow cast came from one fixed camera (on \fdice\ placed where TAMPURA's hand camera is at home, not moving with
+the arm); only path 9's step 3 feeds the robot's camera alone, and no counted run used it. Under Hani's rule of 15
+November the comparisons with TAMPURA, \BF{65}, \BF{64}, the look, hide, the perception fixes and the thesis sweep are
+redone on the robot's camera; the slip, carry, time-cut and grip evaluations stand (unrelated to the view, the same
+camera on every arm). The full list is in the long report, findings chapter, ``Which camera fed each evaluation''.
 \emph{An episode's first plan is not reproducible from run to run} (TB-24). So every comparison is paired by
 scene, and repetitions are declared as draws.
 \emph{The machines.} On the cluster the arms of a scene ran one after the other on one node. On the laptop the
