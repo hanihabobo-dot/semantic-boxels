@@ -26,11 +26,14 @@ world, read after their rollout by the reviewed wrapper in
 tampura_bridge/timed_policy.py (tampura_bridge/final_world.py: the target
 body attached, both finger pads within 5 mm of it, the arm at home); their
 own reward stays in the record and in the row's 't_reward_success'.  An arm-T
-episode whose final world could not be read does not count (it runs once
-more, as any episode that does not count) and counts like a gate failure in
-the harness stop rule (P4.6, R2 of the G13 review): three episodes of one arm
-under the same gate (G13, G19, or FINAL_WORLD for an unread world) stop the
-job, which writes the stop to metadata.json, prints STOPPED and exits 2; the
+episode whose final world could not be read stays in the denominator as a
+non-success, named "our read failed" (ours, never booked as a failure of arm T,
+never run again) and counts like a gate failure in the harness stop rule (P4.6,
+R2 of the G13 review).  The stop rule reaches both arms: three episodes of one
+arm under the same gate stop the job.  A gate is any name in a record's
+gate_failures (G13, G19 for arm T; for arm O whichever gate the ledger reader
+failed, G3, G11, G18, G19, G19h, G21, ...) or FINAL_WORLD for an unread world
+of arm T.  The job writes the stop to metadata.json, prints STOPPED and exits 2; the
 report lists the unread worlds apart with their errors, prints the largest pad
 gap of arm T's attached episodes and the episodes the pad bound alone fails
 (R1), and opens with the caveat that T's test is geometric and ours physical
@@ -89,8 +92,12 @@ VALIDITY (Hani, 14 and 15 Nov 2026; replaces the retry rule declared for BF#63):
 (arm, scene, repetition), and its row is the result, whatever happened.  A run that crashed (their
 exception, our crash, no outcome), hung to the cap, or ended with an outcome whose final world could
 not be read is a FAILURE of that arm and counts (counts True, success False, the cause in 'why').
-Only a harness fault that belongs to neither arm does not count: the episode loaded another scene or
-a gate (G13, G19) failed; it is listed, never run again, and the report says it is not full.  No
+Only a fault that is not a failure of the arm does not count: the episode loaded another scene, only
+the scene gates (G19, G19h) failed on arm O (ours, a BUGS.md entry), our history reader could not read
+arm T's pickle, or an arm T episode was cut by our own job or runner (a started episode whose start
+marker is still there and has no row: for arm O that stays a counted failure of ours, for arm T it does
+not count, ours, listed).  Any other failed gate of arm O is a counted failure of arm O.  A fault is
+listed, never run again, and the report says it is not full.  No
 episode is run a second time: a cell with a row is skipped on a resume, a cell without one runs as its
 first attempt.  A later attempt that exists anyway (an old results folder, a manual run) is a rerun:
 listed, never counted, never replaces the first attempt.  final_rows lists every duplicate row of a
@@ -333,8 +340,9 @@ def classify_t(rec):
         return True, ''
     if st == 'crashed':
         err = (rec.get('history_read') or {}).get('read_error')
-        if err:        # their pickle exists and OUR reader failed: we do not know their result (R 6b)
-            return False, f"our read failed: their pickle exists and our reader could not read it: {str(err)[:200]}"
+        if err:        # OUR reader reported an error (it could not start, timed out or failed): whether their
+            # pickle exists is not known, so we do not know their result (R 6b); no pickle gives no error
+            return False, f"our read failed: our history reader reported an error, so their result is unknown: {str(err)[:200]}"
         return True, f"crashed: {rec.get('error')}"           # no pickle: their crash
     return False, f"{st}: {rec.get('error') or rec.get('gate_failures')}"
 
@@ -512,13 +520,18 @@ def marker_path(out, arm, seed, rep):
 
 
 def cut_row(a, arm, seed, rep, scene, marker):
-    """The row of an episode that started (its marker is still there) and left no row: a failure of that
-    arm, counted, with the cause named; it never runs again."""
+    """The row of an episode that started (its marker is still there) and left no row; it never runs again.
+    The cut came from our own job or runner, so a failure of ours is never booked as theirs (R, 15 Nov):
+    arm O's cut is a counted failure of arm O ('cut: ...'); arm T's cut does not count ('cut (ours): ...',
+    listed as a fault of ours, the cell named, the eval NOT FULL)."""
     started = (marker or {}).get('started') or 'at an unknown time'
+    theirs = arm == 'T'
     return {'arm': arm, 'seed': seed, 'rep': rep, 'attempt': 1, 'scene': scene,
-            'n_cups': a.cups.get(str(seed)), 'counts': True,
-            'why': f"cut: the episode started {started} and left no row (the job or the runner was cut); "
-                   "a failure of this arm, never run again",
+            'n_cups': a.cups.get(str(seed)), 'counts': not theirs,
+            'why': (f"cut (ours): the episode started {started} and left no row (our job or runner was cut); "
+                    "not a failure of arm T, so it does not count; never run again" if theirs else
+                    f"cut: the episode started {started} and left no row (our job or runner was cut); "
+                    "a failure of this arm, counted, never run again"),
             'success': False, 'capped_success': False, 't_equiv': None,
             't_reward_success': False if arm == 'T' else None, 'timed_out': False,
             'wall_s': None, 'loop_s': None, 'host': (marker or {}).get('host') or '?',
@@ -532,7 +545,9 @@ class HarnessStop(Exception):
 def gate_names(row):
     """What a row counts under in the harness stop rule (P4.6): the per-run gates its
     record names (G13, G19) and, for arm T, FINAL_WORLD when an outcome's final world
-    could not be read (R2 of the G13 review: an unread world counts like a gate failure)."""
+    could not be read (R2 of the G13 review: an unread world counts like a gate failure).  Both arms are
+    reached: arm O's record carries the outcome's gate_failures (any gate the ledger reader failed, not
+    only G13 or G19), so three episodes of arm O under one gate stop the job as they do for arm T."""
     names = list(((row.get('rec') or {}).get('gate_failures')) or {})
     if row.get('arm') == 'T' and str(row.get('why') or '').startswith(UNREAD_WHY):
         names.append(FINAL_WORLD_GATE)
@@ -629,7 +644,8 @@ def run(a):
                         rows.append(row)
                         order += 1
                         os.remove(marker)
-                        print(f"[gen] rep {rep} seed {seed} ({scene}) arm {arm}: FAILURE (cut): {row['why']}",
+                        print(f"[gen] rep {rep} seed {seed} ({scene}) arm {arm}: "
+                              f"{'FAILURE (cut)' if row['counts'] else 'DOES NOT COUNT (cut, ours)'}: {row['why']}",
                               flush=True)
                         continue
                     attempt = 1
@@ -813,11 +829,11 @@ def attempt_lines(final, reruns, planned=None, changed=(), n_rows=None, left_out
                          f"({str(r['why'])[:80] or 'no cause'})")
     faults = sorted((k, r) for k, r in final.items() if not r['counts'])
     lines.append("harness faults, first attempts that do not count (a scene that was seen and is another one, a gate "
-                 "that says the scene is not the declared one, a pickle of theirs our reader could not read; none is "
-                 f"run again, the eval is not full): {len(faults)}"
+                 "that says the scene is not the declared one, a history our reader could not read, an arm T episode "
+                 f"cut by our job or runner; none is run again, the eval is not full): {len(faults)}"
                  + ''.join(f"\n  {a} seed {s} rep {rep}: {str(r['why'])[:160]}"
                            + ('  (ours: needs a BUGS.md entry)'
-                              if str(r['why']).startswith(('our read failed', 'gate_failed')) else '')
+                              if str(r['why']).startswith(('our read failed', 'gate_failed', 'cut (ours)')) else '')
                            for (a, s, rep), r in faults))
     kinds = {}
     for k, r in sorted(final.items()):
@@ -855,11 +871,20 @@ def attempt_lines(final, reruns, planned=None, changed=(), n_rows=None, left_out
         lines.append(f"planned cells {len(planned)} (arms x seeds x repetitions), rows for {len(planned & set(final))}; "
                      f"cells with no row: {len(missing)}"
                      + (f" {missing[:8]}" if missing else ''))
+    # a later attempt of a cell is listed and never counted: it leaves a full eval full; two rows of the SAME
+    # attempt are a duplicate (a row banked twice, two folders): that is not full
+    same = [x for x in reruns if x[2] == 'duplicate']
+    later = len(reruns) - len(same)
     problems = [x for x in (f"{len(missing)} planned cell(s) have no row" if missing else '',
                             f"{len(faults)} harness fault(s)" if faults else '',
-                            f"{len(reruns)} rerun/duplicate row(s)" if reruns else '') if x]
-    lines.append('full: every planned cell has one first attempt that counts' if planned is not None and not problems
-                 else ('NOT FULL: ' + ', '.join(problems) if problems else 'full: not said (the planned cells are unknown)'))
+                            f"{len(same)} row(s) of the same attempt as a first attempt (duplicates)" if same else '') if x]
+    note = f"{later} later attempt{'' if later == 1 else 's'} listed and never counted" if later else ''
+    if problems:
+        lines.append('NOT FULL: ' + ', '.join(problems) + (f"; {note}" if note else ''))
+    elif planned is None:
+        lines.append('full: not said (the planned cells are unknown)' + (f"; {note}" if note else ''))
+    else:
+        lines.append((f"full, {note}: " if note else 'full: ') + 'every planned cell has one first attempt that counts')
     return lines
 
 
