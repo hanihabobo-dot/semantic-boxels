@@ -690,6 +690,33 @@ def build_tray_stack_goal(targets, tray_name, rng=None):
     return ('and',) + tuple([base_clause] + pairs)
 
 
+def partition_extent(objects, target_extent=None):
+    """Audit #66/#67, C-09: the largest object size that sets auto_cell.
+
+    Plane, table, robot, trays and bodies without a size are left out.
+    An occluder counts with its own size: the scene puts it in view.  A
+    target (any other body) counts with target_extent, its class's
+    declared size bound, when the scene declares one, so a hidden
+    target's true size never sets the partition.  Without a declared
+    bound a target counts with its own size: scenes without occluders
+    (every target in view), the bridge's env (its sizes are task_spec's
+    class sizes already) and custom SceneConfigs.
+    """
+    max_extent = 0.0
+    for name, info in objects.items():
+        if name in ("plane", "table", "robot"):
+            continue
+        if getattr(info, "is_tray", False):
+            continue
+        if info.size is None:
+            continue
+        if target_extent is not None and not info.is_occluder:
+            max_extent = max(max_extent, float(target_extent))
+            continue
+        max_extent = max(max_extent, float(np.max(info.size)))
+    return max_extent
+
+
 def main(gui=True, run_logger=None, scene_config=None,
          draw_boxel_overlays=True, show_free=False,
          goal_kind='holding', stack_height=2,
@@ -855,15 +882,10 @@ def main(gui=True, run_logger=None, scene_config=None,
     # grounding cost (number of cells), not the underlying
     # discretization strategy.  We compute effective_cell
     # unconditionally and apply it to whichever baseline is active.
-    max_extent = 0.0
-    for name, info in env.objects.items():
-        if name in ("plane", "table", "robot"):
-            continue
-        if getattr(info, "is_tray", False):
-            continue
-        if info.size is None:
-            continue
-        max_extent = max(max_extent, float(np.max(info.size)))
+    # C-09: a target counts with the scene's declared size bound when it
+    # has one (SceneConfig.target_extent), not with a hidden body's own size.
+    max_extent = partition_extent(
+        env.objects, getattr(scene_config, 'target_extent', None))
     auto_cell = max_extent + 0.01
     # Audit #66/#67: a uniform cell smaller than the largest object makes
     # (boxel_fits ?occluder ?cell) ungroundable, so uniform is always
@@ -880,7 +902,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     else:
         effective_cell = min_boxel_size
     print(f"  [audit-66/67] Effective minimum boxel size: "
-          f"{effective_cell:.3f} m (largest object AABB "
+          f"{effective_cell:.3f} m (largest seen or declared object size "
           f"{max_extent:.3f} m + 0.01 m headroom).")
     if baseline != 'uniform' and min_boxel_size is not None:
         rel = "below" if min_boxel_size < auto_cell else "at/above"
