@@ -605,8 +605,14 @@ def test_the_first_attempt_is_the_result_and_a_later_attempt_is_a_listed_rerun(t
             'episode cut after its start is a failure of that arm): 1 crashed') in text
     assert '  T seed 140 rep 0 crashed: crashed: ZeroDivisionError' in text
     assert 'reruns and duplicate rows (never counted, listed here, none collapsed silently): 1' in text
-    assert 'T seed 140 rep 0 attempt 2 (later attempt, counts, success)' in text and 'NOT FULL: 1 rerun/duplicate row(s)' in text
+    assert 'T seed 140 rep 0 attempt 2 (later attempt, counts, success)' in text
+    assert 'full: not said (the planned cells are unknown); 1 later attempt listed and never counted' in text
     assert re.search(r'^T\s+1\s+0\s', text, re.M)                              # T: counted 1, successes 0
+    # with the planned cells known, a later attempt leaves the eval full (R, second read, c)
+    (tmp_path / 'j1' / 'metadata.json').write_text(json.dumps({'seeds': [140], 'reps': 1, 'arms': ['T', 'O']}))
+    text = gse.report([str(tmp_path / 'j1')])
+    assert 'full, 1 later attempt listed and never counted: every planned cell has one first attempt that counts' in text
+    assert 'NOT FULL' not in text
 
 
 def test_a_duplicate_of_the_same_attempt_in_two_folders_is_listed_not_collapsed(tmp_path):
@@ -618,7 +624,8 @@ def test_a_duplicate_of_the_same_attempt_in_two_folders_is_listed_not_collapsed(
     assert [(r['success'], kind) for r, p, kind in reruns] == [(False, 'duplicate')]
     assert reruns[0][1].endswith(os.path.join('j2', 'results.jsonl'))
     text = gse.report([str(tmp_path / 'j1'), str(tmp_path / 'j2')])
-    assert '(duplicate, counts, no success)' in text and 'NOT FULL' in text
+    assert '(duplicate, counts, no success)' in text
+    assert 'NOT FULL: 1 row(s) of the same attempt as a first attempt (duplicates)' in text
 
 
 def test_a_harness_fault_is_listed_not_run_again_and_not_full(tmp_path):
@@ -1010,7 +1017,8 @@ def test_arm_t_a_pickle_our_reader_could_not_read_does_not_count_but_no_pickle_i
     assert gse.classify_t(their) == (True, 'crashed: rc 1, no RolloutHistory ()')
     ours = dict(their, history_read={'history': False, 'read_error': 'Traceback: EOFError'})
     counts, why = gse.classify_t(ours)
-    assert not counts and why.startswith('our read failed: their pickle exists and our reader could not read it')
+    assert not counts and why.startswith('our read failed: our history reader reported an error, so their result is unknown')
+    assert 'pickle exists' not in why                    # nobody looked for the pickle when our reader could not start
     # a hang before the scene line is a counted timeout for arm T too; a seen, other scene is a harness fault
     assert gse.classify_t({'status': 'killed', 'scene_ok': None, 'scene_file': None}) == (True, 'timeout')
     assert not gse.classify_t({'status': 'killed', 'scene_ok': False, 'scene_file': 'other.json'})[0]
@@ -1063,29 +1071,60 @@ def test_run_writes_a_start_marker_before_the_episode_and_removes_it_after(tmp_p
     assert not os.listdir(os.path.join(a.out, 'started'))                      # and is gone once the rows are written
 
 
-def test_a_started_and_cut_episode_is_a_counted_failure_and_not_run_again(tmp_path, monkeypatch, capsys):
+def _run_with_a_leftover_marker(tmp_path, monkeypatch, arm):
     a = _run_setup(tmp_path, monkeypatch, [140, 141])
-    marker = gse.marker_path(a.out, 'T', 140, 0)
+    marker = gse.marker_path(a.out, arm, 140, 0)
     os.makedirs(os.path.dirname(marker))
     with open(marker, 'w') as f:
-        json.dump({'arm': 'T', 'seed': 140, 'rep': 0, 'started': '2026-11-15 10:00:00', 'host': 'cn-101'}, f)
+        json.dump({'arm': arm, 'seed': 140, 'rep': 0, 'started': '2026-11-15 10:00:00', 'host': 'cn-101'}, f)
     calls = []
 
-    def fake(a_, arm, seed, rep, attempt, scene, order):
-        calls.append((arm, seed))
-        return _crow(arm, seed, True, attempt=attempt, rep=rep, t=10, carries=1, losses=0, reward=True)
+    def fake(a_, arm_, seed, rep, attempt, scene, order):
+        calls.append((arm_, seed))
+        return _crow(arm_, seed, True, attempt=attempt, rep=rep, t=10, carries=1, losses=0, reward=True)
     monkeypatch.setattr(gse, 'run_one', fake)
     assert gse.run(a) == 0
-    assert ('T', 140) not in calls and calls == [('O', 140), ('T', 141), ('O', 141)]
     rows = [json.loads(l) for l in open(os.path.join(a.out, 'results.jsonl'))]
-    cut = next(r for r in rows if (r['arm'], r['seed']) == ('T', 140))
+    cut = next(r for r in rows if (r['arm'], r['seed']) == (arm, 140))
+    assert (arm, 140) not in calls and not os.path.exists(marker)                   # not run again, marker gone
+    assert gse.reclassify_row(cut) is cut                                           # the re-classification leaves it alone
+    return cut, calls
+
+
+def test_a_cut_of_arm_o_is_a_counted_failure_of_ours_and_not_run_again(tmp_path, monkeypatch, capsys):
+    cut, calls = _run_with_a_leftover_marker(tmp_path, monkeypatch, 'O')
+    assert calls == [('T', 140), ('T', 141), ('O', 141)]
     assert cut['counts'] is True and cut['success'] is False and cut['why'].startswith('cut: the episode started 2026-11-15 10:00:00')
-    assert gse.failure_kind(cut) == 'cut' and not os.path.exists(marker)
+    assert gse.failure_kind(cut) == 'cut'
     out = capsys.readouterr().out
     assert 'FAILURE (cut)' in out and 'failures that count' in out and '1 cut' in out
+    assert '  O seed 140 rep 0 cut: cut: ' in out and '(ours: needs a BUGS.md entry with its cause)' in out
     assert 'full: every planned cell has one first attempt that counts' in out        # planned 4 cells, 4 rows, none missing
-    # the report's re-classification leaves a cut row alone
-    assert gse.reclassify_row(cut) is cut
+
+
+def test_a_cut_of_arm_t_does_not_count_it_is_ours_listed_and_not_full(tmp_path, monkeypatch, capsys):
+    # a failure of ours is never booked as theirs (R, second read, a)
+    cut, calls = _run_with_a_leftover_marker(tmp_path, monkeypatch, 'T')
+    assert calls == [('O', 140), ('T', 141), ('O', 141)]
+    assert cut['counts'] is False and cut['success'] is False and cut['why'].startswith('cut (ours): the episode started 2026-11-15 10:00:00')
+    assert gse.failure_kind(cut) is None
+    out = capsys.readouterr().out
+    assert 'DOES NOT COUNT (cut, ours)' in out and 'FAILURE (cut)' not in out
+    assert 'harness faults, first attempts that do not count' in out and ': 1\n  T seed 140 rep 0: cut (ours): ' in out
+    assert '(ours: needs a BUGS.md entry)' in out and 'NOT FULL: 1 harness fault(s)' in out
+    assert re.search(r'^T\s+1\s+1\s', out, re.M) and re.search(r'^O\s+1\s+1\s', out, re.M)       # the cell leaves both arms
+    assert 'seed 140 rep 0 (T did not count)' in out
+
+
+def test_the_stop_rule_reaches_arm_o_under_any_one_gate_not_only_g13_and_g19():
+    rows = [_real_row('O', 140 + i, _o_rec(140 + i, status='gate_failed', gates={'G11': 'x'})) for i in range(2)]
+    assert gse.stop_reached(gse.stop_counts(rows)) is None                      # two episodes: not yet
+    rows.append(_real_row('O', 142, _o_rec(142, status='gate_failed', gates={'G11': 'x', 'G3': 'y'})))
+    assert gse.stop_counts(rows) == {('O', 'G11'): 3, ('O', 'G3'): 1}
+    assert gse.stop_reached(gse.stop_counts(rows)) == {'rule': 'HARNESS_STOP', 'arm': 'O', 'gate': 'G11', 'count': 3}
+    # one gate under two different arms is two counts, never summed
+    mixed = rows[:2] + [_real_row('T', 143, _t_rec(143, status='gate_failed', gate_failures={'G11': 'x'}))]
+    assert gse.stop_reached(gse.stop_counts(mixed)) is None
 
 
 def _bf63_folder(folder):
@@ -1111,3 +1150,5 @@ def test_the_report_on_the_archived_bf63_rows_gives_rs_table(folder, o_ok, t_ok,
     assert f"80 pairs; both succeed {both}, only O {o_only}, only T {t_only}, neither {neither};" in text
     assert f"{t_crashed} crashed" in text and 'planned cells 160 (arms x seeds x repetitions), rows for 160' in text
     assert 'left out of the headline table' not in text and 'cells where both arms crashed: 0' in text
+    later = {'eval': 8, 'eval2': 4, 'eval3': 4}[folder]                      # the old reruns: listed, never counted
+    assert f'full, {later} later attempts listed and never counted: every planned cell' in text and 'NOT FULL' not in text
