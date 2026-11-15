@@ -85,13 +85,16 @@ the arms (T,O by default; T,O,O2 runs the three back to back per scene; O2
 alone runs the fix later on scenes already pinned).  The report then adds the
 pairs O2 against O and O2 against T; with the default arms it is BF#63's.
 
-VALIDITY (declared before any run): an episode counts if it loaded its own
-scene and ended with an outcome: success, failure, or the cap (a timeout is
-a failure of that arm).  It does not count if it crashed (no outcome), a
-gate failed, or it loaded another scene; such an episode runs once more
-with the same scene, seed and repetition, and if that run does not count
-either, the scene's repetition leaves the paired comparison for both arms
-and is listed.
+VALIDITY (Hani, 14 and 15 Nov 2026; replaces the retry rule declared for BF#63): ONE attempt per
+(arm, scene, repetition), and its row is the result, whatever happened.  A run that crashed (their
+exception, our crash, no outcome), hung to the cap, or ended with an outcome whose final world could
+not be read is a FAILURE of that arm and counts (counts True, success False, the cause in 'why').
+Only a harness fault that belongs to neither arm does not count: the episode loaded another scene or
+a gate (G13, G19) failed; it is listed, never run again, and the report says it is not full.  No
+episode is run a second time: a cell with a row is skipped on a resume, a cell without one runs as its
+first attempt.  A later attempt that exists anyway (an old results folder, a manual run) is a rerun:
+listed, never counted, never replaces the first attempt.  final_rows lists every duplicate row of a
+cell instead of collapsing it silently.
 
 SCREENSHOTS (Hani, 2026-11-03: a failed run keeps the screenshot that
 explains it, with its metadata): every run that is not a counted success,
@@ -145,6 +148,7 @@ CAP_ACTIONS = 20                     # T's horizon (its config's 20 steps); DV-2
 STOP_RULE_COUNT = bc.STOP_RULE_COUNT  # P4.6 HARNESS STOP RULE: three episodes of one arm under the same gate
 UNREAD_WHY = 'final world unreadable'  # classify_t's reason; the stop rule and the report read it
 FINAL_WORLD_GATE = 'FINAL_WORLD'     # an arm T outcome without a readable final world counts like a gate failure
+OUR_SCENE_GATES = ('G19', 'G19h')     # arm O gates that say the scene is not the declared one: only these do not count
 
 
 def t_equiv(metrics, success):
@@ -307,40 +311,136 @@ def episode_cwd(a, arm, seed, rep, attempt, scene):
 
 
 def classify_t(rec):
-    """(counts, why) of an arm T record (_bridge_campaign's statuses).  Under
-    DV-1 an episode that ended with an outcome counts only when its final
-    world was read (the standard test); a kill at the cap needs no read."""
-    if not rec.get('scene_ok'):
-        return False, f"scene {rec.get('scene_file')}"
+    """(counts, why) of an arm T record (_bridge_campaign's statuses).  counts is False only for a harness
+    fault of neither arm (another scene, a failed gate).  A crash of their code, a kill at the cap and an
+    outcome whose final world could not be read (DV-1: the standard test needs the read) all count, as
+    failures of arm T, with the cause in why (the row's success is then False)."""
     st = rec.get('status')
-    if st in ('success', 'failure'):
-        if not rec.get('standard_read'):
-            err = (rec.get('final_world') or {}).get('error') or 'no final_world.json'
-            return False, f"{UNREAD_WHY}: {err}"
-        return True, ''
+    # only a scene that was seen and is another one is a harness fault: a run that hung or died before
+    # the scene line has no scene to compare and is a failure of the arm (R, 15 Nov: TB-15's kind)
+    if rec.get('scene_file') and not rec.get('scene_ok'):
+        return False, f"scene {rec.get('scene_file')}"
     if st == 'killed':
         return True, 'timeout'
+    if st in ('success', 'failure'):
+        if not rec.get('scene_ok'):
+            return False, f"scene {rec.get('scene_file')}"
+        if 'standard_read' not in rec:       # a record from before DV-1: no final world was ever read,
+            return True, ''                  # success is their reward (see score_rec)
+        if not rec.get('standard_read'):
+            err = (rec.get('final_world') or {}).get('error') or 'no final_world.json'
+            return True, f"{UNREAD_WHY}: {err}"
+        return True, ''
+    if st == 'crashed':
+        err = (rec.get('history_read') or {}).get('read_error')
+        if err:        # their pickle exists and OUR reader failed: we do not know their result (R 6b)
+            return False, f"our read failed: their pickle exists and our reader could not read it: {str(err)[:200]}"
+        return True, f"crashed: {rec.get('error')}"           # no pickle: their crash
     return False, f"{st}: {rec.get('error') or rec.get('gate_failures')}"
 
 
 def scene_seen_o(rec):
     if rec.get('scene_file'):
         return rec['scene_file']
-    m = SCENE_RE.search(se._read_text(os.path.join(rec['save_dir'], 'stdout.txt')))
+    m = SCENE_RE.search(se._read_text(os.path.join(rec.get('save_dir') or os.devnull, 'stdout.txt')))
     return os.path.basename(m.group(1)) if m else None
 
 
 def classify_o(rec, scene):
-    """(counts, why) of an arm O record (slip_eval's run_episode)."""
+    """(counts, why) of an arm O record (slip_eval's run_episode).  As classify_t: a crash of ours, no
+    outcome and a kill at the cap count as failures of arm O (every crash of ours needs a BUGS.md entry);
+    only another scene or a failed gate is a harness fault that does not count."""
     seen = scene_seen_o(rec)
-    if seen != scene:
+    if seen and seen != scene:                    # a scene that was seen and is another one
         return False, f"scene {seen}"
-    if rec.get('timed_out'):
+    if rec.get('timed_out'):                      # a hang, also one before the scene line (TB-15)
         return True, 'timeout'
     st = rec.get('bridge_status')
+    err = rec.get('bridge_outcome_error') or rec.get('bridge_error', '')
     if st in ('success', 'failure'):
+        if not seen:
+            return False, 'scene None'
         return True, ''
-    return False, f"{st or 'no outcome'}: {rec.get('bridge_error', '')}"
+    if st == 'gate_failed':
+        gates = sorted(rec.get('gate_failures') or {})
+        if gates and all(g in OUR_SCENE_GATES for g in gates):
+            # the scene is not the declared one: our fault, flagged for a BUGS.md entry, does not count
+            return False, f"gate_failed {','.join(gates)}: {err}"
+        # any other failed gate means our pipeline broke one of its own rules: a failure of arm O
+        return True, f"gate_failed {','.join(gates) or '(gate not recorded)'}: {err}"
+    return True, f"{st or 'no outcome'}: {err}"      # our crash, or no outcome at all
+
+
+def score_rec(arm, rec, scene):
+    """Everything a row says about the result, from the record alone (so run_one and the report's
+    re-classification of a stored row use one rule): (counts, why, success, timed_out, t_reward, t_equiv_,
+    capped).  A T record from before DV-1 (no 'standard_read' key) scores by their own reward, the only
+    test it ever had."""
+    if arm == 'T':
+        ok, why = classify_t(rec)
+        pre_dv1 = 'standard_read' not in rec
+        success = (rec.get('status') == 'success') if pre_dv1 else bool(rec.get('standard_success'))
+        timed_out = rec.get('status') == 'killed'
+        t_reward, te = rec.get('status') == 'success', None
+    else:
+        ok, why = classify_o(rec, scene)
+        m = rec.get('metrics') or {}
+        # the bridge's outcome (their reward, the error, the ledger gates) and
+        # the pipeline's own goal check must both say success
+        success = rec.get('bridge_status') == 'success' and m.get('outcome') == 'success'
+        if (rec.get('bridge_status') == 'success') != (m.get('outcome') == 'success'):
+            why = (why + '; ' if why else '') + (f"outcomes disagree: bridge {rec.get('bridge_status')}"
+                                                 f", pipeline {m.get('outcome')}")
+        timed_out = bool(rec.get('timed_out'))
+        t_reward, te = None, t_equiv(rec.get('metrics'), success)
+    row_success = bool(ok and success and not timed_out and not str(why).startswith(UNREAD_WHY))
+    # DV-2: T keeps its own 20 steps, so its capped view is its result
+    capped = row_success if arm == 'T' else bool(row_success and te is not None and te <= CAP_ACTIONS)
+    return ok, why, row_success, timed_out, t_reward, te, capped
+
+
+def scorable(row):
+    """Does the row's stored rec hold what the rule reads (arm T: its status; arm O: the bridge's status or
+    the kill flag)?  Every real episode's record does; a cut row and a hand-made row may not."""
+    rec = row.get('rec')
+    if not isinstance(rec, dict) or not rec or rec.get('cut'):
+        return False
+    return 'status' in rec if row.get('arm') == 'T' else ('bridge_status' in rec or 'timed_out' in rec)
+
+
+def reclassify_row(row):
+    """The row's class by today's rule, from its stored rec: a copy with counts, why, success, capped_success,
+    timed_out (and t_reward_success) recomputed, never trusting the stored values.  A row whose rec lacks
+    the inputs (scorable) is returned as it is."""
+    if not scorable(row):
+        return row
+    ok, why, success, timed_out, t_reward, te, capped = score_rec(row['arm'], row['rec'], row.get('scene'))
+    new = dict(row, counts=ok, why=why, success=success, timed_out=timed_out)
+    if 'capped_success' in row:
+        new['capped_success'] = capped
+    if row['arm'] == 'T' and row.get('t_reward_success') is not None:
+        new['t_reward_success'] = t_reward
+    return new
+
+
+def failure_kind(row):
+    """The kind of a counted failure that has a cause of its own: 'timeout' (a hang to the cap, also before
+    the scene line), 'cut' (started, no row), 'unread world' (our read failed), 'gate' (a failed gate of our
+    arm), 'crashed'; else None."""
+    why = str(row.get('why') or '')
+    if not row.get('counts'):
+        return None
+    if why == 'timeout' or row.get('timed_out'):
+        return 'timeout'
+    if why.startswith('cut:'):
+        return 'cut'
+    if why.startswith(UNREAD_WHY):
+        return 'unread world'
+    if why.startswith('gate_failed'):
+        return 'gate'
+    if why.startswith(('crashed', 'no outcome')):
+        return 'crashed'
+    return None
 
 
 def keep_shots(a, ok, success):
@@ -357,10 +457,9 @@ def run_one(a, arm, seed, rep, attempt, scene, order):
                              cap=a.cap, their_envs=cwd, pythonhashseed='0',
                              tampura_work=a.tampura_work, drop_t_history=False)
         rec = bc.episode_t(ns, rep, seed, order, {seed: scene}, bc.machine_check())
-        ok, why = classify_t(rec)
         # DV-1: the standard test; their own reward is kept as t_reward_success
-        success = bool(rec.get('standard_success'))
-        keep = keep_shots(a, ok, success)
+        ok, why, row_success, timed_out, t_reward, te, capped = score_rec('T', rec, scene)
+        keep = keep_shots(a, ok, row_success)
         if keep:
             try:                          # a screenshot never ends the eval
                 rec['shots'] = t_shots(a, rec['save_dir'], shots_dir)
@@ -368,7 +467,6 @@ def run_one(a, arm, seed, rep, attempt, scene, order):
                 rec['shots'] = {'images': [], 'note': f"{type(e).__name__}: {e}"}
         drop_pickle(rec)
         wall, loop = rec.get('wall_s'), rec.get('loop_s')
-        timed_out = rec.get('status') == 'killed'
     else:
         ns = SimpleNamespace(out=out, python=a.python_o,
                              snapshot=(a.snapshot_o2 if arm == 'O2' else a.snapshot),
@@ -377,32 +475,15 @@ def run_one(a, arm, seed, rep, attempt, scene, order):
         rec = se.run_episode(ns, ARM_O, seed, rep,
                              extra_args=('--save-screenshots', 'on') if shots_on else (),
                              extra_env={'BOXEL_EYE_IMAGES': '1'} if shots_on else None)
-        ok, why = classify_o(rec, scene)
-        m = rec.get('metrics') or {}
-        # the bridge's outcome (their reward, the error, the ledger gates) and
-        # the pipeline's own goal check must both say success
-        success = rec.get('bridge_status') == 'success' and m.get('outcome') == 'success'
-        if (rec.get('bridge_status') == 'success') != (m.get('outcome') == 'success'):
-            why = (why + '; ' if why else '') + (f"outcomes disagree: bridge {rec.get('bridge_status')}"
-                                                 f", pipeline {m.get('outcome')}")
-        keep = keep_shots(a, ok, success)
+        # the bridge's outcome and the pipeline's own goal check must both say success (score_rec)
+        ok, why, row_success, timed_out, t_reward, te, capped = score_rec(arm, rec, scene)
+        keep = keep_shots(a, ok, row_success)
         try:                              # a screenshot never ends the eval
             rec['shots'] = o_shots(rec['save_dir'], shots_dir, keep)
         except Exception as e:
             rec['shots'] = {'images': [], 'note': f"{type(e).__name__}: {e}"}
-        wall, loop = rec.get('process_wall_s'), m.get('wall_s')
-        timed_out = bool(rec.get('timed_out'))
+        wall, loop = rec.get('process_wall_s'), (rec.get('metrics') or {}).get('wall_s')
     shutil.rmtree(cwd)
-    row_success = bool(ok and success and not timed_out)
-    if arm == 'T':
-        # DV-2: T keeps its own 20 steps, so its capped view is its result;
-        # their reward beside the standard test (DV-1)
-        te, capped = None, row_success
-        t_reward = rec.get('status') == 'success'
-    else:
-        te = t_equiv(rec.get('metrics'), success)
-        capped = bool(row_success and te is not None and te <= CAP_ACTIONS)
-        t_reward = None
     row = {'arm': arm, 'seed': seed, 'rep': rep, 'attempt': attempt, 'scene': scene,
            'n_cups': a.cups.get(str(seed)), 'counts': ok, 'why': why,
            'success': row_success, 'capped_success': capped, 't_equiv': te,
@@ -426,6 +507,25 @@ def run_one(a, arm, seed, rep, attempt, scene, order):
             meta['metrics'] = rec['metrics']
         bc.write_json(os.path.join(shots_dir, 'meta.json'), meta)
     return row
+
+
+def marker_path(out, arm, seed, rep):
+    """The start marker of an episode: written before it starts, removed when its row is written."""
+    return os.path.join(out, 'started', f'{arm}_s{seed}_r{rep}.json')
+
+
+def cut_row(a, arm, seed, rep, scene, marker):
+    """The row of an episode that started (its marker is still there) and left no row: a failure of that
+    arm, counted, with the cause named; it never runs again."""
+    started = (marker or {}).get('started') or 'at an unknown time'
+    return {'arm': arm, 'seed': seed, 'rep': rep, 'attempt': 1, 'scene': scene,
+            'n_cups': a.cups.get(str(seed)), 'counts': True,
+            'why': f"cut: the episode started {started} and left no row (the job or the runner was cut); "
+                   "a failure of this arm, never run again",
+            'success': False, 'capped_success': False, 't_equiv': None,
+            't_reward_success': False if arm == 'T' else None, 'timed_out': False,
+            'wall_s': None, 'loop_s': None, 'host': (marker or {}).get('host') or '?',
+            'finished': time.strftime('%Y-%m-%d %H:%M:%S'), 'rec': {'cut': True, 'marker': marker}}
 
 
 class HarnessStop(Exception):
@@ -519,36 +619,58 @@ def run(a):
             for seed in seeds:
                 scene = manifest['scenes'][str(seed)]
                 for arm in arms:
-                    tries = [r for r in rows if (r['arm'], r['seed'], r['rep']) == (arm, seed, rep)]
-                    if any(r['counts'] for r in tries) or len(tries) >= 2:
+                    # ONE attempt per cell, its row is the result (Hani, 14 Nov): a cell with any row is
+                    # skipped, never run a second time; a cell without a row runs as its first attempt
+                    if any((r['arm'], r['seed'], r['rep']) == (arm, seed, rep) for r in rows):
                         continue
-                    for attempt in range(len(tries) + 1, 3):
-                        label = f"{arm} seed {seed} rep {rep} attempt {attempt}"
-                        avail = mw.mem_available_kb()
-                        if mw.low_memory(avail, min_kb):
-                            raise mw.LowMemory('start', avail, min_kb, label)
-                        print(f"[gen] rep {rep} seed {seed} ({scene}) arm {arm} attempt {attempt} "
-                              f"(MemAvailable {mw.fmt_gb(avail)}) ...", end=' ', flush=True)
-                        with mw.EpisodeWatch(min_kb, peak_kb) as w:
-                            row = run_one(a, arm, seed, rep, attempt, scene, order)
-                        row.update(mw.row_fields(w.as_row()))
-                        order += 1
+                    marker = marker_path(a.out, arm, seed, rep)
+                    if os.path.isfile(marker):
+                        # started and never wrote a row (the job or the runner was cut): a failed first attempt
+                        # of that arm, cause named; it is not run again as a first attempt
+                        row = cut_row(a, arm, seed, rep, scene, bc.read_json(marker))
                         bc.append_jsonl(path, row)
                         rows.append(row)
-                        print(f"{'success' if row['success'] else 'no success'}"
-                              f"{' (timeout)' if row['timed_out'] else ''}, wall {row['wall_s']} s"
-                              f"{'' if row['counts'] else ', DOES NOT COUNT: ' + row['why']}", flush=True)
-                        for line in w.end_lines(label):
-                            print('[gen] ' + line, flush=True)
-                        for g in gate_names(row):
-                            counts[(arm, g)] = counts.get((arm, g), 0) + 1
-                        stop = stop_reached(counts)
-                        if stop:
-                            raise HarnessStop(stop)
-                        if w.low():
-                            raise mw.LowMemory('end', w.avail_min_kb, min_kb, label)
-                        if row['counts']:
-                            break
+                        order += 1
+                        os.remove(marker)
+                        print(f"[gen] rep {rep} seed {seed} ({scene}) arm {arm}: FAILURE (cut): {row['why']}",
+                              flush=True)
+                        continue
+                    attempt = 1
+                    label = f"{arm} seed {seed} rep {rep} attempt {attempt}"
+                    avail = mw.mem_available_kb()
+                    if mw.low_memory(avail, min_kb):
+                        raise mw.LowMemory('start', avail, min_kb, label)
+                    print(f"[gen] rep {rep} seed {seed} ({scene}) arm {arm} attempt {attempt} "
+                          f"(MemAvailable {mw.fmt_gb(avail)}) ...", end=' ', flush=True)
+                    os.makedirs(os.path.dirname(marker), exist_ok=True)       # the start marker, before the episode
+                    bc.write_json(marker, {'arm': arm, 'seed': seed, 'rep': rep, 'scene': scene,
+                                           'started': time.strftime('%Y-%m-%d %H:%M:%S'),
+                                           'host': os.uname().nodename, 'job': os.environ.get('SLURM_JOB_ID')})
+                    with mw.EpisodeWatch(min_kb, peak_kb) as w:
+                        row = run_one(a, arm, seed, rep, attempt, scene, order)
+                    row.update(mw.row_fields(w.as_row()))
+                    order += 1
+                    bc.append_jsonl(path, row)
+                    rows.append(row)
+                    try:                                  # the row is written: the marker has done its job
+                        os.remove(marker)
+                    except OSError:
+                        pass
+                    kind = failure_kind(row)
+                    print(f"{'success' if row['success'] else 'no success'}"
+                          f"{' (timeout)' if row['timed_out'] else ''}, wall {row['wall_s']} s"
+                          f"{'' if row['counts'] else ', HARNESS FAULT, DOES NOT COUNT: ' + row['why']}"
+                          f"{', FAILURE (' + kind + '): ' + str(row['why'])[:200] if kind and kind != 'timeout' else ''}",
+                          flush=True)
+                    for line in w.end_lines(label):
+                        print('[gen] ' + line, flush=True)
+                    for g in gate_names(row):
+                        counts[(arm, g)] = counts.get((arm, g), 0) + 1
+                    stop = stop_reached(counts)
+                    if stop:
+                        raise HarnessStop(stop)
+                    if w.low():
+                        raise mw.LowMemory('end', w.avail_min_kb, min_kb, label)
     except HarnessStop as e:
         stop = e.args[0]
     except mw.LowMemory as e:
@@ -594,18 +716,77 @@ def _f(v, d=1):
     return '-' if v is None else f"{v:.{d}f}"
 
 
-def final_rows(dirs):
-    rows = []
+def planned_cells(dirs):
+    """The set of (arm, seed, rep) the jobs planned, from each folder's metadata.json (its arms, seeds and
+    repetitions), or None when no metadata.json was found: 'full' is only said against this set."""
+    planned, found = set(), False
+    for d in dirs:
+        for p in sorted(set(glob.glob(os.path.join(d, 'metadata.json'))
+                            + glob.glob(os.path.join(d, '*', 'metadata.json')))):
+            md = bc.read_json(p) or {}
+            if not md.get('seeds') or md.get('reps') is None:
+                continue
+            found = True
+            for arm in md.get('arms') or list(ARMS_DEFAULT):
+                for seed in md['seeds']:
+                    for rep in range(int(md['reps'])):
+                        planned.add((arm, int(seed), rep))
+    return planned if found else None
+
+
+def load_all(dirs):
+    """Everything the report reads: rows (every stored row classified again from its stored rec by today's
+    rule, so old and new folders get one rule), final (the FIRST attempt of each (arm, scene, repetition):
+    the lowest attempt number, and of equal attempts the row read first), reruns (every other row of a cell
+    as (row, source file, kind): 'later attempt' or 'duplicate'; never counted, nothing collapsed
+    silently), changed (the rows whose class, counts or success, differs from their stored fields:
+    (stored counts, stored success, row)) and planned (planned_cells)."""
+    rows, per_key, changed, unscored = [], {}, [], 0
     for d in dirs:
         for p in sorted(set(glob.glob(os.path.join(d, 'results.jsonl'))
                             + glob.glob(os.path.join(d, '*', 'results.jsonl')))):
-            rows += load_rows(p)
-    final = {}
-    for r in rows:
-        key = (r['arm'], r['seed'], r['rep'])
-        if key not in final or r['attempt'] >= final[key]['attempt']:
-            final[key] = r
+            for stored in load_rows(p):
+                r = reclassify_row(stored)
+                unscored += 0 if scorable(stored) or (stored.get('rec') or {}).get('cut') else 1
+                if (bool(r['counts']), bool(r['success'])) != (bool(stored['counts']), bool(stored['success'])):
+                    changed.append((stored['counts'], stored['success'], r))
+                rows.append(r)
+                per_key.setdefault((r['arm'], r['seed'], r['rep']), []).append((r, p))
+    final, reruns = {}, []
+    for key, items in per_key.items():
+        first = min(range(len(items)), key=lambda i: (items[i][0]['attempt'], i))
+        final[key] = items[first][0]
+        for i, (r, p) in enumerate(items):
+            if i != first:
+                reruns.append((r, p, 'later attempt' if r['attempt'] > items[first][0]['attempt'] else 'duplicate'))
+    return {'rows': rows, 'final': final, 'reruns': reruns, 'changed': changed, 'unscored': unscored,
+            'planned': planned_cells(dirs)}
+
+
+def final_rows_listed(dirs):
+    a = load_all(dirs)
+    return a['rows'], a['final'], a['reruns']
+
+
+def final_rows(dirs):
+    rows, final, _ = final_rows_listed(dirs)
     return rows, final
+
+
+def common_cells(final):
+    """(final restricted to the (scene, repetition) cells where every arm of the run has a row that counts,
+    the left-out cells with the arms that did not count): the headline table never gives the arms different
+    denominators."""
+    arms = sorted({k[0] for k in final})
+    cells = sorted({(s, rep) for (_, s, rep) in final})
+    keep, left = set(), []
+    for c in cells:
+        bad = [x for x in arms if not (final.get((x,) + c) or {}).get('counts')]
+        if bad:
+            left.append((c, bad))
+        else:
+            keep.add(c)
+    return {k: r for k, r in final.items() if (k[1], k[2]) in keep}, left
 
 
 def pair_stats(final, keys, x, y):
@@ -619,7 +800,73 @@ def pair_stats(final, keys, x, y):
     return pairs, both, x_only, y_only, len(pairs) - both - x_only - y_only
 
 
-def report_tables(rows, final, brief=False):
+def attempt_lines(final, reruns, planned=None, changed=(), n_rows=None, left_out=(), unscored=0):
+    """The first attempts and what became of them: the rows re-classified by today's rule, harness faults,
+    failures that count by kind, our read failures, reruns and duplicates (never counted), the cells where
+    both arms crashed, the planned cells against the rows, and whether the eval is full."""
+    lines = []
+    if n_rows is not None:
+        lines.append(f"rows classified again from their stored records by today's rule (never from the stored "
+                     f"counts and success): {len(changed)} of {n_rows} changed class"
+                     + (f"; {unscored} row(s) have no stored record to score from and keep their stored class"
+                        if unscored else ''))
+        for stored_counts, stored_success, r in changed[:6]:
+            lines.append(f"  {r['arm']} seed {r['seed']} rep {r['rep']} attempt {r['attempt']}: stored counts "
+                         f"{stored_counts} success {stored_success}, now counts {r['counts']} success {r['success']} "
+                         f"({str(r['why'])[:80] or 'no cause'})")
+    faults = sorted((k, r) for k, r in final.items() if not r['counts'])
+    lines.append("harness faults, first attempts that do not count (a scene that was seen and is another one, a gate "
+                 "that says the scene is not the declared one, a pickle of theirs our reader could not read; none is "
+                 f"run again, the eval is not full): {len(faults)}"
+                 + ''.join(f"\n  {a} seed {s} rep {rep}: {str(r['why'])[:160]}"
+                           + ('  (ours: needs a BUGS.md entry)'
+                              if str(r['why']).startswith(('our read failed', 'gate_failed')) else '')
+                           for (a, s, rep), r in faults))
+    kinds = {}
+    for k, r in sorted(final.items()):
+        kd = failure_kind(r)
+        if kd:
+            kinds.setdefault(kd, []).append((k, r))
+    arm_fail = {kd: v for kd, v in kinds.items() if kd != 'unread world'}
+    lines.append("failures that count (first attempt; a crash, a hang to the cap, a failed gate of our arm or an "
+                 "episode cut after its start is a failure of that arm): "
+                 + (', '.join(f"{len(v)} {kd}" for kd, v in sorted(arm_fail.items())) or 'none'))
+    for kd in ('crashed', 'gate', 'cut'):
+        for (a, s, rep), r in kinds.get(kd, []):
+            lines.append(f"  {a} seed {s} rep {rep} {kd}: {str(r['why'])[:200]}"
+                         + ("  (ours: needs a BUGS.md entry with its cause)" if a != 'T' else ''))
+    lines.append(f"our read failed (arm T's final world could not be read by our reader; ours, never booked as "
+                 f"their failure, counted in the denominator as a non-success): {len(kinds.get('unread world', []))}")
+    lines.append(f"reruns and duplicate rows (never counted, listed here, none collapsed silently): {len(reruns)}"
+                 + ''.join(f"\n  {r['arm']} seed {r['seed']} rep {r['rep']} attempt {r['attempt']} ({kind}, "
+                           f"{'counts' if r['counts'] else 'does not count'}, "
+                           f"{'success' if r['success'] else 'no success'}) in {p}" for r, p, kind in reruns))
+    both = sorted((s, rep) for (s, rep) in {(k[1], k[2]) for k in final}
+                  if all(failure_kind(final.get((x, s, rep)) or {}) == 'crashed' for x in ('T', 'O')))
+    lines.append(f"cells where both arms crashed: {len(both)}"
+                 + (f" {both[:8]}: candidates for a shared-code cause (Hani, 15 Nov: then the seed is replaced and "
+                    "disclosed); each stays a failure for both until then" if both else ''))
+    if left_out:
+        lines.append(f"headline cells: the cells where every arm has a counting first attempt; left out of the "
+                     f"headline table for every arm (named): {len(left_out)} "
+                     + ', '.join(f"seed {s} rep {rep} ({'/'.join(bad)} did not count)" for (s, rep), bad in left_out[:10]))
+    missing = sorted(planned - set(final)) if planned is not None else []
+    if planned is None:
+        lines.append("planned cells: unknown (no metadata.json with seeds and repetitions was found), so 'full' is "
+                     "not said")
+    else:
+        lines.append(f"planned cells {len(planned)} (arms x seeds x repetitions), rows for {len(planned & set(final))}; "
+                     f"cells with no row: {len(missing)}"
+                     + (f" {missing[:8]}" if missing else ''))
+    problems = [x for x in (f"{len(missing)} planned cell(s) have no row" if missing else '',
+                            f"{len(faults)} harness fault(s)" if faults else '',
+                            f"{len(reruns)} rerun/duplicate row(s)" if reruns else '') if x]
+    lines.append('full: every planned cell has one first attempt that counts' if planned is not None and not problems
+                 else ('NOT FULL: ' + ', '.join(problems) if problems else 'full: not said (the planned cells are unknown)'))
+    return lines
+
+
+def report_tables(rows, final, brief=False, extra=()):
     """The tables of one view of the final rows (success = each row's
     'success'); brief leaves out the run counts, the per-scene table and the
     tail, for the second view of the same episodes."""
@@ -629,15 +876,12 @@ def report_tables(rows, final, brief=False):
     if not brief:
         lines = [f"{len(rows)} episode runs, {len(final)} final (arm, scene, repetition); "
                  f"scenes {len({s for s, _ in keys})}, repetitions {len({r for _, r in keys})}", '']
-        retried = [r for r in rows if r['attempt'] == 1 and not r['counts']]
-        lines.append(f"first runs that did not count (each ran once more): {len(retried)}"
-                     + ''.join(f"\n  {r['arm']} seed {r['seed']} rep {r['rep']}: {r['why'][:160]}"
-                               for r in retried))
+        lines += list(extra)
         lines.append('')
-        unread = [r for r in rows if r['arm'] == 'T' and str(r.get('why') or '').startswith(UNREAD_WHY)]
+        unread = [r for r in final.values() if r['arm'] == 'T' and str(r.get('why') or '').startswith(UNREAD_WHY)]
         if unread:
-            lines.append("arm T outcomes whose final world could not be read (they do not count and ran once "
-                         f"more; {STOP_RULE_COUNT} stop the job, R2 of the G13 review): {len(unread)}"
+            lines.append("arm T outcomes whose final world our reader could not read (our read failed: ours, not a "
+                         f"failure of arm T; {STOP_RULE_COUNT} stop the job, R2 of the G13 review): {len(unread)}"
                          + ''.join(f"\n  T seed {r['seed']} rep {r['rep']} attempt {r['attempt']}: "
                                    f"{r['why'][len(UNREAD_WHY) + 2:][:300]}" for r in unread))
             lines.append('')
@@ -664,7 +908,7 @@ def report_tables(rows, final, brief=False):
         dropped = [(s, rep) for (s, rep) in keys if (s, rep) not in pairs]
         if dropped:
             lines.append(f"left out of the pairs{'' if (x, y) == ('O', 'T') else f' of {x} and {y}'} "
-                         "(an arm did not count twice): "
+                         "(an arm's first attempt did not count): "
                          + ', '.join(f"seed {s} rep {r}" for s, r in dropped))
     if brief:
         return '\n'.join(lines)
@@ -947,16 +1191,26 @@ def clean_lines(final, views=(('success', 'success'),)):
 
 
 def report(dirs):
-    rows, final = final_rows(dirs)
-    if not final:
+    loaded = load_all(dirs)
+    rows, first_attempts, reruns = loaded['rows'], loaded['final'], loaded['reruns']
+    if not first_attempts:
         return 'no episodes'
     stops = stop_lines(dirs)
     stops = stops + [''] if stops else []
-    std_final = final                    # success = the standard test, for the both-criteria lines
-    final = apply_t_headline(final)
+    # the headline over the cells where every arm counts (the arms never get different denominators); the
+    # first attempts of every cell, the faults and the reruns are listed in full beside it
+    common, left_out = common_cells(first_attempts)
+    extra = attempt_lines(first_attempts, reruns, loaded['planned'], loaded['changed'], len(rows), left_out,
+                          loaded['unscored'])
+    # arm T's own descriptive lines (both criteria, the pad gaps) read every first attempt of arm T that counts,
+    # with success = the standard test: they compare nothing between arms, so no cell is left out of them
+    std_final = first_attempts
+    final = apply_t_headline(common)
+    if not final:
+        return '\n'.join(stops + extra + ['', 'no cell where every arm counts: no headline table'])
     if not all('capped_success' in r for r in final.values()):
         # no cap fields (BF#63 run 2 and earlier): an uncapped block, printed as before
-        return '\n'.join(stops + [report_tables(rows, final), ''] + clean_lines(final))
+        return '\n'.join(stops + [report_tables(rows, final, extra=extra), ''] + clean_lines(final))
     capped = {k: dict(r, success=r['capped_success']) for k, r in final.items()}
     out = [T_CAVEAT, ''] + stops
     out += [("success = the standard test (DV-1)" if T_HEADLINE != 'reward' else
@@ -966,7 +1220,7 @@ def report(dirs):
             f"{CAP_ACTIONS}; the second view is the same episodes without the limit.",
             '',
             f"== headline: success within {CAP_ACTIONS} actions ==",
-            report_tables(rows, capped),
+            report_tables(rows, capped, extra=extra),
             '',
             '== the same episodes without the action limit ==',
             report_tables(rows, final, brief=True),

@@ -4,6 +4,7 @@ scenes match their manifest; an episode counts only on its own scene with
 an outcome (the declared validity rule); arm O's failure screenshots keep
 the final overviews first and leave no image in the run; the tables'
 statistics."""
+import glob
 import hashlib
 import importlib.util
 import json
@@ -65,18 +66,27 @@ def test_validity_rule_arm_t():
     assert gse.classify_t(dict(read, status='success')) == (True, '')
     assert gse.classify_t(dict(read, status='failure')) == (True, '')
     assert gse.classify_t({'scene_ok': True, 'status': 'killed'}) == (True, 'timeout')   # no read needed
-    assert not gse.classify_t({'scene_ok': True, 'status': 'crashed', 'error': 'rc 1'})[0]
+    # a crash of their code is a failure of the arm and counts (Hani, 14 Nov); a gate or another scene is a harness fault
+    assert gse.classify_t({'scene_ok': True, 'status': 'crashed', 'error': 'rc 1'}) == (True, 'crashed: rc 1')
     assert not gse.classify_t({'scene_ok': True, 'status': 'gate_failed'})[0]
     assert not gse.classify_t({'scene_ok': False, 'status': 'success', 'standard_read': True})[0]
 
 
-def test_validity_rule_arm_t_needs_the_final_world_read():
-    # DV-1: an outcome without a readable final world does not count (it runs once more)
-    counts, why = gse.classify_t({'scene_ok': True, 'status': 'success'})
-    assert not counts and why == 'final world unreadable: no final_world.json'
+def test_validity_rule_arm_t_an_unread_final_world_is_a_failure():
+    # DV-1: the standard test needs the final world; without it the episode is a failure of arm T (first attempt)
+    counts, why = gse.classify_t({'scene_ok': True, 'status': 'success', 'standard_read': False})
+    assert counts and why == 'final world unreadable: no final_world.json'
+    # a record from before DV-1 has no standard_read key: no final world was ever read, success is their reward
+    assert gse.classify_t({'scene_ok': True, 'status': 'success'}) == (True, '')
+    assert gse.score_rec('T', {'scene_ok': True, 'status': 'success'}, 's')[2] is True
+    assert gse.score_rec('T', {'scene_ok': True, 'status': 'failure'}, 's')[2] is False
     counts, why = gse.classify_t({'scene_ok': True, 'status': 'failure', 'standard_read': False,
                                   'final_world': {'ok': False, 'error': 'AttributeError: x'}})
-    assert not counts and why == 'final world unreadable: AttributeError: x'
+    assert counts and why == 'final world unreadable: AttributeError: x'
+    assert gse.failure_kind({'counts': True, 'why': why}) == 'unread world'
+    assert gse.failure_kind({'counts': True, 'why': 'crashed: x'}) == 'crashed'
+    assert gse.failure_kind({'counts': True, 'why': 'timeout'}) == 'timeout'
+    assert gse.failure_kind({'counts': True, 'why': ''}) is None and gse.failure_kind({'counts': False, 'why': 'scene x'}) is None
 
 
 def test_validity_rule_arm_o(tmp_path):
@@ -84,8 +94,21 @@ def test_validity_rule_arm_o(tmp_path):
     base = {'scene_file': s, 'save_dir': str(tmp_path)}
     assert gse.classify_o(dict(base, bridge_status='success'), s) == (True, '')
     assert gse.classify_o(dict(base, bridge_status='failure'), s) == (True, '')
-    assert not gse.classify_o(dict(base, bridge_status='crashed'), s)[0]
-    assert not gse.classify_o(dict(base, bridge_status='gate_failed'), s)[0]
+    # our own crash, or no outcome, is a failure of arm O and counts; a failed gate is a harness fault
+    assert gse.classify_o(dict(base, bridge_status='crashed', bridge_error='boom'), s) == (True, 'crashed: boom')
+    assert gse.classify_o(dict(base, bridge_status=None), s) == (True, 'no outcome: ')
+    # only the scene gates (G19, G19h) do not count; any other failed gate is a counted failure of arm O
+    assert not gse.classify_o(dict(base, bridge_status='gate_failed', gate_failures={'G19': 'x'}), s)[0]
+    assert not gse.classify_o(dict(base, bridge_status='gate_failed', gate_failures={'G19': 'x', 'G19h': 'y'}), s)[0]
+    assert gse.classify_o(dict(base, bridge_status='gate_failed', gate_failures={'G21': 'x'}), s) == (
+        True, 'gate_failed G21: ')
+    assert gse.classify_o(dict(base, bridge_status='gate_failed', gate_failures={'G19': 'x', 'G11': 'y'}), s)[0]
+    assert gse.classify_o(dict(base, bridge_status='gate_failed'), s) == (True, 'gate_failed (gate not recorded): ')
+    # the order: a scene that was seen and is another one first, then the kill, then the outcome
+    assert gse.classify_o({'save_dir': str(tmp_path), 'timed_out': True, 'bridge_status': None}, s) == (True, 'timeout')
+    assert gse.classify_o({'save_dir': str(tmp_path), 'bridge_status': None, 'bridge_error': 'FileNotFoundError'},
+                          s) == (True, 'no outcome: FileNotFoundError')
+    assert not gse.classify_o(dict(base, scene_file='find_dice_gen_s101.json', timed_out=True), s)[0]
     assert not gse.classify_o(dict(base, scene_file='find_dice_gen_s101.json',
                                    bridge_status='success'), s)[0]
     # a kill at the cap leaves no episode file: the scene comes from stdout
@@ -219,7 +242,9 @@ def test_report_with_arm_o2_adds_its_pairs(tmp_path):
     # the table row of an arm that did not count shows 0/0, not another arm's cell
     rows.append(_row('O2', 6, False, counts=False, why='scene x'))
     _write_rows(tmp_path / 'j2', rows)
-    assert 'left out of the pairs of O2 and O' in gse.report([str(tmp_path / 'j2')])
+    text2 = gse.report([str(tmp_path / 'j2')])
+    assert 'headline cells: the cells where every arm has a counting first attempt' in text2
+    assert 'seed 6 rep 0 (O2 did not count)' in text2 and '1 harness fault' in text2 or 'harness faults' in text2
 
 
 def _fake_run_episode(calls):
@@ -301,7 +326,8 @@ def _fake_t(status, standard_read=True, standard_success=False, **extra):
     ('success', True, False, True, False, True),      # their reward says success, the world does not
     ('failure', True, True, True, True, False),       # the world says success, their reward does not
     ('failure', True, False, True, False, False),
-    ('success', False, False, False, False, True),    # unreadable: does not count, runs once more
+    ('success', False, False, True, False, True),     # unreadable: a failure of the arm, counted, never run again
+    ('crashed', False, False, True, False, False),    # their crash: a failure of the arm, counted
     ('killed', False, False, True, False, False),     # the cap: a failure of the arm
 ])
 def test_run_one_arm_t_scores_the_standard_test(tmp_path, monkeypatch, status, read, standard,
@@ -471,7 +497,7 @@ def test_report_with_arm_o2_prints_its_pairs_in_both_views(tmp_path):
 # the review of the G13 amendment (Sub-manager T (2), R1 to R5)
 
 def _unread_row(seed, attempt=1, rep=0, err='AttributeError: x'):
-    return _crow('T', seed, False, counts=False, rep=rep, attempt=attempt,
+    return _crow('T', seed, False, counts=True, rep=rep, attempt=attempt,
                  why=f'{gse.UNREAD_WHY}: {err}', final_world={'ok': False, 'error': err})
 
 
@@ -525,12 +551,12 @@ def test_run_stops_after_three_unread_worlds_and_says_so(tmp_path, monkeypatch, 
         return _crow('O', seed, True, attempt=attempt, rep=rep, t=10, carries=1, losses=0)
     monkeypatch.setattr(gse, 'run_one', fake)
     assert gse.run(a) == 2
-    # T seed 140 twice (the retry), O seed 140, then T seed 141: the third unread world stops the job
-    assert calls == [('T', 140, 1), ('T', 140, 2), ('O', 140, 1), ('T', 141, 1)]
+    # one attempt per cell, no retry: T 140, O 140, T 141, O 141, T 142: the third unread world stops the job
+    assert calls == [('T', 140, 1), ('O', 140, 1), ('T', 141, 1), ('O', 141, 1), ('T', 142, 1)]
     out = capsys.readouterr().out
     assert '[gen] STOPPED: ' in out and '"gate": "FINAL_WORLD"' in out
     assert 'STOPPED by the harness stop rule' in out                      # the report repeats it
-    assert 'arm T outcomes whose final world could not be read' in out
+    assert 'arm T outcomes whose final world our reader could not read' in out
     md = json.loads((tmp_path / 'out' / 'metadata.json').read_text())
     assert md['status'] == 'stopped' and md['stop']['count'] == 3
     assert md['stop_counts'] == {'T:FINAL_WORLD': 3}
@@ -554,9 +580,84 @@ def test_report_lists_the_unread_worlds_apart_with_their_errors(tmp_path):
             _crow('O', 140, True, t=10, carries=1, losses=0)]
     _write_rows(tmp_path / 'j1', rows)
     text = gse.report([str(tmp_path / 'j1')])
-    assert ('arm T outcomes whose final world could not be read (they do not count and ran once more; '
-            '3 stop the job, R2 of the G13 review): 1\n'
+    assert ('arm T outcomes whose final world our reader could not read (our read failed: ours, not a failure of '
+            'arm T; 3 stop the job, R2 of the G13 review): 1\n'
             '  T seed 140 rep 0 attempt 1: AttributeError: robot') in text
+    assert 'our read failed (arm T\'s final world could not be read by our reader; ours, never booked as their ' \
+           'failure, counted in the denominator as a non-success): 1' in text
+
+
+def _cell_attempt(arm, seed, attempt, success, counts=True, why='', rep=0, **kw):
+    return _crow(arm, seed, success, counts=counts, attempt=attempt, why=why, rep=rep, **kw)
+
+
+def test_the_first_attempt_is_the_result_and_a_later_attempt_is_a_listed_rerun(tmp_path):
+    rows = [_cell_attempt('T', 140, 1, False, why='crashed: ZeroDivisionError', reward=False),
+            _cell_attempt('T', 140, 2, True, reward=True),                      # a rerun that would have succeeded
+            _cell_attempt('O', 140, 1, True, t=10, carries=1, losses=0)]
+    _write_rows(tmp_path / 'j1', rows)
+    rows_, final, reruns = gse.final_rows_listed([str(tmp_path / 'j1')])
+    assert final[('T', 140, 0)]['attempt'] == 1 and not final[('T', 140, 0)]['success']
+    assert [(r['attempt'], kind) for r, _, kind in reruns] == [(2, 'later attempt')]
+    assert gse.final_rows([str(tmp_path / 'j1')])[1] == final
+    text = gse.report([str(tmp_path / 'j1')])
+    assert ('failures that count (first attempt; a crash, a hang to the cap, a failed gate of our arm or an '
+            'episode cut after its start is a failure of that arm): 1 crashed') in text
+    assert '  T seed 140 rep 0 crashed: crashed: ZeroDivisionError' in text
+    assert 'reruns and duplicate rows (never counted, listed here, none collapsed silently): 1' in text
+    assert 'T seed 140 rep 0 attempt 2 (later attempt, counts, success)' in text and 'NOT FULL: 1 rerun/duplicate row(s)' in text
+    assert re.search(r'^T\s+1\s+0\s', text, re.M)                              # T: counted 1, successes 0
+
+
+def test_a_duplicate_of_the_same_attempt_in_two_folders_is_listed_not_collapsed(tmp_path):
+    _write_rows(tmp_path / 'j1', [_cell_attempt('T', 140, 1, True, reward=True),
+                                  _cell_attempt('O', 140, 1, True, t=10, carries=1, losses=0)])
+    _write_rows(tmp_path / 'j2', [_cell_attempt('T', 140, 1, False, reward=False)])
+    _, final, reruns = gse.final_rows_listed([str(tmp_path / 'j1'), str(tmp_path / 'j2')])
+    assert final[('T', 140, 0)]['success'] is True                              # the row read first, never the last
+    assert [(r['success'], kind) for r, p, kind in reruns] == [(False, 'duplicate')]
+    assert reruns[0][1].endswith(os.path.join('j2', 'results.jsonl'))
+    text = gse.report([str(tmp_path / 'j1'), str(tmp_path / 'j2')])
+    assert '(duplicate, counts, no success)' in text and 'NOT FULL' in text
+
+
+def test_a_harness_fault_is_listed_not_run_again_and_not_full(tmp_path):
+    rows = [_cell_attempt('T', 140, 1, False, counts=False, why='gate_failed: pin', reward=False),
+            _cell_attempt('O', 140, 1, True, t=10, carries=1, losses=0)]
+    _write_rows(tmp_path / 'j1', rows)
+    text = gse.report([str(tmp_path / 'j1')])
+    assert 'harness faults, first attempts that do not count' in text and '  T seed 140 rep 0: gate_failed: pin' in text
+    assert 'NOT FULL: 1 harness fault(s)' in text
+    clean = tmp_path / 'clean'
+    _write_rows(clean, [_cell_attempt('T', 140, 1, True, reward=True), _cell_attempt('O', 140, 1, True, t=10, carries=1, losses=0)])
+    assert 'full: not said (the planned cells are unknown)' in gse.report([str(clean)])       # no metadata.json
+    (clean / 'metadata.json').write_text(json.dumps({'seeds': [140, 141], 'reps': 1, 'arms': ['T', 'O']}))
+    text = gse.report([str(clean)])
+    assert 'planned cells 4 (arms x seeds x repetitions), rows for 2; cells with no row: 2' in text
+    assert 'NOT FULL: 2 planned cell(s) have no row' in text                  # a cut job is never "full"
+    (clean / 'metadata.json').write_text(json.dumps({'seeds': [140], 'reps': 1, 'arms': ['T', 'O']}))
+    assert 'full: every planned cell has one first attempt that counts' in gse.report([str(clean)])
+
+
+def test_run_makes_one_attempt_per_cell_and_skips_a_cell_that_has_a_row(tmp_path, monkeypatch, capsys):
+    a = _run_setup(tmp_path, monkeypatch, [140, 141])
+    calls = []
+
+    def fake(a_, arm, seed, rep, attempt, scene, order):
+        calls.append((arm, seed, attempt))
+        if (arm, seed) == ('T', 140):
+            return _cell_attempt('T', 140, attempt, False, counts=False, why='gate_failed: pin', reward=False)   # a harness fault
+        if (arm, seed) == ('O', 141):
+            return _cell_attempt('O', 141, attempt, False, why='crashed: boom', t=10, carries=0, losses=0)       # our crash
+        return _crow(arm, seed, True, attempt=attempt, rep=rep, t=10, carries=1, losses=0, reward=True)
+    monkeypatch.setattr(gse, 'run_one', fake)
+    assert gse.run(a) == 0
+    assert calls == [('T', 140, 1), ('O', 140, 1), ('T', 141, 1), ('O', 141, 1)]      # no second attempt, not after a fault
+    out = capsys.readouterr().out
+    assert 'FAILURE (crashed): crashed: boom' in out and 'HARNESS FAULT, DOES NOT COUNT: gate_failed: pin' in out
+    assert '(ours: needs a BUGS.md entry with its cause)' in out
+    calls.clear()
+    assert gse.run(a) == 0 and calls == []                                           # a resume starts nothing
 
 
 def test_report_repeats_a_stop_from_a_jobs_metadata(tmp_path):
@@ -804,3 +905,209 @@ def test_clean_of_never_reads_a_missing_count_as_clean():
     assert gse.clean_of({'drops': 0, 'collisions': None}, True) is None
     assert gse.clean_of({}, True) is None
     assert gse.clean_of({'drops': 0, 'collisions': None}, False) is False
+
+
+# ---------------------------------------------------------------------------
+# R's read of 9feee81 (tracks/review/validity/HARNESS_9feee81.md): early hangs, failed gates, old rows,
+# common cells, planned cells and the start marker
+
+def _scene(seed):
+    return f'find_dice_gen_s{seed}.json'
+
+
+def _o_rec(seed, status='success', timed_out=False, scene='auto', gates=None, error=None, save_dir=None):
+    rec = {'timed_out': timed_out, 'bridge_status': status, 'save_dir': save_dir, 'gate_failures': gates or {},
+           'bridge_outcome_error': error, 'metrics': {'outcome': 'success' if status == 'success' else 'failure',
+                                                       'picks': 2, 'places': 1, 'senses': 0, 'observes': 0}}
+    if scene == 'auto' and status is not None:
+        rec['scene_file'] = None
+    if scene not in (None, 'auto'):
+        rec['scene_file'] = scene
+    elif scene == 'auto' and status is not None:
+        rec['scene_file'] = _scene(seed)
+    if status is None:
+        rec['bridge_error'] = 'FileNotFoundError: bridge_episode.json'
+        rec['metrics'] = None
+    return rec
+
+
+def _t_rec(seed, status='success', **kw):
+    rec = {'status': status, 'scene_ok': True, 'scene_file': _scene(seed), 'standard_read': True,
+           'standard_success': status == 'success', 'history_read': {'history': True}}
+    rec.update(kw)
+    return rec
+
+
+def _real_row(arm, seed, rec, rep=0, attempt=1, **override):
+    """A row as run_one writes it (the class from score_rec), then the stored fields overridden: an old row."""
+    ok, why, success, timed_out, t_reward, te, capped = gse.score_rec(arm, rec, _scene(seed))
+    row = {'arm': arm, 'seed': seed, 'rep': rep, 'attempt': attempt, 'scene': _scene(seed), 'n_cups': 3,
+           'counts': ok, 'why': why, 'success': success, 'capped_success': capped, 't_equiv': te,
+           't_reward_success': t_reward, 'timed_out': timed_out, 'wall_s': 30.0, 'loop_s': 30.0, 'host': 'n',
+           'finished': 'x', 'rec': rec}
+    row.update(override)
+    return row
+
+
+def test_an_early_hang_of_arm_o_before_the_scene_line_is_a_counted_failure_and_old_rows_are_scored_again(tmp_path):
+    # TB-15's kind: arm O hung before "Loading scene from" (no scene seen, killed at the cap).  The OLD rule
+    # stored it as counts False, why "scene None"; today's rule is a timeout, a failure of arm O.
+    hang = _o_rec(136, status=None, timed_out=True, save_dir=str(tmp_path / 'nowhere'))
+    assert gse.classify_o(hang, _scene(136)) == (True, 'timeout')
+    stored_old = _real_row('O', 136, hang, rep=1, counts=False, why='scene None', success=False)
+    # an old row that trusted a stored success the record does not bear out
+    liar = _real_row('O', 137, _o_rec(137, status='failure'), success=True)
+    rows = [stored_old, _real_row('T', 136, _t_rec(136), rep=1), liar, _real_row('T', 137, _t_rec(137))]
+    _write_rows(tmp_path / 'j1', rows)
+    text = gse.report([str(tmp_path / 'j1')])
+    assert "rows classified again from their stored records by today's rule (never from the stored counts and " \
+           "success): 2 of 4 changed class" in text
+    assert re.search(r'^O\s+2\s+0\s', text, re.M)             # both O rows count, neither is a success; no cell is left out
+    assert 'failures that count' in text and '1 timeout' in text
+    assert 'harness faults, first attempts that do not count' in text and ': 0\n' in text
+    assert 'stored counts False success False, now counts True success False' in text
+    assert 'stored counts True success True, now counts True success False' in text
+
+
+def test_a_failed_gate_other_than_g19_is_a_counted_failure_of_arm_o_and_trips_the_stop_rule():
+    g21 = _real_row('O', 140, _o_rec(140, status='gate_failed', gates={'G21': 'moved a body'}))
+    assert (g21['counts'], g21['success']) == (True, False) and gse.gate_names(g21) == ['G21']
+    assert gse.failure_kind(g21) == 'gate'
+    # G19 and G19h alone: the scene is not the declared one, our fault, does not count, flagged
+    g19 = _real_row('O', 141, _o_rec(141, status='gate_failed', gates={'G19': 'scene', 'G19h': 'hash'}))
+    assert g19['counts'] is False and gse.failure_kind(g19) is None
+    rows = [g21, _real_row('O', 142, _o_rec(142, status='gate_failed', gates={'G21': 'x'})),
+            _real_row('O', 143, _o_rec(143, status='gate_failed', gates={'G21': 'x', 'G3': 'y'}))]
+    assert gse.stop_reached(gse.stop_counts(rows)) == {'rule': 'HARNESS_STOP', 'arm': 'O', 'gate': 'G21', 'count': 3}
+
+
+def test_the_report_flags_our_faults_and_names_a_failed_gate(tmp_path):
+    rows = [_real_row('O', 141, _o_rec(141, status='gate_failed', gates={'G19': 'scene'})), _real_row('T', 141, _t_rec(141)),
+            _real_row('O', 142, _o_rec(142, status='gate_failed', gates={'G21': 'moved a body'})), _real_row('T', 142, _t_rec(142))]
+    _write_rows(tmp_path / 'j1', rows)
+    text = gse.report([str(tmp_path / 'j1')])
+    assert '  O seed 141 rep 0: gate_failed G19: ' in text and '(ours: needs a BUGS.md entry)' in text
+    assert '  O seed 142 rep 0 gate: gate_failed G21: ' in text and '1 gate' in text
+    assert 'seed 141 rep 0 (O did not count)' in text            # the headline leaves the fault's cell out for every arm
+    assert re.search(r'^O\s+1\s+0\s', text, re.M) and re.search(r'^T\s+1\s+1\s', text, re.M)
+
+
+def test_the_headline_is_over_the_cells_where_every_arm_counts(tmp_path):
+    rows = []
+    for seed in (1, 2, 3, 4):
+        rows.append(_real_row('T', seed, _t_rec(seed)))
+        rows.append(_real_row('O', seed, _o_rec(seed) if seed != 3 else _o_rec(seed, scene='find_dice_gen_s999.json')))
+    _write_rows(tmp_path / 'j1', rows)
+    text = gse.report([str(tmp_path / 'j1')])
+    assert re.search(r'^O\s+3\s+3\s', text, re.M) and re.search(r'^T\s+3\s+3\s', text, re.M)     # the same 3 cells
+    assert 'left out of the headline table for every arm (named): 1 seed 3 rep 0 (O did not count)' in text
+    assert '  O seed 3 rep 0: scene find_dice_gen_s999.json' in text
+
+
+def test_arm_t_a_pickle_our_reader_could_not_read_does_not_count_but_no_pickle_is_their_crash():
+    their = {'status': 'crashed', 'scene_ok': True, 'scene_file': 's', 'error': 'rc 1, no RolloutHistory ()',
+             'history_read': {'history': False}}
+    assert gse.classify_t(their) == (True, 'crashed: rc 1, no RolloutHistory ()')
+    ours = dict(their, history_read={'history': False, 'read_error': 'Traceback: EOFError'})
+    counts, why = gse.classify_t(ours)
+    assert not counts and why.startswith('our read failed: their pickle exists and our reader could not read it')
+    # a hang before the scene line is a counted timeout for arm T too; a seen, other scene is a harness fault
+    assert gse.classify_t({'status': 'killed', 'scene_ok': None, 'scene_file': None}) == (True, 'timeout')
+    assert not gse.classify_t({'status': 'killed', 'scene_ok': False, 'scene_file': 'other.json'})[0]
+
+
+def test_both_arms_crashing_on_one_cell_is_named(tmp_path):
+    rows = [_real_row('T', 150, _t_rec(150, status='crashed', error='rc 1, no RolloutHistory ()')),
+            _real_row('O', 150, _o_rec(150, status=None)), _real_row('T', 151, _t_rec(151)), _real_row('O', 151, _o_rec(151))]
+    _write_rows(tmp_path / 'j1', rows)
+    text = gse.report([str(tmp_path / 'j1')])
+    assert 'cells where both arms crashed: 1 [(150, 0)]: candidates for a shared-code cause' in text
+
+
+def test_slip_eval_run_episode_carries_the_outcomes_gates_and_error(tmp_path, monkeypatch):
+    se = gse.se
+
+    class FakeProc:
+        outcome = {}
+
+        def __init__(self, cmd, cwd=None, env=None, stdout=None, stderr=None, start_new_session=None):
+            save = cmd[cmd.index('--save-dir') + 1]
+            with open(os.path.join(save, 'bridge_episode.json'), 'w') as f:
+                json.dump({'scene_file': '/s/' + _scene(140), 'rewards': [0.0], 'outcome': dict(self.outcome)}, f)
+            self.pid = 1
+
+        def wait(self, timeout=None):
+            return 0
+    monkeypatch.setattr(se.subprocess, 'Popen', FakeProc)
+    a = SimpleNamespace(out=str(tmp_path), python='py', snapshot='/w/sb', cwd=str(tmp_path), cap=10)
+    FakeProc.outcome = {'status': 'gate_failed', 'gate_failures': {'G21': 'x'}, 'error': None}
+    rec = se.run_episode(a, gse.ARM_O, 140, 0)
+    assert rec['gate_failures'] == {'G21': 'x'} and rec['bridge_outcome_error'] is None
+    assert gse.classify_o(rec, _scene(140)) == (True, 'gate_failed G21: ')
+    FakeProc.outcome = {'status': 'crashed', 'gate_failures': {}, 'error': 'ValueError: boom'}
+    rec = se.run_episode(a, gse.ARM_O, 140, 1)
+    assert rec['bridge_outcome_error'] == 'ValueError: boom'
+    assert gse.classify_o(rec, _scene(140)) == (True, 'crashed: ValueError: boom')       # the crash keeps its cause
+
+
+def test_run_writes_a_start_marker_before_the_episode_and_removes_it_after(tmp_path, monkeypatch):
+    a = _run_setup(tmp_path, monkeypatch, [140])
+    seen = []
+
+    def fake(a_, arm, seed, rep, attempt, scene, order):
+        seen.append((arm, os.path.isfile(gse.marker_path(a.out, arm, seed, rep))))
+        return _crow(arm, seed, True, attempt=attempt, rep=rep, t=10, carries=1, losses=0, reward=True)
+    monkeypatch.setattr(gse, 'run_one', fake)
+    assert gse.run(a) == 0
+    assert seen == [('T', True), ('O', True)]                                  # the marker was there during each episode
+    assert not os.listdir(os.path.join(a.out, 'started'))                      # and is gone once the rows are written
+
+
+def test_a_started_and_cut_episode_is_a_counted_failure_and_not_run_again(tmp_path, monkeypatch, capsys):
+    a = _run_setup(tmp_path, monkeypatch, [140, 141])
+    marker = gse.marker_path(a.out, 'T', 140, 0)
+    os.makedirs(os.path.dirname(marker))
+    with open(marker, 'w') as f:
+        json.dump({'arm': 'T', 'seed': 140, 'rep': 0, 'started': '2026-11-15 10:00:00', 'host': 'cn-101'}, f)
+    calls = []
+
+    def fake(a_, arm, seed, rep, attempt, scene, order):
+        calls.append((arm, seed))
+        return _crow(arm, seed, True, attempt=attempt, rep=rep, t=10, carries=1, losses=0, reward=True)
+    monkeypatch.setattr(gse, 'run_one', fake)
+    assert gse.run(a) == 0
+    assert ('T', 140) not in calls and calls == [('O', 140), ('T', 141), ('O', 141)]
+    rows = [json.loads(l) for l in open(os.path.join(a.out, 'results.jsonl'))]
+    cut = next(r for r in rows if (r['arm'], r['seed']) == ('T', 140))
+    assert cut['counts'] is True and cut['success'] is False and cut['why'].startswith('cut: the episode started 2026-11-15 10:00:00')
+    assert gse.failure_kind(cut) == 'cut' and not os.path.exists(marker)
+    out = capsys.readouterr().out
+    assert 'FAILURE (cut)' in out and 'failures that count' in out and '1 cut' in out
+    assert 'full: every planned cell has one first attempt that counts' in out        # planned 4 cells, 4 rows, none missing
+    # the report's re-classification leaves a cut row alone
+    assert gse.reclassify_row(cut) is cut
+
+
+def _bf63_folder(folder):
+    rel = os.path.join('archive', 'tampura_bridge_plan_2026-10-25', 'bf', 'BF63_gen_scenes', folder)
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for base in (repo, os.path.join(repo, '..', 'Semantic_Boxels')):
+        if glob.glob(os.path.join(base, rel, 'results.jsonl')) or glob.glob(os.path.join(base, rel, '*', 'results.jsonl')):
+            return os.path.join(base, rel)
+    return None
+
+
+@pytest.mark.parametrize('folder,o_ok,t_ok,t_crashed,both,o_only,t_only,neither', [
+    ('eval', 56, 31, 7, 25, 31, 6, 18),
+    ('eval2', 57, 46, 4, 37, 20, 9, 14),
+    ('eval3', 69, 46, 4, 40, 29, 6, 5)])
+def test_the_report_on_the_archived_bf63_rows_gives_rs_table(folder, o_ok, t_ok, t_crashed, both, o_only, t_only, neither):
+    # R's count of the three BF#63 runs, first attempts only, a crash or a hang a failure, over the same 80 pairs
+    path = _bf63_folder(folder)
+    if path is None:
+        pytest.skip('the archived BF#63 folders are not in this checkout')
+    text = gse.report([path])
+    assert re.search(rf'^O\s+80\s+{o_ok}\s', text, re.M) and re.search(rf'^T\s+80\s+{t_ok}\s', text, re.M)
+    assert f"80 pairs; both succeed {both}, only O {o_only}, only T {t_only}, neither {neither};" in text
+    assert f"{t_crashed} crashed" in text and 'planned cells 160 (arms x seeds x repetitions), rows for 160' in text
+    assert 'left out of the headline table' not in text and 'cells where both arms crashed: 0' in text

@@ -77,7 +77,7 @@ def _patch_new_run(monkeypatch):
         pks = sorted(glob.glob(os.path.join(save_dir, '**', '*.pkl'), recursive=True),
                      key=os.path.getmtime)
         if not pks:
-            return {'history': False, 'read_error': 'no pickle'}
+            return {'history': False}            # as the real reader: no pickle, no read error
         return {'history': True, 'pkl': pks[-1], 'rewards': [0.0, 1.0],
                 'time_deltas': [4.0, 9.0], 'actions': ['old', 'old']}
 
@@ -91,7 +91,7 @@ def _assert_only_the_new_run(rec):
     assert rec['get_action_actions'] == ['new', 'new']
     assert rec['planning_s'] == 3.0
     assert rec['status'] == 'crashed' and rec['censored'] and not rec['success']
-    assert rec['history_read'] == {'history': False, 'read_error': 'no pickle'}
+    assert rec['history_read'] == {'history': False}
     assert rec['final_world'] is None
     assert rec['standard_read'] is False and rec['standard_success'] is False
     assert rec['g13_ok'] is None
@@ -195,7 +195,8 @@ def test_gen_scene_eval_run_one_moves_an_old_folder_the_same_way(tmp_path, monke
     assert sorted(os.listdir(t_dir)) == ['seed7', 'seed7.stale1']
     assert _listing(stale) == old
     _assert_only_the_new_run(rec)
-    assert not row['counts'] and not row['success']
+    # the patched run ends without a readable result: since 14 Nov that is a failure of the arm and counts
+    assert row['counts'] and not row['success']
 
 
 def test_a_stall_rerun_leaves_the_stalled_run_in_place(tmp_path, monkeypatch):
