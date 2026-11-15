@@ -195,7 +195,8 @@ def test_gen_scene_eval_run_one_moves_an_old_folder_the_same_way(tmp_path, monke
     assert sorted(os.listdir(t_dir)) == ['seed7', 'seed7.stale1']
     assert _listing(stale) == old
     _assert_only_the_new_run(rec)
-    assert not row['counts'] and not row['success']
+    # the patched run ends without a readable result: since 14 Nov that is a failure of the arm and counts
+    assert row['counts'] and not row['success']
 
 
 def test_a_stall_rerun_leaves_the_stalled_run_in_place(tmp_path, monkeypatch):

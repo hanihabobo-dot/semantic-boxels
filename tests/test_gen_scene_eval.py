@@ -65,18 +65,23 @@ def test_validity_rule_arm_t():
     assert gse.classify_t(dict(read, status='success')) == (True, '')
     assert gse.classify_t(dict(read, status='failure')) == (True, '')
     assert gse.classify_t({'scene_ok': True, 'status': 'killed'}) == (True, 'timeout')   # no read needed
-    assert not gse.classify_t({'scene_ok': True, 'status': 'crashed', 'error': 'rc 1'})[0]
+    # a crash of their code is a failure of the arm and counts (Hani, 14 Nov); a gate or another scene is a harness fault
+    assert gse.classify_t({'scene_ok': True, 'status': 'crashed', 'error': 'rc 1'}) == (True, 'crashed: rc 1')
     assert not gse.classify_t({'scene_ok': True, 'status': 'gate_failed'})[0]
     assert not gse.classify_t({'scene_ok': False, 'status': 'success', 'standard_read': True})[0]
 
 
-def test_validity_rule_arm_t_needs_the_final_world_read():
-    # DV-1: an outcome without a readable final world does not count (it runs once more)
+def test_validity_rule_arm_t_an_unread_final_world_is_a_failure():
+    # DV-1: the standard test needs the final world; without it the episode is a failure of arm T (first attempt)
     counts, why = gse.classify_t({'scene_ok': True, 'status': 'success'})
-    assert not counts and why == 'final world unreadable: no final_world.json'
+    assert counts and why == 'final world unreadable: no final_world.json'
     counts, why = gse.classify_t({'scene_ok': True, 'status': 'failure', 'standard_read': False,
                                   'final_world': {'ok': False, 'error': 'AttributeError: x'}})
-    assert not counts and why == 'final world unreadable: AttributeError: x'
+    assert counts and why == 'final world unreadable: AttributeError: x'
+    assert gse.failure_kind({'counts': True, 'why': why}) == 'unread world'
+    assert gse.failure_kind({'counts': True, 'why': 'crashed: x'}) == 'crashed'
+    assert gse.failure_kind({'counts': True, 'why': 'timeout'}) == 'timeout'
+    assert gse.failure_kind({'counts': True, 'why': ''}) is None and gse.failure_kind({'counts': False, 'why': 'scene x'}) is None
 
 
 def test_validity_rule_arm_o(tmp_path):
@@ -84,7 +89,9 @@ def test_validity_rule_arm_o(tmp_path):
     base = {'scene_file': s, 'save_dir': str(tmp_path)}
     assert gse.classify_o(dict(base, bridge_status='success'), s) == (True, '')
     assert gse.classify_o(dict(base, bridge_status='failure'), s) == (True, '')
-    assert not gse.classify_o(dict(base, bridge_status='crashed'), s)[0]
+    # our own crash, or no outcome, is a failure of arm O and counts; a failed gate is a harness fault
+    assert gse.classify_o(dict(base, bridge_status='crashed', bridge_error='boom'), s) == (True, 'crashed: boom')
+    assert gse.classify_o(dict(base, bridge_status=None), s) == (True, 'no outcome: ')
     assert not gse.classify_o(dict(base, bridge_status='gate_failed'), s)[0]
     assert not gse.classify_o(dict(base, scene_file='find_dice_gen_s101.json',
                                    bridge_status='success'), s)[0]
@@ -301,7 +308,8 @@ def _fake_t(status, standard_read=True, standard_success=False, **extra):
     ('success', True, False, True, False, True),      # their reward says success, the world does not
     ('failure', True, True, True, True, False),       # the world says success, their reward does not
     ('failure', True, False, True, False, False),
-    ('success', False, False, False, False, True),    # unreadable: does not count, runs once more
+    ('success', False, False, True, False, True),     # unreadable: a failure of the arm, counted, never run again
+    ('crashed', False, False, True, False, False),    # their crash: a failure of the arm, counted
     ('killed', False, False, True, False, False),     # the cap: a failure of the arm
 ])
 def test_run_one_arm_t_scores_the_standard_test(tmp_path, monkeypatch, status, read, standard,
@@ -471,7 +479,7 @@ def test_report_with_arm_o2_prints_its_pairs_in_both_views(tmp_path):
 # the review of the G13 amendment (Sub-manager T (2), R1 to R5)
 
 def _unread_row(seed, attempt=1, rep=0, err='AttributeError: x'):
-    return _crow('T', seed, False, counts=False, rep=rep, attempt=attempt,
+    return _crow('T', seed, False, counts=True, rep=rep, attempt=attempt,
                  why=f'{gse.UNREAD_WHY}: {err}', final_world={'ok': False, 'error': err})
 
 
@@ -525,8 +533,8 @@ def test_run_stops_after_three_unread_worlds_and_says_so(tmp_path, monkeypatch, 
         return _crow('O', seed, True, attempt=attempt, rep=rep, t=10, carries=1, losses=0)
     monkeypatch.setattr(gse, 'run_one', fake)
     assert gse.run(a) == 2
-    # T seed 140 twice (the retry), O seed 140, then T seed 141: the third unread world stops the job
-    assert calls == [('T', 140, 1), ('T', 140, 2), ('O', 140, 1), ('T', 141, 1)]
+    # one attempt per cell, no retry: T 140, O 140, T 141, O 141, T 142: the third unread world stops the job
+    assert calls == [('T', 140, 1), ('O', 140, 1), ('T', 141, 1), ('O', 141, 1), ('T', 142, 1)]
     out = capsys.readouterr().out
     assert '[gen] STOPPED: ' in out and '"gate": "FINAL_WORLD"' in out
     assert 'STOPPED by the harness stop rule' in out                      # the report repeats it
@@ -554,9 +562,75 @@ def test_report_lists_the_unread_worlds_apart_with_their_errors(tmp_path):
             _crow('O', 140, True, t=10, carries=1, losses=0)]
     _write_rows(tmp_path / 'j1', rows)
     text = gse.report([str(tmp_path / 'j1')])
-    assert ('arm T outcomes whose final world could not be read (they do not count and ran once more; '
+    assert ('arm T outcomes whose final world could not be read (a failure of arm T, first attempt; '
             '3 stop the job, R2 of the G13 review): 1\n'
             '  T seed 140 rep 0 attempt 1: AttributeError: robot') in text
+
+
+def _cell_attempt(arm, seed, attempt, success, counts=True, why='', rep=0, **kw):
+    return _crow(arm, seed, success, counts=counts, attempt=attempt, why=why, rep=rep, **kw)
+
+
+def test_the_first_attempt_is_the_result_and_a_later_attempt_is_a_listed_rerun(tmp_path):
+    rows = [_cell_attempt('T', 140, 1, False, why='crashed: ZeroDivisionError', reward=False),
+            _cell_attempt('T', 140, 2, True, reward=True),                      # a rerun that would have succeeded
+            _cell_attempt('O', 140, 1, True, t=10, carries=1, losses=0)]
+    _write_rows(tmp_path / 'j1', rows)
+    rows_, final, reruns = gse.final_rows_listed([str(tmp_path / 'j1')])
+    assert final[('T', 140, 0)]['attempt'] == 1 and not final[('T', 140, 0)]['success']
+    assert [(r['attempt'], kind) for r, _, kind in reruns] == [(2, 'later attempt')]
+    assert gse.final_rows([str(tmp_path / 'j1')])[1] == final
+    text = gse.report([str(tmp_path / 'j1')])
+    assert 'failures that count (first attempt; a crash, a hang to the cap or an unread final world is a failure of that arm): 1 crashed' in text
+    assert '  T seed 140 rep 0 crashed: crashed: ZeroDivisionError' in text
+    assert 'reruns and duplicate rows (never counted, listed here, none collapsed silently): 1' in text
+    assert 'T seed 140 rep 0 attempt 2 (later attempt, counts, success)' in text and 'NOT FULL: 1 rerun/duplicate row(s)' in text
+    assert re.search(r'^T\s+1\s+0\s', text, re.M)                              # T: counted 1, successes 0
+
+
+def test_a_duplicate_of_the_same_attempt_in_two_folders_is_listed_not_collapsed(tmp_path):
+    _write_rows(tmp_path / 'j1', [_cell_attempt('T', 140, 1, True, reward=True),
+                                  _cell_attempt('O', 140, 1, True, t=10, carries=1, losses=0)])
+    _write_rows(tmp_path / 'j2', [_cell_attempt('T', 140, 1, False, reward=False)])
+    _, final, reruns = gse.final_rows_listed([str(tmp_path / 'j1'), str(tmp_path / 'j2')])
+    assert final[('T', 140, 0)]['success'] is True                              # the row read first, never the last
+    assert [(r['success'], kind) for r, p, kind in reruns] == [(False, 'duplicate')]
+    assert reruns[0][1].endswith(os.path.join('j2', 'results.jsonl'))
+    text = gse.report([str(tmp_path / 'j1'), str(tmp_path / 'j2')])
+    assert '(duplicate, counts, no success)' in text and 'NOT FULL' in text
+
+
+def test_a_harness_fault_is_listed_not_run_again_and_not_full(tmp_path):
+    rows = [_cell_attempt('T', 140, 1, False, counts=False, why='gate_failed: pin', reward=False),
+            _cell_attempt('O', 140, 1, True, t=10, carries=1, losses=0)]
+    _write_rows(tmp_path / 'j1', rows)
+    text = gse.report([str(tmp_path / 'j1')])
+    assert 'harness faults, first attempts that do not count' in text and '  T seed 140 rep 0: gate_failed: pin' in text
+    assert 'NOT FULL: 1 harness fault(s)' in text
+    clean = tmp_path / 'clean'
+    _write_rows(clean, [_cell_attempt('T', 140, 1, True, reward=True), _cell_attempt('O', 140, 1, True, t=10, carries=1, losses=0)])
+    assert 'full: every cell has one first attempt that counts' in gse.report([str(clean)])
+
+
+def test_run_makes_one_attempt_per_cell_and_skips_a_cell_that_has_a_row(tmp_path, monkeypatch, capsys):
+    a = _run_setup(tmp_path, monkeypatch, [140, 141])
+    calls = []
+
+    def fake(a_, arm, seed, rep, attempt, scene, order):
+        calls.append((arm, seed, attempt))
+        if (arm, seed) == ('T', 140):
+            return _cell_attempt('T', 140, attempt, False, counts=False, why='gate_failed: pin', reward=False)   # a harness fault
+        if (arm, seed) == ('O', 141):
+            return _cell_attempt('O', 141, attempt, False, why='crashed: boom', t=10, carries=0, losses=0)       # our crash
+        return _crow(arm, seed, True, attempt=attempt, rep=rep, t=10, carries=1, losses=0, reward=True)
+    monkeypatch.setattr(gse, 'run_one', fake)
+    assert gse.run(a) == 0
+    assert calls == [('T', 140, 1), ('O', 140, 1), ('T', 141, 1), ('O', 141, 1)]      # no second attempt, not after a fault
+    out = capsys.readouterr().out
+    assert 'FAILURE (crashed): crashed: boom' in out and 'HARNESS FAULT, DOES NOT COUNT: gate_failed: pin' in out
+    assert '(ours: needs a BUGS.md entry with its cause)' in out
+    calls.clear()
+    assert gse.run(a) == 0 and calls == []                                           # a resume starts nothing
 
 
 def test_report_repeats_a_stop_from_a_jobs_metadata(tmp_path):
