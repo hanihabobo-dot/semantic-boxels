@@ -135,15 +135,21 @@ for the same seed (\BF{8}). The campaigns use the cluster's map: seeds 1, 2, 3, 
 11, 12, 13 and 16 the third (\BF{8}). A GUI run on the laptop prints the mismatch
 and goes on, flagged; headless runs stop; no run is scored from a GUI (\BF{39}).
 
-\paragraph{One success test.} TAMPURA's own test reads, from its abstract belief,
+\paragraph{Two success tests, ours the stricter.} TAMPURA's own test reads, from its abstract belief,
 whether the target is held and the arm is at home; the carry is by pose resets
 (\BF{35}). Hani decided on 29
 October that both arms get one environment and one criterion (\BF{35}), and on 7
 November Hani decided for path 6 that our physical world-state test is the standard
-success test of both arms, with TAMPURA's own reward beside it (\TK{6}). For TAMPURA's
-arm on the fresh scenes this needs its final world, which exists only inside its process
-after the rollout; the amendment of \BF{70} reads it there with reads only, and has been
-built, reviewed and checked but never run (\Cref{sec:path6}).
+success test of both arms, with TAMPURA's own reward beside it (\TK{6}). On 15 November
+Hani reversed this for TAMPURA's arm (\ID{decisions}{Hani's decisions}): TAMPURA is
+counted by its own success criterion, and the shared test with the 5\,mm pad bound
+does not decide its success. Our arm is judged by a stricter criterion than
+TAMPURA's: the die physically held between both finger pads and the arm at home,
+where TAMPURA's reward reads its abstract belief after a kinematic carry. Every
+comparison in this report counts TAMPURA by its reward and ours by our physical test;
+none was ever scored with the shared test. Where the shared test is read on TAMPURA's
+final world (\BF{70}), it is a second number beside TAMPURA's own, never its success
+count (\Cref{sec:path6}).
 
 \paragraph{The success criterion itself is under review.} On the evening of 7 November
 Hani said that a single drop might be reason to count an episode as a failure. On 8
@@ -309,6 +315,8 @@ default'' & \BF{62} \\
 every cluster run approved on its own & \BF{63} \\
 6 Nov & Attribute boxelization is saved as far future work; the dev tracks start from a
 stable base & \BF{66}, \BF{68} \\
+15 Nov & TAMPURA counts by its own success criterion; ours is reported as the stricter
+one; the shared test does not decide TAMPURA's success & \ID{decisions}{Hani's decisions} \\
 \bottomrule
 \end{tabularx}
 \caption{Decisions of the record that shape the results.}

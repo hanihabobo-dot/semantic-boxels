@@ -844,7 +844,7 @@ Our setup in the Wumpus world, LW1's states & L &
 as it is 41, 22, 21 and 12 of 100 (5x5 to 15x15); with rules 100 of 100 at 5x5, 7x7 and 10x10, 6 of 100 at 15x15 (93 not run, 1 cut at 300\,s); with the robot, on 31 of these states and random worlds, 30 of 31 &
 Before Hani's look. The sets are the grid world without physics. \\
 The shared success test on TAMPURA's final world (\BF{70}) & L &
-about 2\,ms an episode; on scene 113, 24 of TAMPURA's 43 saved die grasps fail a 2\,mm pad bound and pass the 5\,mm bound now in use &
+about 2\,ms an episode; on scene 113, 24 of TAMPURA's 43 saved die grasps fail a 2\,mm pad bound and pass at 5\,mm; a number beside TAMPURA's reward, not its success count &
 The die is attached in those 24. With 5\,mm, 0 of 6 recorded episodes of TAMPURA's arm change outcome. \\
 The look action, 9 development scenes & L &
 today's flow 7 of 9, centred look 3 of 9, boxel look 2 of 9 (first attempt; 0 crashed; seed 101 builds no scene in any arm) &
@@ -865,9 +865,11 @@ crashed runs named}}
 \emph{No old record can be re-scored for drops.} Telemetry was off in every evaluation up to 8 November. Since
 then every record of ours carries drops, collisions and clean success (TB-22); TAMPURA's executor has no
 physics, so nothing can be counted on its side.
-\emph{Every number of ours against TAMPURA still rests on two end tests.} The shared test is built and reads
-TAMPURA's final world (\BF{70}) with a pad bound of 5\,mm (24 of 43 saved die grasps on scene 113 pass that fail at
-2\,mm; 0 of 6 recorded episodes of TAMPURA's arm change outcome), and no comparison has been scored with it.
+\emph{Every number of ours against TAMPURA rests on two end tests, and ours is the stricter.} TAMPURA counts by
+its own reward, read from its belief after a kinematic carry; ours counts the die physically held between both pads
+(Hani, 15 November). The shared test reads TAMPURA's final world (\BF{70}) with a pad bound of 5\,mm (24 of 43 saved
+die grasps on scene 113 pass that fail at 2\,mm; 0 of 6 recorded episodes of TAMPURA's arm change outcome); it is a
+second number beside TAMPURA's own, never its success count, and no comparison has been scored with it.
 \emph{An episode's first plan is not reproducible from run to run} (TB-24). So every comparison is paired by
 scene, and repetitions are declared as draws.
 \emph{The machines.} On the cluster the arms of a scene ran one after the other on one node. On the laptop the
@@ -967,7 +969,8 @@ November, then the cluster evaluation, and the numbers go to the supervisors on 
 \paragraph{What is still missing.}
 \begin{itemize}
 \item \textbf{The paper's comparison:} ours with the frozen code, the thesis code and TAMPURA on 200 fresh
-\fdice\ scenes and on the tabletop, with the shared success test, TAMPURA's 20-action cap on ours and the drop
+\fdice\ scenes and on the tabletop, TAMPURA by its own reward and ours by the stricter physical test (the shared
+test beside TAMPURA's number), TAMPURA's 20-action cap on ours and the drop
 counts (path 6; about 49 node-hours, after Hani's yes to that question alone).
 \item \textbf{A frozen code version.} The freeze candidate is in the trunk; the slip defaults, the planner flag
 and the die under the cup are still open.
@@ -1017,7 +1020,7 @@ The die under the cup (\BF{65}): how the system knows that a cup is open underne
 Declared per class with a measured cavity; then a look at scenes 104 and 135 &
 the switch, and what the paper may claim for the occlusion model \\
 TAMPURA's clean success in the tables; the pad bound of the shared test (\BF{70}) &
-``Not measured''; the pad bound is decided: 5\,mm per pad for TAMPURA's arm since 14 November, ours keeps its physical test &
+``Not measured''; decided 15 November: TAMPURA counts by its own reward, ours by the stricter physical test, the shared test (5\,mm per pad) a number beside TAMPURA's &
 how every table is scored \\
 \cuncert: the hold on a round fruit &
 About 10 short probe runs for the smallest change that holds the lemon and the strawberry &
