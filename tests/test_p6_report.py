@@ -167,7 +167,9 @@ def test_a_changed_seed_counts_only_for_b_with_the_reroll_in_its_output():
     ts = pipeline_summary(cell, True, seed=777)
     out = '[retry 1/10] placement failed (x); rerolling to seed=555\n[retry 2/10] placement failed (y); rerolling to seed=777\n'
     c = classify_one('B', cell, ts, stdout=out)
-    assert (c['status'], c['rerolled'], c['eff_seed']) == ('success', True, 777)
+    # the replacement scene is never the cell's result (15 Nov): its own run is kept as an extra number
+    assert (c['status'], c['rerolled'], c['eff_seed'], c['rerolled_success']) == ('rerolled', True, 777, True)
+    assert c['success'] is False and not pr.in_set(c['status'])
     # the chain must end in the seed that ran
     assert classify_one('B', cell, pipeline_summary(cell, True, seed=555), stdout=out)['status'] == 'summary_mismatch'
     assert classify_one('B', cell, ts, stdout='')['status'] == 'summary_mismatch'
@@ -176,22 +178,39 @@ def test_a_changed_seed_counts_only_for_b_with_the_reroll_in_its_output():
     assert classify_one('A', cell_a, pipeline_summary(cell_a, True, seed=777), stdout=out)['status'] == 'summary_mismatch'
 
 
-def test_first_attempt_that_counts_is_the_cell():
+def attempt_of(cell, ts, job='job00', label='slot_0', redo=False, void=None, arm='A'):
+    return {'arm': arm, 'tag': ps.expected_tag(cell), 'job': job, 'label': label, 'redo': redo, 'void': void,
+            'ts': ts, 'stdout': '', 'run_dir': None, 'mtime': None}
+
+
+def test_the_first_real_attempt_is_the_cell_and_a_rerun_never_counts():
     cell = cell_of('A', 'holding', 2)
-    attempts = [
-        {'arm': 'A', 'tag': ps.expected_tag(cell), 'job': 'job00', 'label': 'slot_0', 'redo': False, 'void': None,
-         'ts': stub(cell, 'crash_exit1'), 'stdout': '', 'run_dir': None, 'mtime': None},
-        {'arm': 'A', 'tag': ps.expected_tag(cell), 'job': 'redo_9', 'label': 'redo_1', 'redo': True, 'void': None,
-         'ts': pipeline_summary(cell, True), 'stdout': '', 'run_dir': None, 'mtime': None}]
+    attempts = [attempt_of(cell, stub(cell, 'crash_exit1')),
+                attempt_of(cell, pipeline_summary(cell, True), job='redo_9', label='redo_1', redo=True)]
     rec = pr.final_cells(attempts)['A'][ps.expected_tag(cell)]
     assert [a['status'] for a in rec['attempts']] == ['crash', 'success']
-    assert rec['final']['status'] == 'success' and rec['final']['redo']
+    assert rec['final']['status'] == 'crash' and not rec['final']['success']      # the crash is the result: a failure
+    assert [r['status'] for r in rec['reruns']] == ['success']                       # listed, never counted
+    # a cell that never started (a missing summary, a void job) is skipped: the next attempt is its first
+    first = [attempt_of(cell, None), attempt_of(cell, pipeline_summary(cell, True), job='redo_9', label='redo_1', redo=True)]
+    rec = pr.final_cells(first)['A'][ps.expected_tag(cell)]
+    assert rec['final']['status'] == 'success' and rec['reruns'] == []
+    voided = pr.final_cells([attempt_of(cell, pipeline_summary(cell, True), void='tree check failed')])['A'][ps.expected_tag(cell)]
+    assert voided['final']['status'] == 'void' and not pr.in_set('void')
     # a pre-flight rejection is final: nothing re-runs it
     cell2 = cell_of('A', 'find-and-tray-stack', 2)
-    rej = [{'arm': 'A', 'tag': ps.expected_tag(cell2), 'job': 'job00', 'label': 'slot_0', 'redo': False, 'void': None,
-            'ts': stub(cell2, 'preflight_rejected', preflight_message='x'), 'stdout': '', 'run_dir': None, 'mtime': None}]
+    rej = [attempt_of(cell2, stub(cell2, 'preflight_rejected', preflight_message='x'))]
     assert pr.final_cells(rej)['A'][ps.expected_tag(cell2)]['final']['status'] == 'preflight_rejected'
     assert pr.final_cells([])['A'][ps.expected_tag(cell)]['final'] is None
+
+
+def test_what_is_in_the_set(monkeypatch):
+    for s in ('success', 'failure', 'timeout', 'crash', 'no_summary', 'summary_mismatch'):
+        assert pr.in_set(s)
+    for s in ('preflight_rejected', 'rerolled', 'void', 'missing'):
+        assert not pr.in_set(s)
+    monkeypatch.setattr(pr, 'PREFLIGHT_POLICY', 'failure')           # the one switch: a rejection is then a failure
+    assert pr.in_set('preflight_rejected') and pr.in_set('rerolled') and not pr.in_set('void')
 
 
 # ---------------------------------------------------------------------------
@@ -251,23 +270,63 @@ def test_pooled_a_against_b_numbers(tmp_path):
     assert 'snapshot A: sb_a tree hash aaaa' in text
 
 
-def test_rates_over_built_and_over_all_cells(tmp_path):
-    def tweak(job):                                   # A's three tray-stack cells at 3 occluders: rejected
-        for slot in (0, 1, 2):
-            cell = cell_of('A', 'find-and-tray-stack', 3, slot)
-            put(job, 'A', f'slot_{slot}', cell, stub(cell, 'preflight_rejected', preflight_message='[pre-flight] seed 1 rejected: x'), None)
-    fill_job(tmp_path, tweak=tweak)
+def rejected_tweak(job):                              # A's three tray-stack cells at 3 occluders: rejected
+    for slot in (0, 1, 2):
+        cell = cell_of('A', 'find-and-tray-stack', 3, slot)
+        put(job, 'A', f'slot_{slot}', cell, stub(cell, 'preflight_rejected', preflight_message='[pre-flight] seed 1 rejected: x'), None)
+
+
+def test_a_preflight_rejection_is_left_out_and_named_by_default(tmp_path):
+    fill_job(tmp_path, tweak=rejected_tweak)
     text, res = pr.build_report([str(tmp_path)])
     t = pr.tally(pr.group_cells(res, 'A', 'find-and-tray-stack', 3))
-    assert t['all'] == 30 and t['built'] == 27 and t['other'] == {'preflight_rejected': 3}
+    assert t['all'] == 30 and t['n'] == 27 and t['other'] == {'preflight_rejected': 3} and t['crashed'] == {}
     k, n = expected_counts('A', ('find-and-tray-stack',), 3)
     k -= sum(outcome('A', cell_of('A', 'find-and-tray-stack', 3, s)) for s in (0, 1, 2))
     assert t['k'] == k
-    assert 'over all  30' in text and '3 preflight_rejected' in text
-    assert 'arm A: 3 pre-flight rejected (never re-run)' in text.replace('find-and-tray-stack     arm A: ', 'arm A: ')
+    assert 'declared  30' in text and 'left out: 3 preflight_rejected' in text
+    assert 'over all' not in text and 'cells that built' not in text            # one rate, no second one
+    assert 'PREFLIGHT_POLICY = out' in text
 
 
-def test_the_final_pass_list_and_targets(tmp_path):
+def test_the_preflight_policy_failure_counts_a_rejection_as_a_failure(tmp_path, monkeypatch):
+    monkeypatch.setattr(pr, 'PREFLIGHT_POLICY', 'failure')
+    fill_job(tmp_path, tweak=rejected_tweak)
+    text, res = pr.build_report([str(tmp_path)])
+    t = pr.tally(pr.group_cells(res, 'A', 'find-and-tray-stack', 3))
+    assert t['all'] == 30 and t['n'] == 30 and t['other'] == {} and t['crashed'] == {}
+    k, _ = expected_counts('A', ('find-and-tray-stack',), 3)
+    assert t['k'] == k - sum(outcome('A', cell_of('A', 'find-and-tray-stack', 3, s)) for s in (0, 1, 2))
+    assert 'PREFLIGHT_POLICY = failure' in text and 'left out: 3 preflight' not in text
+
+
+def test_a_crash_is_a_failure_with_the_count_named_beside_the_rate(tmp_path):
+    def tweak(job):                                   # A: one crash and one hang; B: one banked summary of another cell
+        c1, c2 = cell_of('A', 'holding', 2, 0), cell_of('A', 'holding', 2, 1)
+        put(job, 'A', 'slot_0', c1, stub(c1, 'crash_exit139'), None)
+        put(job, 'A', 'slot_1', c2, stub(c2, 'no_summary'), None)
+        c3 = cell_of('B', 'stack', 3, 0)
+        bad = pipeline_summary(c3, True)
+        bad['run_config']['goal'] = 'holding'
+        put(job, 'B', 'slot_0', c3, bad, '')
+    fill_job(tmp_path, tweak=tweak)
+    text, res = pr.build_report([str(tmp_path)])
+    t = pr.tally(pr.group_cells(res, 'A', 'holding', 2))
+    assert t['n'] == 30 and t['all'] == 30 and t['crashed'] == {'crash': 1, 'no_summary': 1}
+    expect, _ = expected_counts('A', ('holding',), 2)
+    expect -= sum(outcome('A', cell_of('A', 'holding', 2, s)) for s in (0, 1))
+    assert t['k'] == expect                                                       # both are failures in the numerator's complement
+    assert f"crashed: 2 of {t['n']} (1 crash, 1 no_summary)" in text
+    tb = pr.tally(pr.group_cells(res, 'B', 'stack', 3))
+    assert tb['crashed'] == {'summary_mismatch': 1} and f"crashed: 1 of {tb['n']} (1 summary_mismatch)" in text
+    assert '1 summary of another cell (D-08, a failure)' in text                  # in the failure modes
+    # a cell with a crash is not in the redo list: only cells that never started are
+    out = tmp_path / 'out'
+    pr.build_report([str(tmp_path)], out_dir=str(out))
+    assert (out / 'redo_list.txt').read_text() == ''
+
+
+def test_the_redo_list_and_targets(tmp_path):
     def tweak(job):
         c1 = cell_of('A', 'holding', 2, 4)
         put(job, 'A', 'slot_4', c1, stub(c1, 'crash_exit139'), None)
@@ -278,11 +337,13 @@ def test_the_final_pass_list_and_targets(tmp_path):
     fill_job(tmp_path, tweak=tweak, slots=range(10))
     out = tmp_path / 'out'
     text, res = pr.build_report([str(tmp_path)], out_dir=str(out))
-    redo = (out / 'redo_list.txt').read_text().splitlines()      # the 20 slots nobody ran are on the list too
+    redo = (out / 'redo_list.txt').read_text().splitlines()      # only the 20 slots nobody ran: never started
     assert [r.split()[0] for r in redo] == ['A', 'B']
-    assert ps.expected_tag(cell_of('A', 'holding', 2, 4)) in redo[0].split()[1].split(',')
-    assert ps.expected_tag(cell_of('B', 'stack', 3, 9)) in redo[1].split()[1].split(',')
-    assert len(redo[0].split()[1].split(',')) == 1 + 20 * 9 and len(redo[1].split()[1].split(',')) == 1 + 20 * 9
+    for line, cell in ((redo[0], cell_of('A', 'holding', 2, 4)), (redo[1], cell_of('B', 'stack', 3, 9)),
+                       (redo[0], cell_of('A', 'holding', 3, 5))):           # a crash, a hang and a timeout ran: not listed
+        assert ps.expected_tag(cell) not in line.split()[1].split(',')
+    assert len(redo[0].split()[1].split(',')) == 20 * 9 and len(redo[1].split()[1].split(',')) == 20 * 9
+    assert 'NOT FULL' in text and 'crashes of arm A, ours' in text
     t2 = json.loads((out / 'targets_occ2.json').read_text())
     assert len(t2) == 9 and t2[str(ps.S_A[0])] == f"tgt_{ps.S_A[0]}_2" and str(ps.S_A[4]) not in t2   # the crashed cell has none
     t3 = json.loads((out / 'targets_occ3.json').read_text())
@@ -351,16 +412,16 @@ def test_b_against_the_sweep_pairs_on_the_seed_actually_run(tmp_path):
     junk['run_config'].update(baseline='uniform', min_boxel_size=None)
     rows.append(junk)
     text, res = pr.build_report([str(tmp_path)], sweep=rows)
-    assert res['B'][ps.expected_tag(cell)]['final']['rerolled']
-    assert f"re-rolled (cell seed to the seed that ran): occ4 {cell['seed']}>777" in text
-    assert 'B without its re-rolled cells:' in text
-    assert '90 cells paired on the seed actually run' in text
-    assert 'only the sweep 1, neither' in text and 'only the cluster 0' in text
+    final = res['B'][ps.expected_tag(cell)]['final']
+    assert final['status'] == 'rerolled' and final['rerolled'] and not pr.in_set(final['status'])
+    assert f"re-rolled (cell seed to the seed that ran, the replacement never counts): occ4 {cell['seed']}>777" in text
+    assert "B's runs on the replacement seeds, an extra number apart from every rate: 0/1" in text
+    # the re-rolled cell is out of the rate and out of the pairing; the 89 others pair on their own seed
+    assert '89 cells paired on the cell\'s own seed' in text and 'have no sweep row' not in text
+    assert 'only the sweep 0, neither' in text and 'only the cluster 0' in text
     assert 'exact McNemar p = 1;' in text
-    assert 'agreement  98.9 %' in text
-    # without the matching row the cell is listed unpaired
-    text2, _ = pr.build_report([str(tmp_path)], sweep=[r for r in rows if r['run_config']['seed'] != 777])
-    assert '89 cells paired' in text2 and '1 cluster cells have no sweep row' in text2
+    assert 'agreement 100.0 %' in text
+    assert any('left out:' in l and '1 rerolled' in l for l in text.splitlines())
 
 
 def test_identical_layout_stack_cells_are_a_paired_subset(tmp_path):
@@ -404,6 +465,39 @@ def test_the_stall_rule_lists_the_cells_and_prints_the_test_again(tmp_path):
     (job / 'io_probe.tsv').write_text('time\tepoch\tw_open_s\tw_write_fsync_s\tlocal_write_fsync_s\n')
     text, _ = pr.build_report([str(tmp_path)])
     assert 'stall rule: 0 stalls' in text and 'again without' not in text
+
+
+def test_completeness_zero_crash_and_both_failed_lines(tmp_path):
+    def tweak(job):
+        a1 = cell_of('A', 'stack', 2, 3)
+        put(job, 'A', 'slot_3', a1, stub(a1, 'crash_exit1', wall=3.0), None)
+        b1 = cell_of('B', 'stack', 2, 3)                              # the same cell crashes in B too
+        put(job, 'B', 'slot_3', b1, stub(b1, 'no_summary'), None)
+    fill_job(tmp_path, tweak=tweak, slots=range(4))
+    text, _ = pr.build_report([str(tmp_path)])
+    block = text.split('completeness (planned runs', 1)[1].split('\n\n')[0]
+    assert 'NOT FULL' in block and 'planned 270, rows 36; never started 234' in block      # 4 of 30 slots ran
+    assert 'crashed 1' in block
+    assert 'crashes of arm A, ours (zero-crash rule: each needs a BUGS.md entry' in block and ': 1: ' in block
+    assert 'cells where A and B both failed to run (crash, no summary, mismatch): 1' in block
+    # a full dataset says so
+    full = tmp_path / 'full'
+    full.mkdir()
+    fill_job(full)
+    text2, _ = pr.build_report([str(full)])
+    assert 'full: every planned cell has a first attempt and none crashed' in text2 and 'NOT FULL' not in text2
+    assert 'crashes of arm A, ours (zero-crash rule: each needs a BUGS.md entry with its investigated cause): 0' in text2
+
+
+def test_the_cli_preflight_switch(tmp_path, capsys):
+    fill_job(tmp_path / 'jobs', slots=range(1))
+    try:
+        assert pr.main(['--results', str(tmp_path / 'jobs'), '--preflight', 'failure']) == 0
+        assert 'PREFLIGHT_POLICY = failure' in capsys.readouterr().out
+        assert pr.main(['--results', str(tmp_path / 'jobs')]) == 0
+        assert 'PREFLIGHT_POLICY = out' in capsys.readouterr().out
+    finally:
+        pr.PREFLIGHT_POLICY = 'out'
 
 
 def test_the_cli_writes_the_report(tmp_path, capsys):
@@ -606,7 +700,7 @@ def test_the_rule_18_block_counts_clean_success_for_a_and_says_b_is_not_measured
     assert '  A against B on clean success: not printed (it is measured for A only)' in block
     # the rates above the block are the ones without the fields: nothing changed
     t = pr.tally(pr.group_cells(res, 'A'))
-    assert t['k'] == len(ok) and t['built'] == len(cells)
+    assert t['k'] == len(ok) and t['n'] == len(cells)
 
 
 def test_a_cell_nothing_counted_makes_clean_success_a_lower_bound(tmp_path):

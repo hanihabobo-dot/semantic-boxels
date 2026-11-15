@@ -14,26 +14,39 @@ sacct.txt is `sacct -P -j <job ids> --format=JobID,JobName,State,Elapsed,MaxRSS,
 (rule 16: the report prints each job's MaxRSS against its --mem and flags one over 6 GB).
 Everything below was declared before the first run (PLAN.md sections 8 and 11):
 
-  Validity of a cell: it counts if the runner banked a pipeline summary that
-  belongs to it: the run_config equals the cell (scene, goal, baseline, unit
-  costs, difficulty, seed).  Arm B's pre-flight re-rolls a rejected seed, so its
-  seed may differ when the last "rerolling to seed=N" line in the cell's stdout.log
-  names it.  Counted outcomes: success, a pipeline failure, a runner timeout at
-  the cap.  Not counted (listed with the cause): crash, no_summary,
-  summary_mismatch, a void job, a missing cell.  Pre-flight rejections are scene
-  failures, never re-run, printed beside the rates.  A cell counts once: its first
-  attempt that counts (the final pass reruns the cells that did not).
+  Counting rules of 14 and 15 Nov 2026 (Hani's words in tracks/meeting_2026-11-13/
+  REVIEW_DECISIONS.md; they replace the validity and final-pass rules of PLAN.md
+  sections 8 and 11):
+  One result per cell: its FIRST real attempt.  A later attempt of the same cell
+  (the runner's redo mode, a second job) is listed as a rerun and never counts, never
+  replaces.  A void job or a cell with no timing_summary.json never started: it is
+  not an attempt, the cell is "not full" and may run later as its first attempt.
+  A run of the cell that ends in success, a pipeline failure or a runner timeout at
+  the cap counts as such; a crash, no_summary (a hang or a start-up failure) and
+  summary_mismatch (the banked summary belongs to another cell, D-08) are FAILURES of
+  that arm; every rate has the number of crashed runs named beside it, never a second
+  rate over the cells that "built".  Every crash of arm A (ours) is listed: each
+  needs a BUGS.md entry with its cause (zero-crash rule of 15 Nov).  Arm B's pre-flight
+  re-rolls a rejected seed (its seed then differs when the last "rerolling to seed=N"
+  line in the cell's stdout.log names it): the replacement scene is never counted
+  (status rerolled; its run is printed apart as an extra number).  A pre-flight
+  rejection (preflight_rejected, rerolled) is a scene-level event, the same scenes in
+  every arm of the sweeps it was seen in: PREFLIGHT_POLICY 'out' (the default, the
+  coordinator's P-1 reading of 15 Nov) leaves those cells out of the numerators and
+  denominators and names them beside every rate; 'failure' (--preflight failure, the
+  reading of run sheet section 10 item 14) counts them as failures of that arm.  The
+  one place the choice sits is PREFLIGHT_POLICY.
   The "timeout" label: both commits label every failed run without a give-up
   reason "timeout", so a timeout is counted only for a runner stub at the cap; an
   arm B stack row labelled timeout below the cap is a false success rejected at
   the end (CB#122); an arm A row labelled timeout below the cap is listed as "no
   give-up reason", to check.
   Tests: A against B pooled over find-and-tray-stack and stack only (Newcombe
-  interval of the difference and Fisher's exact test, unpaired, over the cells
-  that built; the all-cells variant beside it); stack's identical-layout cells
+  interval of the difference and Fisher's exact test, unpaired, over the declared
+  cells, one rate, no all-cells variant beside it); stack's identical-layout cells
   also exact McNemar; holding A against B is a descriptive line, never pooled and
   never tested (B grasps by a weld, A by finger pads); B on the cluster against B
-  in the thesis sweep: exact McNemar on the cells paired on the seed actually run.
+  in the thesis sweep: exact McNemar on the cells paired on the cell's own seed.
   Stall rule: two consecutive probe rows with the open on $W at 1 s or more are a
   stall; the cells overlapping one are listed and the pooled line is printed again
   without them.  No cell is re-run for a stall.
@@ -73,8 +86,22 @@ REROLL_RE = re.compile(r'rerolling to seed=(\d+)')
 TARGET_RE = re.compile(r'^\s+Target:\s+(\S+)\s*$', re.M)
 PREFLIGHT_RE = re.compile(r'^\[pre-flight\] seed \d+ rejected: ', re.M)
 GOALS = ('holding', 'find-and-tray-stack', 'stack')
-COUNTED = ('success', 'failure', 'timeout')
-NOT_COUNTED = ('preflight_rejected', 'crash', 'no_summary', 'summary_mismatch', 'void', 'missing')
+COUNTED = ('success', 'failure', 'timeout')        # a run that reached a result of the pipeline or the cap
+CRASHED = ('crash', 'no_summary', 'summary_mismatch')   # runs of the cell that failed: failures, named beside the rate
+PREFLIGHT_LIKE = ('preflight_rejected', 'rerolled')     # scene-level: no scene was run for this cell and seed
+NEVER_STARTED = ('void', 'missing')                     # not an attempt: the cell is "not full"
+# THE ONE PLACE the pre-flight choice sits (see the docstring): 'out' leaves a pre-flight rejection or a
+# re-rolled cell out of the numerator and the denominator and names it beside the rate; 'failure' counts it
+# as a failure of that arm.  Set by --preflight.
+PREFLIGHT_POLICY = 'out'
+STATUS_LABEL = {'crash': 'crashed', 'no_summary': 'no summary (hang or start-up failure)',
+                'summary_mismatch': 'summary of another cell (D-08, a failure)',
+                'preflight_rejected': 'pre-flight rejected', 'rerolled': 're-rolled (replacement never counts)'}
+
+
+def in_set(status):
+    """Does a cell with this final status belong to the rate's denominator?"""
+    return status in COUNTED or status in CRASHED or (PREFLIGHT_POLICY == 'failure' and status in PREFLIGHT_LIKE)
 # rule 18 (tracks/STATE.md): the fields a run's summary carries since TB-22 (world_counts.FIELDS)
 R18_FIELDS = ('drops', 'collisions', 'drop_detector', 'collision_detector', 'clean_success')
 
@@ -239,13 +266,13 @@ def difficulty_of(cell):
 
 
 def classify(att, cell, cap=CAP_S):
-    """The attempt's status and facts: status is one of COUNTED or NOT_COUNTED."""
+    """The attempt's status and facts: status is one of COUNTED, CRASHED, PREFLIGHT_LIKE or NEVER_STARTED."""
     arm, ts = att['arm'], att['ts']
     out = {'tag': att['tag'], 'arm': arm, 'job': att['job'], 'label': att['label'], 'redo': att['redo'],
            'goal': cell['goal'], 'scene': cell['scene'], 'difficulty': difficulty_of(cell), 'seed': cell['seed'],
            'eff_seed': cell['seed'], 'rerolled': False, 'wall': None, 'plan_time': None, 'plan_count': None,
            'failure': None, 'why': '', 'mtime': att['mtime'], 'run_dir': att['run_dir'],
-           '_stdout': att['stdout'], '_ts': ts}
+           'success': False, '_stdout': att['stdout'], '_ts': ts}
     if att['void']:
         return dict(out, status='void', why=f"job {att['job']} is void: {att['void'].strip()[:120]}")
     if not isinstance(ts, dict):
@@ -289,6 +316,9 @@ def classify(att, cell, cap=CAP_S):
     out['plan_count'] = ts.get('plan_count')
     out['rc'] = rc
     out['first_replan'] = ((ts.get('boxel_counts_per_replan') or [None])[0])
+    if out['rerolled']:                          # the replacement scene is never the cell's result (15 Nov)
+        return dict(out, status='rerolled', why=f"seed {cell['seed']} was re-rolled to {eff}",
+                    rerolled_success=bool(ts.get('success')))
     if ts.get('success'):
         return dict(out, status='success', success=True)
     return dict(out, status='failure', success=False,
@@ -296,9 +326,11 @@ def classify(att, cell, cap=CAP_S):
 
 
 def final_cells(attempts, cap=CAP_S):
-    """arm -> tag -> {'final': classified attempt, 'attempts': [all classified]}: the first
-    attempt that counts is the cell's result; failing that the last attempt; a cell with no
-    attempt at all has final None."""
+    """arm -> tag -> {'final': classified attempt, 'attempts': [all classified], 'reruns': [...]}: the
+    FIRST real attempt is the cell's result, whatever it was (a crash is a failure and no later attempt
+    replaces it); a void or missing attempt never started and is skipped; later real attempts are listed
+    as reruns and never count.  A cell with no real attempt has the first never-started attempt as final,
+    or None when there is none."""
     result = {arm: {} for arm in ps.ARMS}
     for arm in ps.ARMS:
         cells = expected_cells(arm)
@@ -309,10 +341,9 @@ def final_cells(attempts, cap=CAP_S):
         for tag, cell in cells.items():
             atts = sorted(by_tag.get(tag, []), key=lambda a: (a['redo'], a['job'], a['label']))
             classified = [classify(a, cell, cap) for a in atts]
-            counted = [c for c in classified if c['status'] in COUNTED]
-            rejected = [c for c in classified if c['status'] == 'preflight_rejected']
-            final = (counted[0] if counted else (rejected[0] if rejected else (classified[-1] if classified else None)))
-            result[arm][tag] = {'final': final, 'attempts': classified, 'cell': cell}
+            real = [c for c in classified if c['status'] not in NEVER_STARTED]
+            final = real[0] if real else (classified[0] if classified else None)
+            result[arm][tag] = {'final': final, 'attempts': classified, 'cell': cell, 'reruns': real[1:]}
     return result
 
 
@@ -348,43 +379,59 @@ def group_cells(res, arm, goal=None, difficulty=None):
 
 
 def tally(recs, exclude=frozenset()):
-    """Counts of a group of cell records: all, built (counted), successes and the rest by status."""
+    """Counts of a group of cell records.  'all' is the declared cells; 'n' the cells in the rate's
+    denominator (in_set: a result, a crash or hang counted as a failure, and under PREFLIGHT_POLICY
+    'failure' a pre-flight rejection); 'k' the successes; 'crashed' the crash, no_summary and
+    summary_mismatch runs among the n (named beside the rate); 'other' the cells left out, by status
+    ('no attempt' for a cell nobody started); 'cells' the runs that reached a result (timing)."""
     finals = [r['final'] for r in recs if r['final'] is not None and (r['final']['arm'], r['final']['tag']) not in exclude]
     n_all = len(recs) - sum(1 for r in recs if r['final'] is not None and (r['final']['arm'], r['final']['tag']) in exclude)
-    built = [f for f in finals if f['status'] in COUNTED]
-    k = sum(1 for f in built if f['success'])
-    other = collections.Counter(f['status'] for f in finals if f['status'] not in COUNTED)
+    inside = [f for f in finals if in_set(f['status'])]
+    k = sum(1 for f in inside if f['success'])
+    other = collections.Counter(f['status'] for f in finals if not in_set(f['status']))
     other['no attempt'] = n_all - len(finals)
-    return {'all': n_all, 'built': len(built), 'k': k, 'other': {s: n for s, n in other.items() if n},
-            'cells': built}
+    crashed = collections.Counter(f['status'] for f in inside if f['status'] in CRASHED)
+    return {'all': n_all, 'n': len(inside), 'k': k, 'other': {s: n for s, n in other.items() if n},
+            'crashed': dict(crashed), 'cells': [f for f in inside if f['status'] in COUNTED]}
 
 
 def rate_line(t):
-    lo, hi = wilson(t['k'], t['built'])
-    return (f"{t['built']:3d} built  {t['k']:3d} ok  {pct(t['k'], t['built'])} %  [{100 * lo:4.1f}, {100 * hi:4.1f}]"
-            f"   over all {t['all']:3d}: {pct(t['k'], t['all'])} %")
+    """One rate over the declared set (crashes and hangs are failures); no second rate beside it."""
+    lo, hi = wilson(t['k'], t['n'])
+    return (f"{t['n']:3d} runs  {t['k']:3d} ok  {pct(t['k'], t['n'])} %  [{100 * lo:4.1f}, {100 * hi:4.1f}]"
+            f"   declared {t['all']:3d}")
+
+
+def beside(t):
+    """What stands beside a rate: the crashed runs (counted as failures) and the cells left out, named."""
+    parts = []
+    if t['crashed']:
+        parts.append(f"crashed: {sum(t['crashed'].values())} of {t['n']} ("
+                     + ', '.join(f"{n} {s}" for s, n in sorted(t['crashed'].items())) + ')')
+    if t['other']:
+        parts.append('left out: ' + ', '.join(f"{n} {s}" for s, n in sorted(t['other'].items())))
+    return ('  ' + '; '.join(parts)) if parts else ''
 
 
 def rates_table(res, arm, lines):
-    lines.append(f"arm {arm}: success over the cells that built (95 % Wilson) and over all cells")
+    lines.append(f"arm {arm}: success over the declared cells, first attempts, a crash or hang a failure (95 % Wilson)")
     for goal in GOALS:
         for d in ps.DIFFICULTIES:
             t = tally(group_cells(res, arm, goal, d))
-            extra = '  ' + ', '.join(f"{n} {s}" for s, n in t['other'].items()) if t['other'] else ''
-            lines.append(f"  {goal:20} {'height' if goal == 'stack' else 'occ'} {d}  {rate_line(t)}{extra}")
+            lines.append(f"  {goal:20} {'height' if goal == 'stack' else 'occ'} {d}  {rate_line(t)}{beside(t)}")
         t = tally(group_cells(res, arm, goal))
-        extra = '  ' + ', '.join(f"{n} {s}" for s, n in t['other'].items()) if t['other'] else ''
-        lines.append(f"  {goal:20} all      {rate_line(t)}{extra}")
+        lines.append(f"  {goal:20} all      {rate_line(t)}{beside(t)}")
 
 
 def failure_modes(res, arm, lines):
-    lines.append(f"arm {arm}: failure modes of the counted failures")
+    lines.append(f"arm {arm}: failure modes of the failures")
     for goal in GOALS:
         modes = collections.Counter()
         for rec in group_cells(res, arm, goal):
             f = rec['final']
-            if f is not None and f['status'] in ('failure', 'timeout'):
-                modes[f['failure']] += 1
+            if f is None or not in_set(f['status']) or f['success']:
+                continue
+            modes[f['failure'] or STATUS_LABEL.get(f['status'], f['status'])] += 1
         lines.append(f"  {goal:20} " + (', '.join(f"{n} {m}" for m, n in modes.most_common()) or 'none'))
 
 
@@ -409,7 +456,7 @@ def rule18_lines(res, lines):
     measured = {}
     for arm in ps.ARMS:
         built = [rec['final'] for rec in res[arm].values()
-                 if rec['final'] is not None and rec['final']['status'] in COUNTED]
+                 if rec['final'] is not None and in_set(rec['final']['status'])]
         measured[arm] = any(f.get('drop_detector') is not None for f in built)
         if not measured[arm]:
             lines.append(f"  arm {arm}: its summaries carry no drop or collision field"
@@ -455,22 +502,58 @@ def status_accounting(res, arm, lines):
 
 
 def first_attempt_trouble(res, lines):
-    """Cells whose first attempt did not count, and what became of them."""
-    lines.append('cells whose first attempt did not count (each runs once more in a final pass, a pre-flight rejection never):')
+    """Cells whose first attempt crashed, hung, did not match, or was not a run (a pre-flight rejection or
+    a re-roll), and the reruns that exist (never counted)."""
+    lines.append('cells whose first attempt did not reach a result (a crash, hang or mismatch is a failure, a pre-flight '
+                 'rejection or re-roll follows PREFLIGHT_POLICY; none is run again, a rerun never counts):')
     n = 0
     for arm in ps.ARMS:
         for tag, rec in res[arm].items():
-            atts = rec['attempts']
-            if atts and atts[0]['status'] in NOT_COUNTED:
+            f = rec['final']
+            if f is not None and (f['status'] in CRASHED or f['status'] in PREFLIGHT_LIKE):
                 n += 1
-                end = rec['final']['status'] if rec['final'] else 'none'
-                lines.append(f"  {arm} {tag}: {atts[0]['status']} ({atts[0]['why'][:100]}); {len(atts)} attempts, ends {end}")
+                lines.append(f"  {arm} {tag}: {f['status']} ({f['why'][:100]}); counts as "
+                             f"{'a failure' if in_set(f['status']) else 'left out'}"
+                             + (f"; {len(rec['reruns'])} rerun(s) listed apart, never counted" if rec['reruns'] else ''))
     if not n:
         lines.append('  none')
+    reruns = [(arm, tag, rec['reruns']) for arm in ps.ARMS for tag, rec in res[arm].items() if rec['reruns']]
+    if reruns:
+        lines.append(f"reruns (never counted, {sum(len(r) for _, _, r in reruns)} attempts on {len(reruns)} cells): "
+                     + '; '.join(f"{a} {t}: " + ', '.join(f"{x['status']} ({x['label']})" for x in r) for a, t, r in reruns[:6])
+                     + (' ...' if len(reruns) > 6 else ''))
+
+
+def completeness_lines(res, lines):
+    """Planned against rows, 'not full', the zero-crash rule's list for arm A, and the cells where both
+    arms failed to run (a possible shared-code cause)."""
+    lines.append('completeness (planned runs against rows, REVIEW 4.5 item 3):')
+    full = True
+    for arm in ps.ARMS:
+        recs = list(res[arm].values())
+        planned = len(recs)
+        started = sum(1 for r in recs if r['final'] is not None and r['final']['status'] not in NEVER_STARTED)
+        never = [t for t, r in res[arm].items() if r['final'] is None or r['final']['status'] in NEVER_STARTED]
+        crashed = [t for t, r in res[arm].items() if r['final'] is not None and r['final']['status'] in CRASHED]
+        full = full and not never and not crashed
+        lines.append(f"  arm {arm}: planned {planned}, rows {started}; never started {len(never)}"
+                     + (f" (first: {never[:3]})" if never else '') + f"; crashed {len(crashed)}")
+    lines.append('  ' + ('full: every planned cell has a first attempt and none crashed' if full else
+                          'NOT FULL: a cell never started or a run crashed (a crash is a failure and is counted; '
+                          'a cell that never started runs later as its first attempt)'))
+    a_crash = [(t, r['final']['status'], r['final']['why'][:80]) for t, r in res['A'].items()
+               if r['final'] is not None and r['final']['status'] in CRASHED]
+    lines.append(f"  crashes of arm A, ours (zero-crash rule: each needs a BUGS.md entry with its investigated cause): "
+                 f"{len(a_crash)}" + (': ' + '; '.join(f"{t} {s} ({w})" for t, s, w in a_crash[:8]) if a_crash else ''))
+    both = [t for t, r in res['A'].items() if r['final'] is not None and r['final']['status'] in CRASHED
+            and res['B'].get(t, {}).get('final') is not None and res['B'][t]['final']['status'] in CRASHED]
+    lines.append(f"  cells where A and B both failed to run (crash, no summary, mismatch): {len(both)}"
+                 + (f" {both[:6]}: a shared-code cause would eliminate the seed and replace it by a declared new one "
+                    f"(a run not made here); each counts as a failure for both until then" if both else ''))
 
 
 def pooled(res, arm, goals, exclude=frozenset()):
-    t = {'all': 0, 'built': 0, 'k': 0}
+    t = {'all': 0, 'n': 0, 'k': 0}
     for g in goals:
         x = tally(group_cells(res, arm, g), exclude)
         for key in t:
@@ -480,7 +563,7 @@ def pooled(res, arm, goals, exclude=frozenset()):
 
 def a_vs_b(res, exclude, lines, heading):
     lines.append(heading)
-    for variant, key in (('over the cells that built (the headline)', 'built'), ('over all cells (a cell that did not build counts as a failure)', 'all')):
+    for variant, key in (('over the declared cells, first attempts, a crash or hang a failure (the one rate)', 'n'),):
         a = pooled(res, 'A', ('find-and-tray-stack', 'stack'), exclude)
         b = pooled(res, 'B', ('find-and-tray-stack', 'stack'), exclude)
         na, nb = a[key], b[key]
@@ -494,24 +577,24 @@ def a_vs_b(res, exclude, lines, heading):
 
 
 def per_goal_ab(res, lines):
-    lines.append('per goal, descriptive (cells that built; the holding line is never pooled or tested):')
+    lines.append('per goal, descriptive (declared cells, first attempts; the holding line is never pooled or tested):')
     for goal in GOALS:
         a, b = tally(group_cells(res, 'A', goal)), tally(group_cells(res, 'B', goal))
-        lines.append(f"  {goal:20} A {a['k']:3d}/{a['built']:3d} = {pct(a['k'], a['built'])} %   B {b['k']:3d}/{b['built']:3d} = {pct(b['k'], b['built'])} %"
+        lines.append(f"  {goal:20} A {a['k']:3d}/{a['n']:3d} = {pct(a['k'], a['n'])} %   B {b['k']:3d}/{b['n']:3d} = {pct(b['k'], b['n'])} %"
                      + ('   (A scores a pad squeeze of 0.5 N, B a weld constraint: two different claims)' if goal == 'holding' else ''))
     for goal in ('find-and-tray-stack',):
         for arm in ps.ARMS:
             rej = sum(1 for r in group_cells(res, arm, goal) if r['final'] and r['final']['status'] == 'preflight_rejected')
-            rer = [r['final'] for r in group_cells(res, arm, goal) if r['final'] and r['final'].get('rerolled')]
-            lines.append(f"  {goal:20} arm {arm}: {rej} pre-flight rejected (never re-run), {len(rer)} cells ran a re-rolled seed")
+            rer = [r['final'] for r in group_cells(res, arm, goal) if r['final'] and r['final']['status'] == 'rerolled']
+            lines.append(f"  {goal:20} arm {arm}: {rej} pre-flight rejected, {len(rer)} cells re-rolled by the arm's runner "
+                         f"(neither is run again; both follow PREFLIGHT_POLICY = {PREFLIGHT_POLICY})")
             if rer:
-                lines.append("    re-rolled (cell seed to the seed that ran): "
+                lines.append("    re-rolled (cell seed to the seed that ran, the replacement never counts): "
                              + ', '.join(f"occ{f['difficulty']} {f['seed']}>{f['eff_seed']}" for f in rer[:12])
                              + (' ...' if len(rer) > 12 else ''))
-        b = [r['final'] for r in group_cells(res, 'B', goal)
-             if r['final'] and r['final']['status'] in COUNTED and not r['final'].get('rerolled')]
-        kb = sum(1 for f in b if f['success'])
-        lines.append(f"  {goal:20} B without its re-rolled cells: {kb}/{len(b)} = {pct(kb, len(b))} %")
+        rr = [r['final'] for r in group_cells(res, 'B', goal) if r['final'] and r['final']['status'] == 'rerolled']
+        kr = sum(1 for f in rr if f.get('rerolled_success'))
+        lines.append(f"  {goal:20} B's runs on the replacement seeds, an extra number apart from every rate: {kr}/{len(rr)}")
 
 
 def stack_identical_pairs(res, identical, lines):
@@ -523,7 +606,7 @@ def stack_identical_pairs(res, identical, lines):
     for seed, height in identical:
         tag = ps.expected_tag(ps.stack_cell(height, seed))
         fa, fb = res['A'].get(tag, {}).get('final'), res['B'].get(tag, {}).get('final')
-        if not fa or not fb or fa['status'] not in COUNTED or fb['status'] not in COUNTED:
+        if not fa or not fb or not in_set(fa['status']) or not in_set(fb['status']):
             continue
         used += 1
         if fa['success'] and fb['success']:
@@ -570,11 +653,11 @@ def b_against_sweep(res, sweep_rows, lines):
     cluster_cap = sweep_cap = 0
     for tag, rec in res['B'].items():
         f = rec['final']
-        if f is None or f['status'] not in COUNTED:
-            continue
+        if f is None or not in_set(f['status']) or f['status'] in PREFLIGHT_LIKE:
+            continue                         # a re-rolled or rejected cell has no run of its own to pair
         cell = rec['cell']
-        key = ('stack', 'stack', cell['n_occluders'], f['eff_seed']) if cell['scene'] == 'stack' \
-            else ('random-pairs', cell['goal'], cell['n_occluders'], f['eff_seed'])
+        key = ('stack', 'stack', cell['n_occluders'], cell['seed']) if cell['scene'] == 'stack' \
+            else ('random-pairs', cell['goal'], cell['n_occluders'], cell['seed'])
         r = index.get(key)
         if r is None:
             unpaired.append(tag)
@@ -593,7 +676,7 @@ def b_against_sweep(res, sweep_rows, lines):
         cluster_cap += f['status'] == 'timeout'
         sweep_cap += (r.get('exit_reason') == 'timeout' and (r.get('wall_clock_s') or 0) >= 0.95 * CAP_S)
     pairs = both + c_only + s_only + neither
-    lines.append(f"  {pairs} cells paired on the seed actually run (a re-rolled cell pairs with the sweep's row of its effective seed); "
+    lines.append(f"  {pairs} cells paired on the cell's own seed (a re-rolled or rejected cell is not paired, a crash is a failure); "
                  f"both succeed {both}, only the cluster {c_only}, only the sweep {s_only}, neither {neither}; "
                  f"exact McNemar p = {mcnemar_exact(c_only, s_only):.3g}; agreement {pct(both + neither, pairs)} %")
     lines.append('  by goal (pairs, agreeing): ' + ', '.join(f"{g} {v[0]}/{v[1]}" for g, v in sorted(per_goal.items())))
@@ -604,7 +687,7 @@ def b_against_sweep(res, sweep_rows, lines):
 
 
 def timing_lines(res, lines):
-    lines.append('time (cells that built): median planning time of the successes, median wall time, cells at the cap, total wall hours')
+    lines.append('time (runs that reached a result): median planning time of the successes, median wall time, cells at the cap, total wall hours')
     for arm in ps.ARMS:
         for goal in GOALS:
             cells = tally(group_cells(res, arm, goal))['cells']
@@ -808,12 +891,12 @@ def targets_files(res, out_dir, lines):
 
 
 def redo_list(res, path, lines):
-    """The final pass's list file for p6_tabletop.sbatch redo: cells that did not count and
-    are not pre-flight rejections, one line per arm."""
+    """The list file for p6_tabletop.sbatch redo: only cells that never started (no attempt, a void job, no
+    summary file), one line per arm.  A crash, hang or mismatch is a first attempt and a failure: not listed."""
     out = []
     for arm in ps.ARMS:
         tags = [t for t, rec in res[arm].items()
-                if rec['final'] is None or rec['final']['status'] in ('crash', 'no_summary', 'summary_mismatch', 'void', 'missing')]
+                if rec['final'] is None or rec['final']['status'] in NEVER_STARTED]
         if tags:
             out.append(f"{arm} {','.join(sorted(tags))}")
     with open(path, 'w', encoding='utf-8', newline='\n') as f:
@@ -882,6 +965,12 @@ def build_report(results, sweep=None, identical=None, cb113=None, cap=CAP_S, out
                  "and the spawned layouts differ; A against B there is unpaired. holding is scored by two different physical "
                  "tests (A: both finger pads squeeze at 0.5 N or more, B: a weld constraint).")
     lines.append('')
+    lines.append("Counting (Hani, 14 and 15 Nov): one result per cell, its first attempt; a crash, a hang (no summary) and a summary of "
+                 "another cell are failures, with the crashed count named beside every rate; no rerun and no re-rolled replacement "
+                 f"counts; one rate, over the declared cells.  Pre-flight rejections and re-rolled cells: PREFLIGHT_POLICY = {PREFLIGHT_POLICY} "
+                 + ("(left out of numerators and denominators, named beside each rate)" if PREFLIGHT_POLICY == 'out'
+                    else "(counted as failures of that arm)") + ".")
+    lines.append('')
     provenance(jobs, lines)
     bad = unknown_tags(attempts)
     if bad:
@@ -893,6 +982,8 @@ def build_report(results, sweep=None, identical=None, cb113=None, cap=CAP_S, out
     for arm in ps.ARMS:
         status_accounting(res, arm, lines)
     first_attempt_trouble(res, lines)
+    lines.append('')
+    completeness_lines(res, lines)
     lines.append('')
     for arm in ps.ARMS:
         rates_table(res, arm, lines)
@@ -946,10 +1037,11 @@ def descriptive_rows(res, rows, lines):
         for d in ps.DIFFICULTIES:
             t = tally(group_cells(res, 'A', goal, d))
             k, n = other.get((goal, d), [0, 0])
-            lines.append(f"  {goal:20} occ {d}  A on the cluster {t['k']}/{t['built']}   CB#113 {k}/{n}")
+            lines.append(f"  {goal:20} occ {d}  A on the cluster {t['k']}/{t['n']}   CB#113 {k}/{n}")
 
 
 def main(argv=None):
+    global PREFLIGHT_POLICY
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('--results', nargs='+', required=True, help='job folders, or folders of job folders')
     ap.add_argument('--out', default=None, help='where redo_list.txt, targets_occK.json, sweep_A/ and sweep_B/ and report.txt go')
@@ -957,9 +1049,13 @@ def main(argv=None):
     ap.add_argument('--stack-identical', default=None, help='JSON [[seed, height], ...] of the stack cells with an identical layout')
     ap.add_argument('--cb113', default=None, help="CB#113's aggregated.jsonl (descriptive)")
     ap.add_argument('--cap', type=float, default=CAP_S)
+    ap.add_argument('--preflight', choices=('out', 'failure'), default='out',
+                    help="pre-flight rejections and re-rolled cells: 'out' (left out, named; default, the coordinator's P-1 "
+                         "reading) or 'failure' (counted as failures of that arm; run sheet section 10 item 14)")
     ap.add_argument('--sacct', default=None,
                     help="`sacct -P -j <ids> --format=JobID,JobName,State,Elapsed,MaxRSS,ReqMem,NodeList` output (rule 16)")
     a = ap.parse_args(argv)
+    PREFLIGHT_POLICY = a.preflight
     sweep = load_rows_jsonl(a.sweep) if a.sweep else None
     identical = read_json(a.stack_identical) if a.stack_identical else None
     cb113 = load_rows_jsonl(a.cb113) if a.cb113 else None
