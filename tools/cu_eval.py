@@ -266,15 +266,32 @@ def append_row(path, row):
         os.fsync(f.fileno())
 
 
+# THE ONE PLACE the choice of the headline criterion for arm T sits (same name and meaning as in
+# tools/gen_scene_eval.py).  'standard' (default, DV-1): the shared test, path 7's world-state test at the end of
+# the episode, is the headline and their own reward is printed beside it.  'reward': their own reward is the
+# headline and the shared test is beside it (Hani 2026-11-15 13:51, "no" to the shared test deciding TAMPURA's
+# success; a reading the coordinator has not confirmed, so the default stays).  Both numbers are always printed;
+# the rows record both whichever is the headline.  Set by --report --t-headline.
+T_HEADLINE = 'standard'
+
+
 def count_lines(rows):
     """The counts of a set of rows, as lines (no interval: path 7's analysis makes the table)."""
     n = len(rows)
     counted = [r for r in rows if r.get('counts')]
     wok = sum(1 for r in counted if r.get('world_success_end'))
     rew = sum(1 for r in counted if r.get('success_first_goal'))
+    by_reward = T_HEADLINE == 'reward'
+    differ = [r for r in counted if r.get('world_success_end') is not None
+              and bool(r.get('world_success_end')) != bool(r.get('success_first_goal'))]
     lines = [f"arm T on {TASK}: {n} episode(s), {len(counted)} counted",
-             f"  world-state test at the end (primary): {wok} of {len(counted)}",
-             f"  their reward reached: {rew} of {len(counted)}",
+             f"  headline criterion: {'their own reward' if by_reward else 'the world-state test at the end (DV-1)'} "
+             f"(T_HEADLINE = {T_HEADLINE}); both numbers are always printed below",
+             f"  world-state test at the end ({'shared test, beside the headline' if by_reward else 'primary'}): {wok} of {len(counted)}",
+             f"  their reward reached{' (headline)' if by_reward else ''}: {rew} of {len(counted)}",
+             f"  the two criteria differ on {len(differ)} of {len(counted)} counted episodes"
+             + (': ' + ', '.join(f"seed {r.get('seed')} rep {r.get('rep')} (world test {bool(r.get('world_success_end'))}, "
+                                 f"their reward {bool(r.get('success_first_goal'))})" for r in differ[:10]) if differ else ''),
              f"  timeouts {sum(1 for r in rows if r.get('timed_out'))}, crashes inside their rollout "
              f"{sum(1 for r in rows if r.get('crash'))}, episodes with a `broken` report "
              f"{sum(1 for r in rows if r.get('broken'))}, not counted {n - len(counted)}",
@@ -380,9 +397,17 @@ def main(argv=None):
                          + '; the rows go to ' + ROWS_SMOKE + ' and are never counted')
     ap.add_argument('--min-avail-gb', type=float, default=None)
     ap.add_argument('--peak-report-gb', type=float, default=None)
+    ap.add_argument('--t-headline', choices=('standard', 'reward'), default='standard',
+                    help="--report only: the headline criterion, the world-state test (default, DV-1) or their own "
+                         "reward; both numbers are always printed (T_HEADLINE)")
     a = ap.parse_args(argv)
     if a.report:
-        print(report(a.report))
+        global T_HEADLINE
+        T_HEADLINE = a.t_headline
+        try:
+            print(report(a.report))
+        finally:
+            T_HEADLINE = 'standard'
         return 0
     for name in ('snapshot', 'out', 'seeds', 'venv_t', 'tampura_work'):
         if not getattr(a, name):
