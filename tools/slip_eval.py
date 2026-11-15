@@ -25,9 +25,22 @@ on the seeds both closed, and the replication's disagreement (the variance
 of the same scene under the same settings).  A rerun skips the episodes
 results.jsonl already holds.
 
+Path 14's check of the candidate defaults on find_dice (2026-11-13,
+tracks/meeting_2026-11-13/cluster_requests/B_find_dice_defaults_DRAFT.md)
+adds three things, all off unless asked for:
+  an arm 'a+b@corridor_object' runs the fixes a and b with the driver flag
+  ARM_FLAGS names for 'corridor_object' (--corridor-test object, TB-25);
+  --scenes FOLDER runs every episode in a fresh folder that holds only its
+  seed's scene of FOLDER/manifest.json (BF#63's generated scenes, as
+  tools/gen_scene_eval.py does it for its two arms), and the row says which
+  scene the episode loaded;
+  --rotate starts each seed's arms one arm further (by seed and repetition),
+  so no arm is always the first of a seed.
+
   PYTHONPATH=<snapshot>:<pddlstream_lib>:<their tampura>:<their envs> \\
     <arm O python> <snapshot>/tools/slip_eval.py --snapshot <snapshot> --out OUT \\
     [--arms base,a,b,a+b] [--seeds 0-19] [--reps 3 --rep-seeds 1,2,5] [--cap 600]
+    [--scenes FOLDER] [--rotate]
   python tools/slip_eval.py --out OUT --summary        the tables again
 """
 import argparse
@@ -35,6 +48,7 @@ import glob
 import json
 import os
 import re
+import shutil
 import signal
 import statistics
 import subprocess
@@ -66,18 +80,54 @@ CARRY_LOSS_RE = re.compile(r"grip lost in the carry for dice")
 GOAL_LOSS_RE = re.compile(r"PHYSICAL_FAILURE \(goal\): \(holding dice\).{0,4}"
                           r"(finger-pad contact incomplete|pads touch but squeeze force)")
 PICK_TRY_RE = re.compile(r"Picking dice")
+# A driver flag an arm carries besides its slip fixes, named after an '@'
+# ('a+b@corridor_object').  A fixed table: an arm stays a name in the
+# record and never becomes a command line.
+ARM_FLAGS = {'corridor_object': ('--corridor-test', 'object')}
+# --scenes: where their loader looks under the working directory, and its
+# line on the console (tools/gen_scene_eval.py's, BF#63).
+PROBLEMS_REL = os.path.join('tampura_environments', 'find_dice', 'problems')
+SCENE_RE = re.compile(r'Loading scene from (\S+)')
+
+
+def split_arm(arm):
+    """(the fixes part, the flag names) of an arm 'a+b@flag'."""
+    head, *flags = [p.strip() for p in arm.split('@')]
+    for name in flags:
+        if name not in ARM_FLAGS:
+            raise SystemExit(f"unknown arm flag {name!r} in {arm!r} "
+                             f"(known: {', '.join(sorted(ARM_FLAGS))})")
+    if len(set(flags)) != len(flags):
+        raise SystemExit(f"arm {arm!r} names a flag twice")
+    return head, flags
 
 
 def arm_fixes(arm):
     """The fix names of an arm as the driver's flag value; 'base' is 'none',
     every switch off (BF#62 made the chosen four the default, so an empty
-    value would run them)."""
-    if arm == 'base':
+    value would run them).  An arm's '@flag' part is not a fix."""
+    head, _ = split_arm(arm)
+    if head == 'base':
         return 'none'
-    names = [n.strip() for n in arm.split('+') if n.strip()]
+    names = [n.strip() for n in head.split('+') if n.strip()]
     if not names:
         raise SystemExit(f"empty arm {arm!r}")
     return ','.join(names)
+
+
+def arm_args(arm):
+    """The driver arguments of an arm's flags, in the arm's order."""
+    return [x for name in split_arm(arm)[1] for x in ARM_FLAGS[name]]
+
+
+def arm_order(arms, seed_index, rep, rotate):
+    """One seed's arms in running order: as given, or with --rotate starting
+    one arm further for every seed and repetition."""
+    arms = list(arms)
+    if not rotate or not arms:
+        return arms
+    k = (seed_index + rep) % len(arms)
+    return arms[k:] + arms[:k]
 
 
 def parse_seeds(s):
@@ -140,6 +190,60 @@ def check_arms(a, arms):
         print(f"arm {arm}: fixes {r.stdout.strip().splitlines()[-1]}", flush=True)
 
 
+def check_arm_flags(snapshot, arms):
+    """An arm's driver flag must be an argument of the snapshot's driver
+    (its source names it), so an arm the driver would refuse fails here,
+    before any episode, and not once per episode with a usage error."""
+    src = _read_text(os.path.join(snapshot, 'tampura_bridge', 'run_bridge_on_finddice.py'))
+    for arm in arms:
+        for flag in arm_args(arm)[::2]:
+            if f"'{flag}'" not in src and f'"{flag}"' not in src:
+                raise SystemExit(f"arm {arm!r}: the driver of {snapshot} has no {flag}")
+
+
+def load_scenes(folder, seeds):
+    """{seed: scene file} of a scenes folder's manifest.json for these
+    seeds.  The manifest must be the one BRIDGE_SCENE_MANIFEST names, since
+    G19 pins the seeds to their scenes by it (tools/bridge_gates.py)."""
+    path = os.path.join(folder, 'manifest.json')
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            scenes = json.load(f)['scenes']
+    except (OSError, ValueError, KeyError) as e:
+        raise SystemExit(f"no scene manifest in {folder}: {type(e).__name__}: {e}")
+    missing = [s for s in seeds if str(s) not in scenes]
+    if missing:
+        raise SystemExit(f"no scene for seeds {missing} in {path}")
+    if (os.path.realpath(os.environ.get('BRIDGE_SCENE_MANIFEST') or '')
+            != os.path.realpath(path)):
+        raise SystemExit(f"BRIDGE_SCENE_MANIFEST must name {path} (G19 pins the seeds by it)")
+    return {s: scenes[str(s)] for s in seeds}
+
+
+def scene_cwd(a, arm, seed, rep, scene):
+    """A working directory that holds the episode's one scene where their
+    loader looks, so its random.choice can only load that scene, and their
+    env_configs/ (the driver's --config is ./env_configs/find_dice.yml).
+    The same folder as tools/gen_scene_eval.py's episode_cwd builds."""
+    d = os.path.join(a.out, 'cwd', f'{arm}_s{seed}_r{rep}')
+    if os.path.isdir(d):
+        shutil.rmtree(d)
+    os.makedirs(os.path.join(d, PROBLEMS_REL))
+    shutil.copyfile(os.path.join(a.scenes, scene), os.path.join(d, PROBLEMS_REL, scene))
+    os.symlink(os.path.join(a.cwd, 'env_configs'), os.path.join(d, 'env_configs'))
+    return d
+
+
+def scene_seen(rec):
+    """The scene file an episode loaded: the bridge's record, or their
+    loader's line on the console when the run left no record (a kill at
+    the cap, a crash)."""
+    if rec.get('scene_file') and rec['scene_file'] != 'None':
+        return rec['scene_file']
+    m = SCENE_RE.search(_read_text(os.path.join(rec['save_dir'], 'stdout.txt')))
+    return os.path.basename(m.group(1)) if m else None
+
+
 def _read_text(path):
     try:
         with open(path, 'r', encoding='utf-8', errors='replace') as f:
@@ -192,7 +296,8 @@ def run_episode(a, arm, seed, rep, extra_args=(), extra_env=None):
     cmd = [a.python,
            os.path.join(a.snapshot, 'tampura_bridge', 'run_bridge_on_finddice.py'),
            '--global-seed', str(seed), '--vis', '0', '--save-dir', save_dir,
-           '--allow-g19-mismatch', '1', '--slip-fixes', arm_fixes(arm)] + list(extra_args)
+           '--allow-g19-mismatch', '1', '--slip-fixes', arm_fixes(arm)]
+    cmd += arm_args(arm) + list(extra_args)
     env = dict(os.environ, PYTHONHASHSEED='0', PYTHONDONTWRITEBYTECODE='1', **(extra_env or {}))
     t0 = time.time()
     timed_out = False
@@ -209,6 +314,8 @@ def run_episode(a, arm, seed, rep, extra_args=(), extra_env=None):
                       process_wall_s=round(time.time() - t0, 1),
                       started=time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(t0)),
                       fixes=arm_fixes(arm), save_dir=save_dir)
+    if arm_args(arm):
+        rec['arm_args'] = arm_args(arm)
     bj = None
     try:
         with open(os.path.join(save_dir, 'bridge_episode.json'), 'r', encoding='utf-8') as f:
@@ -216,6 +323,11 @@ def run_episode(a, arm, seed, rep, extra_args=(), extra_env=None):
         rec['bridge_status'] = (bj.get('outcome') or {}).get('status')
         rec['reward'] = (bj.get('rewards') or [None])[-1]
         rec['scene_file'] = os.path.basename(str(bj.get('scene_file')))
+        # The switches the driver ran with (BF#41: they travel with the
+        # episode, a bridge run leaves the pipeline's own run config empty),
+        # so a row shows that an arm's fixes and its flag arrived.
+        if isinstance(bj.get('switches'), dict):
+            rec['switches'] = bj['switches']
     except Exception as e:                       # no episode file: a crash or a kill
         rec['bridge_status'] = None
         rec['bridge_error'] = f"{type(e).__name__}: {e}"
@@ -361,6 +473,11 @@ def main(argv=None):
     ap.add_argument('--cwd', default=os.path.join(
         os.environ.get('TAMPURA_WORK', '/root/tampura-work'), 'tampura_environments'),
         help="their tampura_environments directory (the driver runs from it)")
+    ap.add_argument('--scenes', default='',
+                    help="a folder of scenes with a manifest.json: every episode runs in a "
+                         "fresh folder that holds only its seed's scene")
+    ap.add_argument('--rotate', action='store_true',
+                    help="start each seed's arms one arm further (by seed and repetition)")
     ap.add_argument('--summary', action='store_true', help='print the tables of --out and exit')
     a = ap.parse_args(argv)
     seeds = parse_seeds(a.seeds)
@@ -368,6 +485,8 @@ def main(argv=None):
     arms = [x.strip() for x in a.arms.split(',') if x.strip()]
     for x in arms:
         arm_fixes(x)                             # a malformed arm fails before any run
+    if len(set(arms)) != len(arms):
+        raise SystemExit(f"an arm is named twice: {arms}")
     results = os.path.join(a.out, 'results.jsonl')
     done = load_results(results)
     if a.summary:
@@ -378,7 +497,12 @@ def main(argv=None):
     alive = pipeline_alive(os.getpid())
     if alive:
         raise SystemExit("a pipeline process is alive: " + '; '.join(alive))
+    a.out = os.path.abspath(a.out)               # an episode may run from its own folder
+    if a.scenes:
+        a.scenes = os.path.abspath(a.scenes)
+    scenes = load_scenes(a.scenes, seeds) if a.scenes else None
     os.makedirs(a.out, exist_ok=True)
+    check_arm_flags(a.snapshot, arms)
     check_arms(a, arms)
     md_path = os.path.join(a.out, 'metadata.json')
     if not os.path.isfile(md_path):
@@ -386,17 +510,29 @@ def main(argv=None):
             json.dump({'snapshot': a.snapshot,
                        'snapshot_name': os.path.basename(os.path.normpath(a.snapshot)),
                        'arms': arms, 'fixes': {x: arm_fixes(x) for x in arms},
+                       'arm_args': {x: arm_args(x) for x in arms},
                        'seeds': seeds, 'reps': a.reps, 'rep_seeds': sorted(rep_seeds),
                        'cap_s': a.cap, 'python': a.python, 'cwd': a.cwd,
+                       'scenes': a.scenes or None, 'rotate': bool(a.rotate),
                        'host': os.uname().nodename, 'job': os.environ.get('SLURM_JOB_ID'),
                        'started': time.strftime('%Y-%m-%d %H:%M:%S')}, f, indent=1)
-    todo = [(rep, s, x) for rep in range(max(1, a.reps)) for s in seeds for x in arms
+    todo = [(rep, s, x) for rep in range(max(1, a.reps)) for k, s in enumerate(seeds)
+            for x in arm_order(arms, k, rep, a.rotate)
             if (rep == 0 or s in rep_seeds) and (x, s, rep) not in done]
     print(f"[eval] {len(done)} episodes done, {len(todo)} to run: arms {arms}, "
           f"seeds {seeds[0]}-{seeds[-1]}, reps {a.reps} on {sorted(rep_seeds)}", flush=True)
     for i, (rep, s, x) in enumerate(todo, 1):
         print(f"[eval] {i}/{len(todo)} arm {x} seed {s} rep {rep} ...", end=' ', flush=True)
-        rec = run_episode(a, x, s, rep)
+        if scenes:
+            ep = argparse.Namespace(**vars(a))
+            ep.cwd = scene_cwd(a, x, s, rep, scenes[s])
+            rec = run_episode(ep, x, s, rep)
+            rec['scene'] = scenes[s]
+            rec['scene_seen'] = scene_seen(rec)
+            rec['scene_ok'] = rec['scene_seen'] == scenes[s]
+            shutil.rmtree(ep.cwd, ignore_errors=True)
+        else:
+            rec = run_episode(a, x, s, rep)
         done[(x, s, rep)] = rec
         with open(results, 'a', encoding='utf-8') as f:
             f.write(json.dumps(rec) + '\n')
