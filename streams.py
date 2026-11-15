@@ -323,6 +323,11 @@ class BoxelStreams:
         # BF#45: approach configs compute_kin_solution turned away because
         # the executor's contact pose below them had no IK.
         self.contact_ik_rejects = 0
+        # BF#65 2(c): compute-kin calls that aimed at a region's reachable
+        # part because its centre was out of reach, and the (object, region,
+        # aim) triples already printed.
+        self.region_aim_shifts = 0
+        self._region_aim_logged: set = set()
         # F18 (2026-09-20): the resolution of every path collision check,
         # in radians of the largest-moving joint between samples.
         # DEFAULT 0 = the fixed RRT_EDGE_CHECKS count, because that is
@@ -1416,7 +1421,67 @@ class BoxelStreams:
     contact_floor = 0.035
     surface_z_default = 0.0
 
-    def contact_target(self, obj_id: str, boxel: BoxelData, grasp: Grasp) -> np.ndarray:
+    # BF#65 2(c) (2026-11-12): a pick out of a region whose centre the arm
+    # cannot reach aims at the region's reachable part.  The grid over the
+    # region's footprint that finds that part, per axis.
+    REGION_AIM_GRID = 9
+
+    def region_reach_aim(self, obj_id: str, boxel: BoxelData,
+                         grasp: Grasp) -> Optional[np.ndarray]:
+        """BF#65 2(c): the xy inside a SHADOW region that a pick of
+        ``obj_id`` out of it aims at when the region's centre is out of
+        reach, or None when no part of the region is in reach (or the boxel
+        is no region).
+
+        The hidden object may lie anywhere in the region, so the centre is
+        only one hypothesis of where the pick will go; a region that
+        straddles the reach limit (a shadow behind an object near the limit)
+        has a reachable part even when its centre is outside, and the plan
+        through it must bind (BF#65 (c): scenes 128 and 135 ended with no
+        plan that binds).  The aim is the centroid of the reachable points
+        of a REGION_AIM_GRID lattice over the footprint, inset by half the
+        object's footprint where the region is wider than the object (the
+        hypothesised object lies inside the region).  For an object without
+        a boxel that footprint is the class LOWER bound
+        (NOMINAL_HIDDEN_EXTENTS_MIN): the question is F6's, "could an
+        instance that hides in this region be reached", and the smallest
+        instance can lie that close to the region's face (with the upper
+        bound scene 128's reachable strip was missed by 1 mm, BF#65's A/B
+        round 1).  The reachable part of
+        a box at one height is convex (a disc and a sphere cut it), so the
+        centroid is reachable; if rounding says otherwise the reachable
+        lattice point nearest to it is taken.  Called only after the centre
+        failed ee_reachable: where the centre is reachable nothing changes.
+        Place destinations (FREE_SPACE) and known objects (OBJECT) are never
+        re-aimed: the executor places at the cell's centre and picks at the
+        object's own box."""
+        if boxel.boxel_type != BoxelType.SHADOW:
+            return None
+        lo = np.asarray(boxel.min_corner, dtype=float)[:2]
+        hi = np.asarray(boxel.max_corner, dtype=float)[:2]
+        obj_boxel = self.registry.get_boxel(str(obj_id))
+        half = (np.asarray(obj_boxel.extent, dtype=float)[:2]
+                if obj_boxel is not None
+                else np.asarray(NOMINAL_HIDDEN_EXTENTS_MIN, dtype=float)[:2] / 2.0)
+        inset = np.minimum(half, (hi - lo) / 2.0)
+        xs = np.linspace(lo[0] + inset[0], hi[0] - inset[0], self.REGION_AIM_GRID)
+        ys = np.linspace(lo[1] + inset[1], hi[1] - inset[1], self.REGION_AIM_GRID)
+        z = float(boxel.center[2]) + float(grasp.position[2])
+        off = np.asarray(grasp.position, dtype=float)[:2]
+
+        def _ok(xy) -> bool:
+            return self.ee_reachable(np.array([xy[0] + off[0], xy[1] + off[1], z]))
+
+        reachable = np.array([[x, y] for x in xs for y in ys if _ok((x, y))])
+        if len(reachable) == 0:
+            return None
+        aim = reachable.mean(axis=0)
+        if not _ok(aim):
+            aim = reachable[int(np.argmin(np.linalg.norm(reachable - aim, axis=1)))]
+        return aim
+
+    def contact_target(self, obj_id: str, boxel: BoxelData, grasp: Grasp,
+                       aim_xy: Optional[np.ndarray] = None) -> np.ndarray:
         """The end-effector position execute_pick / execute_place lowers to
         for (obj, boxel, grasp): the boxel's centre plus the grasp's xy, at
         the object's top minus CONTACT_TOP_CLEARANCE or contact_floor above
@@ -1425,7 +1490,9 @@ class BoxelStreams:
         a region it is the destination's surface plus the object's height
         (a pre-sense target without a box takes the class prior
         NOMINAL_HIDDEN_EXTENTS).  The surface is the destination boxel's
-        surface_z, else the object's, else surface_z_default."""
+        surface_z, else the object's, else surface_z_default.  ``aim_xy``
+        (BF#65 2(c)) replaces the boxel centre's xy when the kin stream
+        aimed at a region's reachable part (region_reach_aim)."""
         obj_boxel = self.registry.get_boxel(str(obj_id))
         surface = getattr(boxel, 'surface_z', None)
         if surface is None and obj_boxel is not None:
@@ -1440,8 +1507,10 @@ class BoxelStreams:
         else:
             top = surface + float(NOMINAL_HIDDEN_EXTENTS[2])
         contact_z = max(top - self.CONTACT_TOP_CLEARANCE, surface + self.contact_floor)
-        return np.array([float(boxel.center[0]) + float(grasp.position[0]),
-                         float(boxel.center[1]) + float(grasp.position[1]),
+        cx, cy = ((float(boxel.center[0]), float(boxel.center[1]))
+                  if aim_xy is None else (float(aim_xy[0]), float(aim_xy[1])))
+        return np.array([cx + float(grasp.position[0]),
+                         cy + float(grasp.position[1]),
                          contact_z])
 
     # =========================================================================
@@ -1529,11 +1598,36 @@ class BoxelStreams:
         # setup (the F4 reach-margin stack case is at 0.61 m) and below
         # every observed burn (0.886-1.02 m), so this changes wall-clock
         # only, never the reachable plan space.
+        #
+        # BF#65 2(c) (2026-11-12): a SHADOW region is where a hidden object
+        # MAY lie, and its centre is only one hypothesis; when the centre
+        # is out of reach and a part of the region is not, the pick out of
+        # it aims at that part (region_reach_aim) instead of failing, so a
+        # plan through a region that straddles the reach limit binds.  A
+        # reachable centre takes the branch below never: nothing changes
+        # for it.  aim_xy stays None unless the aim moved.
+        aim_xy = None
         if not self.ee_reachable(target_pos):
-            logger.debug("compute_kin: %s at %s rejected pre-IK — target "
-                         "%s outside the reach envelope (#P3(c))",
-                         obj_id, boxel_id, np.round(target_pos, 3).tolist())
-            return
+            aim_xy = self.region_reach_aim(obj_id, boxel, grasp)
+            if aim_xy is None:
+                logger.debug("compute_kin: %s at %s rejected pre-IK — target "
+                             "%s outside the reach envelope (#P3(c))",
+                             obj_id, boxel_id, np.round(target_pos, 3).tolist())
+                return
+            _centre_xy = np.asarray(boxel.center, dtype=float)[:2]
+            target_pos = np.array([aim_xy[0] + grasp.position[0],
+                                   aim_xy[1] + grasp.position[1],
+                                   target_pos[2]])
+            self.region_aim_shifts += 1
+            _key = (str(obj_id), str(boxel_id), tuple(np.round(aim_xy, 3)))
+            if _key not in self._region_aim_logged:
+                self._region_aim_logged.add(_key)
+                print(f"  [BF#65] compute_kin({obj_id}, {boxel_id}): the "
+                      f"region's centre is out of reach "
+                      f"({float(np.linalg.norm(_centre_xy - self._robot_base_xy)):.3f} m "
+                      f"from the base); aiming at its reachable part "
+                      f"[{aim_xy[0]:.3f}, {aim_xy[1]:.3f}] "
+                      f"({float(np.linalg.norm(aim_xy - self._robot_base_xy)):.3f} m)")
 
         # --- Resolve the grasped object's PyBullet body ID --------------------
         # This body must be EXCLUDED from collision checks in plan_motion(),
@@ -1572,7 +1666,7 @@ class BoxelStreams:
             # the arm then aborts with the occluder already in hand (seed 10
             # on 1747173593: "IK failed for place contact" at free_006 after
             # the pick, replanned to another cell).
-            contact = self.contact_target(obj_id, boxel, grasp)
+            contact = self.contact_target(obj_id, boxel, grasp, aim_xy=aim_xy)
             if solve_ik(self.robot_id, contact, ee_orn, self.physics_client,
                         seed=config.joint_positions) is None:
                 self.contact_ik_rejects += 1
