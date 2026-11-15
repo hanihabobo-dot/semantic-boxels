@@ -428,9 +428,12 @@ with exit 0, a check against fake TAMPURA packages). It has never run against TA
 real world: no episode, no cluster step (\BF{70}). For TAMPURA's arm the test is geometric where ours is physical:
 the target attached, both pads within a bound of it and the arm's joints at home. The
 bound was 2\,mm, the session's reading; since 14 November it is 5\,mm per pad (\BF{70}).
-With 5\,mm, 24 of TAMPURA's 43 saved die grasps on scene 113 pass that would fail at
-2\,mm, and 0 of 6 recorded episodes of TAMPURA's arm change outcome (the integration
-session's re-score, declared in tracks/integration/evals/eval\_padbound\_DECLARATION.md).
+Of 43 sampled TAMPURA die grasps on scene 113, 24 lie between 2 and 5\,mm, so they
+pass at 5\,mm and would fail at 2\,mm. The recorded episodes of TAMPURA's arm hold one
+grasp on that scene, recorded six times (pad gaps 0.78 and 1.78\,mm), so they test the
+bound once and say nothing on whether it changes results (the integration session's
+re-score, declared in tracks/integration/evals/eval\_padbound\_DECLARATION.md;
+\ID{review}{code review}).
 On 15 November Hani decided that the shared test does not decide TAMPURA's success:
 TAMPURA's episodes count by its own reward, and the reports say beside every
 comparison that our arm is judged by a stricter criterion (\ID{decisions}{Hani's

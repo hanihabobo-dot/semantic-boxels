@@ -192,8 +192,12 @@ evaluation & seed & cause on record & entry \\
 \midrule
 \BF{63} run 1, generated scenes & 136, rep.\ 1 & hung at start-up before loading its scene,
 killed at the 900\,s cap; in the cluster's slow hour, on a start-up that read the venv,
-code and scene from the network volume; the call it waited in is not shown & TB-15
-(analysed, cause not placed) \\
+code and scene from the network volume; console and stdout hold only the banner and
+``Starting up'', and no log folder exists, so the stall came before TAMPURA's logger was
+set up, in the imports or the configuration load; 1 of 161 runs of our arm, the retry
+took 59\,s. A start-up stall on the cluster's network volume; the exact call is not
+recoverable and no defect of our code was found. It counts as our failure & TB-15
+(placed as far as the files allow) \\
 B8 campaigns (30 Oct) & all 80 & our arm wrote into a read-only folder & \BF{54}, fixed \\
 the mirror (path 5) & 0, first start & harness: arm S was started with a run directory
 as its working directory, and the stable pipeline joins a relative log path onto it &
@@ -213,6 +217,52 @@ counted & TB-18 \\
 evaluations this report counts. Runs stopped at a time cap (the time cuts, the Wumpus
 world at 15x15) and runs cut by our runner's restart are in their own sections.}
 \label{tab:our-crashes}
+\end{table}
+
+\paragraph{Which camera fed each evaluation.} Hani's rule of 15 November: what the user
+sees never reaches the robot or the planner, the two side panes of the GUI show only
+what the robot sees, and every evaluation fed the user's view is redone, unless it
+tested something unrelated to the view and ran every instance under the same feed
+(\ID{decisions}{Hani's decisions}). The fixed overhead camera is the user's view. Every
+evaluation of our arm that this report counts perceived through one fixed camera: the
+first image, the detection, the census and every shadow cast. On \fdice\ that camera
+stands where TAMPURA's hand camera is at home, but it does not move with the arm. The
+arm's camera served only inside the observe action, and the GUI's side panes show the
+fixed camera. The first code that feeds the robot's camera only is path 9's step 3
+(\TK{9}); no counted evaluation ran on it. TAMPURA's arm used its own hand camera
+everywhere except the first batch of path 5, where it was given our fixed camera.
+\Cref{tab:feeds} sorts the evaluations by this rule (\ID{feeds}{feed inventory}). Each
+number of ours that a redo replaces stays in this report, named as fed the fixed
+camera, until the redo exists.
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}p{3.1cm}Y@{}}
+\toprule
+verdict & evaluations \\
+\midrule
+redone (our arm on the robot's camera) & \BF{63} runs 1 to 3 against TAMPURA; the die-slip
+campaign's line against TAMPURA (120 of 120 against 40 of 60, \BF{59}); path 5's mirror,
+with its first batch's TAMPURA arm; the scenes that hide the target; \BF{65}; \BF{64}; the
+look action (\TK{9}, owed anyway); the perception fixes F20 and F21; the thesis sweep and
+its CB\#113 rerun, and the thesis pipeline against TAMPURA that rests on it; the running
+\BF{65} regression evaluation \\
+kept: unrelated to the view, same feed on every arm & the die-slip fixes against the base
+(\BF{59}); TB-23 and the carry switches; TB-25's planner flag; the time cuts (\BF{53});
+the squeeze probe; the A/A (\BF{7}); B3's acceptance (\BF{10}); the pick floor A-07; the
+harness and merge checks \\
+kept: no image of ours, or a camera on the robot & the Wumpus grid and LW1 alone; LW1 and
+our setup driving the robot (a camera on the robot's mast; for our setup still to
+confirm); paths 2, 7 and 8 on \cuncert\ and \slamcol\ (TAMPURA's own observations);
+TAMPURA alone (\BF{9}); the pad-gap probe (\BF{70}) \\
+void & the B8 campaigns' arm of ours (\BF{54}); the discarded first bridge \\
+\bottomrule
+\end{tabularx}
+\caption[Evaluations by the camera that fed our arm.]{Evaluations by the camera that fed
+our arm, under Hani's rule of 15 November. Probes and design checks that report
+measurements, not rates, are in the inventory and not listed here.}
+\label{tab:feeds}
 \end{table}
 
 \paragraph{Noise and the test for plan counts.} Run to run, the unchanged pipeline
