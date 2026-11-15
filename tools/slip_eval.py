@@ -210,7 +210,11 @@ def run_episode(a, arm, seed, rep, extra_args=(), extra_env=None):
     try:
         with open(os.path.join(save_dir, 'bridge_episode.json'), 'r', encoding='utf-8') as f:
             bj = json.load(f)
-        rec['bridge_status'] = (bj.get('outcome') or {}).get('status')
+        outcome = bj.get('outcome') or {}
+        rec['bridge_status'] = outcome.get('status')
+        # which gates failed and the crash's error (bridge_gates.episode_outcome): the harness reads both
+        rec['gate_failures'] = outcome.get('gate_failures') or {}
+        rec['bridge_outcome_error'] = outcome.get('error')
         rec['reward'] = (bj.get('rewards') or [None])[-1]
         rec['scene_file'] = os.path.basename(str(bj.get('scene_file')))
     except Exception as e:                       # no episode file: a crash or a kill
