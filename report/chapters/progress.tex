@@ -426,8 +426,11 @@ by Sub-manager T (accepted, with five requests, all built) and checked by Go on 
 November at about 16:39; its checks pass (72 unit tests, the static gates read whole
 with exit 0, a check against fake TAMPURA packages). It has never run against TAMPURA's
 real world: no episode, no cluster step (\BF{70}). For TAMPURA's arm the test is geometric where ours is physical:
-the target attached, both pads within 2\,mm of it and the arm's joints at home; the
-2\,mm is the session's reading, not Hani's words (\BF{70}).
+the target attached, both pads within a bound of it and the arm's joints at home. The
+bound was 2\,mm, the session's reading; since 14 November it is 5\,mm per pad (\BF{70}).
+With 5\,mm, 24 of TAMPURA's 43 saved die grasps on scene 113 pass that would fail at
+2\,mm, and 0 of 6 recorded episodes of TAMPURA's arm change outcome (the integration
+session's re-score, declared in tracks/integration/evals/eval\_padbound\_DECLARATION.md).
 
 \section{Path 7: Our Planning Layer With Boxels on TAMPURA's Tasks}
 \label{sec:path7}
@@ -454,6 +457,18 @@ found 11 differences missing from the lists and 11 entries wrong or incomplete
 differences of \cuncert\ are approved, and so is the corrected wording of five entries (CU-3, CU-5, CU-6,
 CU-7 and CU-10), each by the option marked as recommended
 (\ID{tracksstate}{tracks state file}).
+
+\paragraph{Disclosure: the inspect guard of arm A1.} Our arm A1 on \cuncert\ is protected
+on a line of TAMPURA's code that TAMPURA's own runs use unprotected. When TAMPURA's
+inspect action finds no motion plan, its code fails; the inspect guard (branch
+track/inspect\_guard, commit 51135ae) keeps our arm in place instead and still returns
+the class that inspect observes. TAMPURA's own runs keep that line unguarded and never
+hit the failure in our recorded runs; its run on seed 5 has not been recorded. A paired
+eval on seeds 0 to 19, first attempts, one call per arm: without the guard (A) the world
+test passes on 17 of 20 with 1 crash (seed 5), with it (B) on 18 of 20 with no crash
+(their reward 18 and 19 of 20); only seed 5 differs, and on the other 19 seeds both arms
+ran the same actions (exact McNemar $p = 1.0$; tracks/modes/inspect\_guard/STATE.md).
+Arm A0 of path 2 has no guard and still crashes on seed 5.
 
 The track built the memory guard (one process per episode) on 7 November and, since the answers, a world
 test for the random floor, and the drop and collision fields of rule 18 into its two

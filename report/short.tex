@@ -155,19 +155,17 @@ paper's comparison is the run on 200 fresh scenes, planned for 21 to 24 November
   ylabel={successes (\%)}, xlabel={cups in the scene},
   symbolic x coords={1,2,3,4,5}, xtick=data, enlarge x limits=0.14,
   legend style={at={(0.5,1.02)}, anchor=south, legend columns=3},
-  nodes near coords, point meta=explicit symbolic,
-  nodes near coords style={font=\scriptsize, rotate=90, anchor=west},
   ymajorgrids,
 ]
-\addplot[fill=cours!32, draw=none] coordinates {(1,100) [14/14] (2,55.6) [10/18] (3,62.5) [10/16] (4,75) [12/16] (5,68.8) [11/16]};
-\addplot[fill=cours, draw=none] coordinates {(1,100) [14/14] (2,88.9) [16/18] (3,75) [12/16] (4,100) [16/16] (5,68.8) [11/16]};
-\addplot[fill=ctamp, draw=none] coordinates {(1,85.7) [12/14] (2,55.6) [10/18] (3,62.5) [10/16] (4,37.5) [6/16] (5,50) [8/16]};
+\addplot[fill=cours!32, draw=none] coordinates {(1,100) (2,55.6) (3,62.5) (4,75) (5,68.8)};
+\addplot[fill=cours, draw=none] coordinates {(1,100) (2,88.9) (3,75) (4,100) (5,68.8)};
+\addplot[fill=ctamp, draw=none] coordinates {(1,85.7) (2,55.6) (3,62.5) (4,37.5) (5,50)};
 \legend{{ours, run 2},{ours, run 3},{TAMPURA}}
 \end{axis}
 \end{tikzpicture}
 \caption{Success by the number of cups (the thesis's plot of success against occluders, on TAMPURA's task). Pale: ours
-before the shadow fix. All three bars of a group share one denominator. The groups differ because TAMPURA's
-generator draws the number of cups at random: 7, 9, 8, 8 and 8 of the 40 scenes, two repetitions each.}
+before the shadow fix. TAMPURA's generator draws the number of cups at random: 7, 9, 8, 8 and 8 of the 40
+scenes, two repetitions each.}
 \end{subfigure}\hfill
 \begin{subfigure}[t]{0.33\linewidth}\centering
 \begin{tikzpicture}
@@ -846,8 +844,8 @@ Our setup in the Wumpus world, LW1's states & L &
 as it is 41, 22, 21 and 12 of 100 (5x5 to 15x15); with rules 100 of 100 at 5x5, 7x7 and 10x10, 6 of 100 at 15x15 (93 not run, 1 cut at 300\,s); with the robot, on 31 of these states and random worlds, 30 of 31 &
 Before Hani's look. The sets are the grid world without physics. \\
 The shared success test on TAMPURA's final world (\BF{70}) & L &
-about 2\,ms an episode; 24 of TAMPURA's 43 die grasps fail its 2\,mm pad bound &
-The die is attached in those 24; the bound is Hani's decision. \\
+about 2\,ms an episode; on scene 113, 24 of TAMPURA's 43 saved die grasps fail a 2\,mm pad bound and pass the 5\,mm bound now in use &
+The die is attached in those 24. With 5\,mm, 0 of 6 recorded episodes of TAMPURA's arm change outcome. \\
 The look action, 9 development scenes & L &
 today's flow 7 of 9, centred look 3 of 9, boxel look 2 of 9 (first attempt; 0 crashed; seed 101 builds no scene in any arm) &
 Development runs on the seeds the look was fixed on; both looks keep the fixed camera; today's flow lost its two
@@ -868,12 +866,20 @@ crashed runs named}}
 then every record of ours carries drops, collisions and clean success (TB-22); TAMPURA's executor has no
 physics, so nothing can be counted on its side.
 \emph{Every number of ours against TAMPURA still rests on two end tests.} The shared test is built and reads
-TAMPURA's final world (\BF{70}); its pad bound waits for Hani, and no comparison has been scored with it.
+TAMPURA's final world (\BF{70}) with a pad bound of 5\,mm (24 of 43 saved die grasps on scene 113 pass that fail at
+2\,mm; 0 of 6 recorded episodes of TAMPURA's arm change outcome), and no comparison has been scored with it.
 \emph{An episode's first plan is not reproducible from run to run} (TB-24). So every comparison is paired by
 scene, and repetitions are declared as draws.
 \emph{The machines.} On the cluster the arms of a scene ran one after the other on one node. On the laptop the
 workers share one simulation slot behind a gate that refuses a start above a commit charge of 85\,\%; in the
 night of 12 November the highest reading was 80.9\,\%.
+\emph{Seeds that never became an episode.} Two kinds of rejection drop a planned scene before any run, both made by
+our own code, never by TAMPURA's generator: our scene builder cannot place the hidden targets behind the occluders
+(for example seeds 4, 6, 12, 106 and 115 of the holding scene), and our pre-flight finds no split into hidden
+targets and a visible tray (15 scenes of the cluster sweep CB\#113). Such a scene is the same for every arm, so it
+stays out of the rates and is named beside them. A re-rolled replacement scene (the thesis sweep) never counts; a
+crash, a hang, a run cut by our own side or a run holding another run's record is a failure. The long report
+lists every kind with its criterion, seeds and counts (its \emph{Seeds and Scenes That Never Became an Episode}).
 
 \paragraph{Numbers that must not stand side by side.} The laptop medians of the mirror and any cluster time;
 the absolute times of the time cuts and anything else (their ratios can be quoted); walls of run 2 and of run 3
@@ -911,8 +917,10 @@ and 2 of 2 probe carries on seeds 3 and 4. \\
 Our planning layer on \cuncert\ and on \slamcol\ (path 2) & their reward 18 of 20, 1 crashed, and 17 of 25 & \vNA &
 The decision layer only, on TAMPURA's execution functions. No TAMPURA arm ran beside it; on \slamcol\ a scripted
 rule reaches the same 17 of 25. \\
-\cuncert\ with boxels, first arm (path 7) & the same numbers as path 2 & \vRE &
-It ran before Hani had approved its deviations; the rows are held back. \\
+\cuncert\ with boxels, first arm (path 7) & the same numbers as path 2; with the inspect guard, world test 18 of 20 against 17 of 20 with 1 crash (seed 5) without it & \vRE &
+It ran before Hani had approved its deviations; the rows are held back. Disclosed: the guard keeps our arm in
+place when TAMPURA's inspect motion plan fails and still returns the class; TAMPURA's own runs keep that line
+unguarded, never hit the failure in our records, and have no recorded run of seed 5. Only seed 5 differs. \\
 LW1 drives our robot, 18 episodes (path 4) & 18 of 18; 0 of 369 percepts wrong & \vNA &
 10, 5 and 3 states at 5x5, 7x7 and 10x10; the base is placed kinematically. A first run on the build before
 the parser fix failed the three 10x10 states. \\
@@ -1009,7 +1017,7 @@ The die under the cup (\BF{65}): how the system knows that a cup is open underne
 Declared per class with a measured cavity; then a look at scenes 104 and 135 &
 the switch, and what the paper may claim for the occlusion model \\
 TAMPURA's clean success in the tables; the pad bound of the shared test (\BF{70}) &
-``Not measured''; 5\,mm per pad for TAMPURA's arm, ours keeps its physical test &
+``Not measured''; the pad bound is decided: 5\,mm per pad for TAMPURA's arm since 14 November, ours keeps its physical test &
 how every table is scored \\
 \cuncert: the hold on a round fruit &
 About 10 short probe runs for the smallest change that holds the lemon and the strawberry &
