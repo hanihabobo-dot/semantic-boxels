@@ -171,6 +171,44 @@ reports as a contact; the code keeps that apart, in \texttt{collisions\_reported
 it does not spoil a clean success. On 14 November Hani judged the difference not
 significant, and the code's way of counting stands.
 
+\paragraph{Crashes and hangs of our system.} Hani's standing rule of 15 November: our
+system may not crash on any seed, and any such crash is investigated. Every crash or
+hang of our arm in the evaluations this report counts, read from the records
+(\Cref{tab:our-crashes}). Each counts as a failure of our arm where its evaluation is
+counted.
+
+\begin{table}[tbp]
+\centering
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}P{3.0cm}P{1.6cm}YP{2.1cm}@{}}
+\toprule
+evaluation & seed & cause on record & entry \\
+\midrule
+\BF{63} run 1, generated scenes & 136, rep.\ 1 & hung at start-up before loading its scene,
+killed at the 900\,s cap; in the cluster's slow hour, on a start-up that read the venv,
+code and scene from the network volume; the call it waited in is not shown & TB-15
+(analysed, cause not placed) \\
+B8 campaigns (30 Oct) & all 80 & our arm wrote into a read-only folder & \BF{54}, fixed \\
+the mirror (path 5) & 0, first start & harness: arm S was started with a run directory
+as its working directory, and the stable pipeline joins a relative log path onto it &
+review of E03; no BUGS entry \\
+\cuncert, path 2 (arm A0) & 5 & AttributeError inside TAMPURA's inspect on its empty
+motion plan, after a drop (TB-19's unchecked line) & TB-32, open \\
+\cuncert, path 7 (arm A1) & 5 & the same line; the inspect guard now covers it
+(\Cref{sec:path7}) & TB-32, guarded in A1 \\
+\cuncert, path 2, before the declared batch & 0 to 4 & an AABB unpacking slip of ours,
+in every row; rows deleted, not counted & tasks state file \\
+\slamcol, path 2, before the declared batch & 0 to 4 (2 calls) & hop(x, x) missing,
+then the translator trap TB-18, in every row before any action; rows deleted, not
+counted & TB-18 \\
+\bottomrule
+\end{tabularx}
+\caption[Crashes and hangs of our system.]{Crashes and hangs of our system in the
+evaluations this report counts. Runs stopped at a time cap (the time cuts, the Wumpus
+world at 15x15) and runs cut by our runner's restart are in their own sections.}
+\label{tab:our-crashes}
+\end{table}
+
 \paragraph{Noise and the test for plan counts.} Run to run, the unchanged pipeline
 on our holding scene gave 31 of 35 and 30 of 35 successes (seeds 4, 6, 12, 106 and
 115 build no scene), three outcome flips and different plan counts on 16 of the 35
