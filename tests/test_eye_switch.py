@@ -1,7 +1,8 @@
 """Path 9, the arm camera only, steps 1 and 2 of three (tracks/look/
 ARM_ONLY_DESIGN.md, the switch, part 1 and part 2): --eye fixed|arm, the start
 configuration, the first image and the part of the table it does not show.  No
-episode, no planner.
+episode; one test drives main() up to the first plan-twin sync
+(stop_before_planning), the planner built but never asked for a plan.
 
 1. The flag: fixed by default; arm needs a look; a start configuration from the
    command line.
@@ -19,7 +20,9 @@ episode, no planner.
 7. The wiring in main(): with --eye arm the unseen regions join the first
    scan's boxels before free space is made; with --eye fixed none of it runs
    and the run's record has no eye key; main() cuts no region to a look's
-   cell side (PLAN 11.16: a region is cut only by what an image saw).
+   cell side (PLAN 11.16: a region is cut only by what an image saw).  With
+   --eye arm and no joints given, the arm starts at TAMPURA's home joints,
+   the first image is the wrist there, and q_home is the same joints.
 """
 import ast
 import subprocess
@@ -360,3 +363,72 @@ def test_with_the_fixed_camera_main_makes_no_unseen_region_and_records_no_eye():
     assert ast.unparse(record.value) == "'arm'"
     assert id(record) in _under(PIPELINE, "getattr(args, 'eye', 'fixed') == 'arm'")
     assert literal.lineno < record.lineno
+
+
+def test_the_arm_cameras_default_start_is_set_under_the_switch_alone():
+    """With --eye fixed home_joints stays the caller's (None on the tabletop:
+    q_home REST_POSES); TAMPURA's home joints enter under --eye arm only."""
+    arm = _under(MAIN, "eye == 'arm'")
+    (default,) = [a for a in _assigns(MAIN, 'home_joints')
+                  if ast.unparse(a.value) == 'list(arm_eye.TAMPURA_HOME_JOINTS)']
+    assert id(default) in arm
+    (start,) = _assigns(MAIN, 'eye_start')
+    assert id(start) in arm and ast.unparse(start.value) == 'list(home_joints)'
+
+
+def test_main_starts_the_arm_camera_at_their_home_joints_and_makes_them_q_home(
+        tmp_path, monkeypatch):
+    """--eye arm with no caller joints and no --eye-start-joints (run boxels
+    -Look boxel -Eye arm, tools/eye_render_audit.py): main() puts the arm at
+    TAMPURA's home joints before the settle, the first image's camera is the
+    wrist there, and q_home gets the same joints, so the planner's first
+    current_config (planner.home_config) is where the arm stands.  main()
+    returns before planning (stop_before_planning): no episode.  The target
+    is named and the oracle phases are off (the bridge's way), so Phase 4
+    draws no target at random."""
+    import telemetry
+    import test_full_pipeline as tfp
+    import world_eye
+    assert list(arm_eye.TAMPURA_HOME_JOINTS) == THEIR_HOME
+    monkeypatch.chdir(tmp_path)
+    placed, homes, seen = [], [], {}
+    real_place = arm_eye.place_arm
+    real_home = streams.BoxelStreams.set_home_joints
+
+    def place(env, joints):
+        placed.append([float(v) for v in joints])
+        return real_place(env, joints)
+
+    def set_home(self, joints):
+        homes.append([float(v) for v in joints])
+        return real_home(self, joints)
+
+    def after_settle(e):
+        robot = e.objects['robot'].object_id
+        seen['joints'] = _arm(e)
+        seen['camera'] = np.asarray(e.camera_position, dtype=float)
+        seen['wrist'] = robot_utils.wrist_camera_pose(robot, e.client_id)[:3, 3]
+
+    monkeypatch.setattr(arm_eye, 'place_arm', place)
+    monkeypatch.setattr(streams.BoxelStreams, 'set_home_joints', set_home)
+    monkeypatch.setattr(tfp, 'args', run_logger.parse_pipeline_args(
+        ['--no-gui', '--look', 'boxel', '--eye', 'arm', '--log-level', 'quiet']),
+        raising=False)
+    logger = run_logger.RunLogger(verbosity='quiet', log_dir=str(tmp_path / 'logs'))
+    env = BoxelTestEnv(gui=False)          # default_scene: their home touches no body
+    try:
+        out = tfp.main(gui=False, run_logger=logger, goal_kind='holding',
+                       draw_boxel_overlays=False, env=env,
+                       target_name='purple_object', oracle_phases=False,
+                       gui_hold_s=0, after_settle=after_settle,
+                       stop_before_planning=True)
+    finally:
+        telemetry.disable()
+        world_eye.disable()
+        logger.close()
+        env.close()                        # idempotent; main() closed it already
+    assert out is None
+    assert placed == [THEIR_HOME]
+    assert np.allclose(seen['joints'], THEIR_HOME, rtol=0, atol=2e-3)   # held through the settle
+    assert np.allclose(seen['camera'], seen['wrist'], rtol=0, atol=1e-9)  # the first image's camera
+    assert homes == [THEIR_HOME]           # q_home, the planner's first current_config

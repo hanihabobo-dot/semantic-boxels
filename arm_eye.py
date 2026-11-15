@@ -15,6 +15,8 @@ image taken where the arm stands and judged only on what it holds wholly.
 
   check_mode         the switch's rule: --eye arm needs a look;
   parse_joints       a start configuration from the command line;
+  TAMPURA_HOME_JOINTS  the start configuration (and q_home) when neither the
+                     caller nor the command line gives one: TAMPURA's home;
   place_arm          scene construction in a world of our own: the arm stands
                      at the start configuration before the first image;
   use_start_view     the env's observation camera becomes the arm camera at
@@ -83,6 +85,18 @@ FRAME_MARGIN_PX = 8
 # The switch's mark on an env: set by follow_arm (test_full_pipeline.main,
 # under --eye arm alone) and read through following().
 FOLLOW_FLAG = 'arm_eye_follows'
+# The start configuration of --eye arm, and so its q_home, when neither the
+# caller (find_dice passes DEFAULT_ARM_POS) nor --eye-start-joints gives one:
+# TAMPURA's home joints, their DEFAULT_ARM_POS in
+# tampura_environments/panda_utils/robot.py, as recorded in
+# tracks/look/evidence/arm_camera_home_pose_20261112.txt.  Hani's Q2 answer
+# (tracks/look/FOR_HANI.md): with the arm camera only, the arm starts at
+# TAMPURA's home joints on our tabletop as on find_dice.  A literal, since the
+# tabletop run cannot import tampura_environments;
+# tampura_bridge/tests/test_arm_eye_home.py checks it against theirs.
+TAMPURA_HOME_JOINTS = (-0.0806406098426434, -1.6722951504174777, 0.07069076842695393,
+                       -2.7449419709102822, 0.08184716251979611, 1.7516337599063168,
+                       0.7849295270972781)
 
 
 def _focal_px() -> float:
@@ -105,7 +119,7 @@ def check_mode(eye: str, look_mode: str) -> None:
 def parse_joints(text) -> Optional[List[float]]:
     """A start configuration from the command line: one joint angle per arm
     joint, in radians, separated by commas.  Empty or None: None (the caller
-    takes the run's home configuration)."""
+    takes the caller's home joints, else TAMPURA_HOME_JOINTS)."""
     if text is None or not str(text).strip():
         return None
     try:

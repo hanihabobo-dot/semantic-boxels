@@ -891,7 +891,8 @@ def parse_pipeline_args(argv=None):
         '--eye-start-joints', default='',
         help="Path 9, --eye arm: the start configuration, one angle per arm "
              "joint in radians, comma separated; it becomes q_home.  Empty: "
-             "the run's q_home.")
+             "the caller's home joints (find_dice: TAMPURA's DEFAULT_ARM_POS), "
+             "else TAMPURA's home joints (arm_eye.TAMPURA_HOME_JOINTS).")
     # BF#53 (2026-10-30), the optimistic search's settings.  pddlstream
     # weighs a stream result's effort into the search's costs only with
     # effort_weight set; without it every attempt of the adaptive loop may

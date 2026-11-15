@@ -737,7 +737,9 @@ def main(gui=True, run_logger=None, scene_config=None,
       gui_hold_s        the GUI window hold after the episode.
     D7 (i) to (vii), all off by default:
       home_joints       the joints of the home configuration q_home
-                        (None: REST_POSES).
+                        (None: REST_POSES; with --eye arm, None: the start
+                        configuration, arm_eye.TAMPURA_HOME_JOINTS unless
+                        --eye-start-joints gives one).
       goal_at_home      the goal becomes (and (holding T) (at_config
                         q_home)): q_home gets its init facts, every move
                         to q_home is judged by TAMPURA's at-home test
@@ -788,7 +790,13 @@ def main(gui=True, run_logger=None, scene_config=None,
     if look_on and not pose_belief.SWITCHES['M8']:
         raise ValueError(f"--look {look_mode} needs --m8 on")
     # Path 9, the arm camera only (arm_eye): --eye arm needs a look, and its
-    # start configuration is q_home (the caller's, or --eye-start-joints).
+    # start configuration is q_home: --eye-start-joints, else the caller's
+    # home joints (find_dice: DEFAULT_ARM_POS), else TAMPURA's home joints
+    # (arm_eye.TAMPURA_HOME_JOINTS, Hani's Q2 answer).  q_home stays the
+    # place the arm starts from and returns to: the planner's first
+    # current_config is home_config, and with M8 q_home is a view config, so
+    # a move there gives back the run's first view.  With --eye fixed none
+    # of this runs and the tabletop's q_home stays REST_POSES.
     eye = getattr(args, 'eye', 'fixed')
     arm_eye.check_mode(eye, look_mode)
     if eye == 'arm':
@@ -797,9 +805,11 @@ def main(gui=True, run_logger=None, scene_config=None,
                 not np.allclose(_start, home_joints):
             raise ValueError("--eye-start-joints differs from the caller's home "
                              "joints: the start configuration is q_home")
-        home_joints = _start if _start is not None else home_joints
-        eye_start = list(home_joints if home_joints is not None
-                         else robot_utils.REST_POSES)
+        if _start is not None:
+            home_joints = _start
+        elif home_joints is None:
+            home_joints = list(arm_eye.TAMPURA_HOME_JOINTS)
+        eye_start = list(home_joints)
     if domain_file is None and look_on:
         domain_file = look_domain.domain_file(look_mode, True)
     elif domain_file is None and pose_belief.SWITCHES['M8']:

@@ -43,13 +43,19 @@ import robot_utils  # noqa: E402
 from belief import BeliefState  # noqa: E402
 from boxel_data import BoxelData, BoxelRegistry, BoxelType  # noqa: E402
 from boxel_env import BoxelTestEnv  # noqa: E402
-from test_eye_switch import BASE_CAMERA, START, THEIR_HOME  # noqa: E402
+from test_eye_switch import BASE_CAMERA, START as REST, THEIR_HOME  # noqa: E402
 
+# main()'s start configuration with --eye arm when no joints are given
+# (arm_eye.TAMPURA_HOME_JOINTS, TAMPURA's home joints; test_eye_switch's
+# test_main_starts_the_arm_camera_at_their_home_joints_and_makes_them_q_home
+# shows main takes it).  REST (REST_POSES) stays where a test wants a pose
+# other than the start.
+START = list(arm_eye.TAMPURA_HOME_JOINTS)
 # A target name no body carries, so every body registered here casts shadows.
 NO_TARGET = 'no_target'
 # Turns (rad) of the arm's first joint tried in order for a configuration away
-# from the start one (REST_POSES): the first that touches no body and that the
-# test accepts is taken.
+# from the start one (START, TAMPURA's home joints): the first that touches no
+# body and that the test accepts is taken.
 TURNS = (0.6, -0.6, 0.9, -0.9, 0.3, -0.3)
 # A synthetic arm camera 1 m above the origin looking straight down (project's
 # convention: +x image right, +y image down, +z the optical axis), for the
@@ -97,8 +103,9 @@ def _first_scan(env):
 
 def _move_arm(env, accept=lambda: True):
     """Test control: the arm (both clients, arm_eye.place_arm, refused on a
-    touch) at REST_POSES with its first joint turned by the first of TURNS
-    that is free and that ``accept`` takes.  Returns the turn."""
+    touch) at START (main()'s arm-mode start, TAMPURA's home joints) with its
+    first joint turned by the first of TURNS that is free and that
+    ``accept`` takes.  Returns the turn."""
     for turn in TURNS:
         q = list(START)
         q[0] += turn
@@ -687,7 +694,7 @@ def test_with_the_fixed_camera_no_arm_camera_path_runs(env, monkeypatch):
 def test_the_audit_rule_passes_the_wrist_at_fk_and_fails_the_start_view_after_a_move(env):
     audit = _audit()
     robot = env.objects['robot'].object_id
-    assert arm_eye.place_arm(env, START)
+    assert arm_eye.place_arm(env, REST)
     sview, sproj = robot_utils.wrist_camera_matrices(
         robot_utils.wrist_camera_pose(robot, env.client_id))
     assert audit.wrist_rule(sview, sproj, robot, env.client_id)
@@ -734,7 +741,7 @@ def test_the_audit_runs_the_scene_run_boxels_builds():
 
 def test_view_pose_gives_back_the_camera_a_wrist_view_was_made_from(env):
     robot = env.objects['robot'].object_id
-    for joints in (START, THEIR_HOME):
+    for joints in (REST, THEIR_HOME):
         assert arm_eye.place_arm(env, joints)
         pose = robot_utils.wrist_camera_pose(robot, env.client_id)
         view, _ = robot_utils.wrist_camera_matrices(pose)
@@ -743,7 +750,7 @@ def test_view_pose_gives_back_the_camera_a_wrist_view_was_made_from(env):
 
 def test_in_frame_asks_every_box_to_lie_wholly_in_the_image(env):
     robot = env.objects['robot'].object_id
-    assert arm_eye.place_arm(env, START)
+    assert arm_eye.place_arm(env, REST)
     pose = robot_utils.wrist_camera_pose(robot, env.client_id)
     view, _ = robot_utils.wrist_camera_matrices(pose)
     centre = pose[:3, 3] + 0.3 * pose[:3, 2]                     # on the optical axis
