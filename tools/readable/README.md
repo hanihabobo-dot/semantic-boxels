@@ -249,3 +249,53 @@ and the normalisation (no pipeline import; Windows too); with
 episode's and the per-call facts, goal and RNG checks; with
 `READABLE_GOLDEN`, every pin against its golden copy.
 `READABLE_EPISODE_ONLY=<ids>` limits the generation.
+
+## paired_sets.py and DECLARATION_TEMPLATE.md: the paired sets N, S, A, B
+
+`paired_sets.py` runs a declared paired set and recomputes its numbers from
+`results.jsonl` (PLAN 8 and 24.4; PLAN_REVIEW S-o to S-r and note 3). It
+imports no pipeline and no pybullet. A set's folder holds `DECLARATION.md`
+(copied from `DECLARATION_TEMPLATE.md`; its one block marked `json
+paired-set` is the machine-read part), then `results.jsonl`, `episodes/`
+(one folder per run: `episode.sh`, `gate.txt`, `launch.txt`, stdout,
+stderr, the copied `timing_summary.json` or the bridge's `save/`).
+
+```
+python tools/readable/paired_sets.py plan    --set-dir evals/<id>
+python tools/readable/paired_sets.py scripts --set-dir evals/<id> --out <folder>
+python tools/readable/paired_sets.py run     --set-dir evals/<id>
+python tools/readable/paired_sets.py analyse --set-dir evals/<id> [--crash-reviews F] [--json OUT]
+```
+
+- `plan` checks the declaration and prints the ABBA list (pair k: A B when
+  k is even, B A when odd, carried across worlds) to paste into `runs`.
+- `scripts` writes every episode script for reading; nothing is launched.
+- `run` (Windows: pwsh and wsl.exe) refuses a folder that already has
+  `results.jsonl` (a repeat is a new declaration), a zero sha, a checkout
+  whose HEAD is not its sha or that is not clean, and a stored statistics
+  copy whose sha256 is not the declared one. Then per declared run: a
+  `start` row (written before the launch, so a run that vanishes leaves a
+  row), the episode through `gate_run.ps1`, an `end` row classified from
+  the run's files. The episode script takes `flock` on the pipeline lock,
+  checks MemAvailable (rule 16), restores the statistics copy for boxels
+  under the same hold, runs the child under `timeout -k 30 <cap>`, and
+  exits 0; what happened is in its files. A run that does not start stops
+  the set. `set_start` and `set_end` rows carry each arm's HEAD and status,
+  the library commit and the venv's pip freeze sha256 (S-p).
+- `analyse` prints the per-seed table, the "full" line with every reason
+  the set is not full, the items of 24.4 (b) per world (set A and B), PLAN
+  8's rule (set S) or the noise count (set N), the validity notes, and a
+  verdict: PASS (exit 0), RECORDED (set N, exit 0), FAIL (1), PENDING
+  REVIEW (3: a crash of the new arm without its review pair's verdict in
+  `--crash-reviews`, a JSON map of run position to `migration` or
+  `not_migration`), NOT FULL (4).
+
+Statuses: boxels success, failure, timeout, preflight_rejected, crashed,
+wrong_scene; bridge success (reward 1.0, no failed gate but G19), failure,
+gate_failed, killed, crashed, wrong_scene; both not_started and vanished.
+Item 2 compares outcome kinds without crashed (item 1's) and without the
+not-full statuses, exit reasons, and failed gates without G19.
+
+`tests/readable/test_paired_sets.py`: a fake launcher plants each case of
+S-o; on WSL the generated bash scripts also run for real with a fake python
+and a private lock file (never the pipeline lock).
