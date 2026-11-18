@@ -299,3 +299,52 @@ not-full statuses, exit reasons, and failed gates without G19.
 `tests/readable/test_paired_sets.py`: a fake launcher plants each case of
 S-o; on WSL the generated bash scripts also run for real with a fake python
 and a private lock file (never the pipeline lock).
+
+## console_replay.py and group `console`: pin 27
+
+`console_replay.py` plays a recorded run through the real Console of
+`console_ui.py`, its terminal a pipe (the static layout), in a child
+interpreter per environment set (`plain`, `ascii`: NO_COLOR; `color`,
+`color_ascii`: FORCE_COLOR; the `ascii` sets with SB_CONSOLE_ASCII). The
+child freezes `time.perf_counter` and `time.strftime`, installs the Console
+as `install_early` does, plays the calls and ends with `console_ui.finish`
+or an uncaught exception, as an entry point does. No pipeline file is
+patched.
+
+- A run directory (`ledger.jsonl`, `run_<stamp>.log`, for a bridge run also
+  `bridge_episode.json` two levels up) becomes a tape: the run log's stdout
+  lines go to `narration`, its ERROR and CRITICAL logging lines to the
+  Console's log handler, and the ledger rows to `on_ledger_event`, placed
+  among the lines by anchors read from test_full_pipeline.py (plan rows
+  before their eye or timing line, step rows before `Executing:`, step_end
+  rows before the next step boundary, at_home_test rows before their D7
+  line; every other row before the next anchored row). The header,
+  summary and the bridge driver's own calls (start-up note, G19 note,
+  set_context, gate table and outcome line through `terminal()`) are rebuilt
+  from the run's files; `inputs.json` says from which.
+- The made tapes (`console_replay.MADE`, R's plan review S-d) reach every
+  regex rule of console_ui (44 at the checkpoint), every ledger kind, end
+  status and sense reason, the stderr, log, say, warn and `terminal()`
+  paths, a G19 stop before the run, a crash and an interrupt.
+- `--live-check RUN_DIR` replays a smart run (one with `console_debug.log`)
+  and compares the replay's `[console]` lines with the live ones, times,
+  stamp and run folder masked: the check of the anchors.
+- Outputs per set: `console.txt` (the `[console]` lines, R's compared
+  output), `terminal.txt`, `debug.txt`, `run.json`; per pin `inputs.json`;
+  `INFO_tape.json` and `INFO_coverage.json` are not compared.
+
+Group `console` in `pin_outputs.py`: `p27_made_*` (the made tapes),
+`p27_run_*` (two archived bridge runs tracked in the repo), `p27_tape_*`
+(the live runs behind pin 47's tapes, with READABLE_TAPES). In WSL:
+
+    READABLE_TAPES=<tapes> PYTHONHASHSEED=0 flock /root/sb_pipeline.lock \
+        /root/armO-venvA/bin/python tools/readable/pin_outputs.py --group console --out <folder>
+    PYTHONHASHSEED=0 flock /root/sb_pipeline.lock /root/armO-venvA/bin/python \
+        -m pytest -q tests/readable/test_pin_console.py
+
+`tests/readable/test_pin_console.py`: unit tests of the log reader, the
+anchors, the header derivation, the tapes' form and the masks (Windows
+too); in WSL every pin played in all four sets, the colour-independence of
+the `[console]` lines, the anchors of every recorded run, the made tapes'
+reach, two plays equal, and with READABLE_GOLDEN each pin against its
+golden copy. Pin 26 is `p26_console_pure` in group `low`.

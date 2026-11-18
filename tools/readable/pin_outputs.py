@@ -42,6 +42,10 @@ scripted pick, the bridge's pure parts and the find_dice scene files.
 tools/readable/record_episode.py, index phase0/index/episode_path.md): pin
 30's real runs, pin 34's starts, pin 46's bridge starts and pin 47's
 replays of tapes recorded live on the checkpoint (READABLE_TAPES).
+``console`` (pin 27, tools/readable/console_replay.py): recorded runs (two
+archived bridge runs, the pin 47 tapes' live runs with READABLE_TAPES) and
+the made tapes of R's plan review S-d, played through the real Console with
+its terminal a pipe, in four environment sets.
 """
 import argparse
 import ast
@@ -3883,6 +3887,115 @@ for _e in ('rp0', 'rp1', 'rp1o3', 'stack0', 'br0', 'br5'):
         f'P47: episode {_e} replayed from its recorded tape (needs READABLE_TAPES'
         + ('; needs the bridge venv)' if _e.startswith('br') else ')'),
         timeout=EPISODE_PIN_TIMEOUT_S)(_p47(_e))
+
+
+# ===========================================================================
+# Group "console": pin 27, runs and made tapes through the real Console
+# ===========================================================================
+#
+# Every pin plays one tape through console_ui's Console with
+# tools/readable/console_replay.py: one child interpreter per environment
+# set (plain, ascii, color, color_ascii), its stdout a pipe (the static
+# layout), the clock frozen.  Written per set: console.txt (the [console]
+# lines of the debug file, R's compared output), terminal.txt, debug.txt and
+# run.json; per pin inputs.json (the tape's calls, the anchors that placed
+# the ledger rows, the derived header and summary arguments).
+# INFO_tape.json and INFO_coverage.json are not compared.
+#
+#   p27_made_*   the made tapes of R's plan review S-d (console_replay.MADE):
+#                a sample line per regex rule, a row of every ledger kind,
+#                every end status, the stderr, log, say, warn and terminal()
+#                paths, a G19 stop before the run, a crash, an interrupt.
+#   p27_run_*    archived bridge runs (tracked in the repo): the ledger, the
+#                run log and bridge_episode.json as recorded.
+#   p27_tape_*   the live runs behind pin 47's tapes (READABLE_TAPES), the
+#                run's own ledger and run log.
+
+CONSOLE_PIN_TIMEOUT_S = 900
+CONSOLE_RUNS = {
+    'bf45_s10': 'archive/tampura_bridge_plan_2026-10-25/bf/BF45_46/s10_headless_2026-10-30_14-02-25/'
+                'ours/run_2026-10-30_14-03-01',
+    'bf38_s0': 'archive/tampura_bridge_plan_2026-10-25/bf/BF38_q14/seed0_sq0.5mm/ours/run_2026-10-30_09-00-03',
+}
+CONSOLE_TAPE_RUNS = ('rp0', 'rp1o3', 'stack0', 'br0', 'br5')
+
+
+def _console_tool():
+    import importlib.util
+    mod = sys.modules.get('readable_console_replay')
+    if mod is None:
+        spec = importlib.util.spec_from_file_location(
+            'readable_console_replay', str(REPO / 'tools' / 'readable' / 'console_replay.py'))
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules['readable_console_replay'] = mod
+        spec.loader.exec_module(mod)
+    return mod
+
+
+def _console_play(out, tape, info=None):
+    tool = _console_tool()
+    bad = tool.check_tape(tape)
+    if bad:
+        raise RuntimeError('bad tape: ' + '; '.join(bad[:5]))
+    tool.play(tape, out.folder, tool.DEFAULT_ENVS)
+    tool.write_inputs(out.folder, tape, info, tool.coverage([tape]))
+    out.note('console_replay: one child per environment set (plain, ascii: NO_COLOR; color, color_ascii: '
+             'FORCE_COLOR; *ascii: SB_CONSOLE_ASCII), stdout a pipe, LC_ALL=C.UTF-8, TERM=dumb, '
+             'time.perf_counter and time.strftime frozen in the child')
+    out.note('masks: the replay folder <RUN>, <REPO>, the source run <SRC> and its save folder <SAVE>, '
+             'the early debug file\'s random name, console_replay.py line numbers in a traceback')
+
+
+def _p27_made(name):
+    def f(out):
+        _console_play(out, _console_tool().made_tape(name))
+        out.note(f'made tape {name} (console_replay.MADE), R\'s plan review S-d')
+    f.__name__ = f'p27_made_{name}'
+    return f
+
+
+for _m in _console_tool().MADE:
+    pin('console', f'p27_made_{_m}', f'R27: the made tape {_m} through the real Console',
+        timeout=CONSOLE_PIN_TIMEOUT_S)(_p27_made(_m))
+
+
+def _p27_run(key):
+    def f(out):
+        tape, info = _console_tool().build_run_tape(REPO / CONSOLE_RUNS[key])
+        _console_play(out, tape, info)
+        out.note(f'archived run {CONSOLE_RUNS[key]}: ledger.jsonl, run log, bridge_episode.json')
+    f.__name__ = f'p27_run_{key}'
+    return f
+
+
+for _k in CONSOLE_RUNS:
+    pin('console', f'p27_run_{_k}', f'R27: the archived bridge run {_k} (ledger and run log) through the real Console',
+        timeout=CONSOLE_PIN_TIMEOUT_S)(_p27_run(_k))
+
+
+def _console_tape_run(name):
+    live = _tapes_root() / name
+    runs = sorted((live / 'work' / 'logs').glob('run_*')) + sorted((live / 'save' / 'ours').glob('run_*'))
+    runs = [r for r in runs if r.is_dir() and (r / 'ledger.jsonl').exists()]
+    if not runs:
+        raise RuntimeError(f'needs READABLE_TAPES: no live run with a ledger under {live}')
+    return runs[-1]
+
+
+def _p27_tape(name):
+    def f(out):
+        run = _console_tape_run(name)
+        tape, info = _console_tool().build_run_tape(run)
+        _console_play(out, tape, info)
+        out.note(f'the live run behind pin 47\'s tape {name} (READABLE_TAPES/{name}), recorded with '
+                 f'--log-level normal: its ledger and run log as a smart run writes them')
+    f.__name__ = f'p27_tape_{name}'
+    return f
+
+
+for _e in CONSOLE_TAPE_RUNS:
+    pin('console', f'p27_tape_{_e}', f'R27: the live run of pin 47\'s tape {_e} through the real Console '
+        f'(needs READABLE_TAPES)', timeout=CONSOLE_PIN_TIMEOUT_S)(_p27_tape(_e))
 
 
 if __name__ == '__main__':
