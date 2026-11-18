@@ -38,6 +38,10 @@ sensing, index phase0/index/pins_world.md): scenes, first observation,
 shadows, plan twin, init facts, streams, motion step counts, the stored eye
 renders of tests/readable/make_render_fixture.py (pins 13 to 16), one
 scripted pick, the bridge's pure parts and the find_dice scene files.
+``episode`` (whole episodes and episode starts through
+tools/readable/record_episode.py, index phase0/index/episode_path.md): pin
+30's real runs, pin 34's starts, pin 46's bridge starts and pin 47's
+replays of tapes recorded live on the checkpoint (READABLE_TAPES).
 """
 import argparse
 import ast
@@ -3699,6 +3703,186 @@ def p35b_bridge_table(out):
         r = env_adapter.shadow_table_ranges()
     out.note('needs the bridge venv (TAMPURA\'s tree on sys.path)')
     out.json('shadow_table_ranges.json', r)
+
+
+# ===========================================================================
+# Group "episode": whole episodes and episode starts (index phase0/index/episode_path.md)
+# ===========================================================================
+#
+# Every pin here runs a whole episode or an episode start, headless, through
+# tools/readable/record_episode.py (one child interpreter per episode, its
+# cwd and environment as run.ps1 builds them).  The caller runs the group
+# under flock /root/sb_pipeline.lock and through the health gate (PLAN rule
+# 17); nothing here takes the lock.  The written files are the episode's
+# normalised outputs (record_episode.normalise: times, pids and wall clocks
+# removed, plan_obj and Type@id mapped to their order of first use, paths
+# and stamps masked); files named INFO_* (line numbers, seconds) are not
+# compared.
+#
+#   p30_*            pin 30's real runs: rp0 with a synthetic one-call tape,
+#                    a no-plan with no text (planner_failed) and a no-plan
+#                    whose text names two skeletons (no_plan_binding_death).
+#   p34_start_rp*    pin 34: random-pairs seeds 0 to 4 up to the first plan()
+#                    call (main's parameters at entry, the stage B switches,
+#                    the first plan() keyword arguments, boxel_data.json,
+#                    problem_initial.pddl, the ledger, eye and console).
+#   p46_bridge_*     pin 46: the bridge driver up to the first plan() call
+#                    with the gate hooks installed (shipped seeds 0, 1, 5,
+#                    generated seed 100); gate counts in first_plan.json.
+#   p47_replay_*     pin 47: the tapes recorded live on the checkpoint
+#                    (READABLE_TAPES/<episode>/tape, made by
+#                    "record_episode.py --record-set"), replayed; vs_live.json
+#                    holds the differences from the live episode's own
+#                    normalised outputs (PLAN 24.3 (a)).
+
+TAPES_VAR = 'READABLE_TAPES'
+EPISODE_PIN_TIMEOUT_S = 3600
+BINDING_DEATH_TEXT = [
+    'Stream plan (1, 0, 0.000): [sample-grasp:(orange_object)->(#g0)]\n',
+    'Stream plan (2, 1, 0.000): [sample-grasp:(orange_object)->(#g1)]\n',
+    'Summary: {complexity: 3, cost: inf, evaluations: 12, iterations: 2, length: inf, '
+    'run_time: 1.000, sample_time: 0.000, search_time: 1.000, skeletons: 2, solutions: 0, '
+    'solved: False, timeout: False}\n',
+]
+
+
+def _episode_tool():
+    import importlib.util
+    mod = sys.modules.get('readable_record_episode')
+    if mod is None:
+        spec = importlib.util.spec_from_file_location(
+            'readable_record_episode', str(REPO / 'tools' / 'readable' / 'record_episode.py'))
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules['readable_record_episode'] = mod
+        spec.loader.exec_module(mod)
+    return mod
+
+
+def _write_norm_files(out, run_dir, skip=()):
+    norm = Path(run_dir) / 'norm'
+    for f in sorted(norm.iterdir()):
+        if f.is_file() and f.name not in skip:
+            out.text(f.name, f.read_text(encoding='utf-8'))
+
+
+def _episode_notes(out, tool, name):
+    out.note(f'episode {name}: {tool.EPISODES[name]["kind"]}, argv {tool.EPISODES[name]["argv"]}')
+    out.note('normalised by record_episode.normalise: ledger t, wall, ledger_open.pid, plan.plan_time_s, '
+             'bridge_timing *_s and driver_clock times removed; plan_obj and Type@id mapped to their order '
+             'of first use keyed by plan id; eye t_wall and extra.plan_time_s removed; timing_summary and '
+             'world_counts time keys removed; console times masked; paths and stamps masked')
+
+
+def _synthetic_noplan(out, chunks, label):
+    tool = _episode_tool()
+    work = Path.cwd()
+    tape = work / 'tape'
+    tool.write_synthetic_tape(tape, [((None, float('inf'), None), chunks)])
+    res = tool.run_episode('rp0', 'replay', work / 'run', tape=tape, log=lambda s: None)
+    _episode_notes(out, tool, 'rp0')
+    out.note(f'pin 30 real run: rp0 with a synthetic one-call tape ({label}); the solver answer is '
+             'replaced (plan() itself runs, builds the init and reads the text), PLAN 5.2 row 30')
+    _write_norm_files(out, work / 'run')
+    out.text('INFO_seconds.txt', f"{res['seconds']}\n")
+
+
+@pin('episode', 'p30_planner_failed', 'R30: rp0 to the planner_failed ending (synthetic tape: no plan, no text)',
+     timeout=EPISODE_PIN_TIMEOUT_S)
+def p30_planner_failed(out):
+    _synthetic_noplan(out, [], 'no plan, no solver text')
+
+
+@pin('episode', 'p30_binding_death', 'R30: rp0 to the no_plan_binding_death ending (synthetic tape: no plan, two skeletons in the text)',
+     timeout=EPISODE_PIN_TIMEOUT_S)
+def p30_binding_death(out):
+    _synthetic_noplan(out, BINDING_DEATH_TEXT, 'no plan, text with two skeleton lines and a Summary')
+
+
+def _first_plan(out, name):
+    tool = _episode_tool()
+    work = Path.cwd()
+    res = tool.run_episode(name, 'first-plan', work / 'run', log=lambda s: None)
+    _episode_notes(out, tool, name)
+    out.note('first-plan mode: PDDLStreamPlanner.plan replaced (in the child only) by a recorder that writes '
+             'its bound arguments, the stage B module switches, the RNG digest and the gate counts, then '
+             'raises StopAtPlan; main\'s parameters from a sys.setprofile hook at its first call')
+    out.note('first_plan.json known_empty_shadows and other set-valued arguments: sorted_from_set lists')
+    _write_norm_files(out, work / 'run')
+    out.text('INFO_seconds.txt', f"{res['seconds']}\n")
+
+
+def _p34(seed):
+    def f(out):
+        _first_plan(out, f'rp{seed}')
+    f.__name__ = f'p34_start_rp{seed}'
+    return f
+
+
+for _s in range(5):
+    pin('episode', f'p34_start_rp{_s}',
+        f'R34: random-pairs seed {_s} (run boxels -Headless) up to the first plan() call',
+        timeout=EPISODE_PIN_TIMEOUT_S)(_p34(_s))
+
+
+def _p46(seed):
+    def f(out):
+        _need_tampura()
+        _first_plan(out, f'br{seed}')
+        out.note('needs the bridge venv (TAMPURA\'s tree at /root/tampura-work); seeds 1 and 5 load '
+                 'another scene than the campaign pins on this machine (index 12): '
+                 '--allow-g19-mismatch 1 as run.ps1 -Headless passes it')
+    f.__name__ = f'p46_bridge_start_s{seed}'
+    return f
+
+
+for _s in (0, 1, 5, 100):
+    pin('episode', f'p46_bridge_start_s{_s}',
+        f'P46: the bridge driver, seed {_s}{" (generated)" if _s >= 100 else ""}, up to the first plan() '
+        f'call with the gate hooks installed (needs the bridge venv)',
+        timeout=EPISODE_PIN_TIMEOUT_S)(_p46(_s))
+
+
+def _tapes_root():
+    root = os.environ.get(TAPES_VAR)
+    if not root:
+        raise RuntimeError(f'needs READABLE_TAPES: a folder written by "record_episode.py '
+                           f'--record-set <folder>" on the checkpoint')
+    return Path(root)
+
+
+def _p47(name):
+    def f(out):
+        tool = _episode_tool()
+        if tool.EPISODES[name]['kind'] == 'bridge':
+            _need_tampura()
+        live = _tapes_root() / name
+        if not (live / 'tape' / 'calls.jsonl').exists():
+            raise RuntimeError(f'needs READABLE_TAPES: no tape for {name} under {live}')
+        work = Path.cwd()
+        res = tool.run_episode(name, 'replay', work / 'run', tape=live / 'tape', rng='restore',
+                               trace_main=True, log=lambda s: None)
+        _episode_notes(out, tool, name)
+        out.note('replay: pddlstream_planner.solve replaced by tests/readable/replay_stub.py before the '
+                 'gate hooks wrap it; call k returns tape solution k, prints its text into the tee and '
+                 'restores the live RNG states after the call (rng restore)')
+        out.note('vs_live.json: this replay against the live episode recorded with the tape '
+                 '(READABLE_TAPES/<episode>/norm), PLAN 24.3 (a)')
+        _write_norm_files(out, work / 'run')
+        out.json('vs_live.json', tool.compare_live(live / 'norm', work / 'run' / 'norm'))
+        lines = work / 'run' / 'rec' / 'main_lines.json'
+        if lines.exists():
+            out.text('INFO_main_lines.json', lines.read_text(encoding='utf-8'))
+            out.json('INFO_coverage.json', tool.coverage_table([lines]))
+        out.text('INFO_seconds.txt', f"{res['seconds']}\n")
+    f.__name__ = f'p47_replay_{name}'
+    return f
+
+
+for _e in ('rp0', 'rp1', 'rp1o3', 'stack0', 'br0', 'br5'):
+    pin('episode', f'p47_replay_{_e}',
+        f'P47: episode {_e} replayed from its recorded tape (needs READABLE_TAPES'
+        + ('; needs the bridge venv)' if _e.startswith('br') else ')'),
+        timeout=EPISODE_PIN_TIMEOUT_S)(_p47(_e))
 
 
 if __name__ == '__main__':

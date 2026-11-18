@@ -168,3 +168,84 @@ READABLE_GOLDEN=<folder> READABLE_RENDER_FIXTURE=<fixture> PYTHONHASHSEED=0 \
 
 `READABLE_WORLD_ONLY=<ids>` limits the test's generation to those pins. A
 whole generation takes about 100 s in WSL (pin 1b about 35 s).
+
+## record_episode.py, tests/readable/replay_stub.py and group `episode`
+
+`record_episode.py` runs one whole episode (or an episode start) headless
+in a child interpreter, with the cwd, environment and argv that
+`run boxels -Headless` and `run tampura -Headless` build (run.ps1:149-171),
+`--log-level normal` (no console takes over) and, for boxels,
+`--no-telemetry` (as the eval runner passes it). It never takes the
+pipeline lock: its caller runs it under `flock /root/sb_pipeline.lock`, and
+whole episodes go through the health gate (`gate_run.ps1`).
+
+```
+python tools/readable/record_episode.py --episode rp0 --mode record --run-dir DIR
+python tools/readable/record_episode.py --episode rp0 --mode replay --tape DIR/tape --run-dir DIR2 [--trace-main]
+python tools/readable/record_episode.py --episode br0 --mode first-plan --run-dir DIR
+python tools/readable/record_episode.py --record-set TAPES [--episodes rp0,rp1,rp1o3,stack0,br0,br5]
+python tools/readable/record_episode.py --renorm DIR
+python tools/readable/record_episode.py --coverage DIR/rec/main_lines.json [...]
+```
+
+Episodes: `rp0` to `rp4` (random-pairs, holding, 2 occluders: `run boxels`),
+`rp1o3` (seed 1 with 3 occluders; seed 1 with 2 is a pre-flight rejection),
+`stack0`, `br0`, `br1`, `br5` (shipped scenes, `--allow-g19-mismatch 1` as
+`-Headless` passes it), `br100` (generated scene, its own directory as
+`run tampura -Gen` builds it).
+
+Modes, all patching inside the child only (an import hook sets them right
+after the module has been executed, so the entry's import order is kept):
+
+- `record`: `pddlstream_planner.solve` wrapped; each call writes, at call
+  time, `tape/solution_k.pkl`, `text_k.json` (the chunks the solver printed
+  into plan()'s `_StdoutTee` during this call), `rng_k.pkl` and a
+  `calls.jsonl` row (init facts and goal as text, RNG digests before and
+  after, kwargs).
+- `replay`: `replay_stub.install` sets the stub before the gate hooks wrap
+  `solve` (G11 still sees plan() as the caller). Call k returns a fresh
+  unpickled solution k, prints its text into the tee (so a recorded no-plan
+  with skeletons takes the binding-death branch) and, with `--rng restore`
+  (default), sets the RNG states the live search left. A call beyond the
+  tape raises `ReplayTapeError` (a BaseException). Each call writes
+  `rec/calls.jsonl` with facts, goal and RNG equality against the tape.
+- `first-plan`: `PDDLStreamPlanner.plan` replaced by a recorder (bound
+  arguments, stage B module switches, RNG digest, gate counts) that raises
+  `StopAtPlan`; main's parameters at entry from a `sys.setprofile` hook.
+
+For boxels runs RunLogger's relative `log_dir` is made absolute against the
+cwd inside the child: the export joins a relative run directory to the code
+directory (pddlstream_planner.py:434-439), so a run outside the checkout
+would stop there.
+
+Each run folder gets `RESULT.json`, `stdout.txt`, `stderr.txt`, `rec/` and
+`norm/`: the ledger without `t`, `wall`, `pid`, `plan_time_s`, the
+bridge_timing and driver_clock times, with `plan_obj` and `Type@id` mapped
+to their order of first use keyed by plan id (PLAN 24.3 (d)); `eye.jsonl`
+without `t_wall` and `extra.plan_time_s`; `timing_summary.json` and
+`world_counts.json` without time keys; the console with times masked; the
+facts of every solver call; `bridge_episode.json` without `time_deltas`.
+`compare_live` gives the differences of a replay from the live episode
+(PLAN 24.3 (a)); `--coverage` the breaks, `dispatch_end` statuses, exit
+reasons and dispatcher branches of `main` that a traced replay reached
+(PLAN 24.3 (b)).
+
+Group `episode` of `pin_outputs.py`: `p30_planner_failed` and
+`p30_binding_death` (rp0 with a synthetic one-call tape), `p34_start_rp0`
+to `rp4`, `p46_bridge_start_s0`, `s1`, `s5`, `s100` (need the bridge venv),
+`p47_replay_<episode>` for rp0, rp1, rp1o3, stack0, br0, br5 (need
+`READABLE_TAPES`, the folder of `--record-set`). On the checkpoint:
+
+```
+python tools/readable/record_episode.py --record-set <tapes>
+READABLE_TAPES=<tapes> python tools/readable/pin_outputs.py --group episode --out <folder>
+READABLE_TAPES=<tapes> READABLE_GOLDEN=<folder> PYTHONHASHSEED=0 flock /root/sb_pipeline.lock \
+    /root/armO-venvA/bin/python -m pytest -q tests/readable/test_pin_replay.py
+```
+
+`tests/readable/test_pin_replay.py`: unit tests of the recorder, the stub
+and the normalisation (no pipeline import; Windows too); with
+`READABLE_TAPES`, each replay's step and step_end rows against the live
+episode's and the per-call facts, goal and RNG checks; with
+`READABLE_GOLDEN`, every pin against its golden copy.
+`READABLE_EPISODE_ONLY=<ids>` limits the generation.
