@@ -138,3 +138,33 @@ it the pin tests skip with that message:
 READABLE_GOLDEN=<folder> PYTHONHASHSEED=0 flock /root/sb_pipeline.lock \
     /root/armO-venvA/bin/python -m pytest -q tests/readable/test_pins_low.py
 ```
+
+## pin_outputs.py: group `world` (the world and its sensing)
+
+Group `world` (18 pins, the index `phase0/index/pins_world.md`): R's 1
+(`p01_scene_presets`, `p01_scene_random_pairs`, `p01_scene_failures`), 1b
+(`p01b_find_dice_scenes`), 2, 3, 6, 7, 9 (`p09_streams`, `p09_ik_tables`),
+10, 13, 14, 15, 16, 21 and 35 (`p35_bridge_pure`, `p35b_bridge_table`).
+These pins start physics clients, headless only (`BoxelTestEnv(gui=False)`
+or `pybullet.DIRECT`): a scene must get client 0 (executing) and client 1
+(plan twin), or the pin stops. Pins 1b and 35b need the bridge venv
+(TAMPURA's tree at `/root/tampura-work`); without it they stop with "needs
+the bridge venv". Pin 21 runs one scripted pick (contact physics); pin 10
+and pin 21 wrap pybullet functions inside their own child (call through),
+pin 7 wraps `random.shuffle` the same way.
+
+Pins 13 to 16 read a stored eye render made by
+`tests/readable/make_render_fixture.py` (four renders A, A2, B2, C of two
+scenes, `FIXTURE.json` with the sha256 of every file). The folder comes
+from `READABLE_RENDER_FIXTURE` (default `tests/readable/_scratch/render_fixture`).
+On tag refactor-checkpoint-2, first the fixture, then the golden folder:
+
+```
+python tests/readable/make_render_fixture.py --out <fixture>
+READABLE_RENDER_FIXTURE=<fixture> python tools/readable/pin_outputs.py --group world --out <folder>
+READABLE_GOLDEN=<folder> READABLE_RENDER_FIXTURE=<fixture> PYTHONHASHSEED=0 \
+    flock /root/sb_pipeline.lock /root/armO-venvA/bin/python -m pytest -q tests/readable/test_pins_world.py
+```
+
+`READABLE_WORLD_ONLY=<ids>` limits the test's generation to those pins. A
+whole generation takes about 100 s in WSL (pin 1b about 35 s).

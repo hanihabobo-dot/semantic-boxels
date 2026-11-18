@@ -33,7 +33,11 @@ folder as ``<WORK>``, the output folder as ``<OUT>``.
 
 Groups: ``low`` (this build: the low-cost pins and the AST pins of the
 index phase0/index/pins_low.md); later builds add their own groups (world,
-episode) with the same ``@pin`` decorator.
+episode) with the same ``@pin`` decorator.  ``world`` (the world and its
+sensing, index phase0/index/pins_world.md): scenes, first observation,
+shadows, plan twin, init facts, streams, motion step counts, the stored eye
+renders of tests/readable/make_render_fixture.py (pins 13 to 16), one
+scripted pick, the bridge's pure parts and the find_dice scene files.
 """
 import argparse
 import ast
@@ -2250,6 +2254,1451 @@ def p48_twin_constants(out):
              'tools/cluster *.sbatch files')
 
 #@@LOW_PINS@@
+
+
+# ===========================================================================
+# Group "world": the world and its sensing (index phase0/index/pins_world.md)
+# ===========================================================================
+#
+# Every pin of this group starts a fresh child with no physics client.  A
+# scene is built headless (BoxelTestEnv(gui=False): DIRECT) and must get
+# client 0 for the executing world and client 1 for the plan twin, because
+# half the PyBullet calls of the pipeline name no client and mean client 0
+# (index 0.2); _make_env refuses anything else.  Module state the pins set:
+# pose_belief.SWITCHES (written per case into the outputs), slip_fixes at
+# its import default (DEFAULT_ON, the CLI default; spec() written), and
+# robot_utils.GRIP_SQUEEZE for the pick pin.
+
+TW = '/root/tampura-work'
+TW_ENVS = TW + '/tampura_environments'
+RENDER_FIXTURE_VAR = 'READABLE_RENDER_FIXTURE'
+RENDER_FIXTURE_DEFAULT = REPO / 'tests' / 'readable' / '_scratch' / 'render_fixture'
+SWITCH_NAMES = ('M8', 'M9', 'M10', 'pick_aperture_from_pose')
+STATIC_NAMES = ('plane', 'table', 'robot')
+SCENE_SEEDS = (0, 1, 7, 13, 999)
+
+
+def _pb():
+    import pybullet
+    return pybullet
+
+
+def _live_clients():
+    pb = _pb()
+    return [i for i in range(16) if pb.isConnected(physicsClientId=i)]
+
+
+def _disconnect_all():
+    pb = _pb()
+    for i in _live_clients():
+        try:
+            pb.disconnect(physicsClientId=i)
+        except Exception:
+            pass
+
+
+def _set_switches(on):
+    import pose_belief
+    for k in SWITCH_NAMES:
+        pose_belief.SWITCHES[k] = bool(on)
+
+
+def _module_state():
+    import pose_belief
+    import robot_utils
+    import slip_fixes
+    return {'slip_fixes': slip_fixes.spec(), 'switches': dict(pose_belief.SWITCHES),
+            'grip_squeeze': robot_utils.GRIP_SQUEEZE,
+            'robot_model_is_pybullet_data': robot_utils.robot_model() == robot_utils.PANDA_PYBULLET_DATA}
+
+
+def _rng_digest():
+    """sha256 of the global random and np.random states (index 0.5)."""
+    import random
+    import numpy as np
+    n = np.random.get_state()
+    h = hashlib.sha256(repr(random.getstate()).encode())
+    h.update(repr((n[0], n[1].tolist(), n[2], n[3], n[4])).encode())
+    return h.hexdigest()
+
+
+def _py_rng_digest():
+    import random
+    return hashlib.sha256(repr(random.getstate()).encode()).hexdigest()
+
+
+def _make_env(cfg):
+    """BoxelTestEnv(gui=False, scene_config=cfg) on clients 0 and 1; returns
+    (env, the constructor's printed text)."""
+    from boxel_env import BoxelTestEnv
+    live = _live_clients()
+    if live:
+        raise RuntimeError(f'clients still connected before a scene build: {live}')
+    with captured() as box:
+        env = BoxelTestEnv(gui=False, scene_config=cfg)
+    if (env.client_id, env.plan_client_id) != (0, 1):
+        env.close()
+        raise RuntimeError(f'scene built on clients {env.client_id}, {env.plan_client_id}, not 0, 1')
+    return env, box['out'].getvalue()
+
+
+def _first_registry(env):
+    """test_full_pipeline.main lines 858-997 replayed (semantic baseline, no
+    --min-boxel-size, no oracle phase): the effective cell, main's 50 settle
+    steps, the observation, free space, merge, surface tags, the registry and
+    record_initial_detections.  Returns (obs, registry, effective_cell)."""
+    import numpy as np
+    from boxel_data import BoxelRegistry
+    from cell_merger import merge_free_space_cells
+    from execution import record_initial_detections
+    max_extent = 0.0
+    for name, info in env.objects.items():
+        if name in STATIC_NAMES:
+            continue
+        if getattr(info, 'is_tray', False):
+            continue
+        if info.size is None:
+            continue
+        max_extent = max(max_extent, float(np.max(info.size)))
+    effective_cell = max_extent + 0.01
+    env.free_space_generator.min_resolution = effective_cell
+    for _ in range(50):
+        env.step_simulation()
+    env.update_object_positions()
+    obs = env.get_camera_observation()
+    all_known = obs.boxels
+    free_boxels = env.generate_free_space(all_known, visualize=False)
+    merged_free = merge_free_space_cells(free_boxels)
+    env.annotate_free_space_surface(merged_free)
+    all_boxels = all_known + merged_free
+    registry = BoxelRegistry()
+    for bd in all_boxels:
+        registry.add_boxel(bd)
+    record_initial_detections(env, registry)
+    return obs, registry, effective_cell
+
+
+def _boxel_tuple(b):
+    """R's tuple (id, type, min, max, is_occluder, shadow_boxel_ids,
+    created_by_boxel_id, on_surface) plus object_name, created_by_object,
+    surface_z."""
+    return [b.id, b.boxel_type.value, b.min_corner.tolist(), b.max_corner.tolist(),
+            b.is_occluder, list(b.shadow_boxel_ids), b.created_by_boxel_id, b.on_surface,
+            b.object_name, b.created_by_object, b.surface_z]
+
+
+def _pose_fields(b):
+    return {'pose_radius': b.pose_radius, 'yaw': b.yaw, 'yaw_valid': b.yaw_valid,
+            'body_extents': b.body_extents, 'rect_center': b.rect_center,
+            'complete_detections': b.complete_detections}
+
+
+def _config_rec(c):
+    if c is None:
+        return None
+    return {'name': c.name, 'joint_positions': c.joint_positions, 'is_heuristic': c.is_heuristic,
+            'ignored_body_ids': sorted(int(x) for x in c.ignored_body_ids),
+            'held_body_ids': sorted(int(x) for x in c.held_body_ids),
+            'grasp_ee_offset': c.grasp_ee_offset}
+
+
+def _grasp_rec(g):
+    return {'name': g.name, 'position': g.position, 'orientation': g.orientation}
+
+
+def _targets_of(env):
+    """Non-static, non-occluder, non-tray objects in env.objects order."""
+    return [n for n, i in env.objects.items()
+            if n not in STATIC_NAMES and not i.is_occluder and not getattr(i, 'is_tray', False)]
+
+
+def _env_constants(env):
+    import pose_belief
+    import robot_utils
+    import slip_fixes
+    pb = _pb()
+    rid = env.objects['robot'].object_id
+    model = robot_utils.robot_model()
+    sc, fs = env.shadow_calculator, env.free_space_generator
+    n_con = pb.getNumConstraints(physicsClientId=env.client_id)
+    return {
+        'table_surface_height': env.table_surface_height,
+        'table_x_range': env.table_x_range, 'table_y_range': env.table_y_range,
+        'camera_position': env.camera_position, 'camera_target': env.camera_target,
+        'camera_up': env.camera_up,
+        'shadow_calculator': {'camera_position': sc.camera_position,
+                              'table_surface_height': sc.table_surface_height,
+                              'x': [sc.table_x_min, sc.table_x_max],
+                              'y': [sc.table_y_min, sc.table_y_max]},
+        'free_space_generator': {'min_resolution': fs.min_resolution, 'ws_min': fs.ws_min,
+                                 'ws_max': fs.ws_max},
+        'tray_xy': env._tray_xy,
+        'gui_to_plan': [[g, p_] for g, p_ in env._gui_to_plan.items()],
+        'plan_robot_id': env.plan_robot_id,
+        'finger_joint_states': {
+            'client0': [list(pb.getJointState(rid, fj, physicsClientId=env.client_id)[:2])
+                        for fj in model.finger_joints],
+            'client1': [list(pb.getJointState(env.plan_robot_id, fj, physicsClientId=env.plan_client_id)[:2])
+                        for fj in model.finger_joints]},
+        'finger_lateral_friction_client0': [pb.getDynamicsInfo(rid, fl, physicsClientId=env.client_id)[1]
+                                            for fl in model.finger_joints],
+        'num_constraints_client0': n_con,
+        'constraints_client0': [list(pb.getConstraintInfo(pb.getConstraintUniqueId(i, physicsClientId=env.client_id),
+                                                          physicsClientId=env.client_id))
+                                for i in range(n_con)],
+        'num_solver_iterations': {
+            'client0': pb.getPhysicsEngineParameters(physicsClientId=env.client_id)['numSolverIterations'],
+            'client1': pb.getPhysicsEngineParameters(physicsClientId=env.plan_client_id)['numSolverIterations']},
+        'slip_fixes': slip_fixes.spec(), 'switches': dict(pose_belief.SWITCHES),
+    }
+
+
+def _scene_record(env, cfg):
+    """Every object in env.objects order: the ObjectInfo fields, its spec,
+    the spawn pose (read from the plan twin, created at the spawn position and
+    never stepped) and the settled pose (client 0 after the 10 settle steps)."""
+    pb = _pb()
+    specs = {}
+    for i, s in enumerate(cfg.occluders):
+        specs[s.name if s.name is not None else f'occluder_{i + 1}'] = s
+    for i, s in enumerate(cfg.targets):
+        specs[s.name if s.name is not None else f'target_{i + 1}'] = s
+    objs = []
+    for name, info in env.objects.items():
+        gid = info.object_id
+        pid = env._gui_to_plan.get(gid)
+        row = {'name': name, 'object_id': gid, 'plan_id': pid, 'is_occluder': info.is_occluder,
+               'is_visible': info.is_visible, 'is_tray': getattr(info, 'is_tray', False),
+               'size': info.size, 'info_position': info.position,
+               'info_orientation': info.orientation,
+               'spawn_pose_from_twin': (list(pb.getBasePositionAndOrientation(pid, physicsClientId=env.plan_client_id))
+                                        if pid is not None else None),
+               'settled_pose_client0': list(pb.getBasePositionAndOrientation(gid, physicsClientId=env.client_id))}
+        s = specs.get(name)
+        if s is not None:
+            row['spec'] = {'shape': s.shape.value, 'size': s.size, 'color': s.color, 'mass': s.mass,
+                           'lateral_friction': s.lateral_friction}
+        objs.append(row)
+    return {'scene_config': {'seed': cfg.seed, 'constrain_to_reach': cfg.constrain_to_reach,
+                             'n_hidden_targets': cfg.n_hidden_targets, 'enable_tray': cfg.enable_tray,
+                             'occluder_positions': cfg.occluder_positions,
+                             'target_positions': cfg.target_positions},
+            'objects': objs, 'constants': _env_constants(env)}
+
+
+def _scene_case(label, make_cfg, tray=False):
+    """Build one scene; its record, or the exception's type and text."""
+    import random
+    import numpy as np
+    cfg = make_cfg()
+    if tray:
+        cfg.enable_tray = True     # set after the preset call, as main does
+    random.seed(1234)
+    np.random.seed(1234)
+    before = _rng_digest()
+    try:
+        env, printed = _make_env(cfg)
+    except Exception as ex:
+        live = _live_clients()
+        _disconnect_all()
+        return {'case': label, 'raises': type(ex).__name__, 'message': str(ex),
+                'global_rng_unchanged': _rng_digest() == before, 'clients_left_connected': live}
+    try:
+        rec = {'case': label, **_scene_record(env, cfg),
+               'global_rng_unchanged': _rng_digest() == before, 'stdout': printed}
+    finally:
+        env.close()
+    return rec
+
+
+def _scene_notes(out):
+    out.note('each case: BoxelTestEnv(gui=False, scene_config=preset(...)), tray set after the preset call '
+             'as main does (test_full_pipeline.py:3214); clients asserted 0 (executing) and 1 (plan twin)')
+    out.note('spawn_pose_from_twin: the plan twin body is created at the spawn position and never stepped; '
+             'settled_pose_client0: after the env\'s 10 settle steps (boxel_env.py:1003)')
+    out.note('global_rng_unchanged: random and np.random states hashed before and after the build '
+             '(both seeded 1234 first): the builders draw only from local RandomState (index 0.5)')
+    out.note('slip_fixes at the import default (DEFAULT_ON, the CLI default); spec() in constants')
+
+
+# ----- pin 1: scene per seed -----------------------------------------------
+
+@pin('world', 'p01_scene_presets', 'R1: default (tray off/on), mixed, stack n=3 and scalability 3/4/1 at seeds 0,1,7,13,999',
+     timeout=1800)
+def p01_scene_presets(out):
+    from boxel_env import default_scene, mixed_shapes_scene, stack_scene, scalability_scene
+    _set_switches(False)
+    _scene_notes(out)
+    out.json('state.json', _module_state())
+    out.json('default.json', _scene_case('default', default_scene))
+    out.json('default_tray.json', _scene_case('default tray', default_scene, tray=True))
+    out.json('mixed_seed0.json', _scene_case('mixed seed 0', lambda: mixed_shapes_scene(seed=0)))
+    for s in SCENE_SEEDS:
+        out.json(f'stack3_seed{s}.json', _scene_case(f'stack 3 seed {s}', lambda: stack_scene(n_objects=3, seed=s)))
+    for s in SCENE_SEEDS:
+        out.json(f'scalability_3_4_1_seed{s}.json', _scene_case(
+            f'scalability 3/4/1 seed {s}',
+            lambda: scalability_scene(n_occluders=3, n_targets=4, n_hidden=1, seed=s)))
+
+
+@pin('world', 'p01_scene_random_pairs', 'R1: random-pairs 3 occ + 1 distractor, the bridge form, run boxels (2 occ, seeds 0-19), tray',
+     timeout=2400)
+def p01_scene_random_pairs(out):
+    from boxel_env import random_pairs_scene
+    _set_switches(False)
+    _scene_notes(out)
+    out.note('run boxels = random-pairs, --n-occluders 2 (run.ps1:42), --n-extra-distractors 0 (run_logger.py:740)')
+    out.json('state.json', _module_state())
+    for s in SCENE_SEEDS:
+        out.json(f'rp_3occ_1dist_seed{s}.json', _scene_case(
+            f'random-pairs 3 occ 1 distractor seed {s}',
+            lambda: random_pairs_scene(n_occluders=3, extra_distractors=1, seed=s)))
+        out.json(f'rp_bridge_form_seed{s}.json', _scene_case(
+            f'random_pairs_scene(seed={s})', lambda: random_pairs_scene(seed=s)))
+    for s in range(20):
+        out.json(f'rp_2occ_seed{s}.json', _scene_case(
+            f'random-pairs 2 occ seed {s}', lambda: random_pairs_scene(n_occluders=2, extra_distractors=0, seed=s)))
+    out.json('rp_3occ_1dist_seed0_tray.json', _scene_case(
+        'random-pairs 3 occ 1 distractor seed 0 tray',
+        lambda: random_pairs_scene(n_occluders=3, extra_distractors=1, seed=0), tray=True))
+    out.json('rp_2occ_seed0_tray.json', _scene_case(
+        'random-pairs 2 occ seed 0 tray', lambda: random_pairs_scene(n_occluders=2, seed=0), tray=True))
+
+
+@pin('world', 'p01_scene_failures', 'R1: placement scans (which seeds raise, with the exact RuntimeError text)',
+     timeout=2400)
+def p01_scene_failures(out):
+    from boxel_env import random_pairs_scene, scalability_scene, stack_scene
+    _set_switches(False)
+    out.note('scan: each seed built once; ok rows carry only the object names (the full records are the '
+             'other p01 pins), failing rows the exception type and text and the clients left connected')
+    out.json('state.json', _module_state())
+
+    def scan(label, make):
+        rows = []
+        for s in range(30):
+            r = _scene_case(f'{label} seed {s}', lambda: make(s))
+            if 'raises' in r:
+                rows.append({'seed': s, 'raises': r['raises'], 'message': r['message'],
+                             'clients_left_connected': r['clients_left_connected'],
+                             'global_rng_unchanged': r['global_rng_unchanged']})
+            else:
+                rows.append({'seed': s, 'ok': [o['name'] for o in r['objects']]})
+        return rows
+    out.json('scan_rp_3occ_1dist.json', scan('rp 3/1', lambda s: random_pairs_scene(
+        n_occluders=3, extra_distractors=1, seed=s)))
+    out.json('scan_rp_3occ_3dist.json', scan('rp 3/3', lambda s: random_pairs_scene(
+        n_occluders=3, extra_distractors=3, seed=s)))
+    out.json('scan_scalability_3_4_2.json', scan('scal 3/4/2', lambda s: scalability_scene(
+        n_occluders=3, n_targets=4, n_hidden=2, seed=s)))
+    out.json('stack_too_many.json', [_scene_case(f'stack {n} seed 0', lambda: stack_scene(n_objects=n, seed=0))
+                                     for n in (12, 16)])
+
+
+# ----- pin 1b: find_dice scene files (needs the bridge venv) ----------------
+
+def _need_tampura():
+    if not os.path.isdir(TW_ENVS):
+        raise RuntimeError(f'needs the bridge venv: TAMPURA tree {TW_ENVS} absent')
+    for pth in (TW + '/tampura', TW_ENVS):
+        if pth not in sys.path:
+            sys.path.append(pth)
+
+
+@pin('world', 'p01b_find_dice_scenes', 'R1b: their world built from every committed generated scene and the 3 shipped ones (needs the bridge venv)',
+     timeout=2400)
+def p01b_find_dice_scenes(out):
+    _need_tampura()
+    import warnings
+    with captured(), warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        from tampura_environments.panda_utils.panda_env_utils import setup_robot
+        from tampura_environments.find_dice import env as fd_env
+    out.note('needs the bridge venv: /root/armO-venvA with TAMPURA\'s tree on sys.path (run.ps1:149)')
+    out.note('the world as their initialize builds it (find_dice/env.py:816-838) without their env object: '
+             'setup_robot(vis=False), setup_world(robot, client, categories, poses, vis=False); the file is '
+             'named, never picked by their os.listdir loader (BF#8)')
+    out.note('sha256_raw: the working-tree bytes (core.autocrlf decides the eol); sha256_lf: CRLF turned LF')
+    gen = REPO / 'tampura_bridge' / 'gen_scenes' / 'find_dice'
+    shipped = Path(TW_ENVS) / 'tampura_environments' / 'find_dice' / 'problems'
+    files = [('gen', f) for f in sorted(gen.glob('find_dice_gen_s*.json'))]
+    files += [('shipped', f) for f in sorted(shipped.glob('*.json'))]
+    man_raw = (gen / 'manifest.json').read_bytes()
+    manifest = json.loads(man_raw.decode('utf-8'))
+    out.json('manifest.json', {'sha256_raw': hashlib.sha256(man_raw).hexdigest(),
+                               'sha256_lf': hashlib.sha256(man_raw.replace(b'\r\n', b'\n')).hexdigest(),
+                               'content': manifest})
+    excluded = list(getattr(fd_env, 'EXCLUDE_CLASSES', []))
+    rows = []
+    for kind, f in files:
+        raw = f.read_bytes()
+        scene = json.loads(raw.decode('utf-8'))
+        if _live_clients():
+            raise RuntimeError(f'clients connected before {f.name}: {_live_clients()}')
+        with captured() as box, warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            robot, client = setup_robot(vis=False)
+            world = fd_env.setup_world(robot, client, scene['categories'], scene['poses'], vis=False)
+        try:
+            body = getattr(robot, 'body', robot)
+            arm = robot.get_group_joints(fd_env.ARM_GROUP, client=client)
+            grip = robot.get_group_joints(fd_env.GRIPPER_GROUP, client=client)
+            rows.append({
+                'kind': kind, 'file': f.name,
+                'sha256_raw': hashlib.sha256(raw).hexdigest(),
+                'sha256_lf': hashlib.sha256(raw.replace(b'\r\n', b'\n')).hexdigest(),
+                'categories': scene['categories'], 'excluded_class_present': not set(excluded).isdisjoint(scene['categories']),
+                'world_categories': list(world.categories), 'n_objects': len(world.objects),
+                'object_poses': [list(client.getBasePositionAndOrientation(int(b))) for b in world.objects],
+                'environment_bodies': [int(b) for b in world.environment], 'floor': int(world.floor),
+                'arm_joints': [list(client.getJointState(int(body), int(j))[:2]) for j in arm],
+                'gripper_joints': [list(client.getJointState(int(body), int(j))[:2]) for j in grip],
+                'num_bodies': client.getNumBodies(),
+                'stdout': box['out'].getvalue()})
+        finally:
+            client.disconnect()
+    out.json('scenes.json', rows)
+    out.json('exclude_classes.json', excluded)
+
+
+# ----- pin 2: first observation and boxels ---------------------------------
+
+def _first_observation_cases():
+    from boxel_env import default_scene, stack_scene, scalability_scene, random_pairs_scene
+    cases = [('default', default_scene, False),
+             ('stack3_seed0', lambda: stack_scene(n_objects=3, seed=0), False),
+             ('scalability_3_4_1_seed0', lambda: scalability_scene(n_occluders=3, n_targets=4, n_hidden=1, seed=0), False),
+             ('scalability_3_4_1_seed1', lambda: scalability_scene(n_occluders=3, n_targets=4, n_hidden=1, seed=1), False),
+             ('rp_3occ_1dist_seed0', lambda: random_pairs_scene(n_occluders=3, extra_distractors=1, seed=0), False),
+             ('rp_3occ_1dist_seed1', lambda: random_pairs_scene(n_occluders=3, extra_distractors=1, seed=1), False),
+             ('rp_3occ_1dist_seed0_tray', lambda: random_pairs_scene(n_occluders=3, extra_distractors=1, seed=0), True)]
+    for s in range(5):
+        cases.append((f'rp_2occ_seed{s}', lambda s=s: random_pairs_scene(n_occluders=2, seed=s), False))
+    return cases
+
+
+@pin('world', 'p02_first_observation', 'R2: main\'s first observation, free space, merge and registry (switches off and on)',
+     timeout=2400)
+def p02_first_observation(out):
+    out.note('main lines 858-998 replayed (_first_registry): effective cell = largest object extent + 0.01 '
+             'set as the octree min_resolution, 50 settle steps, get_camera_observation, generate_free_space, '
+             'merge_free_space_cells, annotate_free_space_surface, BoxelRegistry, record_initial_detections, '
+             'save_to_json("boxel_data.json") in the work folder')
+    out.note('boxels rows: [id, type, min, max, is_occluder, shadow_boxel_ids, created_by_boxel_id, on_surface, '
+             'object_name, created_by_object, surface_z] in registry order; pose fields only for OBJECT boxels')
+    out.note('switches "on" = M8, M9, M10, pick_aperture_from_pose all on (what run boxels runs)')
+    out.note('a scene whose build raises (scalability 3/4/1 seed 0: placement) is written as the exception '
+             'type and text with the clients left connected; seed 1 of the same preset is the built case')
+    for label, make, tray in _first_observation_cases():
+        for sw in (False, True):
+            _set_switches(sw)
+            cfg = make()
+            if tray:
+                cfg.enable_tray = True
+            try:
+                env, printed = _make_env(cfg)
+            except Exception as ex:          # a placement failure is the output (as pin 1 writes it)
+                live = _live_clients()
+                _disconnect_all()
+                out.json(f'{label}_{"on" if sw else "off"}.json', {
+                    'state': _module_state(), 'scene_build_raises': type(ex).__name__, 'message': str(ex),
+                    'clients_left_connected': live})
+                continue
+            try:
+                r = outcome(_first_registry, env)
+                if 'value' not in r:
+                    out.json(f'{label}_{"on" if sw else "off"}.json', r)
+                    continue
+                obs, registry, cell = r.pop('value')
+                registry.save_to_json('boxel_data.json')
+                text = Path('boxel_data.json').read_text(encoding='utf-8')
+                out.json(f'{label}_{"on" if sw else "off"}.json', {
+                    'state': _module_state(), 'effective_cell': cell,
+                    'visible_objects': obs.visible_objects,
+                    'object_poses': {n: [c, q] for n, (c, q) in obs.object_poses.items()},
+                    'boxels': [_boxel_tuple(b) for b in registry.boxels.values()],
+                    'object_pose_fields': {b.id: _pose_fields(b) for b in registry.boxels.values()
+                                           if b.boxel_type.value == 'object'},
+                    'boxel_data_json_sha256': text_digest(text),
+                    'next_id': registry._next_id, 'stdout': r['stdout']})
+                if not sw:
+                    out.text(f'{label}_off_boxel_data.json', text)
+            finally:
+                env.close()
+    _set_switches(False)
+
+
+# ----- pin 3: shadow geometry alone ----------------------------------------
+
+@pin('world', 'p03_shadow_geometry', 'R3: ShadowCalculator on a bare plane and table with hand-made OBJECT boxels')
+def p03_shadow_geometry(out):
+    import numpy as np
+    import pybullet_data
+    from boxel_data import BoxelData, BoxelType
+    from shadow_calculator import ShadowCalculator
+    pb = _pb()
+    if _live_clients():
+        raise RuntimeError('a client is connected')
+    c = pb.connect(pb.DIRECT)
+    if c != 0:
+        raise RuntimeError(f'bare world on client {c}, not 0')
+    try:
+        pb.setAdditionalSearchPath(pybullet_data.getDataPath(), physicsClientId=c)
+        pb.loadURDF('plane.urdf', [0, 0, 0], [0, 0, 0, 1], physicsClientId=c)
+        pb.loadURDF('table/table.urdf', [0.5, 0.0, -0.3], [0, 0, 0, 1], useFixedBase=True, physicsClientId=c)
+        if pb.getNumBodies(physicsClientId=0) != 2:
+            raise RuntimeError('client 0 must hold the plane and the table only')
+        tz = 0.625 + (-0.3)                      # boxel_env.py:899-903
+        sc = ShadowCalculator(np.array([0.1, -0.8, 0.7]), tz,
+                              table_x_range=(-0.4, 0.6), table_y_range=(-0.5, 0.5))
+        out.note('client 0: plane.urdf and table/table.urdf at [0.5, 0, -0.3] fixed (boxel_env.py:891-902); '
+                 'ShadowCalculator(eye [0.1, -0.8, 0.7], 0.625 + (-0.3), x (-0.4, 0.6), y (-0.5, 0.5)), the '
+                 'env\'s values (boxel_env.py:513, 617-620, 903-909); rays on client 0 (physics_client None)')
+        out.note('fragment rows: [type, min, max, created_by_object, id] in returned order')
+
+        def ob(name, cx, cy, hx, hy, h, z0=0.0):
+            return BoxelData(id=name, boxel_type=BoxelType.OBJECT, object_name=name,
+                             min_corner=np.array([cx - hx, cy - hy, tz + z0]),
+                             max_corner=np.array([cx + hx, cy + hy, tz + z0 + h]))
+
+        def frag(fs):
+            return [[f.boxel_type.value, f.min_corner.tolist(), f.max_corner.tolist(),
+                     f.created_by_object, f.id] for f in fs]
+
+        def run(label, obj, obstacles):
+            r = outcome(sc.calculate_shadow_boxel, obj, obstacles)
+            v = r.pop('value', None)
+            return {'case': label, 'object': _boxel_tuple(obj), 'n_obstacles': len(obstacles),
+                    'fragments': frag(v) if v is not None else None, **r}
+        rows = []
+        a = ob('cube', 0.1, 0.1, 0.03, 0.03, 0.06)
+        rows.append(run('a one cube on the table', a, []))
+        A = ob('occ_a', 0.1, 0.1, 0.03, 0.03, 0.12)
+        B = ob('occ_b', 0.12, 0.18, 0.03, 0.03, 0.10)
+        rows.append(run('b A with B as obstacle', A, [B]))
+        rows.append(run('b B with A as obstacle', B, [A]))
+        shadows = []
+        for o in sorted([B, A], key=lambda b: b.id):          # generate_boxels order (boxel_env.py:1663-1671)
+            obst = [x for x in (A, B) if x.id != o.id] + shadows
+            r = run(f'b sequence {o.id}', o, obst)
+            rows.append(r)
+            shadows.extend(sc.calculate_shadow_boxel(o, obst))
+        rows.append(run('c far from the camera, clipped by the table range', ob('far', 0.5, 0.42, 0.03, 0.03, 0.1), []))
+        rows.append(run('d held above the table', ob('held', 0.1, 0.1, 0.02, 0.02, 0.04, z0=0.05), []))
+        rows.append(run('d just inside the 1 cm on-surface margin', ob('low', 0.1, 0.1, 0.02, 0.02, 0.04, z0=0.009), []))
+        T = ob('tall', 0.1, 0.0, 0.03, 0.03, 0.15)
+        S = ob('behind', 0.17, 0.12, 0.02, 0.02, 0.05)
+        rows.append(run('e two-slab carve (overhang meets an obstacle)', T, [S]))
+        rows.append(run('e obstacle inside the shadow', T, [ob('inside', 0.1, 0.2, 0.02, 0.02, 0.04)]))
+        rows.append(run('f beyond the table y edge (degenerate)', ob('edge', 0.1, 0.55, 0.03, 0.03, 0.06), []))
+        rows.append(run('f beyond the table x edge', ob('xedge', 0.7, 0.0, 0.03, 0.03, 0.06), []))
+        out.json('shadows.json', rows)
+    finally:
+        _disconnect_all()
+
+
+# ----- pin 6: plan twin sync -----------------------------------------------
+
+@pin('world', 'p06_twin_sync', 'R6: sync_to_plan_client without and with the registry, held body, moved arm (tray scene)')
+def p06_twin_sync(out):
+    import numpy as np
+    import robot_utils
+    from boxel_env import random_pairs_scene
+    pb = _pb()
+    _set_switches(False)
+    cfg = random_pairs_scene(n_occluders=3, extra_distractors=1, seed=0)
+    cfg.enable_tray = True
+    env, _ = _make_env(cfg)
+    try:
+        with captured():
+            obs, registry, _ = _first_registry(env)
+        names = {i.object_id: n for n, i in env.objects.items()}
+        rid, prid = env.objects['robot'].object_id, env.plan_robot_id
+        nj = pb.getNumJoints(prid, physicsClientId=env.plan_client_id)
+
+        def reset_twin():
+            for gid, pid in env._gui_to_plan.items():
+                pb.resetBasePositionAndOrientation(pid, [3.0, 3.0, 3.0], [0, 0, 0, 1],
+                                                   physicsClientId=env.plan_client_id)
+            for j in range(nj):
+                pb.resetJointState(prid, j, 0.0, targetVelocity=0.0, physicsClientId=env.plan_client_id)
+
+        def twin():
+            return {'bodies': {names[g]: list(pb.getBasePositionAndOrientation(p_, physicsClientId=env.plan_client_id))
+                               for g, p_ in env._gui_to_plan.items()},
+                    'robot_joints': [list(pb.getJointState(prid, j, physicsClientId=env.plan_client_id)[:2])
+                                     for j in range(nj)]}
+        held = next(n for n in _targets_of(env) if registry.get_boxel(n) is not None)
+        parked = [n for n in env.objects if n not in STATIC_NAMES and registry.get_boxel(n) is None
+                  and not getattr(env.objects[n], 'is_tray', False)]
+        ee = robot_utils.robot_model().ee_link
+        cases = []
+        reset_twin()
+        env.sync_to_plan_client()
+        cases.append({'case': '1 no registry', **twin()})
+        reset_twin()
+        env.sync_to_plan_client(registry=registry)
+        cases.append({'case': '2 registry (belief poses, boxel-less bodies parked)', **twin()})
+        reset_twin()
+        env.sync_to_plan_client(held_body_id=env.objects[held].object_id, registry=registry)
+        cases.append({'case': f'3 registry, holding {held}', 'ee_client0': pb.getLinkState(rid, ee, physicsClientId=env.client_id)[0],
+                      **twin()})
+        q = np.array(robot_utils.REST_POSES) + np.array([0.3, 0.2, -0.2, 0.3, 0.1, -0.2, 0.4])
+        for j, v in zip(robot_utils.robot_model().arm_joints, q):
+            pb.resetJointState(rid, j, float(v), physicsClientId=env.client_id)
+        reset_twin()
+        env.sync_to_plan_client(held_body_id=env.objects[held].object_id, registry=registry)
+        cases.append({'case': f'4 arm moved on client 0, holding {held}',
+                      'ee_client0': pb.getLinkState(rid, ee, physicsClientId=env.client_id)[0], **twin()})
+        out.json('twin.json', {'held': held, 'parked_expected': parked, 'park_pose': env._PLAN_CLIENT_PARK,
+                               'state': _module_state(), 'cases': cases})
+        out.note('scene: random_pairs_scene(3, 1, seed 0) with the tray, switches off, registry of _first_registry; '
+                 'the twin is reset (bodies to [3, 3, 3], robot joints to 0) before each case')
+        out.note('parked_expected: non-static, non-tray bodies without a boxel (case 2 must show them at the park pose)')
+    finally:
+        env.close()
+
+
+# ----- pin 7: init fact set ------------------------------------------------
+
+def _build_planner(env, registry, m8_on, sense_gate='off', corridor='cell+object'):
+    """The planner as main builds it (test_full_pipeline.py:1215-1392)."""
+    import m8_domain
+    from boxel_data import BoxelType
+    from execution import compute_shadow_blockers, pick_contact_floor
+    from pddlstream_planner import PDDLStreamPlanner
+    shadows = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.SHADOW]
+    occluders = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.OBJECT]
+    som = compute_shadow_blockers(env.camera_position, registry, shadows, occluders, env)
+    object_body_ids = {}
+    for name, info in env.objects.items():
+        if name not in STATIC_NAMES:
+            object_body_ids[name] = env.plan_body_id(info.object_id)
+    for b in registry.boxels.values():
+        if b.object_name and b.object_name in object_body_ids:
+            object_body_ids[b.id] = object_body_ids[b.object_name]
+    support = frozenset({env.plan_body_id(env.objects['plane'].object_id),
+                         env.plan_body_id(env.objects['table'].object_id)})
+    tray_name = next((n for n, i in env.objects.items() if i.is_tray), None)
+    planner = PDDLStreamPlanner(registry, robot_id=env.plan_robot_id, shadow_occluder_map=som,
+                                physics_client=env.plan_client_id, object_body_ids=object_body_ids,
+                                support_body_ids=support, camera_pos=env.camera_position,
+                                tray_name=tray_name,
+                                domain_file=m8_domain.domain_file(True) if m8_on else None)
+    if env.reach_envelope is not None:
+        planner.streams.set_reach(*env.reach_envelope)
+    planner.streams.contact_floor = pick_contact_floor(env)
+    planner.streams.surface_z_default = float(env.table_surface_height)
+    planner.sense_gate = sense_gate
+    planner.corridor_test = corridor
+    return planner, som, shadows, occluders
+
+
+class _ShuffleRecorder:
+    """Test-level wrapper on random.shuffle (the shared module attribute
+    pddlstream_planner.random.shuffle): copies the list before and after the
+    real shuffle and hashes the global random state around it."""
+
+    def __init__(self):
+        import random
+        self.random, self.real, self.calls = random, random.shuffle, []
+
+    def __call__(self, x, *a, **k):
+        pre = [str(f) for f in x]
+        s0 = _py_rng_digest()
+        self.real(x, *a, **k)
+        self.calls.append({'pre': pre, 'post': [str(f) for f in x], 'rng_before': s0, 'rng_after': _py_rng_digest()})
+
+    def __enter__(self):
+        self.random.shuffle = self
+        return self
+
+    def __exit__(self, *exc):
+        self.random.shuffle = self.real
+        return False
+
+
+def _indices(facts, universe):
+    idx = {f: i for i, f in enumerate(universe)}
+    return [idx[f] for f in facts]
+
+
+def _facts_block(calls, universe):
+    return [{'pre_idx': _indices(c['pre'], universe), 'post_idx': _indices(c['post'], universe),
+             'rng_before': c['rng_before'], 'rng_after': c['rng_after']} for c in calls]
+
+
+@pin('world', 'p07_init_facts', 'R7: _build_init through export_problem_pddl and create_problem, M8 x sense_gate x corridor, later states',
+     timeout=2400)
+def p07_init_facts(out):
+    import observe_views
+    from boxel_data import BoxelType
+    from boxel_env import random_pairs_scene, stack_scene
+    out.note('per case a fresh planner (names carry counters, streams.py:306-310), built as main does; '
+             'sync_to_plan_client(registry) before the export and again before create_problem; '
+             'random.seed(7) before the export, random.seed(8) before create_problem; with M8 on, '
+             'm8_views and sense_over_region are set between the two calls, as main does (1452-1456)')
+    out.note('facts are str(tuple) (R: sorted(set(map(str, init)))); sorted_set is that list; the export and '
+             'create_problem blocks give the list before and after random.shuffle as indices into sorted_set, '
+             'with the global random state hashed around the shuffle; pre-shuffle order needs PYTHONHASHSEED=0')
+    out.note('target: the first non-occluder, non-tray target without a boxel (hidden), else the first target; '
+             'visible_target_locations as main 1089-1097 (target named); known_empty_shadows [] for the first plan')
+    out.note('m8_stats: keys ending in _s and keys with "time" removed (timings)')
+    cases = []
+
+    def run_case(label, env, registry, m8_on, gate, corridor, target_objects, goal, known_empty=(),
+                 moved=None, observed_clear=None, on_relations=None, stackable=None, held=None, vtl=None):
+        planner, som, shadows, occluders = _build_planner(env, registry, m8_on, gate, corridor)
+        env.sync_to_plan_client(registry=registry)
+        import random
+        with _ShuffleRecorder() as rec, captured() as box:
+            random.seed(7)
+            path = planner.export_problem_pddl(target_objects=target_objects, goal=goal,
+                                               visible_target_locations=vtl,
+                                               filepath=os.path.abspath('problem_debug.pddl'))
+            n_export = len(rec.calls)
+            if m8_on:
+                planner.m8_views = observe_views.ObserveViews(env, planner.streams._robot_base_xy)
+                planner.sense_over_region = True
+            env.sync_to_plan_client(registry=registry)
+            random.seed(8)
+            planner.create_problem(target_objects, goal, current_config=planner.home_config,
+                                   known_empty_shadows=list(known_empty), moved_occluders=moved or {},
+                                   observed_clear_regions=observed_clear, visible_target_locations=vtl,
+                                   on_relations=on_relations, stackable_objects=stackable, held_obj=held)
+        export_text = Path(path).read_text(encoding='utf-8')
+        universe = sorted({f for c in rec.calls for f in c['pre']})
+        last = [str(f) for f in planner.last_init]
+        configs = {}
+        for f in planner.last_init:
+            for a in f[1:]:
+                if hasattr(a, 'joint_positions') and getattr(a, 'name', None):
+                    configs[a.name] = a.joint_positions
+        stats = {k: v for k, v in sorted((planner.last_m8_stats or {}).items())
+                 if not k.endswith('_s') and 'time' not in k}
+        cases.append(label)
+        safe = label.replace(' ', '_').replace('/', '-').replace('+', 'p')
+        out.json(f'case_{len(cases):02d}_{safe}.json', {
+            'case': label, 'state': _module_state(), 'sense_gate': gate, 'corridor_test': corridor,
+            'target_objects': target_objects, 'goal': goal,
+            'shadow_occluder_map_sorted': {k: sorted(v) for k, v in som.items()},
+            'sorted_set': universe, 'export': _facts_block(rec.calls[:n_export], universe),
+            'create_problem': _facts_block(rec.calls[n_export:], universe),
+            'n_shuffle_calls': [n_export, len(rec.calls) - n_export],
+            'last_init_idx': _indices(last, universe),
+            'export_text_sha256': text_digest(export_text),
+            'configs_in_init': {k: configs[k] for k in sorted(configs)},
+            'm8_stats': stats})
+        out.text(f'case_{len(cases):02d}_export.pddl', export_text)
+
+    def scene(make, tray, sw):
+        _set_switches(sw)
+        cfg = make()
+        cfg.enable_tray = tray
+        env, _ = _make_env(cfg)
+        with captured():
+            obs, registry, _ = _first_registry(env)
+        return env, registry
+
+    for sw in (False, True):
+        env, registry = scene(lambda: random_pairs_scene(n_occluders=3, extra_distractors=1, seed=0), True, sw)
+        try:
+            tg = _targets_of(env)
+            hidden = [t for t in tg if registry.get_boxel(t) is None]
+            target = hidden[0] if hidden else tg[0]
+            vtl = {}
+            for b in registry.boxels.values():
+                if b.object_name == target:
+                    vtl[target] = b.id
+                    break
+            for gate in ('off', 'strict'):
+                for corridor in ('cell+object', 'object'):
+                    run_case(f'rp tray M8 {"on" if sw else "off"} gate {gate} corridor {corridor}', env, registry,
+                             sw, gate, corridor, [target], ('holding', target), vtl=vtl)
+            if not sw:
+                visible = next(t for t in tg if registry.get_boxel(t) is not None)
+                shadows = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.SHADOW]
+                occl = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.OBJECT and b.is_occluder]
+                frees = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.FREE_SPACE]
+                run_case('rp tray later state: held, known empty, moved occluder, observed clear', env, registry,
+                         False, 'off', 'cell+object', [target], ('holding', target),
+                         known_empty=shadows[:1], moved={occl[0]: frees[0]} if occl and frees else {},
+                         observed_clear=frees[1:2], held=visible, vtl=vtl)
+        finally:
+            env.close()
+    env, registry = scene(lambda: stack_scene(n_objects=3, seed=0), False, False)
+    try:
+        cubes = _targets_of(env)
+        vtl = {}
+        for t in cubes:
+            for b in registry.boxels.values():
+                if b.object_name == t:
+                    vtl[t] = b.id
+                    break
+        run_case('stack3 seed0 stackable, one on relation', env, registry, False, 'off', 'cell+object',
+                 list(cubes), ('and', ('on', cubes[1], cubes[0])), on_relations={cubes[2]: cubes[0]},
+                 stackable=list(cubes), vtl=vtl)
+    finally:
+        env.close()
+    _set_switches(False)
+    out.json('cases.json', cases)
+
+
+# ----- pin 9: stream outputs without search --------------------------------
+
+@pin('world', 'p09_streams', 'R9: sample_grasp, compute_kin_solution, test_boxel_fits, hideability, ee_reachable (default scene)',
+     timeout=1800)
+def p09_streams(out):
+    import numpy as np
+    import slip_fixes
+    from boxel_data import BoxelData, BoxelType
+    from boxel_env import default_scene
+    from execution import pick_contact_floor
+    from streams import BoxelStreams
+    out.note('default_scene, switches off and on (M9 grasps need the fitted pose that '
+             'record_initial_detections writes with the switches on); hand boxels added to the registry: '
+             'hand_rect (3 x 6 cm), hand_wide (9 x 9 cm), hand_far_free (a free box 1.0 m from the base); '
+             '"ghost" has no boxel')
+    out.note('one fresh BoxelStreams per call group (counters); contact_floor and surface_z_default as main; '
+             'sync_to_plan_client(registry) first (the hideability test raycasts the twin)')
+    out.note('grasp_wrist_home on = the default slip set; off = the default set without it (slip_fixes.ENABLED '
+             'set directly and restored)')
+    saved = slip_fixes.ENABLED
+    for sw in (False, True):
+        _set_switches(sw)
+        env, _ = _make_env(default_scene())
+        try:
+            with captured():
+                obs, registry, _ = _first_registry(env)
+            tz = env.table_surface_height
+            O = BoxelType.OBJECT
+            registry.add_boxel(BoxelData(id='hand_rect', boxel_type=O, object_name='hand_rect',
+                                         min_corner=np.array([0.30, -0.33, tz]), max_corner=np.array([0.33, -0.27, tz + 0.05])))
+            registry.add_boxel(BoxelData(id='hand_wide', boxel_type=O, object_name='hand_wide',
+                                         min_corner=np.array([0.30, 0.25, tz]), max_corner=np.array([0.39, 0.34, tz + 0.05])))
+            registry.add_boxel(BoxelData(id='hand_far_free', boxel_type=BoxelType.FREE_SPACE,
+                                         min_corner=np.array([0.55, 0.25, tz]), max_corner=np.array([0.65, 0.35, tz + 0.1])))
+            env.sync_to_plan_client(registry=registry)
+            obj_ids = {}
+            for name, info in env.objects.items():
+                if name not in STATIC_NAMES:
+                    obj_ids[name] = env.plan_body_id(info.object_id)
+            support = frozenset({env.plan_body_id(env.objects['plane'].object_id),
+                                 env.plan_body_id(env.objects['table'].object_id)})
+
+            def streams():
+                s = BoxelStreams(registry, robot_id=env.plan_robot_id, physics_client=env.plan_client_id,
+                                 object_body_ids=obj_ids, support_body_ids=support)
+                s.contact_floor = pick_contact_floor(env)
+                s.surface_z_default = float(env.table_surface_height)
+                return s
+            objects = [b.id for b in registry.boxels.values() if b.boxel_type == O]
+            grasps = {}
+            for obj in objects + ['ghost']:
+                for wrist in (True, False):
+                    slip_fixes.ENABLED = saved if wrist else frozenset(saved - {'grasp_wrist_home'})
+                    r = outcome(lambda: [g for (g,) in streams().sample_grasp(obj)])
+                    v = r.pop('value', None)
+                    grasps[f'{obj} wrist_home={wrist}'] = {'grasps': [_grasp_rec(g) for g in v] if v is not None else None,
+                                                          **r}
+            slip_fixes.ENABLED = saved
+            kin = {}
+            red_grasp = next(streams().sample_grasp('red_object'))[0]
+            for label, boxel_id, view in (('own boxel', 'red_object', None), ('beyond reach', 'hand_far_free', None),
+                                          ('home pseudo-boxel', 'home', None), ('view boxel', 'view_x', 'view_x'),
+                                          ('missing boxel', 'nope', None), ('green boxel', 'green_object', None)):
+                s = streams()
+                if view:
+                    s.view_boxel_ids = frozenset({view})
+                r = outcome(lambda: [c for (c,) in s.compute_kin_solution('red_object', boxel_id, red_grasp)])
+                v = r.pop('value', None)
+                kin[label] = {'boxel': boxel_id, 'configs': [_config_rec(c) for c in v] if v is not None else None,
+                              'contact_ik_rejects': s.contact_ik_rejects, 'view_kin_skips': s.view_kin_skips, **r}
+            s = streams()
+            boxel_ids = list(registry.boxels)
+            fits = {obj: [bid for bid in boxel_ids if s.test_boxel_fits(obj, bid)] for obj in objects + ['ghost']}
+            shadow_ids = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.SHADOW]
+            hide = {}
+            for obj in _targets_of(env) + ['ghost']:
+                for sh in shadow_ids:
+                    hide[f'{obj} in {sh}'] = s.test_target_can_hide_in_shadow(obj, sh, camera_pos=env.camera_position)
+            reach = []
+            for rad in (0.5, 0.79, 0.8, 0.81, 0.9):
+                for ang in (0.0, 0.7853981633974483, 1.5707963267948966):
+                    for z in (0.0, 0.325, 0.6, 0.9):
+                        pt = [-0.4 + rad * float(np.cos(ang)), rad * float(np.sin(ang)), z]
+                        reach.append([pt, s.ee_reachable(pt)])
+            out.json(f'streams_switches_{"on" if sw else "off"}.json', {
+                'state': _module_state(), 'grasps': grasps, 'red_grasp': _grasp_rec(red_grasp), 'kin': kin,
+                'boxel_fits': fits, 'can_hide': hide, 'ee_reachable': reach,
+                'class_defaults': {'contact_floor': BoxelStreams.contact_floor,
+                                   'surface_z_default': BoxelStreams.surface_z_default,
+                                   'GRASP_MAX_SPAN': BoxelStreams.GRASP_MAX_SPAN,
+                                   'GRASP_SQUARE_TOL': BoxelStreams.GRASP_SQUARE_TOL}})
+        finally:
+            slip_fixes.ENABLED = saved
+            env.close()
+    _set_switches(False)
+
+
+@pin('world', 'p09_ik_tables', 'R9: solve_ik on 20 targets, resolve_robot_model, executor helpers, observe_views pure functions')
+def p09_ik_tables(out):
+    import types
+    import numpy as np
+    import pybullet_data
+    import execution
+    import observe_views
+    import robot_utils
+    pb = _pb()
+    if _live_clients():
+        raise RuntimeError('a client is connected')
+    c = pb.connect(pb.DIRECT)
+    if c != 0:
+        raise RuntimeError(f'bare world on client {c}, not 0')
+    out.note('bare DIRECT client 0 with pybullet_data\'s Panda at [-0.4, 0, 0] fixed (boxel_env.py:918-920); '
+             'targets: FK of REST_POSES at the ee link (worldLinkFramePosition) plus a 5 x 4 grid '
+             'dx (-0.25, -0.1, 0.05, 0.2, 0.35) x dy (-0.3, -0.1, 0.1, 0.3), dz -0.25 (index open 4: '
+             'the construction is this builder\'s)')
+    try:
+        rb = pb.loadURDF(os.path.join(pybullet_data.getDataPath(), 'franka_panda/panda.urdf'),
+                         [-0.4, 0.0, 0.0], [0, 0, 0, 1], useFixedBase=True, physicsClientId=c)
+
+        def model_rec(m):
+            return {'arm_joints': list(m.arm_joints), 'finger_joints': list(m.finger_joints), 'ee_link': m.ee_link,
+                    'gripper_links_sorted': sorted(m.gripper_links),
+                    'ignored_self_pairs_sorted': sorted(list(x) for x in m.ignored_self_pairs),
+                    'finger_limits': m.finger_limits}
+        m = robot_utils.resolve_robot_model(rb, c)
+        models = {'pybullet_data': model_rec(m), 'equals_PANDA_PYBULLET_DATA': m == robot_utils.PANDA_PYBULLET_DATA}
+        for j, q in zip(m.arm_joints, robot_utils.REST_POSES):
+            pb.resetJointState(rb, j, q, physicsClientId=c)
+        ee = np.array(pb.getLinkState(rb, m.ee_link, computeForwardKinematics=True, physicsClientId=c)[4])
+        targets = [ee + np.array([dx, dy, -0.25]) for dx in (-0.25, -0.1, 0.05, 0.2, 0.35)
+                   for dy in (-0.3, -0.1, 0.1, 0.3)]
+        yawed = pb.getQuaternionFromEuler([0, np.pi, 0.6])
+        ik = []
+        for t in targets:
+            for orn_label, orn in (('down', None), ('yaw 0.6', yawed)):
+                for seed_label, seed in (('none', None), ('REST_POSES', robot_utils.REST_POSES)):
+                    q = robot_utils.solve_ik(rb, t, orn, c, seed=seed)
+                    ik.append({'target': t, 'orn': orn_label, 'seed': seed_label,
+                               'joints': None if q is None else np.asarray(q)})
+        after = [pb.getJointState(rb, j, physicsClientId=c)[0] for j in m.arm_joints]
+        out.json('solve_ik.json', {'ee_rest': ee, 'cases': ik, 'arm_after_all_calls': after})
+        their = TW_ENVS + '/models/srl/franka_panda/panda.urdf'
+        if os.path.isfile(their):
+            c2 = pb.connect(pb.DIRECT)
+            try:
+                rb2 = pb.loadURDF(their, useFixedBase=True, physicsClientId=c2)
+                models['tampura_panda'] = model_rec(robot_utils.resolve_robot_model(rb2, c2))
+            finally:
+                pb.disconnect(physicsClientId=c2)
+        else:
+            models['tampura_panda'] = 'absent (needs the bridge venv)'
+        out.json('robot_models.json', models)
+    finally:
+        _disconnect_all()
+    rows = []
+    for name, aabb in (('cube 4 cm', ([0, 0, 0.325], [0.04, 0.04, 0.365])),
+                       ('cube 6 cm', ([0, 0, 0.325], [0.06, 0.06, 0.385])),
+                       ('tall 15 cm', ([0, 0, 0.325], [0.06, 0.06, 0.475])),
+                       ('die 1.6 cm', ([0, 0, 0.325], [0.016, 0.016, 0.341]))):
+        for floor in (None, 0.0, 0.0132, 0.035):
+            rows.append([name, floor, execution._grasp_ee_to_obj_z(aabb, 0.325, floor)])
+    floors = [['attribute missing', execution.pick_contact_floor(types.SimpleNamespace())],
+              ['None', execution.pick_contact_floor(types.SimpleNamespace(pick_contact_floor=None))],
+              ['0.0132', execution.pick_contact_floor(types.SimpleNamespace(pick_contact_floor=0.0132))]]
+    cargo = []
+    for floor in (None, 0.0132):
+        stub = types.SimpleNamespace(plan_body_id=lambda g: g + 100, table_surface_height=0.325,
+                                     pick_contact_floor=floor)
+        cargo.append(_config_rec(execution.held_cargo_config(
+            [0.1, -0.7, 0.0, -2.3, 0.0, 1.6, 0.8], 'q_readback_3', stub, 7,
+            ([0.0, 0.0, 0.325], [0.05, 0.05, 0.4]), [0.001, -0.002])))
+    out.json('executor_helpers.json', {'grasp_ee_to_obj_z': rows, 'pick_contact_floor': floors,
+                                       'held_cargo_config': cargo})
+    lat = [observe_views.lattice([0, 0, 0], [1, 2, 3], n) for n in (1, 2, 3)]
+    lat.append(observe_views.lattice([0.1, -0.2, 0.3], [0.4, 0.2, 0.33]))
+    quats = {}
+    for label, eul in (('identity', (0, 0, 0)), ('z 90', (0, 0, 1.5707963267948966)), ('x 180', (3.141592653589793, 0, 0)),
+                       ('y 170 deg', (0, 2.9670597283903604, 0)), ('down yaw 0.6', (0, 3.141592653589793, 0.6)),
+                       ('mixed', (0.3, -1.1, 2.4))):
+        R = np.array(_pb().getMatrixFromQuaternion(_pb().getQuaternionFromEuler(eul))).reshape(3, 3)
+        quats[label] = {'matrix': R, 'quat': observe_views._quat(R)}
+    quats['diag(1,-1,-1)'] = {'matrix': np.diag([1.0, -1.0, -1.0]), 'quat': observe_views._quat(np.diag([1.0, -1.0, -1.0]))}
+    quats['diag(-1,1,-1)'] = {'matrix': np.diag([-1.0, 1.0, -1.0]), 'quat': observe_views._quat(np.diag([-1.0, 1.0, -1.0]))}
+    quats['diag(-1,-1,1)'] = {'matrix': np.diag([-1.0, -1.0, 1.0]), 'quat': observe_views._quat(np.diag([-1.0, -1.0, 1.0]))}
+    out.json('observe_views.json', {'lattice': lat, 'quat': quats})
+
+
+# ----- pin 10: move_robot_smooth step count --------------------------------
+
+@pin('world', 'p10_move_steps', 'R10: move_robot_smooth stepSimulation count per case (default scene)')
+def p10_move_steps(out):
+    import numpy as np
+    import robot_utils
+    from boxel_env import default_scene
+    pb = _pb()
+    _set_switches(False)
+    env, _ = _make_env(default_scene())
+    out.note('default_scene (finger gear and solver iterations as the pipeline), main\'s 50 settle steps; then '
+             'per case the arm reset to REST_POSES (resetJointState, client 0) and move_robot_smooth with '
+             'pybullet.stepSimulation and setJointMotorControl2 wrapped (test-level, call through)')
+    out.note('steps for settle=False is arithmetic: max(steps, min(ceil(max(delta / (limit * dt))), 1200)); '
+             'settle=True adds the convergence hold (physics); final_arm is the readback after the move')
+    try:
+        for _ in range(50):
+            env.step_simulation()
+        rid = env.objects['robot'].object_id
+        arm = robot_utils.robot_model().arm_joints
+        rest = np.array(robot_utils.REST_POSES, dtype=float)
+        calls = {'step': 0, 'motor': []}
+        real_step, real_motor = pb.stepSimulation, pb.setJointMotorControl2
+
+        def step(*a, **k):
+            calls['step'] += 1
+            return real_step(*a, **k)
+
+        def motor(*a, **k):
+            calls['motor'].append([list(a), {kk: k[kk] for kk in sorted(k)}])
+            return real_motor(*a, **k)
+        cases = [('tiny', [0.01, 0, 0, 0, 0, 0, 0], 60, False, True),
+                 ('tiny steps 10', [0.01, 0, 0, 0, 0, 0, 0], 10, False, True),
+                 ('tiny steps 30', [0.01, 0, 0, 0, 0, 0, 0], 30, False, True),
+                 ('stretch joint 2', [0, 1.5, 0, 0, 0, 0, 0], 60, False, True),
+                 ('stretch joint 6', [0, 0, 0, 0, 0, 2.0, 0], 60, False, True),
+                 ('capped at 1200', [11.0, 0, 0, 0, 0, 0, 0], 60, False, True),
+                 ('not bounded', [0, 1.5, 0, 0, 0, 0, 0], 60, False, False),
+                 ('tiny settle', [0.01, 0, 0, 0, 0, 0, 0], 60, True, True),
+                 ('medium settle', [0, 0, 0, 0.5, 0, 0, 0], 60, True, True)]
+        rows = []
+        pb.stepSimulation, pb.setJointMotorControl2 = step, motor
+        try:
+            for label, delta, steps, settle, bounded in cases:
+                for j, q in zip(arm, rest):
+                    pb.resetJointState(rid, j, float(q), targetVelocity=0.0, physicsClientId=env.client_id)
+                calls['step'], calls['motor'] = 0, []
+                target = (rest + np.array(delta)).tolist()
+                robot_utils.move_robot_smooth(rid, target, gui=False, steps=steps, settle=settle,
+                                              velocity_bounded=bounded)
+                rows.append({'case': label, 'delta': delta, 'steps_arg': steps, 'settle': settle,
+                             'velocity_bounded': bounded, 'step_calls': calls['step'],
+                             'motor_calls': len(calls['motor']),
+                             'motor_sha256': text_digest(dumps(plain(calls['motor']))),
+                             'first_motor_calls': calls['motor'][:7],
+                             'final_arm': [pb.getJointState(rid, j, physicsClientId=env.client_id)[0] for j in arm]})
+        finally:
+            pb.stepSimulation, pb.setJointMotorControl2 = real_step, real_motor
+        out.json('steps.json', {'state': _module_state(), 'cases': rows,
+                                'constants': {'JOINT_VELOCITY_LIMITS': robot_utils.JOINT_VELOCITY_LIMITS,
+                                              'SIM_TIMESTEP': robot_utils.SIM_TIMESTEP,
+                                              'MAX_INTERP_STEPS': robot_utils.MAX_INTERP_STEPS}})
+    finally:
+        env.close()
+
+
+# ----- pins 13 to 16: the stored eye renders --------------------------------
+
+def _fixture_dir():
+    return Path(os.environ.get(RENDER_FIXTURE_VAR) or RENDER_FIXTURE_DEFAULT)
+
+
+def _load_fixture():
+    """The renders written by tests/readable/make_render_fixture.py:
+    {name: {'depth_buffer', 'seg', 'view', 'proj', 'meta'}}, plus the
+    fixture's own FIXTURE.json."""
+    import numpy as np
+    d = _fixture_dir()
+    man = d / 'FIXTURE.json'
+    if not man.is_file():
+        raise RuntimeError(f'no render fixture: run tests/readable/make_render_fixture.py (or set '
+                           f'{RENDER_FIXTURE_VAR}); looked for FIXTURE.json under the fixture folder')
+    fixture = json.loads(man.read_text(encoding='utf-8'))
+    renders = {}
+    for name in fixture['renders']:
+        meta = json.loads((d / f'{name}.json').read_text(encoding='utf-8'))
+        renders[name] = {'depth_buffer': np.load(d / f'{name}_depth.npy').astype(np.float64),
+                         'seg': np.load(d / f'{name}_seg.npy'),
+                         'view': tuple(meta['view']), 'proj': tuple(meta['proj']), 'meta': meta}
+    return fixture, renders
+
+
+def _fixture_registry(fixture):
+    from boxel_data import BoxelRegistry
+    return BoxelRegistry.load_from_json(str(_fixture_dir() / fixture['registry_file']))
+
+
+def _depth_m(depth_buffer, meta):
+    import types
+    from boxel_env import BoxelTestEnv
+    ns = types.SimpleNamespace(far_plane=meta['far_plane'], near_plane=meta['near_plane'])
+    return BoxelTestEnv._depth_buffer_to_meters(ns, depth_buffer)
+
+
+def _fixture_note(out, fixture):
+    out.note('input: the render fixture of tests/readable/make_render_fixture.py (folder from '
+             f'{RENDER_FIXTURE_VAR}, default tests/readable/_scratch/render_fixture); fixture.json holds the '
+             'sha256 of every fixture file, so another fixture shows as a difference')
+    out.json('fixture.json', {'files': fixture['files'], 'renders': fixture['renders'],
+                              'scenes': fixture.get('scenes')})
+
+
+def _det_rec(d):
+    return {'name': d.name, 'body_id': d.body_id, 'pixel_count': d.pixel_count, 'est_min': d.est_min,
+            'est_max': d.est_max, 'yaw': d.yaw, 'yaw_valid': d.yaw_valid, 'rect_center': d.rect_center,
+            'body_extents': d.body_extents, 'pixel_steps': d.pixel_steps, 'raw_xy_ext': d.raw_xy_ext}
+
+
+@pin('world', 'p13_detections', 'R13: detect_objects_from_render and _rest_on_support on the stored renders')
+def p13_detections(out):
+    import numpy as np
+    from perception import ObjectDetection, _rest_on_support, detect_objects_from_render
+    fixture, renders = _load_fixture()
+    _fixture_note(out, fixture)
+    out.note('per render: min_pixels default and 200; for A also without no_footprint_completion (the tray grown '
+             'like any body); detections in dict order, every field')
+    res = {}
+    for name in ('A', 'B2', 'A2', 'C'):
+        r = renders[name]
+        meta = r['meta']
+        bmap = {int(k): v for k, v in meta['body_id_to_name']}
+        trays = frozenset(meta['trays'])
+        variants = [('default', {}), ('min_pixels 200', {'min_pixels': 200})]
+        if name == 'A':
+            variants.append(('no tray exemption', {'no_footprint_completion': frozenset()}))
+        for label, kw in variants:
+            kwargs = {'no_footprint_completion': trays, **kw}
+            dets = detect_objects_from_render(r['seg'], r['depth_buffer'], r['view'], r['proj'], bmap,
+                                              meta['camera_xy'], meta['support_z'], **kwargs)
+            res[f'{name} {label}'] = [_det_rec(d) for d in dets.values()]
+    out.json('detections.json', res)
+
+    def det(name, mn, mx):
+        return ObjectDetection(name=name, body_id=1, pixel_count=50, est_min=np.array(mn, dtype=float),
+                               est_max=np.array(mx, dtype=float))
+    z = 0.325
+    hand = {
+        'below support (fell off)': {'a': det('a', [0, 0, 0.1], [0.04, 0.04, 0.3])},
+        'bottom within snap': {'a': det('a', [0, 0, z + 0.004], [0.04, 0.04, z + 0.04])},
+        'floating, nothing under': {'a': det('a', [0, 0, z + 0.05], [0.04, 0.04, z + 0.09])},
+        'stacked on another': {'low': det('low', [0, 0, z], [0.05, 0.05, z + 0.05]),
+                               'up': det('up', [0.005, 0.005, z + 0.07], [0.045, 0.045, z + 0.1])},
+        'small overlap only': {'low': det('low', [0, 0, z], [0.05, 0.05, z + 0.05]),
+                               'up': det('up', [0.045, 0.045, z + 0.07], [0.085, 0.085, z + 0.1])},
+        'other in front, taller': {'front': det('front', [0, 0, z], [0.05, 0.05, z + 0.2]),
+                                   'back': det('back', [0.01, 0.01, z + 0.1], [0.04, 0.04, z + 0.15])},
+    }
+    rows = {}
+    for label, dets in hand.items():
+        _rest_on_support(dets, z)
+        rows[label] = {k: [v.est_min, v.est_max] for k, v in dets.items()}
+    out.json('rest_on_support_hand.json', rows)
+
+
+def _sense_inputs(renders, name, registry):
+    r = renders[name]
+    meta = r['meta']
+    return r, meta, _depth_m(r['depth_buffer'], meta)
+
+
+@pin('world', 'p14_sense_render', 'R14: sense_shadow_from_render on the stored renders (A, A2, C) for every fragment')
+def p14_sense_render(out):
+    import numpy as np
+    from boxel_data import BoxelType
+    from execution import sense_shadow_from_render
+    fixture, renders = _load_fixture()
+    _fixture_note(out, fixture)
+    registry = _fixture_registry(fixture)
+    frags = [b for b in registry.boxels.values() if b.boxel_type == BoxelType.SHADOW]
+    meta_a = renders['A']['meta']
+    occ_all = sorted(meta_a['occluder_body_ids'])
+    support = frozenset({meta_a['plane_id'], meta_a['table_id']} | set(meta_a['tray_ids']))
+    targets = [('hidden', meta_a['hidden_target_ids'][0] if meta_a['hidden_target_ids'] else -2),
+               ('visible', meta_a['visible_target_ids'][0] if meta_a['visible_target_ids'] else -3),
+               ('absent', 99999)]
+    occs = [('none', None), ('all', set(occ_all)), ('all but first', set(occ_all[1:]))]
+    robots = [('none', None), ('robot', meta_a['robot_id'])]
+    sups = [('none', None), ('plane table tray', support)]
+    out.note('the full product: render (A, A2, C) x fragment x target (hidden, visible, absent id 99999) x '
+             'occluder ids (None, all, all but the first) x robot id (None, robot) x support ids (None, plane '
+             'table tray); printed NOTE lines discarded (pin 39\'s); detected bodies and interceptor counts sorted')
+    rows = []
+    counts = {}
+    for name in ('A', 'A2', 'C'):
+        r, meta, dm = _sense_inputs(renders, name, registry)
+        for f in frags:
+            for tl, tid in targets:
+                for ol, oids in occs:
+                    for rl, rbid in robots:
+                        for sl, sids in sups:
+                            with captured():
+                                o, frac, bodies, bbox, icounts = sense_shadow_from_render(
+                                    f, tid, dm, r['seg'], r['view'], r['proj'],
+                                    occluder_pybullet_ids=oids, robot_id=rbid, support_body_ids=sids)
+                            counts[o] = counts.get(o, 0) + 1
+                            rows.append([name, f.id, tl, ol, rl, sl, o, frac, sorted(int(x) for x in bodies),
+                                         None if bbox is None else [bbox[0].tolist(), bbox[1].tolist()],
+                                         sorted([int(k), v] for k, v in icounts.items())])
+    out.json('sense.json', rows)
+    out.json('outcome_counts.json', {k: counts[k] for k in sorted(counts)})
+
+
+@pin('world', 'p15_shadow_blockers', 'R15: compute_shadow_blockers with a stub env returning the stored renders')
+def p15_shadow_blockers(out):
+    import copy
+    import types
+    from boxel_data import BoxelType
+    from execution import compute_shadow_blockers
+    fixture, renders = _load_fixture()
+    _fixture_note(out, fixture)
+    base = _fixture_registry(fixture)
+    out.note('stub env: objects {name: object_id}, detect_objects returns the stored buffer and seg, '
+             '_depth_buffer_to_meters BoxelTestEnv\'s formula on far 5.0, near 0.01, '
+             '_view_and_projection_matrices the stored matrices; registry rebuilt from the stored boxel_data.json '
+             'and deep-copied per case; blocker lists sorted (they come from a set)')
+    res = {}
+    cases = [('A', 'A', False), ('A2', 'A2', False), ('C', 'C', False),
+             ('A2 creators removed (no fallback)', 'A2', True), ('A creators removed', 'A', True)]
+    for label, name, strip in cases:
+        r = renders[name]
+        meta = r['meta']
+        reg = copy.deepcopy(base)
+        if strip:
+            for b in [b for b in reg.boxels.values() if b.boxel_type == BoxelType.OBJECT and b.is_occluder]:
+                reg.remove_boxel(b.id)
+        env = types.SimpleNamespace(
+            objects={n: types.SimpleNamespace(object_id=i) for n, i in meta['objects']},
+            camera_position=meta['camera_position'],
+            detect_objects=lambda r=r: (None, None, r['depth_buffer'], r['seg']),
+            _depth_buffer_to_meters=lambda b, meta=meta: _depth_m(b, meta),
+            _view_and_projection_matrices=lambda r=r: (r['view'], r['proj']))
+        shadows = [b.id for b in reg.boxels.values() if b.boxel_type == BoxelType.SHADOW]
+        objects = [b.id for b in reg.boxels.values() if b.boxel_type == BoxelType.OBJECT]
+        o = outcome(compute_shadow_blockers, meta['camera_position'], reg, shadows, objects, env)
+        m = o.pop('value', None)
+        res[label] = {'map_sorted': None if m is None else {k: sorted(v) for k, v in m.items()},
+                      'blocked_fraction': {s: getattr(reg.get_boxel(s), 'blocked_fraction', None) for s in shadows},
+                      **o}
+    out.json('blockers.json', res)
+
+
+@pin('world', 'p16_fragment_render', 'R16: _fragment_renders_empty and _shrink_shadow_fragment on the stored renders')
+def p16_fragment_render(out):
+    import copy
+    import numpy as np
+    from boxel_data import BoxelData, BoxelType
+    from execution import _fragment_renders_empty, _shrink_shadow_fragment, sense_shadow_from_render
+    fixture, renders = _load_fixture()
+    _fixture_note(out, fixture)
+    base = _fixture_registry(fixture)
+    frags = [b for b in base.boxels.values() if b.boxel_type == BoxelType.SHADOW]
+    tz = renders['A']['meta']['support_z']
+    extra = [BoxelData(id='hand_zero_height', boxel_type=BoxelType.SHADOW,
+                       min_corner=np.array([0.1, 0.1, tz]), max_corner=np.array([0.2, 0.2, tz])),
+             BoxelData(id='hand_partly_outside_image', boxel_type=BoxelType.SHADOW,
+                       min_corner=np.array([-1.2, 0.2, tz]), max_corner=np.array([-0.6, 0.4, tz + 0.05]))]
+    out.note('_fragment_renders_empty: every fragment plus a zero-height box and a box partly outside the image, '
+             'on A, A2, C with render (depth in metres, seg, view, proj)')
+    out.note('_shrink_shadow_fragment: the still_blocked bboxes of sense_shadow_from_render on A (real occluder '
+             'set, robot id, support ids) for each fragment, plus hand cases; fragment and registry deep-copied '
+             'per case; viz None; printed lines discarded')
+    empty = {}
+    for name in ('A', 'A2', 'C'):
+        r = renders[name]
+        render = (_depth_m(r['depth_buffer'], r['meta']), r['seg'], r['view'], r['proj'])
+        for f in frags + extra:
+            empty[f'{name} {f.id}'] = _fragment_renders_empty(f, render)
+    out.json('renders_empty.json', empty)
+    r = renders['A']
+    meta = r['meta']
+    dm = _depth_m(r['depth_buffer'], meta)
+    support = frozenset({meta['plane_id'], meta['table_id']} | set(meta['tray_ids']))
+    shrink = []
+
+    def do(label, f, bmin, bmax):
+        reg = copy.deepcopy(base)
+        fd = reg.get_boxel(f.id) if reg.get_boxel(f.id) is not None else copy.deepcopy(f)
+        centres = {}
+        with captured():
+            ret = _shrink_shadow_fragment(reg, fd, bmin, bmax, None, centres)
+        shrink.append({'case': label, 'fragment': f.id, 'blocked_min': bmin, 'blocked_max': bmax,
+                       'returned': ret, 'min_after': fd.min_corner, 'max_after': fd.max_corner,
+                       'boxel_centers': {k: v for k, v in centres.items()},
+                       'registry_dirty_attr': getattr(reg, '_dirty', None)})
+    for f in frags:
+        with captured():
+            o, frac, _, bbox, _ = sense_shadow_from_render(
+                f, -1, dm, r['seg'], r['view'], r['proj'], occluder_pybullet_ids=set(meta['occluder_body_ids']),
+                robot_id=meta['robot_id'], support_body_ids=support)
+        if bbox is not None:
+            do(f'from the sense on A ({o})', f, bbox[0], bbox[1])
+    f0 = frags[0]
+    mn, mx = np.asarray(f0.min_corner, dtype=float), np.asarray(f0.max_corner, dtype=float)
+    do('degenerate (new box within 1 mm)', f0, mn, mn + np.array([0.0005, 1.0, 1.0]))
+    do('reveal under 2 mm on every axis', f0, mn + 0.0009, mx - 0.0009)
+    do('meaningful reveal', f0, mn, (mn + mx) / 2.0)
+    do('box covering all (no change)', f0, mn - 1.0, mx + 1.0)
+    out.json('shrink.json', shrink)
+
+
+# ----- pin 21: executor motion record (written last) ------------------------
+
+class _CallRecorder:
+    """Test-level wrappers on pybullet module attributes: every call of the
+    named functions with its arguments, and runs of stepSimulation."""
+    NAMES = ('setJointMotorControl2', 'setJointMotorControlArray', 'resetJointState',
+             'createConstraint', 'changeConstraint', 'removeConstraint', 'changeDynamics',
+             'resetBasePositionAndOrientation')
+
+    def __init__(self):
+        self.pb = _pb()
+        self.seq, self.counts, self.real = [], {}, {}
+
+    def _wrap(self, name, real):
+        def w(*a, **k):
+            self.counts[name] = self.counts.get(name, 0) + 1
+            if name == 'stepSimulation':
+                if self.seq and self.seq[-1][0] == 'steps':
+                    self.seq[-1][1] += 1
+                else:
+                    self.seq.append(['steps', 1])
+            else:
+                self.seq.append([name, plain(list(a)), plain({kk: k[kk] for kk in sorted(k)})])
+            return real(*a, **k)
+        return w
+
+    def __enter__(self):
+        for n in self.NAMES + ('stepSimulation',):
+            self.real[n] = getattr(self.pb, n)
+            setattr(self.pb, n, self._wrap(n, self.real[n]))
+        return self
+
+    def __exit__(self, *exc):
+        for n, f in self.real.items():
+            setattr(self.pb, n, f)
+        return False
+
+
+@pin('world', 'p21_pick_record', 'R21: one scripted pick of red_object in the default scene, motor calls and step runs recorded',
+     timeout=1200)
+def p21_pick_record(out):
+    import numpy as np
+    import robot_utils
+    import execution
+    from boxel_env import default_scene
+    from execution import pick_contact_floor
+    from streams import BoxelStreams
+    pb = _pb()
+    _set_switches(True)
+    robot_utils.GRIP_SQUEEZE = 0.5 / 1000.0
+    out.note('default_scene, switches on (run boxels), GRIP_SQUEEZE 0.0005 (main 776), slip fixes default; '
+             '_first_registry; BoxelStreams as main; grasp = the first of sample_grasp(red_object); config = the '
+             'first of compute_kin_solution(red_object, red_object, grasp); move_robot_smooth(config, steps 60, '
+             'settle True) to the approach; then the recorder and execute_pick(..., obj_aabb=(min, max), pose=boxel)')
+    out.note('sequence: every recorded call as [name, args, kwargs] and stepSimulation runs as ["steps", n]; '
+             'written whole as its sha256 and the first and last 60 entries')
+    env, _ = _make_env(default_scene())
+    try:
+        with captured():
+            obs, registry, _ = _first_registry(env)
+        env.sync_to_plan_client(registry=registry)
+        obj_ids = {n: env.plan_body_id(i.object_id) for n, i in env.objects.items() if n not in STATIC_NAMES}
+        support = frozenset({env.plan_body_id(env.objects['plane'].object_id),
+                             env.plan_body_id(env.objects['table'].object_id)})
+        s = BoxelStreams(registry, robot_id=env.plan_robot_id, physics_client=env.plan_client_id,
+                         object_body_ids=obj_ids, support_body_ids=support)
+        s.contact_floor = pick_contact_floor(env)
+        s.surface_z_default = float(env.table_surface_height)
+        obj = 'red_object'
+        bd = registry.get_boxel(obj)
+        grasp = next(s.sample_grasp(obj))[0]
+        config = next(s.compute_kin_solution(obj, obj, grasp))[0]
+        rid = env.objects['robot'].object_id
+        with captured() as box:
+            robot_utils.move_robot_smooth(rid, config.joint_positions, steps=60, settle=True)
+        before = {'arm': robot_utils.arm_joint_positions(rid, env.client_id),
+                  'object_pose': list(pb.getBasePositionAndOrientation(env.objects[obj].object_id,
+                                                                     physicsClientId=env.client_id))}
+        with _CallRecorder() as rec, captured() as box:
+            res = execution.execute_pick(rid, env, obj, bd.center, grasp, config, False,
+                                         obj_aabb=(bd.min_corner, bd.max_corner), pose=bd)
+        seq = rec.seq
+        out.json('pick.json', {
+            'state': _module_state(), 'grasp': _grasp_rec(grasp), 'config': _config_rec(config),
+            'before': before,
+            'result': {'held_body_id': res[0], 'config': _config_rec(res[1]),
+                       'touched_sorted': sorted(str(x) for x in (res[2] or ()))},
+            'after': {'arm': robot_utils.arm_joint_positions(rid, env.client_id),
+                      'object_pose': list(pb.getBasePositionAndOrientation(env.objects[obj].object_id,
+                                                                         physicsClientId=env.client_id))},
+            'call_counts': {k: rec.counts[k] for k in sorted(rec.counts)},
+            'sequence_len': len(seq), 'sequence_sha256': text_digest(dumps(seq)),
+            'sequence_first': seq[:60], 'sequence_last': seq[-60:],
+            'stdout_sha256': text_digest(box['out'].getvalue())})
+    finally:
+        env.close()
+        _set_switches(False)
+
+
+# ----- pin 35: bridge pure parts -------------------------------------------
+
+@pin('world', 'p35_bridge_pure', 'R35: symbol_names, task_spec hash and constants, search_options_from, episode_outcome')
+def p35_bridge_pure(out):
+    import types
+    from tampura_bridge import env_adapter, task_spec
+    from pddlstream_planner import search_options_from
+    os.environ.pop('BRIDGE_SCENE_MANIFEST', None)
+    bg = _load_tool('bridge_gates')
+    out.note('bridge_gates loaded by path with BRIDGE_SCENE_MANIFEST removed from the environment (R S-g); '
+             'task_spec: the file sha256 (raw bytes and CRLF turned LF) and repr of every upper-case constant, '
+             'sorted by name (a repr with an address is written as its type name)')
+    gen = REPO / 'tampura_bridge' / 'gen_scenes' / 'find_dice'
+    syms = []
+    for f in sorted(gen.glob('find_dice_gen_s*.json')):
+        cats = json.loads(f.read_text(encoding='utf-8'))['categories']
+        syms.append([f.name, cats, env_adapter.symbol_names(cats)])
+    shipped = Path(TW_ENVS) / 'tampura_environments' / 'find_dice' / 'problems'
+    for f in sorted(shipped.glob('*.json')) if shipped.is_dir() else []:
+        cats = json.loads(f.read_text(encoding='utf-8'))['categories']
+        syms.append([f.name, cats, env_adapter.symbol_names(cats)])
+    for cats in (['a_cups_ud', 'a_cups_ud', 'dice', 'a_cups_ud'], [], ['x'], ['b', 'a', 'b', 'a', 'c']):
+        syms.append(['synthetic', cats, env_adapter.symbol_names(cats)])
+    out.json('symbol_names.json', syms)
+    raw = Path(task_spec.__file__).read_bytes()
+    consts = {}
+    for k in sorted(vars(task_spec)):
+        if k.isupper():
+            rp = repr(getattr(task_spec, k))
+            consts[k] = type(getattr(task_spec, k)).__name__ if ' at 0x' in rp else rp
+    out.json('task_spec.json', {'sha256_raw': hashlib.sha256(raw).hexdigest(),
+                                'sha256_lf': hashlib.sha256(raw.replace(b'\r\n', b'\n')).hexdigest(),
+                                'constants': consts})
+    table = []
+    for ew, ic in (('1', 3), ('off', 0), ('0.5', 0), ('off', 5), ('2.5', 3), ('0', 0), ('1e-3', 1)):
+        table.append([ew, ic, outcome(search_options_from, ew, ic)])
+    out.json('search_options_from.json', table)
+    rows = []
+    for rewards in ([], [0.0], [1.0], [0.0, 1.0], [1.0, 0.0]):
+        for error in (None, '', 'x'):
+            for gates in ((), (('G1', 'PASS', 'ok'),), (('G1', 'FAIL', 'bad'), ('G2', 'PASS', '')),
+                          (('G3', 'FAIL', 'one'), ('G3', 'FAIL', 'two'))):
+                rep = bg.Report()
+                for g in gates:
+                    rep.add(*g)
+                rows.append([rewards, error, [list(g) for g in gates], bg.episode_outcome(rewards, error, rep)])
+    out.json('episode_outcome.json', rows)
+
+
+@pin('world', 'p35b_bridge_table', 'R35: env_adapter.shadow_table_ranges from their module (needs the bridge venv)')
+def p35b_bridge_table(out):
+    _need_tampura()
+    import warnings
+    with captured(), warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        from tampura_bridge import env_adapter
+        r = env_adapter.shadow_table_ranges()
+    out.note('needs the bridge venv (TAMPURA\'s tree on sys.path)')
+    out.json('shadow_table_ranges.json', r)
 
 
 if __name__ == '__main__':
