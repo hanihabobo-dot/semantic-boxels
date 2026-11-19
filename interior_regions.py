@@ -89,6 +89,25 @@ def is_interior(bd) -> bool:
             and getattr(bd, 'region_kind', 'lateral') == KIND)
 
 
+def standing_cover_of(registry, region) -> Optional[BoxelData]:
+    """The cover of an interior region while it still stands over it (the
+    region's centre inside the cover's footprint), else None.  For the look
+    (track/evalfinal, 2026-11-19): such a cover hides its region and is never
+    its content, so a look must wait until a plan has moved it away, as the
+    sense does."""
+    if not ENABLED or not is_interior(region):
+        return None
+    cover = registry.get_boxel(region.created_by_boxel_id or '')
+    if cover is None:
+        return None
+    rc = region.center
+    cmin = np.asarray(cover.min_corner, dtype=float)
+    cmax = np.asarray(cover.max_corner, dtype=float)
+    if cmin[0] <= rc[0] <= cmax[0] and cmin[1] <= rc[1] <= cmax[1]:
+        return cover
+    return None
+
+
 def cavity_of(env, name: str) -> Optional[np.ndarray]:
     """The declared cavity (x, y, z in metres) of the object's class, or
     None for a solid body."""

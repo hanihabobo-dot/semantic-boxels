@@ -39,6 +39,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
+import interior_regions
 import observe_views
 import pose_belief
 import robot_utils
@@ -205,8 +206,9 @@ def _occluder_ids(registry, region, env):
     in or at ``region``: what may hide it.  A body in or at it is content
     (_content_boxes)."""
     ids = set()
+    cover = interior_regions.standing_cover_of(registry, region)   # BF#65: hides, never content
     for bd in registry.get_boxels_by_type(BoxelType.OBJECT):
-        if _stands_at(bd, region):
+        if _stands_at(bd, region) and not (cover is not None and bd.id == cover.id):
             continue
         info = env.objects.get(bd.object_name or bd.id)
         if info is not None:
@@ -219,8 +221,9 @@ def _content_boxes(registry, region, env):
     stand in or at ``region``, the ones _occluder_ids leaves out.  Such a body
     is seen where it stands and hides what lies behind it (PLAN.md 11.14)."""
     out = {}
+    cover = interior_regions.standing_cover_of(registry, region)   # BF#65: hides, never content
     for bd in registry.get_boxels_by_type(BoxelType.OBJECT):
-        if not _stands_at(bd, region):
+        if not _stands_at(bd, region) or (cover is not None and bd.id == cover.id):
             continue
         info = env.objects.get(bd.object_name or bd.id)
         if info is not None:

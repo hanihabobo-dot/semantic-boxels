@@ -40,6 +40,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
+import interior_regions
 import robot_utils
 from boxel_data import BoxelType
 from observe_views import (LOOK_IMAGE_MARGIN_PX, _quat, lattice, look_at_pose,
@@ -475,10 +476,16 @@ class LookViews:
         cut from a shadow touches its caster, so a view from the caster's
         side is a view through the caster (PLAN.md 11.14)."""
         out: Dict[int, Optional[tuple]] = {}
+        # BF#65 (track/evalfinal, 2026-11-19): the cover standing over an interior region hides it
+        # and is never its content, so the view counts it as a movable blocker (blocks_look_at)
+        cover = (interior_regions.standing_cover_of(registry, registry.get_boxel(goal.id))
+                 if goal.kind != 'object' else None)
         for tid, bid in movable.items():
             if goal.kind == 'object':
                 if bid == goal.id:
                     out[tid] = None
+                continue
+            if cover is not None and bid == cover.id:
                 continue
             bd = registry.get_boxel(bid)
             if _overlaps(bd.min_corner, bd.max_corner, goal.lo, goal.hi):
