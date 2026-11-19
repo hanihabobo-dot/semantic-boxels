@@ -45,6 +45,12 @@ The child patches only inside its own process, never a pipeline file:
               then raises StopAtPlan.  main's parameters at entry come from a
               sys.setprofile hook that removes itself at main's first call.
 
+Scripted tapes (tools/readable/scripted_tapes.py) replay like live ones;
+``--stubs JSON`` sets the test-level executor stubs of
+tests/readable/executor_stubs.py in the child, and ``--tfp-copy`` (or
+READABLE_TFP_COPY) runs a planted copy of test_full_pipeline.py for the
+planted-change checks of PLAN 24.3 (e) only.
+
 After the child the parent writes RESULT.json and the normalised outputs
 (``norm/``): times, pids and wall clocks removed, ``plan_obj`` ints and
 ``Type@id`` strings mapped to their order of first use (PLAN 24.3 (d)),
@@ -78,6 +84,8 @@ TW = '/root/tampura-work'
 TW_ENVS = TW + '/tampura_environments'
 GEN_DIR = REPO / 'tampura_bridge' / 'gen_scenes' / 'find_dice'
 EPISODE_TIMEOUT_S = 3600
+EXEC_STUBS_FILE = REPO / 'tests' / 'readable' / 'executor_stubs.py'
+TFP_COPY_VAR = 'READABLE_TFP_COPY'
 
 _BOXELS = ['--no-gui', '--log-level', 'normal', '--no-telemetry']
 
@@ -331,6 +339,26 @@ class _PatchOnLoad(importlib.abc.MetaPathFinder):
         return spec
 
 
+class _RedirectModule(importlib.abc.MetaPathFinder):
+    """Import `name` from another file (the planted copy of a module)."""
+
+    def __init__(self, name, path):
+        self.name, self.path = name, path
+
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname != self.name:
+            return None
+        return importlib.util.spec_from_file_location(fullname, self.path)
+
+
+def _load_exec_stubs():
+    spec = importlib.util.spec_from_file_location('readable_executor_stubs', str(EXEC_STUBS_FILE))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules['readable_executor_stubs'] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def _load_stub():
     spec = importlib.util.spec_from_file_location('readable_replay_stub', str(STUB_FILE))
     mod = importlib.util.module_from_spec(spec)
@@ -533,8 +561,23 @@ def child_main(a):
     rec.mkdir(parents=True, exist_ok=True)
     script = os.path.abspath(a.script)
     trace = None
-    if os.path.realpath(script) == os.path.realpath(TFP):
+    is_tfp = os.path.realpath(script) == os.path.realpath(TFP)
+    if is_tfp:
         sys.meta_path.insert(0, _PatchOnLoad('run_logger', _absolute_log_dir))
+    if a.stubs:
+        _load_exec_stubs().install(
+            a.stubs, rec, lambda name, fn: sys.meta_path.insert(0, _PatchOnLoad(name, fn)))
+    if a.tfp_copy:
+        # Planted-change checks (PLAN 24.3 (e)) only: the copy is run as the
+        # entry (boxels) or imported as test_full_pipeline (bridge), with
+        # the checkout on sys.path and the pddlstream path the checkout's
+        # file computes (test_full_pipeline.py:52-55).
+        copy = os.path.abspath(a.tfp_copy)
+        os.environ.setdefault('PDDLSTREAM_PATH', os.path.join(
+            os.path.dirname(os.path.abspath(TFP)), '..', 'pddlstream_lib'))
+        sys.meta_path.insert(0, _RedirectModule('test_full_pipeline', copy))
+        if is_tfp:
+            script = copy
     if a.mode in ('record', 'replay'):
         if a.mode == 'record':
             def patch(mod):
@@ -555,7 +598,7 @@ def child_main(a):
     if a.trace_main:
         trace = _LineTrace(TFP)
     sys.argv = [script] + list(a.argv)
-    sys.path[0] = os.path.dirname(script)
+    sys.path[0] = os.path.dirname(os.path.abspath(a.script))
     code, how = 0, 'returned'
     try:
         if trace is not None:
@@ -637,8 +680,19 @@ def pipeline_run_dir(run_dir, spec):
 
 
 def run_episode(name, mode, run_dir, tape=None, rng='restore', trace_main=False,
-                timeout=EPISODE_TIMEOUT_S, log=print):
-    """Run episode `name` in a child process; returns the RESULT dict."""
+                timeout=EPISODE_TIMEOUT_S, log=print, stubs=None, tfp_copy=None):
+    """Run episode `name` in a child process; returns the RESULT dict.
+
+    stubs: executor stubs (tests/readable/executor_stubs.py config, a dict
+    or JSON text) for a scripted tape.  tfp_copy (default: the variable
+    READABLE_TFP_COPY): a planted copy of test_full_pipeline.py run instead
+    of the checkout's, for the planted-change checks of PLAN 24.3 (e) only;
+    the copy is named in RESULT.json and INFO files only, never in a
+    compared output."""
+    if tfp_copy is None:
+        tfp_copy = os.environ.get(TFP_COPY_VAR) or None
+    if isinstance(stubs, dict):
+        stubs = json.dumps(stubs, sort_keys=True)
     run_dir = Path(run_dir).resolve()
     if run_dir.exists():
         shutil.rmtree(run_dir)
@@ -655,6 +709,10 @@ def run_episode(name, mode, run_dir, tape=None, rng='restore', trace_main=False,
         cmd += ['--tape', str(Path(tape).resolve())]
     if trace_main:
         cmd += ['--trace-main']
+    if stubs:
+        cmd += ['--stubs', stubs]
+    if tfp_copy:
+        cmd += ['--tfp-copy', str(Path(tfp_copy).resolve())]
     cmd += ['--'] + argv
     t0 = time.monotonic()
     status = 'ended'
@@ -675,7 +733,9 @@ def run_episode(name, mode, run_dir, tape=None, rng='restore', trace_main=False,
     result = {'episode': name, 'mode': mode, 'rng': rng, 'status': status, 'rc': rc,
               'child_exit': exit_info, 'argv': argv, 'script': str(script), 'cwd': str(cwd),
               'pipeline_run_dir': str(pr) if pr else None, 'seconds': round(seconds, 1),
-              'tape': str(tape) if tape is not None else None}
+              'tape': str(tape) if tape is not None else None,
+              'stubs': json.loads(stubs) if stubs else None,
+              'tfp_copy': str(tfp_copy) if tfp_copy else None}
     write_json(run_dir / 'RESULT.json', result)
     write_norm(run_dir)
     log(f'[record_episode] {name} {mode}: rc {rc}, {status}, {seconds:.0f} s, '
@@ -880,6 +940,9 @@ def normalise(run_dir):
                                                           'rng_before_equal_tape',
                                                           'stream_ints_before_equal_tape', 'error')}
                                    for c in calls]
+    stub_rows = _read_jsonl(run_dir / 'rec' / 'stubs.jsonl')
+    if stub_rows is not None:
+        out['stubs.json'] = _walk(stub_rows, mask)
     for f in ('first_plan.json', 'main_params.json'):
         p = run_dir / 'rec' / f
         if p.exists():
@@ -1074,6 +1137,9 @@ def main(argv=None):
     ap.add_argument('--child', action='store_true', help=argparse.SUPPRESS)
     ap.add_argument('--rec', help=argparse.SUPPRESS)
     ap.add_argument('--script', help=argparse.SUPPRESS)
+    ap.add_argument('--stubs', help='JSON of tests/readable/executor_stubs.py (scripted tapes)')
+    ap.add_argument('--tfp-copy', help='planted-change checks only: run this copy of '
+                                       'test_full_pipeline.py instead of the checkout\'s')
     ap.add_argument('argv', nargs='*')
     a = ap.parse_args(argv)
     if a.child:
@@ -1091,7 +1157,8 @@ def main(argv=None):
     if a.mode == 'replay' and not a.tape:
         ap.error('--mode replay needs --tape')
     res = run_episode(a.episode, a.mode, a.run_dir, tape=a.tape, rng=a.rng,
-                      trace_main=a.trace_main, timeout=a.timeout)
+                      trace_main=a.trace_main, timeout=a.timeout, stubs=a.stubs,
+                      tfp_copy=a.tfp_copy)
     return 0 if res['status'] == 'ended' and res['child_exit'].get('code') is not None else 1
 
 

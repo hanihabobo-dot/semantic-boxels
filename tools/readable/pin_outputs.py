@@ -3889,6 +3889,65 @@ for _e in ('rp0', 'rp1', 'rp1o3', 'stack0', 'br0', 'br5'):
         timeout=EPISODE_PIN_TIMEOUT_S)(_p47(_e))
 
 
+# Pin 47's scripted tapes (PLAN 5.2 row 47 "one scripted sense-only plan per
+# sense outcome", 24.3 (b) and (e), REVIEW_PHASE0 B3): made from the live
+# tapes of READABLE_TAPES by tools/readable/scripted_tapes.py, some with the
+# test-level executor stubs of tests/readable/executor_stubs.py.
+
+def _scripted_tool():
+    import importlib.util
+    mod = sys.modules.get('readable_scripted_tapes')
+    if mod is None:
+        spec = importlib.util.spec_from_file_location(
+            'readable_scripted_tapes', str(REPO / 'tools' / 'readable' / 'scripted_tapes.py'))
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules['readable_scripted_tapes'] = mod
+        spec.loader.exec_module(mod)
+    return mod
+
+
+def _p47s(scenario):
+    def f(out):
+        tool, st = _episode_tool(), _scripted_tool()
+        work = Path.cwd()
+        info = st.build(scenario, _tapes_root(), work / 'tape')
+        name = info['episode']
+        if tool.EPISODES[name]['kind'] == 'bridge':
+            _need_tampura()
+        stubs = info['stubs'] if info['stubs'].get('stubs') else None
+        res = tool.run_episode(name, 'replay', work / 'run', tape=work / 'tape', rng='restore',
+                               trace_main=True, log=lambda s: None, stubs=stubs)
+        _episode_notes(out, tool, name)
+        out.note(f'scripted tape {scenario}: {st.SCENARIOS[scenario]}; made by '
+                 'tools/readable/scripted_tapes.py from READABLE_TAPES/' + name + '; live calls copied, '
+                 'scripted calls cut from live plans (replay_stub.scripted_solution), no action invented')
+        if stubs:
+            out.note('executor stubs (tests/readable/executor_stubs.py, in the episode child only): '
+                     + json.dumps(stubs, sort_keys=True))
+        out.json('script.json', {'scenario': scenario, 'episode': name, 'stubs': info['stubs'],
+                                 'calls': info['calls']})
+        _write_norm_files(out, work / 'run')
+        lines = work / 'run' / 'rec' / 'main_lines.json'
+        if lines.exists():
+            out.text('INFO_main_lines.json', lines.read_text(encoding='utf-8'))
+            out.json('INFO_coverage.json', tool.coverage_table([lines]))
+        out.json('INFO_run.json', {'seconds': res['seconds'], 'tfp_copy': res.get('tfp_copy'),
+                                   'source_tape_sha256': info['source_tape_sha256']})
+    f.__name__ = f'p47_scripted_{scenario}'
+    return f
+
+
+def _register_scripted():
+    for _sc in _scripted_tool().SCENARIOS:
+        pin('episode', f'p47_scripted_{_sc}',
+            f'P47: scripted tape {_sc} (needs READABLE_TAPES'
+            + ('; needs the bridge venv)' if _sc.startswith('home') else ')'),
+            timeout=EPISODE_PIN_TIMEOUT_S)(_p47s(_sc))
+
+
+_register_scripted()
+
+
 # ===========================================================================
 # Group "console": pin 27, runs and made tapes through the real Console
 # ===========================================================================

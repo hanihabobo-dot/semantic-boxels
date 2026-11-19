@@ -80,6 +80,33 @@ class Tape:
         return p.read_bytes() if p.exists() else None
 
 
+def scripted_solution(solution, row):
+    """A scripted call (REVIEW_PHASE0 B3, tools/readable/scripted_tapes.py):
+    the live solution the row's pickle holds, cut to the action indices in
+    ``actions`` (in that order), with ``replace_args`` ({action index: {arg
+    index: text}}) applied, or no plan at all when ``no_plan`` is set.  A
+    row without these keys is a live call and returns the solution as it
+    is.  The stub never invents an action: every scripted action is one the
+    live search returned."""
+    if row.get('no_plan'):
+        return (None, float('inf'), None)
+    actions = row.get('actions')
+    if actions is None:
+        return solution
+    plan, cost, cert = solution
+    new = []
+    for pos, i in enumerate(actions):
+        a = plan[int(i)]
+        rep = (row.get('replace_args') or {}).get(str(pos))
+        if rep:
+            args = list(a.args)
+            for j, text in rep.items():
+                args[int(j)] = text
+            a = a._replace(args=tuple(args) if isinstance(a.args, tuple) else args)
+        new.append(a)
+    return (new, float(len(new)), cert)
+
+
 def make_stub(tape_dir, rec_dir, rng='restore'):
     """The stand-in for pddlstream_planner.solve."""
     if rng not in ('restore', 'keep'):
@@ -126,7 +153,7 @@ def make_stub(tape_dir, rec_dir, rng='restore'):
                 setattr(planner.streams, name, value)
         if live.get('raised'):
             raise ReplayTapeError(row['error'])
-        return tape.solution(k)
+        return scripted_solution(tape.solution(k), live)
     solve.tape = tape
     solve.state = state
     return solve

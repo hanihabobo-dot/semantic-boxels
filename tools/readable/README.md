@@ -272,6 +272,50 @@ READABLE_TAPES=<tapes> READABLE_GOLDEN=<folder> PYTHONHASHSEED=0 flock /root/sb_
     /root/armO-venvA/bin/python -m pytest -q tests/readable/test_pin_replay.py
 ```
 
+### Pin 47's scripted tapes (`scripted_tapes.py`, `tests/readable/executor_stubs.py`)
+
+The live replays reach the success path only. `p47_scripted_<scenario>`
+replays a scripted tape that `scripted_tapes.py` makes from the live tapes
+of READABLE_TAPES by rules over the live ledger: live calls copied as they
+are (facts, goal and RNG still checked), then calls cut from a live plan
+(the actions before a sense, the sense alone, a pick alone, all but a final
+move to q_home), an argument replaced by a text, or no plan (the end).
+`replay_stub.scripted_solution` serves them; no action is invented. Some
+scenarios add a test-level executor stub (pin 47 allows them;
+`tests/readable/executor_stubs.py`, set in the episode child by
+`record_episode.py --stubs`) that forces a physical failure; every stub
+call is a row of the pin's `stubs.json`.
+
+| scenario | source and rule | branch reached |
+|---|---|---|
+| `sense_still_blocked` | rp0's first plan, its sense alone at the start | sense_still_blocked |
+| `sense_missing_shadow` | the same sense, shadow `shadow_of_no_such_body` | sense_missing_shadow |
+| `sense_found_target` | the first live found_target sense, split off as a sense-only plan | sense_found_target |
+| `sense_clear_but_empty` | the first live clear_but_empty sense (br0 or br5), split off | sense_clear_but_empty |
+| `sense_contains_nontarget` | the found_target split; stub: outcome contains_nontarget, the moved occluder as the body | sense_contains_nontarget |
+| `sense_contains_unlocalizable` | the same with a body the render does not show | sense_contains_unlocalizable |
+| `empty_hand_place`, `_carry`, `_stack` | the first plan with a place, a move after a pick, a stack; stub: EmptyHandError at the place or stack entry, a carry loss | step_end empty_hand (three sites) |
+| `integrity_replan` | rp0's first plan; stub: a disturbed bystander after the first move | integrity_replan |
+| `knocked_off_table` | the same with the goal object knocked off | exit knocked_off_table |
+| `integrity_after_place` | the first plan with a place that ended ok; stub: a disturbed bystander after that place (label `plan#N place(`) | integrity_replan at the place site |
+| `integrity_after_stack` | stack0; stub: a disturbed bystander after its stack | integrity_replan at the stack site (then success: the stack was the goal) |
+| `knocked_after_pick` | the first plan with a sense and a pick that ended ok; stub: the goal object knocked off after that pick, while holding | integrity_replan at the pick site, exit knocked_off_table |
+| `pick_giveup` | the found_target plan up to the target's pick, the pick alone twice; stub: the target's picks fail | pick_failure x3, exit pick_giveup |
+| `home_split` | the last bridge plan split before its final move to q_home | success one plan later (the at_home_ok path) |
+| `home_not_reached` | the last bridge plan, its final move twice more; stub: readback 0.01 rad off | home_not_reached |
+
+A tape set without a source for a rule makes the pin error with the rule's
+name. `READABLE_TFP_COPY=<file>` (planted-change checks of PLAN 24.3 (e)
+only) runs a copy of test_full_pipeline.py instead of the checkout's: the
+copy is named in `INFO_run.json` only.
+
+`planted_changes.py --out <dir>` writes those copies, one folder per plant
+(`at_home_drop`: `at_home_ok = False` dropped; `empty_hand_swap`: two
+statements of the place empty-hand path swapped; `empty_hand_swap_quiet`:
+the same swap without the crash), each as one exact text replacement that
+must match once in the checkout's file; `--list` names the pin each must
+turn red. Never written into the checkout.
+
 `tests/readable/test_pin_replay.py`: unit tests of the recorder, the stub
 and the normalisation (no pipeline import; Windows too); with
 `READABLE_TAPES`, each replay's step and step_end rows against the live
