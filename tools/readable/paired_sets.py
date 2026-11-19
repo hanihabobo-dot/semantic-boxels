@@ -43,10 +43,12 @@ The episode of each world, as the launchers build it:
 
 Statuses of a run (the `status` field of an end row):
 
-- boxels: success, failure, timeout (killed at the cap), preflight_rejected,
+- boxels: success, failure, timeout (killed at the cap), preflight_rejected
+  (no summary, the `[pre-flight] seed N rejected: M` line, and no traceback
+  but the re-raised one in stderr after the line that ends in `<type>: M`),
   crashed (rc not 0 or 1, no timing_summary.json in a new run directory, or
-  a traceback in stdout, stderr or the run directory's logs: PLAN 8, the
-  C-01 bullet), wrong_scene (the summary's run_config is another cell's).
+  any other traceback in stdout, stderr or the run directory's logs: PLAN 8,
+  the C-01 bullet), wrong_scene (the summary's run_config is another cell's).
 - bridge: success (reward 1.0 and no failed gate other than G19, PLAN_REVIEW
   S-q), failure, gate_failed (a failed gate other than G19, or the G19 or
   G13 stop before any bridge_episode.json), killed (at the cap), crashed
@@ -532,6 +534,46 @@ def _tracebacks(files: dict) -> list[str]:
     return sorted(name for name, text in files.items() if TRACEBACK in text)
 
 
+def _preflight_rejection(texts: dict) -> str | None:
+    """The pre-flight line when the run is a real pre-flight rejection.
+
+    test_full_pipeline.py:3335-3337 prints the line and re-raises the
+    RuntimeError; under --log-level quiet no Console excepthook is installed,
+    so the interpreter writes that exception's traceback to stderr. The run
+    is a rejection when the line is there and the only traceback anywhere is
+    one in stderr.txt, after the line, whose exception line is
+    `<type>: <the line's message>`. Any other traceback (a second one, one
+    before the line, one in stdout or a log, one that ends in another
+    message) keeps the run a crash. eval_runner.py:671-683 classifies by the
+    line alone.
+    """
+    line = PREFLIGHT_RE.search(texts["stderr.txt"]) or PREFLIGHT_RE.search(texts["stdout.txt"])
+    if not line:
+        return None
+    found = line.group(0).strip()
+    counts = {name: text.count(TRACEBACK) for name, text in texts.items()}
+    if sum(counts.values()) == 0:
+        return found
+    if counts.get("stderr.txt") != 1 or sum(counts.values()) != 1:
+        return None
+    err = texts["stderr.txt"]
+    m_line = PREFLIGHT_RE.search(err)
+    if m_line is None or err.index(TRACEBACK) < m_line.end():
+        return None
+    message = found.split(" rejected: ", 1)[1]
+    exc_line = None
+    for x in err[err.index(TRACEBACK) + len(TRACEBACK):].splitlines()[1:]:
+        if x and not x[0].isspace():
+            exc_line = x.rstrip()
+            break
+    if exc_line is None:
+        return None
+    m_exc = re.match(r"^([A-Za-z_][\w.]*): (.*)$", exc_line)
+    if m_exc is None or m_exc.group(2) != message.rstrip():
+        return None
+    return found
+
+
 def _launch_facts(ep: Path, launch_info: dict) -> dict:
     launch = _kv(_read(ep / "launch.txt"))
     ns = _kv(_read(ep / "not_started.txt"))
@@ -615,9 +657,9 @@ def classify_boxels(d: dict, r: dict, ep: Path, launch_info: dict) -> dict:
     elif f["rc"] not in (0, 1):
         row.update(status="crashed", crash_cause=f"crash_exit{f['rc']}")
     elif summary is None:
-        line = PREFLIGHT_RE.search(texts["stderr.txt"]) or PREFLIGHT_RE.search(texts["stdout.txt"])
-        if line and not row["traceback_in"]:
-            row.update(status="preflight_rejected", preflight_message=line.group(0).strip())
+        rejection = _preflight_rejection(texts)
+        if rejection:
+            row.update(status="preflight_rejected", preflight_message=rejection)
         else:
             row.update(status="crashed", crash_cause="no timing_summary.json in a new run directory")
     else:

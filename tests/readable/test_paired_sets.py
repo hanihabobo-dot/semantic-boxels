@@ -405,6 +405,43 @@ def test_runner_refuses_second_run_and_bad_start(tmp_path):
     assert rc3 == 2 and "placeholder" in out3[0]
 
 
+# B1 (REVIEW_PHASE0): the stderr and stdout of a real pre-flight rejection,
+# seed 1 of random-pairs with 2 occluders under the runner's argv
+# (--log-level quiet, rc 1, no run directory), captured on the checkpoint
+# code 2026-11-19. test_full_pipeline.py:3335-3337 prints the line and
+# re-raises; without a Console excepthook the interpreter writes the
+# traceback.
+PREFLIGHT_MESSAGE = ("Could not place 2 hidden targets with 2 occluders at seed=1. "
+                     "Try --n-occluders higher, --n-hidden lower, or a different --seed.")
+PREFLIGHT_LINE = f"[pre-flight] seed 1 rejected: {PREFLIGHT_MESSAGE}\n"
+REAL_PREFLIGHT_STDERR = (
+    "pybullet build time: Jan 29 2025 23:17:20\n"
+    + PREFLIGHT_LINE
+    + "Traceback (most recent call last):\n"
+    '  File "/mnt/c/Users/HaniAlassiriAlhabbou/git/sb-readable/test_full_pipeline.py", '
+    "line 3277, in <module>\n"
+    "    probe_env = BoxelTestEnv(gui=False, scene_config=scene_cfg)\n"
+    "                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"
+    '  File "/mnt/c/Users/HaniAlassiriAlhabbou/git/sb-readable/boxel_env.py", '
+    "line 611, in __init__\n"
+    "    self._setup_scene()\n"
+    '  File "/mnt/c/Users/HaniAlassiriAlhabbou/git/sb-readable/boxel_env.py", '
+    "line 998, in _setup_scene\n"
+    "    self._create_targets()\n"
+    '  File "/mnt/c/Users/HaniAlassiriAlhabbou/git/sb-readable/boxel_env.py", '
+    "line 1546, in _create_targets\n"
+    "    raise RuntimeError(\n"
+    f"RuntimeError: {PREFLIGHT_MESSAGE}\n")
+REAL_PREFLIGHT_STDOUT = "  solver_iters: numSolverIterations 200 on our world (client 0)\n\n"
+UNRELATED_TRACEBACK = (
+    "Traceback (most recent call last):\n"
+    '  File "/mnt/c/x/test_full_pipeline.py", line 3340, in <module>\n'
+    "    logger = RunLogger(verbosity=args.log_level)\n"
+    "KeyError: 'log_dir'\n")
+# The line, the re-raised traceback, then a second, unrelated one.
+PREFLIGHT_THEN_OTHER_TRACEBACK = REAL_PREFLIGHT_STDERR + UNRELATED_TRACEBACK
+
+
 @pytest.mark.parametrize("plan, status, extra", [
     ({"rc": 1, "make_dir": False, "stderr": "Traceback (most recent call last):\n  x\nValueError\n"},
      "crashed", "no timing_summary.json"),                        # exception before the summary
@@ -418,6 +455,18 @@ def test_runner_refuses_second_run_and_bad_start(tmp_path):
     ({"rc": 2, "make_dir": False}, "crashed", "crash_exit2"),
     ({"rc": 1, "make_dir": False, "stderr": "[pre-flight] seed 1 rejected: no scene\n"},
      "preflight_rejected", None),
+    ({"rc": 1, "make_dir": False, "stderr": REAL_PREFLIGHT_STDERR,
+      "stdout": REAL_PREFLIGHT_STDOUT},
+     "preflight_rejected", None),                                 # B1: the real stderr
+    ({"rc": 1, "make_dir": False, "stderr": PREFLIGHT_THEN_OTHER_TRACEBACK},
+     "crashed", "no timing_summary.json"),                        # B1: another traceback
+    ({"rc": 1, "make_dir": False, "stderr": PREFLIGHT_LINE + UNRELATED_TRACEBACK},
+     "crashed", "no timing_summary.json"),                        # B1: line, other message
+    ({"rc": 1, "make_dir": False, "stderr": UNRELATED_TRACEBACK + REAL_PREFLIGHT_STDERR},
+     "crashed", "no timing_summary.json"),                        # B1: one before the line
+    ({"rc": 1, "make_dir": False, "stderr": REAL_PREFLIGHT_STDERR,
+      "stdout": "Traceback (most recent call last):\n  x\nValueError: y\n"},
+     "crashed", "no timing_summary.json"),                        # B1: one in stdout too
     ({"rc": 1, "success": False, "exit_reason": "all_searched"}, "failure", None),
     ({"rc": None}, "crashed", "left no rc"),
 ])
@@ -430,6 +479,8 @@ def test_boxels_planted_statuses(tmp_path, plan, status, extra):
     assert row["status"] == status and row["success"] is False
     if extra:
         assert extra in (row["crash_cause"] or "")
+    if status == "preflight_rejected":
+        assert row["preflight_message"].startswith("[pre-flight] seed 1 rejected: ")
     others = [e for e in ends.values() if not (e["seed"] == 1 and e["arm"] == "B")]
     assert all(e["status"] == "success" for e in others)
     a = ps.analyse(set_dir)

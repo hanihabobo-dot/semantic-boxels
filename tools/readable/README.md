@@ -291,7 +291,13 @@ python tools/readable/paired_sets.py analyse --set-dir evals/<id> [--crash-revie
   `not_migration`), NOT FULL (4).
 
 Statuses: boxels success, failure, timeout, preflight_rejected, crashed,
-wrong_scene; bridge success (reward 1.0, no failed gate but G19), failure,
+wrong_scene. A pre-flight rejection is the `[pre-flight] seed N rejected: M`
+line with no summary; test_full_pipeline re-raises the RuntimeError, so
+under `--log-level quiet` its traceback follows the line in stderr. That one
+traceback (after the line, ending in `<type>: M`) is part of the rejection;
+any other traceback (a second one, one before the line, one in stdout or a
+log, one with another message) makes the run `crashed`. Bridge: success
+(reward 1.0, no failed gate but G19), failure,
 gate_failed, killed, crashed, wrong_scene; both not_started and vanished.
 Item 2 compares outcome kinds without crashed (item 1's) and without the
 not-full statuses, exit reasons, and failed gates without G19.
