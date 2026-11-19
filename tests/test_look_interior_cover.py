@@ -91,6 +91,13 @@ def test_off_strikes_as_before(scene, monkeypatch):
     assert look_action._struck(['interior_of_cup'], 'elsewhere', reg) == ['interior_of_cup']
 
 
+def test_a_pose_look_judges_the_regions_for_the_mission_target():
+    env = SimpleNamespace(objects={'cup': SimpleNamespace(object_id=7),
+                                   'dice': SimpleNamespace(object_id=9)})
+    assert look_action._judged_body(env, 'cup', 'dice') == ('dice', 9)     # a pose look at the cup
+    assert look_action._judged_body(env, 'dice', 'dice') == ('dice', 9)    # a look for the target
+
+
 def test_the_plan_twin_leaves_the_cover_out_of_the_regions_content(scene):
     _, inside, reg, _ = scene
     goal = SimpleNamespace(id='interior_of_cup', kind='region', lo=inside.min_corner,

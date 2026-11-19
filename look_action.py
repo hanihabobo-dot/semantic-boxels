@@ -201,6 +201,16 @@ def _stands_at(bd, region) -> bool:
                      region.min_corner, region.max_corner)
 
 
+def _judged_body(env, obj, target_name):
+    """(name, body id) the named regions are judged for: the mission target,
+    whatever the look's ?o (a pose look's ?o is another body); ?o itself only
+    when the env has no body of the target's name."""
+    tname = str(target_name)
+    if tname in env.objects:
+        return tname, env.objects[tname].object_id
+    return tname, env.objects[obj].object_id
+
+
 def _struck(blocked, h, registry):
     """The still-blocked named regions that take a strike.  An interior region
     whose cover still stands over it is hidden by that cover, not by a bad
@@ -397,7 +407,12 @@ def handle_look_action(*, action_params, named, env, registry, belief, viz,
     supports = frozenset(support_body_ids or ()) | {
         info.object_id for info in env.objects.values()
         if getattr(info, 'is_tray', False)}
-    target_pid = env.objects[obj].object_id
+    # Every named region is judged for the MISSION target, as the sense judges
+    # its shadow (track/evalfinal, 2026-11-19): a pose look's ?o is another
+    # body (a cup), and judging the regions for that body "found" it in its
+    # own interior and shadow, marking them found with the die never seen
+    # (find_dice seeds 142, 146, 149, --look boxel --eye arm --interior-regions on).
+    tname, target_pid = _judged_body(env, obj, target_name)
 
     regions = [n for n in sorted(named)
                if registry.get_boxel(n) is not None
@@ -435,9 +450,9 @@ def handle_look_action(*, action_params, named, env, registry, belief, viz,
         if outcome == 'found_target':
             belief.mark_sensed(sid, found=True)
             res.found_in = sid
-            found_here = sid == h
-            if registry.get_boxel(obj) is None:
-                _register_target(obj, dets.get(obj), env, registry, viz, render,
+            found_here = sid == h and obj == tname
+            if registry.get_boxel(tname) is None:
+                _register_target(tname, dets.get(tname), env, registry, viz, render,
                                  boxel_centers, boxel_to_pybullet, object_body_ids)
             continue
         _remove_fragment(sid, registry, belief, viz, shadows,
