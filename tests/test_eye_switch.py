@@ -411,6 +411,10 @@ def test_main_starts_the_arm_camera_at_their_home_joints_and_makes_them_q_home(
 
     monkeypatch.setattr(arm_eye, 'place_arm', place)
     monkeypatch.setattr(streams.BoxelStreams, 'set_home_joints', set_home)
+    # main() writes M8-M10 into pose_belief.SWITCHES; a copy keeps that out of later tests
+    # (test_pose_writers, test_m9_grasp and test_interior_regions read the module defaults)
+    import pose_belief
+    monkeypatch.setattr(pose_belief, 'SWITCHES', dict(pose_belief.SWITCHES))
     monkeypatch.setattr(tfp, 'args', run_logger.parse_pipeline_args(
         ['--no-gui', '--look', 'boxel', '--eye', 'arm', '--log-level', 'quiet']),
         raising=False)
