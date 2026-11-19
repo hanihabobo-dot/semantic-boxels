@@ -15,7 +15,11 @@ equal the old span's tokens after a CLOSED list of allowed rewrites:
   R4 nonlocal      `nonlocal` lines are dropped (their names must be mapped)
   R5 indentation   compared relative to the span's first statement
   R6 comments      may differ, but every removed, changed or added comment
-                   is printed as residual (rule 19: narration comments stay)
+                   is printed as residual (rule 19: narration comments stay);
+                   the old comments are those inside the span plus the
+                   contiguous comment block directly above it (to the first
+                   blank or code line), the new ones those inside the new
+                   function plus the block directly above the new def
 
 Everything else that differs is printed as residual. Beside the token
 compare it checks:
@@ -1043,12 +1047,32 @@ def _comments_in(src: Source, lo: int, hi: int) -> List[Tuple[int, str]]:
     return [(r, t) for r, t in src.comments if lo <= r <= hi]
 
 
+def _code_rows(src: Source) -> set:
+    rows = set()
+    for ll in src.logical:
+        rows.update(range(ll.start, ll.end + 1))
+    return rows
+
+
+def _leading_comments(src: Source, first: int) -> List[Tuple[int, str]]:
+    """The contiguous comment block directly above row `first`: comment-only
+    lines up to the first blank line, code line or the top of the file
+    (B2 of REVIEW_PHASE0: the narration header of a cut block or of a moved
+    def belongs to the span's comment diff, PLAN 24.3 (f))."""
+    text = {r: t for r, t in src.comments}
+    code_rows = _code_rows(src)
+    out: List[Tuple[int, str]] = []
+    r = first - 1
+    while r > 0 and r in text and r not in code_rows:
+        out.append((r, text[r]))
+        r -= 1
+    return out[::-1]
+
+
 def _adjacent_comments(src: Source, lo: int, hi: int) -> List[int]:
     rows: List[int] = []
     crow = {r for r, _t in src.comments}
-    code_rows = set()
-    for ll in src.logical:
-        code_rows.update(range(ll.start, ll.end + 1))
+    code_rows = _code_rows(src)
     for step, r in ((-1, lo - 1), (1, hi + 1)):
         while 0 < r <= len(src.lines):
             if r in code_rows:
@@ -1197,7 +1221,13 @@ def check_entry(entry: dict, read_old, read_new,
         res.errors.append((rf.rule, rf.message))
         return res
     res.old_lines = f"{span.first}-{span.last}"
+    # B2: the comment block directly above the span is diffed with the span
+    # (a delete diffs every comment outside the span with the new file).
+    old_lead = [] if kind == "delete" else _leading_comments(old_src, span.first)
+    lead_rows = {r for r, _t in old_lead}
     for r in _adjacent_comments(old_src, span.first, span.last):
+        if r in lead_rows:
+            continue
         res.info.append(f"comment adjacent to the old span, outside it "
                         f"(check where it went): {old_src.path}:{r}: "
                         f"{old_src.line(r).strip()}")
@@ -1234,9 +1264,16 @@ def check_entry(entry: dict, read_old, read_new,
     _diff_code(res, old_src, old_ll_kept, old_keys, new_src, new_ll,
                new_keys)
     res.rewrites_used = dict(rw.used)
-    _diff_comments(res, _comments_in(old_src, span.first, span.last),
-                   _comments_in(new_src, c0, n1))
+    # B2: the old span's leading comment block counts as kept when it stands
+    # directly above the new def or inside the new function; dropped, it is
+    # a removed comment (residual).
+    new_lead = _leading_comments(new_src, first_line(new_fn))
+    new_lead_rows = {r for r, _t in new_lead}
+    _diff_comments(res, old_lead + _comments_in(old_src, span.first, span.last),
+                   new_lead + _comments_in(new_src, c0, n1))
     for r in _adjacent_comments(new_src, first_line(new_fn), n1):
+        if r in new_lead_rows:
+            continue
         res.info.append(f"comment adjacent to the new function, outside it: "
                         f"{new_src.path}:{r}: {new_src.line(r).strip()}")
     # free names

@@ -461,6 +461,126 @@ def test_dropped_comment_shows_as_residual(tmp_path):
     assert mc.exit_code([r]) == 3
 
 
+# B2 of REVIEW_PHASE0: the contiguous comment block directly above a cut
+# span or a moved def is part of the comment diff (PLAN 24.3 (f), rule 19's
+# narration comments). Dropped, it is a removed comment (residual, exit 3);
+# kept above the new def or inside the new function, the entry is clean.
+
+B2_OLD_CUT = '''\
+def main(n):
+    plan_count = 0
+    # --- Stage B: the narration header of this block ---
+    # (two lines, one block)
+    plan_count += n
+    plan_count += 2
+
+    # separated by a blank line: not part of the block above the span
+    return plan_count
+'''
+
+B2_CUT = {"id": "b2-cut", "kind": "cut", "phase": "P6",
+          "old": {"file": "old.py", "qualname": "main",
+                  "start_anchor": "plan_count += n",
+                  "end_anchor": "plan_count += 2"},
+          "new": {"file": "new.py", "qualname": "stage_b"},
+          "name_map": {"plan_count": "st.counts.plan_count"}}
+
+B2_HEADER = ("    # --- Stage B: the narration header of this block ---\n"
+             "    # (two lines, one block)\n")
+B2_BODY = ("    st.counts.plan_count += n\n"
+           "    st.counts.plan_count += 2\n")
+
+B2_OLD_MOVE = '''\
+import os
+
+
+# narration: why this helper exists
+# (it joins one fixed part)
+def helper(x):
+    return os.path.join(x, "a")
+'''
+
+B2_MOVE = {"id": "b2-move", "kind": "move", "phase": "P2",
+           "old": {"file": "a.py", "qualname": "helper"},
+           "new": {"file": "b.py", "qualname": "helper"}}
+
+
+def b2_move(tmp_path, new_text):
+    return one(run([B2_MOVE], old_files={"a.py": B2_OLD_MOVE},
+                   new_files={"b.py": new_text}, tmp_path=tmp_path))
+
+
+def test_b2_move_dropping_the_comment_above_the_def_is_residual(tmp_path):
+    new = B2_OLD_MOVE.replace("# narration: why this helper exists\n"
+                              "# (it joins one fixed part)\n", "")
+    r = b2_move(tmp_path, new)
+    assert r.status == "review" and not r.code_residual and not r.errors
+    assert sum("comment removed" in c for c in r.comment_residual) == 2
+    assert any("why this helper exists" in c for c in r.comment_residual)
+    assert mc.exit_code([r]) == 3
+
+
+def test_b2_move_keeping_the_comment_above_the_def_is_clean(tmp_path):
+    new = '"""b."""\nimport os\n\n\n' + B2_OLD_MOVE.split("\n\n\n", 1)[1]
+    r = b2_move(tmp_path, new)
+    assert r.status == "clean", (r.comment_residual, r.warnings)
+    assert not any("adjacent" in i for i in r.info)
+    assert mc.exit_code([r]) == 0
+
+
+def test_b2_move_changing_the_comment_above_the_def_is_residual(tmp_path):
+    r = b2_move(tmp_path, B2_OLD_MOVE.replace("why this helper", "why the helper"))
+    assert r.status == "review"
+    assert any("changed" in c and "why this helper" in c for c in r.comment_residual)
+
+
+def b2_cut(tmp_path, new_text):
+    return one(run([B2_CUT], old_files={"old.py": B2_OLD_CUT},
+                   new_files={"new.py": new_text}, tmp_path=tmp_path))
+
+
+def test_b2_cut_dropping_the_header_comment_is_residual(tmp_path):
+    r = b2_cut(tmp_path, "def stage_b(st, n):\n" + B2_BODY)
+    assert r.status == "review" and not r.code_residual and not r.errors
+    assert sum("comment removed" in c for c in r.comment_residual) == 2
+    assert any("Stage B" in c for c in r.comment_residual)
+    assert mc.exit_code([r]) == 3
+    # the comment after a blank line below the span stays information only
+    assert any("adjacent" in i and "separated by a blank line" in i for i in r.info)
+    assert not any("separated" in c for c in r.comment_residual)
+
+
+def test_b2_cut_header_kept_as_the_new_functions_first_lines_is_clean(tmp_path):
+    r = b2_cut(tmp_path, "def stage_b(st, n):\n" + B2_HEADER + B2_BODY)
+    assert r.status == "clean", (r.comment_residual, r.warnings)
+    assert mc.exit_code([r]) == 0
+
+
+def test_b2_cut_header_kept_above_the_new_def_is_clean(tmp_path):
+    lead = "".join(x[4:] + "\n" for x in B2_HEADER.splitlines())
+    r = b2_cut(tmp_path, "import os\n\n\n" + lead + "def stage_b(st, n):\n" + B2_BODY)
+    assert r.status == "clean", (r.comment_residual, r.warnings)
+    assert mc.exit_code([r]) == 0
+
+
+def test_b2_cli_dropped_header_exits_nonzero(tmp_path):
+    (tmp_path / "old").mkdir()
+    (tmp_path / "new").mkdir()
+    (tmp_path / "old" / "old.py").write_text(B2_OLD_CUT, encoding="utf-8")
+    (tmp_path / "new" / "new.py").write_text("def stage_b(st, n):\n" + B2_BODY,
+                                             encoding="utf-8")
+    spec = tmp_path / "spec.json"
+    spec.write_text(json.dumps({"spec_version": 1, "entries": [B2_CUT]}),
+                    encoding="utf-8")
+    p = subprocess.run([sys.executable, str(TOOL), str(spec),
+                        "--old-root", str(tmp_path / "old"),
+                        "--new-root", str(tmp_path / "new")],
+                       capture_output=True, text=True, encoding="utf-8", timeout=120)
+    print(p.stdout, p.stderr)
+    assert p.returncode == 3
+    assert "RESIDUAL comment removed" in p.stdout and "Stage B" in p.stdout
+
+
 def test_changed_inline_comment_shows_as_residual(tmp_path):
     new = NEW.replace("# loop ends", "# the loop ends")
     r = syn(tmp_path, LOOP, new=new)

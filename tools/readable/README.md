@@ -22,7 +22,7 @@ Allowed rewrites (nothing else):
 | R3 | `return False` / `return None` of the old function in the span become `return <SENTINEL>` | `sentinel_returns` |
 | R4 | `nonlocal` lines are dropped (their names must be in `name_map`) | `drop_nonlocal` |
 | R5 | indentation, compared relative to the first statement | always |
-| R6 | comments: may differ, but every removed, changed or added comment is printed as residual | always |
+| R6 | comments: may differ, but every removed, changed or added comment is printed as residual; the contiguous comment block directly above a cut span or a moved def (up to the first blank or code line) is diffed with the span, so dropping it is residual, and keeping it directly above the new def or inside the new function is clean | always |
 
 Other checks: a cut is a run of sibling statements of one block (no cut
 through a `try`, `with`, `if` or loop); a def span carries its decorators;
@@ -82,7 +82,9 @@ line for every matched logical line.
 
 Limits: the identity check of cross-file moves (`new_mod.x is old_mod.x`,
 draft 4.1) needs imports and belongs to a pin under the pipeline lock, not
-here. Bound-before-use is a straight-line approximation: a read bound only
+here. A comment after a blank line above the span, or below the span, is listed as
+INFO only; a cut whose header comment stays above the call site in the old
+function reads as removed (R reads it). Bound-before-use is a straight-line approximation: a read bound only
 on some paths is a warning for R. An f-string is compared by prefix, quote
 and `ast.dump`, so spaces inside `{...}` do not count.
 
