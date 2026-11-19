@@ -254,7 +254,7 @@ STEP_END_STATUSES = (
     'ok', 'sense_outcome', 'integrity_replan', 'motion_resolve_failed',
     'pick_failure', 'place_failure', 'stack_failure', 'empty_hand',
     'stale_precondition', 'home_not_reached', 'observe_ok',
-    'observe_incomplete', 'unlabelled', 'action_failed', 'dead',
+    'observe_incomplete', 'look_outcome', 'unlabelled', 'action_failed', 'dead',
 )
 
 
@@ -871,6 +871,32 @@ def parse_pipeline_args(argv=None):
              "region when the arm there does not block the eye's view, then "
              'pick from there (on), or return to a static view spot before '
              'every sense as before (off).')
+    # Path 9 (BF#68, tracks/look): one look action replaces sense and
+    # observe (look_domain.py, look_action.py); off keeps both, as before.
+    # boxel: the look from a free-space boxel (look_views.py); centred: the
+    # reference look that uses no boxel model (the camera straight over the
+    # object the look is about, the tag's observe rule).  `on` means boxel.
+    parser.add_argument(
+        '--look', choices=['off', 'on', 'boxel', 'centred'], default='off',
+        help="Path 9: replace the sense and observe actions by one look "
+             "action: boxel (a free-space boxel, the generated domain "
+             "pddl/domain_pddlstream_look.pddl; `on` is the same) or centred "
+             "(the object-centred look, pddl/domain_pddlstream_look_centred."
+             "pddl); needs --m8 on.")
+    # Path 9, the arm camera only (tracks/look/ARM_ONLY_DESIGN.md): every
+    # image comes from the arm camera, the first one at the start
+    # configuration, which is q_home.  fixed keeps the overview camera.
+    parser.add_argument(
+        '--eye', choices=['fixed', 'arm'], default='fixed',
+        help="Path 9: arm: the overview camera is the arm camera at the start "
+             "configuration (needs --look boxel or --look centred); fixed: "
+             "the fixed overview camera, as before.")
+    parser.add_argument(
+        '--eye-start-joints', default='',
+        help="Path 9, --eye arm: the start configuration, one angle per arm "
+             "joint in radians, comma separated; it becomes q_home.  Empty: "
+             "the caller's home joints (find_dice: TAMPURA's DEFAULT_ARM_POS), "
+             "else TAMPURA's home joints (arm_eye.TAMPURA_HOME_JOINTS).")
     # BF#53 (2026-10-30), the optimistic search's settings.  pddlstream
     # weighs a stream result's effort into the search's costs only with
     # effort_weight set; without it every attempt of the adaptive loop may

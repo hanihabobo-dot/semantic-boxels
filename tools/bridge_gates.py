@@ -150,14 +150,16 @@ for _scene, _seeds in (('1747173590', (1, 2, 3, 4, 8, 14, 15, 18)),
 
 # G5: the enumerated channels behind a SHADOW boxel's belief change.
 G5_CHANNELS = ('planned_sense_render', 'sweep_render', 'lost_caster_render',
-               'rediscovery_render', 'strike_park', 'observed_before_placement')
+               'rediscovery_render', 'strike_park', 'observed_before_placement',
+               'planned_look_render')       # path 9: a look's named regions only
 G5_UNRENDERED = 'superseded_unrendered'
 # G3: how a dispatched step may end (run_logger.STEP_END_STATUSES less
 # 'unlabelled', which always fails).
 G3_STATUSES = ('ok', 'sense_outcome', 'integrity_replan',
                'motion_resolve_failed', 'pick_failure', 'place_failure',
                'stack_failure', 'empty_hand', 'stale_precondition',
-               'home_not_reached', 'observe_ok', 'observe_incomplete')
+               'home_not_reached', 'observe_ok', 'observe_incomplete',
+               'look_outcome')              # path 9
 G4_TOL_M = 1e-6
 # G18: the arm O driver's clock stamps, in order.  Between their
 # initialize() returning and the rollout's first env.step it may only load
@@ -539,6 +541,16 @@ def _m8_domain():
     return mod
 
 
+def _look_domain():
+    if REPO not in sys.path:        # look_domain imports m8_domain
+        sys.path.insert(0, REPO)
+    spec = importlib.util.spec_from_file_location(
+        'look_domain', os.path.join(REPO, 'look_domain.py'))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def run_domain(report):
     d, s = _pddl_sha('domain_pddlstream.pddl'), _pddl_sha('stream.pddl')
     report.add('G10', 'INFO', f"domain_pddlstream.pddl {d[:16]}  "
@@ -561,6 +573,19 @@ def run_domain(report):
         report.add('G10', 'PASS', f'{rel(m8.GENERATED_FILE)} {m8.sha(want)[:16]} '
                                   f'= regenerated (live + M8 delta); an OFF run '
                                   f'must load the live file, an ON run this one')
+    # Path 9: the look domain is the same text plus the look delta, regenerated.
+    if os.path.isfile(os.path.join(REPO, 'look_domain.py')):
+        look = _look_domain()
+        for mode, path in look.GENERATED_FILES.items():
+            want_l = look.generate(look.read(look.LIVE_FILE), mode)
+            have_l = look.read(path) if os.path.isfile(path) else None
+            report.add('G10', 'PASS' if have_l == want_l else 'FAIL',
+                       f'{rel(path)} {look.sha(want_l)[:16]} = '
+                       f'regenerated (live + M8 delta + {mode} look delta); a '
+                       f'--look {mode} run must load this one'
+                       if have_l == want_l else
+                       f'{rel(path)} is missing or not the regenerated live '
+                       f'domain plus the {mode} look delta')
 
 
 def ledger_domain(report, rows):
@@ -574,6 +599,14 @@ def ledger_domain(report, rows):
     bad = []
     for r in doms:
         on = bool((r.get('switches') or {}).get('M8'))
+        if (r.get('switches') or {}).get('look'):       # path 9
+            look = _look_domain()
+            mode = look.mode_of(r['switches']['look'])
+            want = look.sha(look.generate(live, mode))
+            if r.get('sha') != want:
+                bad.append(f"look {mode}: loaded {r.get('file')} "
+                           f"{str(r.get('sha'))[:16]} != {want[:16]}")
+            continue
         want = m8.sha(m8.generate(live) if on else live)
         if r.get('sha') != want:
             bad.append(f"M8 {'on' if on else 'off'}: loaded {r.get('file')} "
@@ -870,6 +903,10 @@ def run_ledger(report, run_dir, m7='on'):
         # appended sensing configuration.
         if s['action'] == 'sense' and len(s['args']) >= 2:
             sense_regions[(s['plan'], s['step'])] = s['args'][1]
+    # Path 9: the regions and objects a look names are its (reveals ?q .)
+    # facts, logged by the dispatcher as the step's look_reveals row.
+    look_named = {(r.get('plan'), r.get('step')): set(r.get('named') or ())
+                  for r in rows if r['kind'] == 'look_reveals'}
     for r in rows:
         if r['kind'] != 'belief' or r['op'] == 'add':
             continue
@@ -884,6 +921,12 @@ def run_ledger(report, run_dir, m7='on'):
             if planned != r['region']:
                 bad5.append(f"{r['region']} {r['op']}: sense render of "
                             f"{planned}, not this region")
+        elif ch == 'planned_look_render':
+            named = look_named.get((r.get('plan'), r.get('step')))
+            if named is None or r['region'] not in named:
+                bad5.append(f"{r['region']} {r['op']}: look render named "
+                            f"{sorted(named) if named is not None else None}, "
+                            f"not this region")
     if unrendered and m7 == 'on':
         bad5.append(f'{unrendered} unrendered rediscovery removals with M7 on')
     detail = ', '.join(f'{k}={v}' for k, v in sorted(counts.items(),
@@ -903,6 +946,19 @@ def run_ledger(report, run_dir, m7='on'):
     report.add('G15', 'FAIL' if missing else 'PASS',
                f'no outcome for {missing[:5]}' if missing else
                f'{len(sense_steps)} senses, each classified on its planned region')
+    # G15 for the look (path 9): every look step has its look_reveals row
+    # (what the plan named) and its look_result row (what the render did).
+    look_steps = [s for s in steps if s['action'] == 'look']
+    if look_steps:
+        have_r = {(r.get('plan'), r.get('step')) for r in rows
+                  if r['kind'] == 'look_result'}
+        have_n = set(look_named)
+        miss = [f"plan {s['plan']} step {s['step']}" for s in look_steps
+                if (s['plan'], s['step']) not in have_r
+                or (s['plan'], s['step']) not in have_n]
+        report.add('G15L', 'FAIL' if miss else 'PASS',
+                   f'no look_reveals or look_result for {miss[:5]}' if miss else
+                   f'{len(look_steps)} looks, each with its named set and its result')
 
     # G10 on the run: the loaded domain matches the M8 switch.
     ledger_domain(report, rows)
