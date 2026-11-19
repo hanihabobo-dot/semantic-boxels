@@ -201,6 +201,21 @@ def _stands_at(bd, region) -> bool:
                      region.min_corner, region.max_corner)
 
 
+def _struck(blocked, h, registry):
+    """The still-blocked named regions that take a strike.  An interior region
+    whose cover still stands over it is hidden by that cover, not by a bad
+    view: it takes no strike unless it is the planned region ?h, as the sense
+    strikes only the shadow it was planned for (BF#65 x path 9)."""
+    out = []
+    for sid in blocked:
+        if sid != h and interior_regions.standing_cover_of(
+                registry, registry.get_boxel(sid)) is not None:
+            print(f"    look: {sid} blocked by its standing cover (no strike)")
+            continue
+        out.append(sid)
+    return out
+
+
 def _occluder_ids(registry, region, env):
     """The executing client's ids of the registered bodies that do not stand
     in or at ``region``: what may hide it.  A body in or at it is content
@@ -443,7 +458,7 @@ def handle_look_action(*, action_params, named, env, registry, belief, viz,
         render=render, held_body_id=held_body_id, camera='wrist')
 
     # Strikes are a loop rule: a named region still blocked is one more strike.
-    for sid in res.blocked:
+    for sid in _struck(res.blocked, h, registry):
         blocked_counts[sid] = blocked_counts.get(sid, 0) + 1
         print(f"    look: {sid} blocked [strike {blocked_counts[sid]}/{STRIKE_PARK}]")
         if blocked_counts[sid] >= STRIKE_PARK:

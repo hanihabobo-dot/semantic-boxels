@@ -70,6 +70,27 @@ def test_the_executor_counts_the_cover_as_an_occluder_not_as_content(scene):
     assert 7 not in look_action._content_boxes(reg, inside, env)
 
 
+def test_a_look_elsewhere_does_not_strike_an_interior_under_its_cover(scene):
+    _, inside, reg, _ = scene
+    lateral = _bd('shadow_of_cup', (0.54, -0.26, 0.0), (0.60, -0.20, 0.06), kind=BoxelType.SHADOW)
+    reg.b[lateral.id] = lateral
+    assert look_action._struck(['interior_of_cup', 'shadow_of_cup'], 'shadow_of_cup', reg) == ['shadow_of_cup']
+    assert look_action._struck(['interior_of_cup'], 'interior_of_cup', reg) == ['interior_of_cup']
+
+
+def test_a_moved_cover_lets_the_interior_take_strikes_again(scene):
+    cup, inside, reg, _ = scene
+    cup.min_corner = cup.min_corner + 0.3
+    cup.max_corner = cup.max_corner + 0.3
+    assert look_action._struck(['interior_of_cup'], 'elsewhere', reg) == ['interior_of_cup']
+
+
+def test_off_strikes_as_before(scene, monkeypatch):
+    _, inside, reg, _ = scene
+    monkeypatch.setattr(interior_regions, 'ENABLED', False)
+    assert look_action._struck(['interior_of_cup'], 'elsewhere', reg) == ['interior_of_cup']
+
+
 def test_the_plan_twin_leaves_the_cover_out_of_the_regions_content(scene):
     _, inside, reg, _ = scene
     goal = SimpleNamespace(id='interior_of_cup', kind='region', lo=inside.min_corner,
