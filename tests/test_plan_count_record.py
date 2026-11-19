@@ -19,6 +19,8 @@ import types
 import typing
 from pathlib import Path
 
+import interior_regions
+
 SOURCE_PATH = Path(__file__).resolve().parents[1] / 'test_full_pipeline.py'
 TARGET = 'green_object'
 HELD = 7
@@ -70,6 +72,7 @@ class _Planner:
         self.clock, self.plans, self.seconds = clock, list(plans), list(seconds)
         self.goals = []
         self.m8_views = self.last_m8_stats = self.last_init = None
+        self.last_look_stats = None            # path 9's per-plan look stats (track/look)
         self.last_no_plan_binding_death = None
         self.streams = types.SimpleNamespace(ungraspable_objects=set())
 
@@ -119,6 +122,8 @@ def _run(unknown_shadows, plans, seconds, held_body_id=None):
         'held_body_id': held_body_id, 'body_id_to_name': {HELD: 'red_object'},
         'current_config': None, 'visible_target_locations': {},
         'unit_costs': False,
+        # BF#65's module (merged with C-07 on track/evalfinal): the rounds call it; off by default
+        'interior_regions': interior_regions,
         'args': types.SimpleNamespace(max_plan_time=60.0, log_level='quiet',
                                       planner='default'),
     }
