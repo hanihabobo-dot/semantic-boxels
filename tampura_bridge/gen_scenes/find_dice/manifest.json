@@ -1,10 +1,1190 @@
 {
- "what": "find_dice scenes from their env_generator.py, unmodified; scene s is the first scene it accepts after random.seed(s) and numpy.random.seed(s) (BF#63)",
+ "details": {
+  "100": {
+   "categories": [
+    "a_cups_ud",
+    "b_cups_ud",
+    "dice",
+    "c_cups_ud",
+    "d_cups_ud",
+    "e_cups_ud"
+   ],
+   "gen_s": 156.9,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s100.json",
+   "sha256": "16b0a3398fa389ba8396fbc969a5cf637da568aaaffc5d1ffcd0a3b0ac88d45b",
+   "their_name": "1793726448.7310283.json"
+  },
+  "101": {
+   "categories": [
+    "e_cups_ud",
+    "dice",
+    "a_cups_ud",
+    "d_cups_ud",
+    "c_cups_ud",
+    "b_cups_ud"
+   ],
+   "gen_s": 36.9,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s101.json",
+   "sha256": "b4283e233aba8ac4c19d60dd059c2633447225a7b29e353186e38ece704fbab0",
+   "their_name": "1793726329.265596.json"
+  },
+  "102": {
+   "categories": [
+    "c_cups_ud",
+    "e_cups_ud",
+    "dice",
+    "d_cups_ud"
+   ],
+   "gen_s": 279.9,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s102.json",
+   "sha256": "5b7a7fd7e6f8d758e5db5efe952b794e6a28c9509f8cadfd698659bcb829fddc",
+   "their_name": "1793726572.2272465.json"
+  },
+  "103": {
+   "categories": [
+    "d_cups_ud",
+    "dice",
+    "e_cups_ud",
+    "a_cups_ud",
+    "c_cups_ud"
+   ],
+   "gen_s": 35.3,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s103.json",
+   "sha256": "e90177a9fc2dde5dc6e9190771dc2a4c0507fdeed9e5020dda8a65419cde872b",
+   "their_name": "1793726327.6602948.json"
+  },
+  "104": {
+   "categories": [
+    "e_cups_ud",
+    "dice",
+    "d_cups_ud",
+    "b_cups_ud"
+   ],
+   "gen_s": 39.0,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s104.json",
+   "sha256": "86d94bfbbbde36e6a9f1bede27e6209ff8d75150cc689ae268a9412c5d60784f",
+   "their_name": "1793726331.4297585.json"
+  },
+  "105": {
+   "categories": [
+    "d_cups_ud",
+    "dice",
+    "e_cups_ud",
+    "b_cups_ud",
+    "c_cups_ud",
+    "a_cups_ud"
+   ],
+   "gen_s": 39.6,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s105.json",
+   "sha256": "dc532ce16ccd7f116b3580e3d7d8f91633741bf647aee60a1dfbb5c779a802fb",
+   "their_name": "1793726332.0984182.json"
+  },
+  "106": {
+   "categories": [
+    "d_cups_ud",
+    "b_cups_ud",
+    "e_cups_ud",
+    "c_cups_ud",
+    "dice"
+   ],
+   "gen_s": 38.2,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s106.json",
+   "sha256": "9686aa4f9f8d4e71dcd87e245e25c2fcf13abc9451f269c3dc17d38e744f774f",
+   "their_name": "1793726365.5311422.json"
+  },
+  "107": {
+   "categories": [
+    "c_cups_ud",
+    "e_cups_ud",
+    "dice",
+    "a_cups_ud",
+    "b_cups_ud"
+   ],
+   "gen_s": 174.8,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s107.json",
+   "sha256": "1efa72d57e5d3519c7cf2fe0968ba223d1d93f7484b9f2aa03e3e28f3c05a36d",
+   "their_name": "1793726503.957965.json"
+  },
+  "108": {
+   "categories": [
+    "b_cups_ud",
+    "dice",
+    "e_cups_ud"
+   ],
+   "gen_s": 23.7,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s108.json",
+   "sha256": "e39259976d9b6a661eafdba2758d822b3fb25a3e3f23c91b280cb7562916b1b3",
+   "their_name": "1793726355.2245758.json"
+  },
+  "109": {
+   "categories": [
+    "a_cups_ud",
+    "c_cups_ud",
+    "e_cups_ud",
+    "dice"
+   ],
+   "gen_s": 26.4,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s109.json",
+   "sha256": "6091e071aa26e2ca42b7820ad207f8adbbc0857dcf690f0095004c45e0e27f96",
+   "their_name": "1793726358.480476.json"
+  },
+  "110": {
+   "categories": [
+    "d_cups_ud",
+    "a_cups_ud",
+    "b_cups_ud",
+    "dice",
+    "c_cups_ud"
+   ],
+   "gen_s": 32.4,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s110.json",
+   "sha256": "931d0933621504c258992050c4e25c8c954f06fbebb1874d4855a0e14a6da4d5",
+   "their_name": "1793726387.650934.json"
+  },
+  "111": {
+   "categories": [
+    "b_cups_ud",
+    "dice",
+    "e_cups_ud"
+   ],
+   "gen_s": 31.9,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s111.json",
+   "sha256": "537d482d950c9a8732511dda1061c9814c6886f6b3af17b99160a3396e5ce03c",
+   "their_name": "1793726390.5429857.json"
+  },
+  "112": {
+   "categories": [
+    "b_cups_ud",
+    "dice",
+    "c_cups_ud",
+    "a_cups_ud",
+    "d_cups_ud"
+   ],
+   "gen_s": 31.9,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s112.json",
+   "sha256": "cd26de4d8037c1abc697c5450d6e3e8d4e89dd0781eee6f1876ba41bb8e2da16",
+   "their_name": "1793726398.097589.json"
+  },
+  "113": {
+   "categories": [
+    "d_cups_ud",
+    "dice"
+   ],
+   "gen_s": 34.5,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s113.json",
+   "sha256": "110bcbf7a1e3f9ba1313ece1262a4836acc305575b389d408cb9aac562d78434",
+   "their_name": "1793726421.779227.json"
+  },
+  "114": {
+   "categories": [
+    "c_cups_ud",
+    "dice",
+    "d_cups_ud"
+   ],
+   "gen_s": 36.6,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s114.json",
+   "sha256": "08e67ec026b8779a145a71af17ddc271b1f09e754f925580a62f2c05df9a0f17",
+   "their_name": "1793726426.8887706.json"
+  },
+  "115": {
+   "categories": [
+    "dice",
+    "e_cups_ud",
+    "c_cups_ud",
+    "d_cups_ud"
+   ],
+   "gen_s": 102.6,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s115.json",
+   "sha256": "e5cde7620c7b31b4ab1a800bf1d1f9c8524b414e7cac6fb8a4fa909263d49966",
+   "their_name": "1793726500.699093.json"
+  },
+  "116": {
+   "categories": [
+    "d_cups_ud",
+    "dice",
+    "c_cups_ud",
+    "a_cups_ud",
+    "b_cups_ud",
+    "e_cups_ud"
+   ],
+   "gen_s": 76.1,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s116.json",
+   "sha256": "0b276c72b51bb8a6687003d19ccfe5aece4970699f8e4e55e1990254f15282f0",
+   "their_name": "1793726501.0961823.json"
+  },
+  "117": {
+   "categories": [
+    "d_cups_ud",
+    "c_cups_ud",
+    "dice"
+   ],
+   "gen_s": 71.1,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s117.json",
+   "sha256": "04636f1cbea0592f9975c199d024e724de66845b2572ec52f12940361a6a2b2c",
+   "their_name": "1793726499.1262293.json"
+  },
+  "118": {
+   "categories": [
+    "b_cups_ud",
+    "dice",
+    "d_cups_ud"
+   ],
+   "gen_s": 59.4,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s118.json",
+   "sha256": "c4c7511b3c32f205835261c1817a31bf1abaeaa523f52aab09adee9c3c8c4244",
+   "their_name": "1793726509.872256.json"
+  },
+  "119": {
+   "categories": [
+    "e_cups_ud",
+    "dice",
+    "c_cups_ud",
+    "a_cups_ud"
+   ],
+   "gen_s": 46.4,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s119.json",
+   "sha256": "1e23fe29036e0e620ae4648d0e09e1bf9dcec453ffdcc633ac0f7cf6aa74a6ef",
+   "their_name": "1793726545.986502.json"
+  },
+  "120": {
+   "categories": [
+    "e_cups_ud",
+    "c_cups_ud",
+    "b_cups_ud",
+    "a_cups_ud",
+    "d_cups_ud",
+    "dice"
+   ],
+   "gen_s": 42.4,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s120.json",
+   "sha256": "09976a9309ccda72fe6b9f169dc84e7a86bf22c960f844b3b1433197b3e6d076",
+   "their_name": "1793726543.2050023.json"
+  },
+  "121": {
+   "categories": [
+    "e_cups_ud",
+    "dice"
+   ],
+   "gen_s": 36.5,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s121.json",
+   "sha256": "33a0c3ae7e50529d24213932b3ac5bf2af68b32d5d8d8cdeb8bd3ca0dc94bdcd",
+   "their_name": "1793726537.9699633.json"
+  },
+  "122": {
+   "categories": [
+    "e_cups_ud",
+    "c_cups_ud",
+    "dice",
+    "b_cups_ud",
+    "a_cups_ud",
+    "d_cups_ud"
+   ],
+   "gen_s": 42.7,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s122.json",
+   "sha256": "b145134b0ea80e90856837a8b344c79c754717b7b7249b2526c6157424b60a08",
+   "their_name": "1793726547.177202.json"
+  },
+  "123": {
+   "categories": [
+    "d_cups_ud",
+    "dice"
+   ],
+   "gen_s": 45.9,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s123.json",
+   "sha256": "c63d037dbaf87f396e70380c69c0952ec876ee78b27e49d38cd0bd1e2fe2ee91",
+   "their_name": "1793726555.8004115.json"
+  },
+  "124": {
+   "categories": [
+    "b_cups_ud",
+    "d_cups_ud",
+    "a_cups_ud",
+    "e_cups_ud",
+    "c_cups_ud",
+    "dice"
+   ],
+   "gen_s": 296.2,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s124.json",
+   "sha256": "407f4efbfd22301afcce4a99f7fb122389966bfea71978411ab2681cd0630a54",
+   "their_name": "1793726834.844518.json"
+  },
+  "125": {
+   "categories": [
+    "d_cups_ud",
+    "dice"
+   ],
+   "gen_s": 183.6,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s125.json",
+   "sha256": "b2a9e99ac70018e0a19d41cefd64ee07f4abed3301f9487f9625e29dbd625945",
+   "their_name": "1793726726.7507675.json"
+  },
+  "126": {
+   "categories": [
+    "d_cups_ud",
+    "c_cups_ud",
+    "dice",
+    "b_cups_ud",
+    "a_cups_ud",
+    "e_cups_ud"
+   ],
+   "gen_s": 49.0,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s126.json",
+   "sha256": "869bb69e519b289304ddd4ed1dc3971a7d89c7feb49c4c4b95f414bcc7d3e91d",
+   "their_name": "1793726594.856372.json"
+  },
+  "127": {
+   "categories": [
+    "c_cups_ud",
+    "b_cups_ud",
+    "dice"
+   ],
+   "gen_s": 384.7,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s127.json",
+   "sha256": "28244cd917656137030f6ee19333041d47261e97ef1127110463840dcc576327",
+   "their_name": "1793726931.866737.json"
+  },
+  "128": {
+   "categories": [
+    "e_cups_ud",
+    "b_cups_ud",
+    "dice"
+   ],
+   "gen_s": 43.3,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s128.json",
+   "sha256": "62d94202378e85102ddb32be9f10d0fb9e510731798cfed9df1cd9ef876ad0fb",
+   "their_name": "1793726599.4912255.json"
+  },
+  "129": {
+   "categories": [
+    "c_cups_ud",
+    "dice",
+    "e_cups_ud"
+   ],
+   "gen_s": 61.1,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s129.json",
+   "sha256": "31084e95a908b5826d69a97195718cbe0c8cecba9ad67472249e26b6bacde735",
+   "their_name": "1793726633.718431.json"
+  },
+  "130": {
+   "categories": [
+    "d_cups_ud",
+    "dice",
+    "c_cups_ud",
+    "a_cups_ud"
+   ],
+   "gen_s": 57.7,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s130.json",
+   "sha256": "b46888570567fe225493baa4068bc70c226c14aa0c8d717f45da40137972a97e",
+   "their_name": "1793726652.6758227.json"
+  },
+  "131": {
+   "categories": [
+    "e_cups_ud",
+    "b_cups_ud",
+    "d_cups_ud",
+    "dice"
+   ],
+   "gen_s": 42.4,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s131.json",
+   "sha256": "8b173776b62e307ce5e2142d4c61492e871c2dea53307947b97107de73ec84a7",
+   "their_name": "1793726641.6911726.json"
+  },
+  "132": {
+   "categories": [
+    "e_cups_ud",
+    "a_cups_ud",
+    "d_cups_ud",
+    "c_cups_ud",
+    "dice"
+   ],
+   "gen_s": 53.2,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s132.json",
+   "sha256": "5656639f7e5887f74f014eaeccfb96221e30f0353e0a42c540edd2e9ebb7cc62",
+   "their_name": "1793726687.2819495.json"
+  },
+  "133": {
+   "categories": [
+    "a_cups_ud",
+    "b_cups_ud",
+    "e_cups_ud",
+    "dice",
+    "d_cups_ud"
+   ],
+   "gen_s": 78.8,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s133.json",
+   "sha256": "cf1e933986050e051f5b99ff143dc87506a574f744b0f99a59db0013eee82f73",
+   "their_name": "1793726720.6416898.json"
+  },
+  "134": {
+   "categories": [
+    "a_cups_ud",
+    "d_cups_ud",
+    "b_cups_ud",
+    "c_cups_ud",
+    "dice"
+   ],
+   "gen_s": 61.4,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s134.json",
+   "sha256": "ee074397ecee0758f7f273dbe7b7ef5814e45f9c443c0a225aa0453ca8124888",
+   "their_name": "1793726715.5833175.json"
+  },
+  "135": {
+   "categories": [
+    "c_cups_ud",
+    "dice",
+    "a_cups_ud",
+    "d_cups_ud"
+   ],
+   "gen_s": 62.6,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s135.json",
+   "sha256": "bd05fd3b4c923aa2da85fb9a3deb5b5d17ba2a1e0a84fa782589f866c7f84654",
+   "their_name": "1793726750.097537.json"
+  },
+  "136": {
+   "categories": [
+    "d_cups_ud",
+    "dice"
+   ],
+   "gen_s": 50.2,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s136.json",
+   "sha256": "6ebaabd6f6f74f3181ba61daeffe27aeed2746346c6711573037451a396da77e",
+   "their_name": "1793726765.5259602.json"
+  },
+  "137": {
+   "categories": [
+    "c_cups_ud",
+    "dice"
+   ],
+   "gen_s": 46.2,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s137.json",
+   "sha256": "5210be597f7def1ec2268ac3363aee7ae93d96b6df1abc1c61052b8e1f9c5eb2",
+   "their_name": "1793726767.241398.json"
+  },
+  "138": {
+   "categories": [
+    "e_cups_ud",
+    "dice"
+   ],
+   "gen_s": 48.1,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s138.json",
+   "sha256": "0419322681e743a6f49dded0d70c9af32cfa629c3d9aa36ab20379f1e983c6b4",
+   "their_name": "1793726775.9778857.json"
+  },
+  "139": {
+   "categories": [
+    "e_cups_ud",
+    "dice",
+    "b_cups_ud"
+   ],
+   "gen_s": 255.5,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s139.json",
+   "sha256": "7f3e3118f3fdf50b7f996b1b58fb53d4ced63e0075f0270ef02c9cd2d72b8a2a",
+   "their_name": "1793727006.3387706.json"
+  },
+  "140": {
+   "categories": [
+    "b_cups_ud",
+    "dice"
+   ],
+   "gen_s": 22.8,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s140.json",
+   "sha256": "75685170b90de63876b0d52f671514a64c3f1e382464cfe4bec2625e799be6be",
+   "their_name": "1795099064.5702739.json"
+  },
+  "141": {
+   "categories": [
+    "e_cups_ud",
+    "c_cups_ud",
+    "d_cups_ud",
+    "a_cups_ud",
+    "b_cups_ud",
+    "dice"
+   ],
+   "gen_s": 33.1,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s141.json",
+   "sha256": "c4cc6eec243e0c83290aae46a531ab69a06769a8a153710d10ec4584ef336c9b",
+   "their_name": "1795099074.9715989.json"
+  },
+  "142": {
+   "categories": [
+    "a_cups_ud",
+    "e_cups_ud",
+    "dice",
+    "b_cups_ud",
+    "d_cups_ud",
+    "c_cups_ud"
+   ],
+   "gen_s": 29.5,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s142.json",
+   "sha256": "bb610cb63d7c4943384e1bbdb0a39932dd8a9baeee4a967959d2097e69f5373a",
+   "their_name": "1795099071.277697.json"
+  },
+  "143": {
+   "categories": [
+    "b_cups_ud",
+    "c_cups_ud",
+    "dice"
+   ],
+   "gen_s": 23.8,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s143.json",
+   "sha256": "99aba8383b6e5a9c537034e8922e1e42ab42c57234ff910cf2773c3c89e5b356",
+   "their_name": "1795099065.7432537.json"
+  },
+  "144": {
+   "categories": [
+    "d_cups_ud",
+    "b_cups_ud",
+    "c_cups_ud",
+    "dice",
+    "e_cups_ud"
+   ],
+   "gen_s": 27.2,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s144.json",
+   "sha256": "df2ad275077d9aca39745dee11ef57dec9d1a7b2d4ebc6658d3ba63a0548b90f",
+   "their_name": "1795099091.741135.json"
+  },
+  "145": {
+   "categories": [
+    "e_cups_ud",
+    "d_cups_ud",
+    "a_cups_ud",
+    "b_cups_ud",
+    "dice",
+    "c_cups_ud"
+   ],
+   "gen_s": 93.4,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s145.json",
+   "sha256": "aa6b26d7766c700b5cac4d782a4e60d63b6bb64f5219040690481d6ab772ceb5",
+   "their_name": "1795099159.1227746.json"
+  },
+  "146": {
+   "categories": [
+    "e_cups_ud",
+    "dice"
+   ],
+   "gen_s": 92.3,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s146.json",
+   "sha256": "319ab0b1c5a1a564e8af5cf428d7f739ee7d400c664565be57a07d2777f88148",
+   "their_name": "1795099163.6947143.json"
+  },
+  "147": {
+   "categories": [
+    "d_cups_ud",
+    "dice",
+    "b_cups_ud",
+    "e_cups_ud",
+    "c_cups_ud",
+    "a_cups_ud"
+   ],
+   "gen_s": 25.2,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s147.json",
+   "sha256": "ec82c75a7a597c4b2b756c88c7c012e0c2b4f582f69ae4006d5d8667f47fae96",
+   "their_name": "1795099100.0691073.json"
+  },
+  "148": {
+   "categories": [
+    "d_cups_ud",
+    "e_cups_ud",
+    "b_cups_ud",
+    "dice",
+    "c_cups_ud"
+   ],
+   "gen_s": 20.6,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s148.json",
+   "sha256": "1ed05582089a27265333a1da676276aa65f53cf3a0539b5084dd2ff9a19ddd7a",
+   "their_name": "1795099112.3637753.json"
+  },
+  "149": {
+   "categories": [
+    "d_cups_ud",
+    "dice"
+   ],
+   "gen_s": 17.3,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s149.json",
+   "sha256": "45498fc6f87d7cf67f370ac5920e7da21fc238168c99a09a34774c0e9900ffa2",
+   "their_name": "1795099117.471377.json"
+  },
+  "150": {
+   "categories": [
+    "c_cups_ud",
+    "e_cups_ud",
+    "dice",
+    "a_cups_ud"
+   ],
+   "gen_s": 16.1,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s150.json",
+   "sha256": "2286447c6b8b3d49d10b3dde7b579cb6e192ee1f513b02ac7b3520e26e4c9044",
+   "their_name": "1795099128.549543.json"
+  },
+  "151": {
+   "categories": [
+    "d_cups_ud",
+    "dice"
+   ],
+   "gen_s": 132.9,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s151.json",
+   "sha256": "baf051d33238c9a0d57241cce54e7a08d526767b24c26baef6c0d4442fd9be71",
+   "their_name": "1795099250.4752777.json"
+  },
+  "152": {
+   "categories": [
+    "e_cups_ud",
+    "dice",
+    "a_cups_ud",
+    "c_cups_ud",
+    "d_cups_ud",
+    "b_cups_ud"
+   ],
+   "gen_s": 32.6,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s152.json",
+   "sha256": "2eaef409784328809cb6df6b1daf208bd5e18325e002b0f4bbb9062fde412009",
+   "their_name": "1795099161.128702.json"
+  },
+  "153": {
+   "categories": [
+    "b_cups_ud",
+    "dice",
+    "d_cups_ud",
+    "c_cups_ud",
+    "e_cups_ud"
+   ],
+   "gen_s": 17.6,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s153.json",
+   "sha256": "c0a276f50b2eef3287585a5746c22c6be429036b63ba078a8acd00716989402d",
+   "their_name": "1795099176.688886.json"
+  },
+  "154": {
+   "categories": [
+    "c_cups_ud",
+    "dice",
+    "b_cups_ud"
+   ],
+   "gen_s": 13.9,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s154.json",
+   "sha256": "cc46e96215540dcd5b2a621768a02d265d58f2f9abbf44e27a925af1e704b8bd",
+   "their_name": "1795099175.1227417.json"
+  },
+  "155": {
+   "categories": [
+    "b_cups_ud",
+    "c_cups_ud",
+    "dice",
+    "a_cups_ud",
+    "d_cups_ud"
+   ],
+   "gen_s": 72.1,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s155.json",
+   "sha256": "71d89332bb6cc567d14601f0f8244f6b10adef3664296921a5a29691d38d2648",
+   "their_name": "1795099235.7713866.json"
+  },
+  "156": {
+   "categories": [
+    "a_cups_ud",
+    "e_cups_ud",
+    "dice",
+    "b_cups_ud",
+    "c_cups_ud"
+   ],
+   "gen_s": 16.4,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s156.json",
+   "sha256": "249c43f57bb8fd94898444475b7ba4bc8145aa9a48362a17594526bb28b6975a",
+   "their_name": "1795099191.5199347.json"
+  },
+  "157": {
+   "categories": [
+    "a_cups_ud",
+    "e_cups_ud",
+    "d_cups_ud",
+    "b_cups_ud",
+    "c_cups_ud",
+    "dice"
+   ],
+   "gen_s": 17.5,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s157.json",
+   "sha256": "addcfa0c42976bb0f04126a76071a8f2ea91af60a55b0b2054287aa6d538d9fb",
+   "their_name": "1795099194.2194545.json"
+  },
+  "158": {
+   "categories": [
+    "b_cups_ud",
+    "c_cups_ud",
+    "dice",
+    "a_cups_ud"
+   ],
+   "gen_s": 65.9,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s158.json",
+   "sha256": "707700258035ccc121a2742acde10960e9e3abcfc44de23bfcaab1f73a386325",
+   "their_name": "1795099257.5143964.json"
+  },
+  "159": {
+   "categories": [
+    "c_cups_ud",
+    "b_cups_ud",
+    "dice"
+   ],
+   "gen_s": 120.9,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s159.json",
+   "sha256": "42d4c47957d5ccfc4daa015ce5176855b51ad0fb846230e4d71ff8ec1c46ab6f",
+   "their_name": "1795099315.1212072.json"
+  },
+  "160": {
+   "categories": [
+    "e_cups_ud",
+    "b_cups_ud",
+    "dice",
+    "a_cups_ud"
+   ],
+   "gen_s": 65.8,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s160.json",
+   "sha256": "20f6e3c6dfbbd3a9bf72170829cb7aea6cb0a9a36ac40b42e9f90af0c306be35",
+   "their_name": "1795099301.5752137.json"
+  },
+  "161": {
+   "categories": [
+    "d_cups_ud",
+    "e_cups_ud",
+    "c_cups_ud",
+    "b_cups_ud",
+    "dice"
+   ],
+   "gen_s": 20.8,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s161.json",
+   "sha256": "396da3113cad0a6adb7b4e1a59d95dc9fa5b1b0f34f76ba92740894472932499",
+   "their_name": "1795099271.1784842.json"
+  },
+  "162": {
+   "categories": [
+    "a_cups_ud",
+    "c_cups_ud",
+    "dice"
+   ],
+   "gen_s": 132.7,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s162.json",
+   "sha256": "307c79448a6f4b7eb46e1c9eb433bb2f63e42739f3ba4d3033cbb6e4107e2433",
+   "their_name": "1795099390.163197.json"
+  },
+  "163": {
+   "categories": [
+    "d_cups_ud",
+    "dice",
+    "e_cups_ud",
+    "b_cups_ud",
+    "a_cups_ud",
+    "c_cups_ud"
+   ],
+   "gen_s": 20.0,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s163.json",
+   "sha256": "f004a435fe135444ad3e3119ff41e57379410deef1100b6166b8bf6f2caa3331",
+   "their_name": "1795099291.145125.json"
+  },
+  "164": {
+   "categories": [
+    "a_cups_ud",
+    "c_cups_ud",
+    "d_cups_ud",
+    "b_cups_ud",
+    "dice",
+    "e_cups_ud"
+   ],
+   "gen_s": 67.3,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s164.json",
+   "sha256": "82697347f839891c2845260378f82df8bf69ca2db3f403205fbb61eb2e346a6c",
+   "their_name": "1795099358.4327662.json"
+  },
+  "165": {
+   "categories": [
+    "c_cups_ud",
+    "dice"
+   ],
+   "gen_s": 18.4,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s165.json",
+   "sha256": "d478b538c8f5fa2185931fbe15da4da9b8fe1caa411bab22aa2d64d9527f951b",
+   "their_name": "1795099319.9978516.json"
+  },
+  "166": {
+   "categories": [
+    "e_cups_ud",
+    "a_cups_ud",
+    "c_cups_ud",
+    "dice",
+    "b_cups_ud"
+   ],
+   "gen_s": 19.4,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s166.json",
+   "sha256": "b5fa641cb4d86c266b0c8fca95c59caf3facedec010ada800e6b8b21e3d74526",
+   "their_name": "1795099334.557197.json"
+  },
+  "167": {
+   "categories": [
+    "e_cups_ud",
+    "dice",
+    "d_cups_ud"
+   ],
+   "gen_s": 13.9,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s167.json",
+   "sha256": "e062575be985e8bd626ef8acbd33e91e16aa261f7f455c53929dcbb36d8706bd",
+   "their_name": "1795099333.7826588.json"
+  },
+  "168": {
+   "categories": [
+    "d_cups_ud",
+    "dice"
+   ],
+   "gen_s": 12.9,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s168.json",
+   "sha256": "01ad8eeb5e6c19d3aa4b96005ebb1bfd681e69056eec202ba82e44ae6d83cfcc",
+   "their_name": "1795099346.8492074.json"
+  },
+  "169": {
+   "categories": [
+    "c_cups_ud",
+    "b_cups_ud",
+    "e_cups_ud",
+    "dice"
+   ],
+   "gen_s": 78.1,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s169.json",
+   "sha256": "2072ed6e66901c402adcf3a2e155ff8ea79e6059ba1580e661f3297459dd5bfa",
+   "their_name": "1795099412.5387313.json"
+  },
+  "170": {
+   "categories": [
+    "b_cups_ud",
+    "a_cups_ud",
+    "e_cups_ud",
+    "d_cups_ud",
+    "c_cups_ud",
+    "dice"
+   ],
+   "gen_s": 194.4,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s170.json",
+   "sha256": "af7bd1b905b09373a1584399ee309e551f75c63d38cc9ee8c032ea1f8deb173a",
+   "their_name": "1795099541.2708807.json"
+  },
+  "171": {
+   "categories": [
+    "b_cups_ud",
+    "dice"
+   ],
+   "gen_s": 199.9,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s171.json",
+   "sha256": "b6eb1c8350305c631f35abc370b91f373e6783406ed3cd74f932ec97acc674de",
+   "their_name": "1795099558.3173215.json"
+  },
+  "172": {
+   "categories": [
+    "c_cups_ud",
+    "dice",
+    "e_cups_ud"
+   ],
+   "gen_s": 91.5,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s172.json",
+   "sha256": "0ab2d4d29f5906476fcf3271c8043794ae6af3576359b4cb58f2537fdfb16aee",
+   "their_name": "1795099481.6539955.json"
+  },
+  "173": {
+   "categories": [
+    "b_cups_ud",
+    "a_cups_ud",
+    "e_cups_ud",
+    "dice"
+   ],
+   "gen_s": 19.1,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s173.json",
+   "sha256": "4d2b0ae08d5af096be5a07148be603992a01ebf771aa015fd9a1a3b87ce3f31e",
+   "their_name": "1795099431.7038019.json"
+  },
+  "174": {
+   "categories": [
+    "e_cups_ud",
+    "dice"
+   ],
+   "gen_s": 15.7,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s174.json",
+   "sha256": "4432d68169fba2a97e62f9bb03caa254b27bc59e1ca90208a670de3e8fe35efc",
+   "their_name": "1795099447.5218282.json"
+  },
+  "175": {
+   "categories": [
+    "c_cups_ud",
+    "a_cups_ud",
+    "e_cups_ud",
+    "dice",
+    "d_cups_ud"
+   ],
+   "gen_s": 25.6,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s175.json",
+   "sha256": "0ec71b2e82c924d2786dc59189e83cb539223f3ee8b5d3353c86bb0fcfd40cf9",
+   "their_name": "1795099473.0620575.json"
+  },
+  "176": {
+   "categories": [
+    "e_cups_ud",
+    "dice",
+    "d_cups_ud",
+    "c_cups_ud"
+   ],
+   "gen_s": 128.8,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s176.json",
+   "sha256": "6fdca6bc8fba73d1e48802921a9c60410aec3d1e17cba4b4236d21cc2c830979",
+   "their_name": "1795099601.8038208.json"
+  },
+  "177": {
+   "categories": [
+    "c_cups_ud",
+    "e_cups_ud",
+    "b_cups_ud",
+    "dice",
+    "d_cups_ud"
+   ],
+   "gen_s": 75.5,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s177.json",
+   "sha256": "acb951ce7f0a3ab71126a0819ee300579850dfeadb62ceaa5b79977c18ea81aa",
+   "their_name": "1795099557.1229382.json"
+  },
+  "178": {
+   "categories": [
+    "a_cups_ud",
+    "e_cups_ud",
+    "d_cups_ud",
+    "b_cups_ud",
+    "c_cups_ud",
+    "dice"
+   ],
+   "gen_s": 73.3,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s178.json",
+   "sha256": "96532c41861740db3b3a0f3c46a35e0d59e3cee431d826bbf0ba3cb0263d186b",
+   "their_name": "1795099614.397508.json"
+  },
+  "179": {
+   "categories": [
+    "b_cups_ud",
+    "dice",
+    "c_cups_ud"
+   ],
+   "gen_s": 15.7,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s179.json",
+   "sha256": "ad94e2ff15818b061a98df83d8e2e384ba5ade104c8045807ae066ce0c0cf84f",
+   "their_name": "1795099573.0355098.json"
+  },
+  "180": {
+   "categories": [
+    "b_cups_ud",
+    "d_cups_ud",
+    "dice"
+   ],
+   "gen_s": 15.9,
+   "n_cups": 2,
+   "scene": "find_dice_gen_s180.json",
+   "sha256": "ac10c83f1f918845eecaec5de498bd3d2e9a7f8161eac6f9dec1d5f87dec7ba5",
+   "their_name": "1795099574.263069.json"
+  },
+  "181": {
+   "categories": [
+    "d_cups_ud",
+    "e_cups_ud",
+    "dice",
+    "a_cups_ud"
+   ],
+   "gen_s": 23.2,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s181.json",
+   "sha256": "95bb673edf97ec09a548140f9bba5a6557765c5acbed16feb3c3a308ad37acd2",
+   "their_name": "1795099596.0448983.json"
+  },
+  "182": {
+   "categories": [
+    "a_cups_ud",
+    "e_cups_ud",
+    "dice",
+    "b_cups_ud",
+    "d_cups_ud"
+   ],
+   "gen_s": 17.4,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s182.json",
+   "sha256": "ad236b7fc49062c2fc75f4da1b9730890af79a6fce91656391358c0244a27fb6",
+   "their_name": "1795099591.753636.json"
+  },
+  "183": {
+   "categories": [
+    "d_cups_ud",
+    "dice"
+   ],
+   "gen_s": 15.7,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s183.json",
+   "sha256": "3be2646978f5b402ce5a62be105a66b34ca4697cfc32ec7b96b83bf8978de873",
+   "their_name": "1795099607.4725006.json"
+  },
+  "184": {
+   "categories": [
+    "c_cups_ud",
+    "dice",
+    "e_cups_ud",
+    "d_cups_ud"
+   ],
+   "gen_s": 14.4,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s184.json",
+   "sha256": "6927083e0ce4bc4ef9fa1951d73b7e90795af49d6856b31c45dbb8510660776e",
+   "their_name": "1795099610.4810154.json"
+  },
+  "185": {
+   "categories": [
+    "e_cups_ud",
+    "b_cups_ud",
+    "c_cups_ud",
+    "dice",
+    "d_cups_ud",
+    "a_cups_ud"
+   ],
+   "gen_s": 68.0,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s185.json",
+   "sha256": "47eb6e8765bee8543a96c51eaf1713fc2373f510d2ebbd0d13d33f58b5925bbb",
+   "their_name": "1795099669.9263837.json"
+  },
+  "186": {
+   "categories": [
+    "e_cups_ud",
+    "dice",
+    "c_cups_ud",
+    "d_cups_ud"
+   ],
+   "gen_s": 150.5,
+   "n_cups": 3,
+   "scene": "find_dice_gen_s186.json",
+   "sha256": "967f15a90a5dde8d3db04dfa60018db1f1432452de757cfd0c67bb365b602615",
+   "their_name": "1795099758.0301452.json"
+  },
+  "187": {
+   "categories": [
+    "e_cups_ud",
+    "dice"
+   ],
+   "gen_s": 66.6,
+   "n_cups": 1,
+   "scene": "find_dice_gen_s187.json",
+   "sha256": "b4403dbd6748eca5b2cbd99a02440e981af34266bc78d416b426e318fd1995cd",
+   "their_name": "1795099677.2409248.json"
+  },
+  "188": {
+   "categories": [
+    "e_cups_ud",
+    "d_cups_ud",
+    "dice",
+    "a_cups_ud",
+    "c_cups_ud"
+   ],
+   "gen_s": 112.7,
+   "n_cups": 4,
+   "scene": "find_dice_gen_s188.json",
+   "sha256": "d73a2b9062aff4911949847509ed433c228e6db191ea744cff6858370579211a",
+   "their_name": "1795099727.2002745.json"
+  },
+  "189": {
+   "categories": [
+    "b_cups_ud",
+    "c_cups_ud",
+    "a_cups_ud",
+    "e_cups_ud",
+    "dice",
+    "d_cups_ud"
+   ],
+   "gen_s": 18.4,
+   "n_cups": 5,
+   "scene": "find_dice_gen_s189.json",
+   "sha256": "0683184cd6ee3c7c5098dc086700f0fd2968061910fd0c901242ac210fda81c1",
+   "their_name": "1795099688.4397383.json"
+  }
+ },
  "generator": {
   "path": "tampura_environments/find_dice/env_generator.py",
   "sha256": "2dd495e8e001981469418b2f43ab61c2dd16ce1f31eceda5032c19a573e10158",
   "their_commit": "4167c35"
  },
+ "made": "2026-11-03 18:30:06 + seeds 140-189 2026-11-19 15:49:18",
  "scenes": {
   "100": "find_dice_gen_s100.json",
   "101": "find_dice_gen_s101.json",
@@ -45,530 +1225,57 @@
   "136": "find_dice_gen_s136.json",
   "137": "find_dice_gen_s137.json",
   "138": "find_dice_gen_s138.json",
-  "139": "find_dice_gen_s139.json"
+  "139": "find_dice_gen_s139.json",
+  "140": "find_dice_gen_s140.json",
+  "141": "find_dice_gen_s141.json",
+  "142": "find_dice_gen_s142.json",
+  "143": "find_dice_gen_s143.json",
+  "144": "find_dice_gen_s144.json",
+  "145": "find_dice_gen_s145.json",
+  "146": "find_dice_gen_s146.json",
+  "147": "find_dice_gen_s147.json",
+  "148": "find_dice_gen_s148.json",
+  "149": "find_dice_gen_s149.json",
+  "150": "find_dice_gen_s150.json",
+  "151": "find_dice_gen_s151.json",
+  "152": "find_dice_gen_s152.json",
+  "153": "find_dice_gen_s153.json",
+  "154": "find_dice_gen_s154.json",
+  "155": "find_dice_gen_s155.json",
+  "156": "find_dice_gen_s156.json",
+  "157": "find_dice_gen_s157.json",
+  "158": "find_dice_gen_s158.json",
+  "159": "find_dice_gen_s159.json",
+  "160": "find_dice_gen_s160.json",
+  "161": "find_dice_gen_s161.json",
+  "162": "find_dice_gen_s162.json",
+  "163": "find_dice_gen_s163.json",
+  "164": "find_dice_gen_s164.json",
+  "165": "find_dice_gen_s165.json",
+  "166": "find_dice_gen_s166.json",
+  "167": "find_dice_gen_s167.json",
+  "168": "find_dice_gen_s168.json",
+  "169": "find_dice_gen_s169.json",
+  "170": "find_dice_gen_s170.json",
+  "171": "find_dice_gen_s171.json",
+  "172": "find_dice_gen_s172.json",
+  "173": "find_dice_gen_s173.json",
+  "174": "find_dice_gen_s174.json",
+  "175": "find_dice_gen_s175.json",
+  "176": "find_dice_gen_s176.json",
+  "177": "find_dice_gen_s177.json",
+  "178": "find_dice_gen_s178.json",
+  "179": "find_dice_gen_s179.json",
+  "180": "find_dice_gen_s180.json",
+  "181": "find_dice_gen_s181.json",
+  "182": "find_dice_gen_s182.json",
+  "183": "find_dice_gen_s183.json",
+  "184": "find_dice_gen_s184.json",
+  "185": "find_dice_gen_s185.json",
+  "186": "find_dice_gen_s186.json",
+  "187": "find_dice_gen_s187.json",
+  "188": "find_dice_gen_s188.json",
+  "189": "find_dice_gen_s189.json"
  },
- "details": {
-  "100": {
-   "scene": "find_dice_gen_s100.json",
-   "their_name": "1793726448.7310283.json",
-   "sha256": "16b0a3398fa389ba8396fbc969a5cf637da568aaaffc5d1ffcd0a3b0ac88d45b",
-   "categories": [
-    "a_cups_ud",
-    "b_cups_ud",
-    "dice",
-    "c_cups_ud",
-    "d_cups_ud",
-    "e_cups_ud"
-   ],
-   "n_cups": 5,
-   "gen_s": 156.9
-  },
-  "101": {
-   "scene": "find_dice_gen_s101.json",
-   "their_name": "1793726329.265596.json",
-   "sha256": "b4283e233aba8ac4c19d60dd059c2633447225a7b29e353186e38ece704fbab0",
-   "categories": [
-    "e_cups_ud",
-    "dice",
-    "a_cups_ud",
-    "d_cups_ud",
-    "c_cups_ud",
-    "b_cups_ud"
-   ],
-   "n_cups": 5,
-   "gen_s": 36.9
-  },
-  "102": {
-   "scene": "find_dice_gen_s102.json",
-   "their_name": "1793726572.2272465.json",
-   "sha256": "5b7a7fd7e6f8d758e5db5efe952b794e6a28c9509f8cadfd698659bcb829fddc",
-   "categories": [
-    "c_cups_ud",
-    "e_cups_ud",
-    "dice",
-    "d_cups_ud"
-   ],
-   "n_cups": 3,
-   "gen_s": 279.9
-  },
-  "103": {
-   "scene": "find_dice_gen_s103.json",
-   "their_name": "1793726327.6602948.json",
-   "sha256": "e90177a9fc2dde5dc6e9190771dc2a4c0507fdeed9e5020dda8a65419cde872b",
-   "categories": [
-    "d_cups_ud",
-    "dice",
-    "e_cups_ud",
-    "a_cups_ud",
-    "c_cups_ud"
-   ],
-   "n_cups": 4,
-   "gen_s": 35.3
-  },
-  "104": {
-   "scene": "find_dice_gen_s104.json",
-   "their_name": "1793726331.4297585.json",
-   "sha256": "86d94bfbbbde36e6a9f1bede27e6209ff8d75150cc689ae268a9412c5d60784f",
-   "categories": [
-    "e_cups_ud",
-    "dice",
-    "d_cups_ud",
-    "b_cups_ud"
-   ],
-   "n_cups": 3,
-   "gen_s": 39.0
-  },
-  "105": {
-   "scene": "find_dice_gen_s105.json",
-   "their_name": "1793726332.0984182.json",
-   "sha256": "dc532ce16ccd7f116b3580e3d7d8f91633741bf647aee60a1dfbb5c779a802fb",
-   "categories": [
-    "d_cups_ud",
-    "dice",
-    "e_cups_ud",
-    "b_cups_ud",
-    "c_cups_ud",
-    "a_cups_ud"
-   ],
-   "n_cups": 5,
-   "gen_s": 39.6
-  },
-  "106": {
-   "scene": "find_dice_gen_s106.json",
-   "their_name": "1793726365.5311422.json",
-   "sha256": "9686aa4f9f8d4e71dcd87e245e25c2fcf13abc9451f269c3dc17d38e744f774f",
-   "categories": [
-    "d_cups_ud",
-    "b_cups_ud",
-    "e_cups_ud",
-    "c_cups_ud",
-    "dice"
-   ],
-   "n_cups": 4,
-   "gen_s": 38.2
-  },
-  "107": {
-   "scene": "find_dice_gen_s107.json",
-   "their_name": "1793726503.957965.json",
-   "sha256": "1efa72d57e5d3519c7cf2fe0968ba223d1d93f7484b9f2aa03e3e28f3c05a36d",
-   "categories": [
-    "c_cups_ud",
-    "e_cups_ud",
-    "dice",
-    "a_cups_ud",
-    "b_cups_ud"
-   ],
-   "n_cups": 4,
-   "gen_s": 174.8
-  },
-  "108": {
-   "scene": "find_dice_gen_s108.json",
-   "their_name": "1793726355.2245758.json",
-   "sha256": "e39259976d9b6a661eafdba2758d822b3fb25a3e3f23c91b280cb7562916b1b3",
-   "categories": [
-    "b_cups_ud",
-    "dice",
-    "e_cups_ud"
-   ],
-   "n_cups": 2,
-   "gen_s": 23.7
-  },
-  "109": {
-   "scene": "find_dice_gen_s109.json",
-   "their_name": "1793726358.480476.json",
-   "sha256": "6091e071aa26e2ca42b7820ad207f8adbbc0857dcf690f0095004c45e0e27f96",
-   "categories": [
-    "a_cups_ud",
-    "c_cups_ud",
-    "e_cups_ud",
-    "dice"
-   ],
-   "n_cups": 3,
-   "gen_s": 26.4
-  },
-  "110": {
-   "scene": "find_dice_gen_s110.json",
-   "their_name": "1793726387.650934.json",
-   "sha256": "931d0933621504c258992050c4e25c8c954f06fbebb1874d4855a0e14a6da4d5",
-   "categories": [
-    "d_cups_ud",
-    "a_cups_ud",
-    "b_cups_ud",
-    "dice",
-    "c_cups_ud"
-   ],
-   "n_cups": 4,
-   "gen_s": 32.4
-  },
-  "111": {
-   "scene": "find_dice_gen_s111.json",
-   "their_name": "1793726390.5429857.json",
-   "sha256": "537d482d950c9a8732511dda1061c9814c6886f6b3af17b99160a3396e5ce03c",
-   "categories": [
-    "b_cups_ud",
-    "dice",
-    "e_cups_ud"
-   ],
-   "n_cups": 2,
-   "gen_s": 31.9
-  },
-  "112": {
-   "scene": "find_dice_gen_s112.json",
-   "their_name": "1793726398.097589.json",
-   "sha256": "cd26de4d8037c1abc697c5450d6e3e8d4e89dd0781eee6f1876ba41bb8e2da16",
-   "categories": [
-    "b_cups_ud",
-    "dice",
-    "c_cups_ud",
-    "a_cups_ud",
-    "d_cups_ud"
-   ],
-   "n_cups": 4,
-   "gen_s": 31.9
-  },
-  "113": {
-   "scene": "find_dice_gen_s113.json",
-   "their_name": "1793726421.779227.json",
-   "sha256": "110bcbf7a1e3f9ba1313ece1262a4836acc305575b389d408cb9aac562d78434",
-   "categories": [
-    "d_cups_ud",
-    "dice"
-   ],
-   "n_cups": 1,
-   "gen_s": 34.5
-  },
-  "114": {
-   "scene": "find_dice_gen_s114.json",
-   "their_name": "1793726426.8887706.json",
-   "sha256": "08e67ec026b8779a145a71af17ddc271b1f09e754f925580a62f2c05df9a0f17",
-   "categories": [
-    "c_cups_ud",
-    "dice",
-    "d_cups_ud"
-   ],
-   "n_cups": 2,
-   "gen_s": 36.6
-  },
-  "115": {
-   "scene": "find_dice_gen_s115.json",
-   "their_name": "1793726500.699093.json",
-   "sha256": "e5cde7620c7b31b4ab1a800bf1d1f9c8524b414e7cac6fb8a4fa909263d49966",
-   "categories": [
-    "dice",
-    "e_cups_ud",
-    "c_cups_ud",
-    "d_cups_ud"
-   ],
-   "n_cups": 3,
-   "gen_s": 102.6
-  },
-  "116": {
-   "scene": "find_dice_gen_s116.json",
-   "their_name": "1793726501.0961823.json",
-   "sha256": "0b276c72b51bb8a6687003d19ccfe5aece4970699f8e4e55e1990254f15282f0",
-   "categories": [
-    "d_cups_ud",
-    "dice",
-    "c_cups_ud",
-    "a_cups_ud",
-    "b_cups_ud",
-    "e_cups_ud"
-   ],
-   "n_cups": 5,
-   "gen_s": 76.1
-  },
-  "117": {
-   "scene": "find_dice_gen_s117.json",
-   "their_name": "1793726499.1262293.json",
-   "sha256": "04636f1cbea0592f9975c199d024e724de66845b2572ec52f12940361a6a2b2c",
-   "categories": [
-    "d_cups_ud",
-    "c_cups_ud",
-    "dice"
-   ],
-   "n_cups": 2,
-   "gen_s": 71.1
-  },
-  "118": {
-   "scene": "find_dice_gen_s118.json",
-   "their_name": "1793726509.872256.json",
-   "sha256": "c4c7511b3c32f205835261c1817a31bf1abaeaa523f52aab09adee9c3c8c4244",
-   "categories": [
-    "b_cups_ud",
-    "dice",
-    "d_cups_ud"
-   ],
-   "n_cups": 2,
-   "gen_s": 59.4
-  },
-  "119": {
-   "scene": "find_dice_gen_s119.json",
-   "their_name": "1793726545.986502.json",
-   "sha256": "1e23fe29036e0e620ae4648d0e09e1bf9dcec453ffdcc633ac0f7cf6aa74a6ef",
-   "categories": [
-    "e_cups_ud",
-    "dice",
-    "c_cups_ud",
-    "a_cups_ud"
-   ],
-   "n_cups": 3,
-   "gen_s": 46.4
-  },
-  "120": {
-   "scene": "find_dice_gen_s120.json",
-   "their_name": "1793726543.2050023.json",
-   "sha256": "09976a9309ccda72fe6b9f169dc84e7a86bf22c960f844b3b1433197b3e6d076",
-   "categories": [
-    "e_cups_ud",
-    "c_cups_ud",
-    "b_cups_ud",
-    "a_cups_ud",
-    "d_cups_ud",
-    "dice"
-   ],
-   "n_cups": 5,
-   "gen_s": 42.4
-  },
-  "121": {
-   "scene": "find_dice_gen_s121.json",
-   "their_name": "1793726537.9699633.json",
-   "sha256": "33a0c3ae7e50529d24213932b3ac5bf2af68b32d5d8d8cdeb8bd3ca0dc94bdcd",
-   "categories": [
-    "e_cups_ud",
-    "dice"
-   ],
-   "n_cups": 1,
-   "gen_s": 36.5
-  },
-  "122": {
-   "scene": "find_dice_gen_s122.json",
-   "their_name": "1793726547.177202.json",
-   "sha256": "b145134b0ea80e90856837a8b344c79c754717b7b7249b2526c6157424b60a08",
-   "categories": [
-    "e_cups_ud",
-    "c_cups_ud",
-    "dice",
-    "b_cups_ud",
-    "a_cups_ud",
-    "d_cups_ud"
-   ],
-   "n_cups": 5,
-   "gen_s": 42.7
-  },
-  "123": {
-   "scene": "find_dice_gen_s123.json",
-   "their_name": "1793726555.8004115.json",
-   "sha256": "c63d037dbaf87f396e70380c69c0952ec876ee78b27e49d38cd0bd1e2fe2ee91",
-   "categories": [
-    "d_cups_ud",
-    "dice"
-   ],
-   "n_cups": 1,
-   "gen_s": 45.9
-  },
-  "124": {
-   "scene": "find_dice_gen_s124.json",
-   "their_name": "1793726834.844518.json",
-   "sha256": "407f4efbfd22301afcce4a99f7fb122389966bfea71978411ab2681cd0630a54",
-   "categories": [
-    "b_cups_ud",
-    "d_cups_ud",
-    "a_cups_ud",
-    "e_cups_ud",
-    "c_cups_ud",
-    "dice"
-   ],
-   "n_cups": 5,
-   "gen_s": 296.2
-  },
-  "125": {
-   "scene": "find_dice_gen_s125.json",
-   "their_name": "1793726726.7507675.json",
-   "sha256": "b2a9e99ac70018e0a19d41cefd64ee07f4abed3301f9487f9625e29dbd625945",
-   "categories": [
-    "d_cups_ud",
-    "dice"
-   ],
-   "n_cups": 1,
-   "gen_s": 183.6
-  },
-  "126": {
-   "scene": "find_dice_gen_s126.json",
-   "their_name": "1793726594.856372.json",
-   "sha256": "869bb69e519b289304ddd4ed1dc3971a7d89c7feb49c4c4b95f414bcc7d3e91d",
-   "categories": [
-    "d_cups_ud",
-    "c_cups_ud",
-    "dice",
-    "b_cups_ud",
-    "a_cups_ud",
-    "e_cups_ud"
-   ],
-   "n_cups": 5,
-   "gen_s": 49.0
-  },
-  "127": {
-   "scene": "find_dice_gen_s127.json",
-   "their_name": "1793726931.866737.json",
-   "sha256": "28244cd917656137030f6ee19333041d47261e97ef1127110463840dcc576327",
-   "categories": [
-    "c_cups_ud",
-    "b_cups_ud",
-    "dice"
-   ],
-   "n_cups": 2,
-   "gen_s": 384.7
-  },
-  "128": {
-   "scene": "find_dice_gen_s128.json",
-   "their_name": "1793726599.4912255.json",
-   "sha256": "62d94202378e85102ddb32be9f10d0fb9e510731798cfed9df1cd9ef876ad0fb",
-   "categories": [
-    "e_cups_ud",
-    "b_cups_ud",
-    "dice"
-   ],
-   "n_cups": 2,
-   "gen_s": 43.3
-  },
-  "129": {
-   "scene": "find_dice_gen_s129.json",
-   "their_name": "1793726633.718431.json",
-   "sha256": "31084e95a908b5826d69a97195718cbe0c8cecba9ad67472249e26b6bacde735",
-   "categories": [
-    "c_cups_ud",
-    "dice",
-    "e_cups_ud"
-   ],
-   "n_cups": 2,
-   "gen_s": 61.1
-  },
-  "130": {
-   "scene": "find_dice_gen_s130.json",
-   "their_name": "1793726652.6758227.json",
-   "sha256": "b46888570567fe225493baa4068bc70c226c14aa0c8d717f45da40137972a97e",
-   "categories": [
-    "d_cups_ud",
-    "dice",
-    "c_cups_ud",
-    "a_cups_ud"
-   ],
-   "n_cups": 3,
-   "gen_s": 57.7
-  },
-  "131": {
-   "scene": "find_dice_gen_s131.json",
-   "their_name": "1793726641.6911726.json",
-   "sha256": "8b173776b62e307ce5e2142d4c61492e871c2dea53307947b97107de73ec84a7",
-   "categories": [
-    "e_cups_ud",
-    "b_cups_ud",
-    "d_cups_ud",
-    "dice"
-   ],
-   "n_cups": 3,
-   "gen_s": 42.4
-  },
-  "132": {
-   "scene": "find_dice_gen_s132.json",
-   "their_name": "1793726687.2819495.json",
-   "sha256": "5656639f7e5887f74f014eaeccfb96221e30f0353e0a42c540edd2e9ebb7cc62",
-   "categories": [
-    "e_cups_ud",
-    "a_cups_ud",
-    "d_cups_ud",
-    "c_cups_ud",
-    "dice"
-   ],
-   "n_cups": 4,
-   "gen_s": 53.2
-  },
-  "133": {
-   "scene": "find_dice_gen_s133.json",
-   "their_name": "1793726720.6416898.json",
-   "sha256": "cf1e933986050e051f5b99ff143dc87506a574f744b0f99a59db0013eee82f73",
-   "categories": [
-    "a_cups_ud",
-    "b_cups_ud",
-    "e_cups_ud",
-    "dice",
-    "d_cups_ud"
-   ],
-   "n_cups": 4,
-   "gen_s": 78.8
-  },
-  "134": {
-   "scene": "find_dice_gen_s134.json",
-   "their_name": "1793726715.5833175.json",
-   "sha256": "ee074397ecee0758f7f273dbe7b7ef5814e45f9c443c0a225aa0453ca8124888",
-   "categories": [
-    "a_cups_ud",
-    "d_cups_ud",
-    "b_cups_ud",
-    "c_cups_ud",
-    "dice"
-   ],
-   "n_cups": 4,
-   "gen_s": 61.4
-  },
-  "135": {
-   "scene": "find_dice_gen_s135.json",
-   "their_name": "1793726750.097537.json",
-   "sha256": "bd05fd3b4c923aa2da85fb9a3deb5b5d17ba2a1e0a84fa782589f866c7f84654",
-   "categories": [
-    "c_cups_ud",
-    "dice",
-    "a_cups_ud",
-    "d_cups_ud"
-   ],
-   "n_cups": 3,
-   "gen_s": 62.6
-  },
-  "136": {
-   "scene": "find_dice_gen_s136.json",
-   "their_name": "1793726765.5259602.json",
-   "sha256": "6ebaabd6f6f74f3181ba61daeffe27aeed2746346c6711573037451a396da77e",
-   "categories": [
-    "d_cups_ud",
-    "dice"
-   ],
-   "n_cups": 1,
-   "gen_s": 50.2
-  },
-  "137": {
-   "scene": "find_dice_gen_s137.json",
-   "their_name": "1793726767.241398.json",
-   "sha256": "5210be597f7def1ec2268ac3363aee7ae93d96b6df1abc1c61052b8e1f9c5eb2",
-   "categories": [
-    "c_cups_ud",
-    "dice"
-   ],
-   "n_cups": 1,
-   "gen_s": 46.2
-  },
-  "138": {
-   "scene": "find_dice_gen_s138.json",
-   "their_name": "1793726775.9778857.json",
-   "sha256": "0419322681e743a6f49dded0d70c9af32cfa629c3d9aa36ab20379f1e983c6b4",
-   "categories": [
-    "e_cups_ud",
-    "dice"
-   ],
-   "n_cups": 1,
-   "gen_s": 48.1
-  },
-  "139": {
-   "scene": "find_dice_gen_s139.json",
-   "their_name": "1793727006.3387706.json",
-   "sha256": "7f3e3118f3fdf50b7f996b1b58fb53d4ced63e0075f0270ef02c9cd2d72b8a2a",
-   "categories": [
-    "e_cups_ud",
-    "dice",
-    "b_cups_ud"
-   ],
-   "n_cups": 2,
-   "gen_s": 255.5
-  }
- },
- "made": "2026-11-03 18:30:06"
+ "what": "find_dice scenes from their env_generator.py, unmodified; scene s is the first scene it accepts after random.seed(s) and numpy.random.seed(s) (BF#63)"
 }
