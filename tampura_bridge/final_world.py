@@ -28,7 +28,9 @@ It runs once per episode, after their rollout has returned (the one reviewed
 wrapper in timed_policy.py; G13's amendment, tampura_bridge/g13_runtime.py).
 Evaluation only: nothing it reads reaches their policy, belief or history,
 and a failure to read never raises; it is recorded in the file, and the
-harness then does not count the episode (tools/gen_scene_eval.py).  The raw
+harness keeps the episode in the denominator as a non-success ("final world
+unreadable") that also counts like a gate failure in its stop rule
+(tools/gen_scene_eval.py, classify_t and gate_names).  The raw
 gaps and joint readings go beside the verdict, so a threshold can be
 re-judged from the records.
 """
@@ -141,5 +143,5 @@ def record_after_rollout(env, save_dir, **kwargs):
             json.dump(rec, f, indent=1, default=str)
         os.replace(path + '.tmp', path)
     except Exception:               # whatever fails here (a None folder included): no file, never a raise
-        pass                         # no file = unreadable; the harness does not count it
+        pass                         # no file = unreadable; the harness counts it as a non-success
     return rec
