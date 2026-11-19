@@ -3,7 +3,9 @@
 `tools/_eval_ab.py` stays untracked on purpose: a tracked harness would be
 deleted by `git checkout <old-sha>` in the middle of an eval. These are
 byte copies, kept for reproducibility. The `.txt` suffix means nothing
-imports or runs them. To use one, copy it to `tools/_eval_ab.py`.
+imports or runs them. To use one, copy it to `tools/_eval_ab.py`. A
+Windows checkout may write CRLF line endings; for the exact bytes behind
+each hash, take the blob with `git show HEAD:archive/eval_harness/<file>`.
 
 | file | sha256 (first 8) | used by |
 |---|---|---|
