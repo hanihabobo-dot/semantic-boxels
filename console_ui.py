@@ -303,6 +303,10 @@ def _is_home(name):
 # A shadow's parent object; the registry's slab suffix (shadow_of_x__03,
 # boxel_env: one shadow per slab) is not part of the name.
 _SHADOW_OF = re.compile(r'shadow_of_(.+?)(?:__\d{2,})?$')
+# BF#65 option 1: the region under a cover (interior_regions.py); its
+# suffixes (__NN a carve's part, __rK a second region of one object) are not
+# part of the name.
+_INTERIOR_OF = re.compile(r'interior_of_(.+?)(?:__(?:\d{2,}|r\d+))*$')
 
 
 def _place(name):
@@ -324,6 +328,9 @@ def _place(name):
     m = _SHADOW_OF.match(name)
     if m:
         return f'the space behind `{m.group(1)}`'
+    m = _INTERIOR_OF.match(name)
+    if m:
+        return f'the space under `{m.group(1)}`'
     return f'`{name}`'
 
 
@@ -344,6 +351,9 @@ def _move_phrase(dest):
     m = _SHADOW_OF.match(dest)
     if m:
         return f'Moving to the space behind `{m.group(1)}`'
+    m = _INTERIOR_OF.match(dest)
+    if m:
+        return f'Moving to the space under `{m.group(1)}`'
     return f'Moving over `{dest}`'
 
 
@@ -352,7 +362,7 @@ def _where(dest):
     dest = str(dest)
     if re.match(r'free_\d+$', dest):
         return 'on a free spot'
-    if dest.startswith('shadow_of_'):
+    if dest.startswith('shadow_of_') or dest.startswith('interior_of_'):
         return f'in {_place(dest)}'
     return f'at {_place(dest)}' if dest else ''
 
@@ -365,7 +375,8 @@ def describe_step(action, args):
     if action == 'pick':
         obj = s[0] if s else '?'
         src = s[1] if len(s) > 1 else obj
-        if src != obj and src.startswith('shadow_of_'):
+        if src != obj and (src.startswith('shadow_of_')
+                           or src.startswith('interior_of_')):
             return f'Picking up `{obj}` from {_place(src)}'
         return f'Picking up `{obj}`'
     if action in ('place', 'place_hiding'):
