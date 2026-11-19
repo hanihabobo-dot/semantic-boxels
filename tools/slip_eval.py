@@ -168,7 +168,11 @@ def pipeline_alive(my_pid):
                 cmd = f.read().replace(b'\0', b' ').decode(errors='replace')
         except OSError:
             continue
-        if (('run_bridge_on_finddice' in cmd or 'test_full_pipeline' in cmd)
+        # only a python process counts (2026-11-19: a waiting shell script that names the
+        # pipeline in its arguments is not one; the episode itself runs under the lock)
+        exe = os.path.basename(cmd.split(' ', 1)[0])
+        if (exe.startswith('python')
+                and ('run_bridge_on_finddice' in cmd or 'test_full_pipeline' in cmd)
                 and ' -c ' not in cmd and 'slip_eval' not in cmd):
             alive.append(f"{pid}: {cmd[:100]}")
     return alive
