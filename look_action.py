@@ -208,7 +208,7 @@ def _judged_body(env, obj, target_name):
     tname = str(target_name)
     if tname in env.objects:
         return tname, env.objects[tname].object_id
-    return tname, env.objects[obj].object_id
+    return str(obj), env.objects[obj].object_id
 
 
 def _struck(blocked, h, registry):
@@ -427,6 +427,7 @@ def handle_look_action(*, action_params, named, env, registry, belief, viz,
 
     res = LookResult(True, 'look_ok')
     found_here = False
+    pose_look_registered = []     # the target registered by a pose look (another ?o): a replan
     for sid in regions:
         region = registry.get_boxel(sid)
         outcome, frac, bodies, _bbox, _counts = _judge(
@@ -452,8 +453,10 @@ def handle_look_action(*, action_params, named, env, registry, belief, viz,
             res.found_in = sid
             found_here = sid == h and obj == tname
             if registry.get_boxel(tname) is None:
-                _register_target(tname, dets.get(tname), env, registry, viz, render,
-                                 boxel_centers, boxel_to_pybullet, object_body_ids)
+                if (_register_target(tname, dets.get(tname), env, registry, viz, render,
+                                     boxel_centers, boxel_to_pybullet, object_body_ids)
+                        and obj != tname):
+                    pose_look_registered.append(tname)
             continue
         _remove_fragment(sid, registry, belief, viz, shadows,
                          shadow_occluder_map, boxel_centers)
@@ -471,6 +474,10 @@ def handle_look_action(*, action_params, named, env, registry, belief, viz,
         shadow_occluder_map=shadow_occluder_map, boxel_centers=boxel_centers,
         boxel_to_pybullet=boxel_to_pybullet, object_body_ids=object_body_ids,
         render=render, held_body_id=held_body_id, camera='wrist')
+    # A pose look that found and registered the target: reported as a
+    # registration, so the dispatcher replans as it does after M-1 (review of a3fa79c).
+    res.registered = list(res.registered or []) + [n for n in pose_look_registered
+                                                   if n not in (res.registered or [])]
 
     # Strikes are a loop rule: a named region still blocked is one more strike.
     for sid in _struck(res.blocked, h, registry):
