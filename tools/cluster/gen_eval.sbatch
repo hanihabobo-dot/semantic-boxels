@@ -150,10 +150,16 @@ if [ -n "$SB2" ]; then
   ARMS_ARGS="--arms T,O,O2 --snapshot-o2 $SB2"
   echo "arms T, O ($SB) and O2 ($SB2)"
 fi
+# paper_jobs 2026-11-19: P4_ARMS (e.g. O) picks the arms without a second snapshot; P4_O_ARGS
+# passes pipeline flags to arm O (the camera: '--interior-regions on --look boxel --eye arm');
+# P4_SHOTS (default failures; evals use none, Hani's minimal-debug rule)
+[ -n "${P4_ARMS:-}" ] && [ -z "$SB2" ] && ARMS_ARGS="--arms $P4_ARMS"
+echo "arms ${P4_ARMS:-default}  o-args '${P4_O_ARGS:-}'  shots ${P4_SHOTS:-failures}"
 # The cap is B8's pre-registered 900 s (D10), the same for both arms: on
 # the new scenes (up to five cups) TAMPURA's loop may run past BF#59's 600 s.
 $VA/python -u $SB/tools/gen_scene_eval.py --snapshot $SB --out $OUT --seeds $SEEDS \
-  --reps $REPS --cap 900 --python-o $VA/python --venv-t $TW/.venv --tampura-work $TW $ARMS_ARGS
+  --reps $REPS --cap 900 --python-o $VA/python --venv-t $TW/.venv --tampura-work $TW $ARMS_ARGS \
+  --o-args "${P4_O_ARGS:-}" --shots ${P4_SHOTS:-failures}
 HRC=$?
 echo "harness rc $HRC"
 # rule 16: exit code 4 is memwatch's stop (MemAvailable under 4 GB after an episode, STOPPED_LOW_MEMORY.txt in OUT)
