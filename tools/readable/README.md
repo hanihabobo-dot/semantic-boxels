@@ -81,7 +81,7 @@ re-run replaces its own entries' rows). `--line-map` writes old line to new
 line for every matched logical line.
 
 Limits: the identity check of cross-file moves (`new_mod.x is old_mod.x`,
-draft 4.1) needs imports and belongs to a pin under the pipeline lock, not
+draft 4.1) needs imports and is done by `global_identity.py` (below), not
 here. A comment after a blank line above the span, or below the span, is listed as
 INFO only; a cut whose header comment stays above the call site in the old
 function reads as removed (R reads it). Bound-before-use is a straight-line approximation: a read bound only
@@ -90,6 +90,33 @@ and `ast.dump`, so spaces inside `{...}` do not count.
 
 Tests: `python -m pytest -q tests/readable/test_move_check.py` (Windows
 Python 3.12 or `/root/armO-venvA/bin/python` 3.11 in WSL).
+
+## global_identity.py: the identity half of pin 44
+
+Pin 44 (`p44_loggers_globals`) describes every global a function reads by
+type and name; a description cannot tell two instances apart. For each
+cross-file `move` or `cut` row of `MIGRATION_MAP.tsv` (the new file is not
+the old file), `global_identity.py` takes the globals the new function and
+its nested scopes read (symtable of the new file) and, in one child
+interpreter (cwd the checkout, `PYTHONHASHSEED=0`) that imports the old and
+the new module, checks `new.__dict__[g] is old.__dict__[g]` (builtins
+resolved as at run time). A lock, registry or cache re-created in the new
+module instead of imported fails, and so do a global only one module binds,
+a name the function declares `global`, and a row whose module or function
+is not found.
+
+```
+PYTHONHASHSEED=0 flock /root/sb_pipeline.lock /root/armO-venvA/bin/python \
+    tools/readable/global_identity.py --map tools/readable/MIGRATION_MAP.tsv --root . [--json OUT]
+```
+
+Exit 0 every global the same object (or no cross-file row), 1 a failure, 2
+the map could not be read. Run it after every cut with a cross-file row,
+from P2 on. Limits: `is` on a small int or interned string holds even when
+the constant was written twice (pin 48 holds the twin constants);
+decorators, defaults and annotations are read at module level and are not
+listed. Tests: `tests/readable/test_global_identity.py` (synthetic old and
+new module pairs; Windows and WSL).
 
 ## pin_outputs.py: the pin generator (group `low`)
 
