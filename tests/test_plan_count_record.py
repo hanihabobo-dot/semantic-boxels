@@ -15,11 +15,13 @@ run with stand-ins for the names they use.  The record's plan_count is the
 expression main() passes to report_run_outcome, evaluated after the loop.
 """
 import ast
+import contextlib
 import types
 import typing
 from pathlib import Path
 
 import interior_regions
+from belief import BeliefState
 
 SOURCE_PATH = Path(__file__).resolve().parents[1] / 'test_full_pipeline.py'
 TARGET = 'green_object'
@@ -86,14 +88,23 @@ def _ignore(*args, **kwargs):
     return None
 
 
-def _run(unknown_shadows, plans, seconds, held_body_id=None):
+def _run(unknown_shadows, plans, seconds, held_body_id=None, belief=None,
+         clock_now=0.0):
     """The rounds of a holding goal; unknown_shadows is what the belief
-    reports at the head of each round.  Returns the names after the loop,
-    the record's plan_count and the planner."""
+    reports at the head of each round, or belief is a real BeliefState (M7's
+    suspension) and clock_now the clock at the first head.  Returns the
+    names after the loop, the record's plan_count and the planner."""
     main = _main()
     clock = _Clock()
+    clock.now = clock_now
     planner = _Planner(clock, plans, seconds)
-    heads = iter(unknown_shadows)
+    heads = iter(unknown_shadows or [])
+    if belief is None:
+        belief = types.SimpleNamespace(
+            get_unknown_shadows=lambda: next(heads),
+            get_known_empty_shadows=lambda: [],
+            get_parked_shadows=lambda: [], occluders_moved={},
+            release_suspended=lambda now: [], get_suspended_shadows=lambda: [])
     names = {
         '_loop_done': lambda: False,
         'plan_count': 0, 'plan_times': [], 'total_plan_time': 0.0,
@@ -102,10 +113,11 @@ def _run(unknown_shadows, plans, seconds, held_body_id=None):
         'pick_giveup_objects': set(), 'pick_parole_counts': {},
         'observe_strikes': {}, 'm8_per_plan': [],
         'boxel_counts_per_replan': [],
-        'belief': types.SimpleNamespace(
-            get_unknown_shadows=lambda: next(heads),
-            get_known_empty_shadows=lambda: [],
-            get_parked_shadows=lambda: [], occluders_moved={}),
+        'belief': belief,
+        # M7's suspension (Hani, 2026-11-20): the channel of a release and
+        # the suspension length in its line
+        'provenance': lambda *a, **k: contextlib.nullcontext(),
+        'execution': types.SimpleNamespace(M7_SUSPEND_S=120.0),
         'registry': types.SimpleNamespace(
             dirty=False, get_boxel=lambda name: None,
             get_object_boxels=lambda: [], get_shadow_boxels=lambda: [],
@@ -163,3 +175,34 @@ def test_planner_failed_counts_agree_as_before():
     assert names['exit_reason'] == 'planner_failed'
     assert names['plan_times'] == [1.0, 2.0] and names['total_plan_time'] == 3.0
     assert record == names['plan_count'] == 2
+
+
+# ----- M7's suspension at the loop's head (Hani, 2026-11-20) -----------------
+
+def _suspended_belief():
+    """s1 seen empty, s2 suspended at the F9 give-up at t = 0 for 120 s."""
+    b = BeliefState(['s1', 's2'], TARGET)
+    b.mark_sensed('s1', found=False)
+    b.suspend('s2', bodies={'red_object': 3}, now=0.0, seconds=120.0)
+    return b
+
+
+def test_only_a_suspended_region_left_ends_as_a_rediscovery_giveup(capsys):
+    # the round ends before any planner call, failed, with its own reason
+    names, record, planner = _run(None, [], [], belief=_suspended_belief(),
+                                  clock_now=60.0)
+    assert names['exit_reason'] == 'rediscovery_giveup'
+    assert planner.goals == [] and record == 0
+    out = capsys.readouterr().out
+    assert "['s2'] suspended at the F9 give-up (M7), not searched" in out
+    assert 'Searched all shadows' not in out
+
+
+def test_a_suspension_whose_time_is_up_is_planned_for_again(capsys):
+    b = _suspended_belief()
+    names, record, planner = _run(None, [None], [1.0], belief=b, clock_now=120.0)
+    assert b.shadow_status['s2'] == 'unknown' and not b.get_suspended_shadows()
+    assert planner.goals == [GOAL]                   # the round planned, for s2
+    assert names['exit_reason'] == 'planner_failed'
+    assert ('[M7] s2 is back in the search: its 120 s suspension at the F9 '
+            'give-up is over') in capsys.readouterr().out

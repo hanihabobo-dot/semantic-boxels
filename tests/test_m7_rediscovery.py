@@ -218,12 +218,14 @@ def _scripted(hidden_part, bodies=(BLUE,)):
 
 
 def _run(tmp_path, monkeypatch, *, m7, moved=False, counts=None, first=False,
-         red=False, caster=None, redetected=()):
+         red=False, caster=None, redetected=(), after=None):
     """One sense of SENSED under plan 1 step 1; returns (result, registry,
     belief, rows, caster, parked).  counts is the episode's rediscovery
     counter itself (passed, not copied, so a test can read it after the
     sense); redetected names the bodies in belief.redetected (F20's
-    exemption); first, red and caster as in _scene and NothingCaster."""
+    exemption); first, red and caster as in _scene and NothingCaster;
+    after(belief) runs once the step is closed, before the ledger closes
+    (the loop's top, where a suspension ends)."""
     execution.M7 = m7
     render, reg, hidden_part = _scene(moved, first=first, red=red)
     names = NAMES_RED if red else NAMES
@@ -253,6 +255,8 @@ def _run(tmp_path, monkeypatch, *, m7, moved=False, counts=None, first=False,
         run_logger.ledger_event('sense_result', reason=result.reason,
                                 continue_=result.continue_)
         run_logger.dispatch_end('sense_outcome')
+        if after is not None:
+            after(belief)
     finally:
         run_logger.ledger_close()
     with open(tmp_path / 'ledger.jsonl', encoding='utf-8') as f:
@@ -349,7 +353,12 @@ def test_give_up_keeps_and_parks_the_sensed_fragment(tmp_path, monkeypatch, main
     assert result.reason == 'sense_contains_nontarget'
     assert not caster.calls
     assert reg.get_boxel(SENSED) is not None
-    assert belief.shadow_status[SENSED] == 'unresolved' and SENSED in parked
+    # the park is a suspension (Hani, 2026-11-20), not a blocked view
+    assert belief.shadow_status[SENSED] == 'unresolved' and SENSED not in parked
+    assert belief.get_suspended_shadows() == [SENSED]
+    s = belief.suspended[SENSED]
+    assert s['bodies'] == {'blue': 3}
+    assert s['until'] - s['start'] == pytest.approx(execution.M7_SUSPEND_S)
     b = _belief_rows(rows)
     assert (SENSED, 'status', 'unresolved', 'strike_park') in b
     assert not [x for x in b if x[0] == SENSED and x[1] in ('remove', 'forget')]
@@ -357,6 +366,34 @@ def test_give_up_keeps_and_parks_the_sensed_fragment(tmp_path, monkeypatch, main
     assert reg.get_boxel('blue').shadow_boxel_ids == [HIDDEN]
     d, = [r for r in rows if r['kind'] == 'sense_discovery']
     assert d['giveup'] and d['parked'] and d['recast'] == [] and d['kept'] == [HIDDEN]
+    susp, = [r for r in rows if r['kind'] == 'm7_suspension']
+    assert (susp['op'], susp['region'], susp['bodies'], susp['seconds']) == (
+        'start', SENSED, {'blue': 3}, execution.M7_SUSPEND_S)
+    assert (susp['plan'], susp['step']) == (1, 1)
+    assert _g5(tmp_path)[0] == 'PASS', _g5(tmp_path)
+
+
+def test_the_suspension_ends_when_its_time_is_up(tmp_path, monkeypatch, main_defaults):
+    # Hani, 2026-11-20: after M7_SUSPEND_S the region is offered again; the
+    # loop's top releases it under the suspension_over channel, and G5 reads
+    # that row as the end of the park before it.
+    def after(belief):
+        until = belief.suspended[SENSED]['until']
+        with run_logger.provenance('suspension_over'):
+            assert belief.release_suspended(until - 1.0) == []
+            assert belief.get_suspended_shadows() == [SENSED]
+            assert belief.release_suspended(until) == [SENSED]
+    _, reg, belief, rows, _, _ = _run(tmp_path, monkeypatch, m7=True,
+                                      counts={'blue': 2}, after=after)
+    assert belief.shadow_status[SENSED] == 'unknown'
+    assert SENSED in belief.get_unknown_shadows() and reg.get_boxel(SENSED) is not None
+    assert not belief.suspended and not belief.get_suspended_shadows()
+    assert belief.suspensions[0]['ended_by'] == 'released'
+    assert _belief_rows(rows)[-1] == (SENSED, 'status', 'unknown', 'suspension_over')
+    ends = [r for r in rows if r['kind'] == 'm7_suspension']
+    assert [(r['op'], r.get('ended_by')) for r in ends] == [('start', None),
+                                                            ('end', 'released')]
+    assert 'step' not in ends[1]                      # no step was open
     assert _g5(tmp_path)[0] == 'PASS', _g5(tmp_path)
 
 
@@ -431,8 +468,9 @@ def test_two_bodies_one_at_its_give_up_park_the_region(
     counts = {'blue': 2}
     result, reg, belief, rows, caster, parked = _run(
         tmp_path, monkeypatch, m7=True, counts=counts, red=True)
-    assert reg.get_boxel(SENSED) is not None and SENSED in parked
+    assert reg.get_boxel(SENSED) is not None and SENSED not in parked
     assert belief.shadow_status[SENSED] == 'unresolved'
+    assert belief.suspended[SENSED]['bodies'] == {'blue': 3}   # red has no give-up
     calls = dict(caster.calls)
     assert set(calls) == {'red'}                     # blue's give-up casts nothing
     assert SENSED in calls['red'] and 'red' not in calls['red']

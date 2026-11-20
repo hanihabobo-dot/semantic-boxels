@@ -151,7 +151,8 @@ for _scene, _seeds in (('1747173590', (1, 2, 3, 4, 8, 14, 15, 18)),
 # G5: the enumerated channels behind a SHADOW boxel's belief change.
 G5_CHANNELS = ('planned_sense_render', 'sweep_render', 'lost_caster_render',
                'strike_park', 'observed_before_placement',
-               'planned_look_render')       # path 9: a look's named regions only
+               'planned_look_render',       # path 9: a look's named regions only
+               'suspension_over')           # M7: back to unknown after an F9 park only
 G5_UNRENDERED = 'superseded_unrendered'
 # M7's own channel in the audit's G5 text.  M7 as built (TB-46) has no
 # render test of its own: the F16 sweep tests the old fragments on the same
@@ -960,12 +961,23 @@ def run_ledger(report, run_dir, m7='on'):
     # facts, logged by the dispatcher as the step's look_reveals row.
     look_named = {(r.get('plan'), r.get('step')): set(r.get('named') or ())
                   for r in rows if r['kind'] == 'look_reveals'}
+    parked_now = set()      # regions parked by strike_park and not released
     for r in rows:
         if r['kind'] != 'belief' or r['op'] == 'add':
             continue
         ch = r.get('channel')
         counts[ch] = counts.get(ch, 0) + 1
-        if ch == G5_UNRENDERED:
+        if ch == 'strike_park' and r.get('status') == 'unresolved':
+            parked_now.add(r['region'])
+        if ch == 'suspension_over':
+            # M7 (Hani, 2026-11-20): a suspension's end returns a region
+            # parked earlier to unknown, nothing else
+            if r['op'] != 'status' or r.get('status') != 'unknown' \
+                    or r['region'] not in parked_now:
+                bad5.append(f"{r['region']} {r['op']} {r.get('status')}: "
+                            f"suspension_over without a park before it")
+            parked_now.discard(r['region'])
+        elif ch == G5_UNRENDERED:
             unrendered += 1
         elif ch in G5_NO_WRITER:
             bad5.append(f"{r['region']} {r['op']}: channel {ch} has no writer")

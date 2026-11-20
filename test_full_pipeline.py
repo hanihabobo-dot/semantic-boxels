@@ -96,7 +96,7 @@ from robot_utils import (move_robot_smooth, hold_at_config,
                          robot_model, arm_joint_positions)
 from run_logger import (RunLogger, parse_pipeline_args, report_run_outcome,
                         dispatch_begin, dispatch_end, ledger_event,
-                        ledger_plan)
+                        ledger_plan, provenance)
 from visualization import BoxelVisualizer
 
 from belief import BeliefState
@@ -1839,6 +1839,14 @@ def main(gui=True, run_logger=None, scene_config=None,
     while not _loop_done():
         plan_count += 1
         disturbed_counts.clear()   # the #P2 disturbance cap is per plan
+        # M7 (Hani, 2026-11-20): a region suspended at the F9 give-up is
+        # offered again once its time is up (with --m7 off nothing is
+        # suspended).
+        with provenance('suspension_over'):
+            for _sid in belief.release_suspended(time.perf_counter()):
+                print(f"  [M7] {_sid} is back in the search: its "
+                      f"{execution.M7_SUSPEND_S:.0f} s suspension at the F9 "
+                      f"give-up is over")
         unknown_shadows = belief.get_unknown_shadows()
         # #P1 F15: parked-unresolved fragments are withheld from the
         # planner exactly like eliminated ones (or the episode loops on
@@ -1911,6 +1919,16 @@ def main(gui=True, run_logger=None, scene_config=None,
                       f"registered at [{_tc[0]:.3f},{_tc[1]:.3f},"
                       f"{_tc[2]:.3f}] (seen by an observation) — "
                       f"planning a direct pick (#P1 F20)")
+            elif not unknown_shadows and belief.get_suspended_shadows():
+                # M7 (Hani, 2026-11-20): nothing is left to search but
+                # regions suspended at the F9 give-up.  The episode fails
+                # here, without a planner call, and says why.
+                exit_reason = "rediscovery_giveup"
+                print(f"ERROR: No unknown shadows remain; "
+                      f"{sorted(belief.get_suspended_shadows())} suspended at "
+                      f"the F9 give-up (M7), not searched; the target may "
+                      f"be inside.")
+                break
             elif not unknown_shadows:
                 # Audit #21: 'all_searched' is the loop-termination tag,
                 # but with the still_blocked 3-strike give-up some of
@@ -3423,6 +3441,8 @@ def main(gui=True, run_logger=None, scene_config=None,
                   if planner.m8_views is not None else None),
         shadows=shadows,
         blocked_giveup_shadows=blocked_giveup_shadows,
+        # M7: the F9 give-up's suspension length (None with --m7 off)
+        m7_suspend_s=(execution.M7_SUSPEND_S if execution.M7 else None),
         plan_times=plan_times,
         total_plan_time=total_plan_time,
         physical_failures=physical_failures,

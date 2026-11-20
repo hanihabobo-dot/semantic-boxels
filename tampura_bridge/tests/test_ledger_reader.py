@@ -187,6 +187,35 @@ def test_m7_give_up_kept_and_parked_passes(tmp_path):
     assert run(tmp_path, rows)['G5'] == 'PASS'
 
 
+def _suspension_over(region='shadow_3', status='unknown'):
+    """The end of an M7 suspension at the next plan's top (no step open)."""
+    return {'kind': 'belief', 'region': region, 'op': 'status',
+            'status': status, 'channel': 'suspension_over'}
+
+
+def test_m7_suspension_over_after_its_park_passes(tmp_path):
+    # Hani, 2026-11-20: the F9 give-up's park ends after its time; the region
+    # goes back to unknown under its own channel
+    rows = _rediscovery(removed=False, recast=(), adds=(), giveup=True, parked=True)
+    rows.insert(-1, _suspension_over())
+    assert run(tmp_path, rows)['G5'] == 'PASS'
+
+
+@pytest.mark.parametrize('name,row', [
+    ('without a park before it', _suspension_over(region='shadow_5')),
+    ('to another status', _suspension_over(status='not_here')),
+])
+def test_m7_suspension_over_tampering_fails(tmp_path, name, row):
+    rows = _rediscovery(removed=False, recast=(), adds=(), giveup=True, parked=True)
+    rows.insert(-1, row)
+    run(tmp_path, rows)
+    rep = bg.Report()
+    bg.run_ledger(rep, str(tmp_path))
+    status, detail = {g: (s, d) for g, s, d in rep.rows}['G5']
+    assert status == 'FAIL', name
+    assert 'suspension_over without a park before it' in detail, detail
+
+
 def test_m7_checks_are_tied_by_plan_and_step(tmp_path):
     # the same discovery row written at another step backs nothing
     rows = _rediscovery()
