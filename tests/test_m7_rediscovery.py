@@ -8,9 +8,12 @@ fragment is scripted (sense_shadow_from_render is replaced by a table keyed
 by fragment id), so each case says which fragment the render shows empty and
 which still hidden; everything after the classification is the real code.
 The stand-in shadow calculator casts one fixed box behind the body and carves
-it with ShadowCalculator's own subtraction against the obstacles it is given.
+it with ShadowCalculator's own subtraction against the obstacles it is given
+(a second stand-in casts nothing, the case of a body that hides part of the
+region but casts no fragment of its own, audit #103).
 The ledger rows are read back and judged by tools/bridge_gates.py's G5 (B5
-deliverable (3), review TB-46 b4)."""
+deliverable (3), review TB-46 b4; the last four tests are R5 of the M7 code
+review, prefreeze/analysis/REVIEW_M7_CODE.md)."""
 import importlib.util
 import json
 import os
@@ -39,9 +42,10 @@ _spec.loader.exec_module(bg)
 W, H = 64, 48
 NEAR, FAR = 0.02, 5.0
 EYE = (0.5, 0.0, 1.0)                 # straight above the table (z = 0)
-TABLE, BLUE, TARGET = 0, 7, 9         # seg ids; the target is not in the image
+TABLE, BLUE, RED, TARGET = 0, 7, 8, 9  # seg ids; the target is not in the image
 BLUE_TOP = 0.04
 NAMES = {BLUE: 'blue', TARGET: 'target'}
+NAMES_RED = {**NAMES, RED: 'red'}       # a second body, for the two-body case
 SENSED = 'shadow_sensed'
 HIDDEN = 'shadow_of_blue__00'         # blue's old fragment the render still hides
 EMPTY = 'shadow_of_blue__01'          # blue's old fragment the render shows empty
@@ -54,7 +58,9 @@ def main_defaults():
     pose_belief.SWITCHES.update({k: True for k in saved})
     slip_fixes.configure('')
     interior_regions.configure('off')
-    m7 = execution.M7
+    # with a default, so the two M7 off tests also run against d14199d's
+    # execution.py, which has no flag (the equivalence run, review R2)
+    m7 = getattr(execution, 'M7', True)
     yield
     pose_belief.SWITCHES.clear()
     pose_belief.SWITCHES.update(saved)
@@ -70,14 +76,18 @@ def _meters(buf):
     return FAR * NEAR / (FAR - (FAR - NEAR) * buf)
 
 
-def _render():
-    """The table everywhere, and blue as a 5 x 5 pixel block at the centre."""
+def _render(red=False):
+    """The table everywhere, and blue as a 5 x 5 pixel block at the centre
+    (with red: red as a second 5 x 5 block, one column beside blue)."""
     view = p.computeViewMatrix(list(EYE), [EYE[0], EYE[1], 0.0], [0.0, 1.0, 0.0])
     proj = p.computeProjectionMatrixFOV(50.0, W / H, NEAR, FAR)
     seg = np.full((H, W), TABLE, dtype=int)
     buf = np.full((H, W), _buffer(EYE[2]))
     seg[22:27, 30:35] = BLUE
     buf[22:27, 30:35] = _buffer(EYE[2] - BLUE_TOP)
+    if red:
+        seg[22:27, 36:41] = RED
+        buf[22:27, 36:41] = _buffer(EYE[2] - BLUE_TOP)
     return seg, buf, view, proj
 
 
@@ -110,16 +120,24 @@ class Caster:
         return active
 
 
-def _env(render, caster):
+class NothingCaster(Caster):
+    """A body that casts no fragment from this view (a body not resting on
+    the table, audit #103, or a cast carved away entirely)."""
+
+    def calculate_shadow_boxel(self, bd, obstacles, physics_client=None):
+        self.calls.append((bd.id, [o.id for o in obstacles]))
+        return []
+
+
+def _env(render, caster, names=NAMES):
     seg, buf, view, proj = render
 
     def detect_objects():
         dets = perception.detect_objects_from_render(
-            seg, buf, view, proj, NAMES, EYE[:2], 0.0)
+            seg, buf, view, proj, names, EYE[:2], 0.0)
         return dets, None, buf, seg
     return SimpleNamespace(
-        objects={'blue': SimpleNamespace(object_id=BLUE),
-                 'target': SimpleNamespace(object_id=TARGET)},
+        objects={n: SimpleNamespace(object_id=b) for b, n in names.items()},
         detect_objects=detect_objects,
         _depth_buffer_to_meters=_meters,
         _view_and_projection_matrices=lambda: (view, proj),
@@ -131,31 +149,44 @@ def _env(render, caster):
         annotate_free_space_surface=lambda cells: None)
 
 
-def _scene(moved=False):
+def _scene(moved=False, first=False, red=False):
     """The registry before the sense: blue registered (at its true box, or
     15 cm away in x for a body the arm had moved, seed 188's pattern), its
-    two old fragments, the sensed region and one other region."""
-    render = _render()
-    det = perception.detect_objects_from_render(
-        render[0], render[1], render[2], render[3], NAMES, EYE[:2], 0.0)['blue']
+    two old fragments, the sensed region and one other region.  With first:
+    blue was never registered, so neither blue nor its fragments are there
+    (a first discovery).  With red: red stands beside blue, unregistered,
+    and the sensed region holds both."""
+    render = _render(red)
+    dets = perception.detect_objects_from_render(
+        render[0], render[1], render[2], render[3],
+        NAMES_RED if red else NAMES, EYE[:2], 0.0)
+    det = dets['blue']
     bmin, bmax = np.array(det.est_min, float), np.array(det.est_max, float)
+    smin, smax = bmin, bmax
+    if red:
+        smin = np.minimum(bmin, np.array(dets['red'].est_min, float))
+        smax = np.maximum(bmax, np.array(dets['red'].est_max, float))
     dx = np.array([0.15, 0.0, 0.0]) if moved else np.zeros(3)
     reg = BoxelRegistry()
-    blue = BoxelData(id='blue', boxel_type=BoxelType.OBJECT, min_corner=bmin + dx,
-                     max_corner=bmax + dx, object_name='blue', is_occluder=True,
-                     on_surface='table', surface_z=0.0)
-    reg.add_boxel(blue)
-    ob = blue
-    frags = {
+    frags = {}
+    hidden_part = None
+    if not first:
+        blue = BoxelData(id='blue', boxel_type=BoxelType.OBJECT, min_corner=bmin + dx,
+                         max_corner=bmax + dx, object_name='blue', is_occluder=True,
+                         on_surface='table', surface_z=0.0)
+        reg.add_boxel(blue)
+        ob = blue
         # behind blue's believed box, 10 cm deep (its old shadow)
-        HIDDEN: _box([ob.min_corner[0], ob.max_corner[1], 0.0],
-                     [ob.max_corner[0], ob.max_corner[1] + 0.10, 0.06]),
-        EMPTY: _box([0.20, -0.30, 0.0], [0.26, -0.24, 0.06]),
-        # the sensed region holds blue where it truly stands
-        SENSED: _box([bmin[0] - 0.01, bmin[1] - 0.01, 0.0],
-                     [bmax[0] + 0.01, bmax[1] + 0.03, 0.06]),
-        OTHER: _box([0.70, 0.20, 0.0], [0.76, 0.26, 0.06]),
-    }
+        frags[HIDDEN] = _box([ob.min_corner[0], ob.max_corner[1], 0.0],
+                             [ob.max_corner[0], ob.max_corner[1] + 0.10, 0.06])
+        frags[EMPTY] = _box([0.20, -0.30, 0.0], [0.26, -0.24, 0.06])
+        # the still-hidden part of HIDDEN: its first 4 cm behind the body
+        hidden_part = _box([ob.min_corner[0], ob.max_corner[1], 0.0],
+                           [ob.max_corner[0], ob.max_corner[1] + 0.04, 0.06])
+    # the sensed region holds blue (and red) where it truly stands
+    frags[SENSED] = _box([smin[0] - 0.01, smin[1] - 0.01, 0.0],
+                         [smax[0] + 0.01, smax[1] + 0.03, 0.06])
+    frags[OTHER] = _box([0.70, 0.20, 0.0], [0.76, 0.26, 0.06])
     for sid, (lo, hi) in frags.items():
         caster = 'blue' if sid in (HIDDEN, EMPTY) else None
         reg.add_boxel(BoxelData(id=sid, boxel_type=BoxelType.SHADOW,
@@ -163,21 +194,21 @@ def _scene(moved=False):
                                 created_by_object=caster,
                                 created_by_boxel_id=caster,
                                 on_surface='table', surface_z=0.0))
-    blue.shadow_boxel_ids = [HIDDEN, EMPTY]
-    # the still-hidden part of HIDDEN: its first 4 cm behind the body
-    hidden_part = _box([ob.min_corner[0], ob.max_corner[1], 0.0],
-                       [ob.max_corner[0], ob.max_corner[1] + 0.04, 0.06])
+    if not first:
+        blue.shadow_boxel_ids = [HIDDEN, EMPTY]
     return render, reg, hidden_part
 
 
-def _scripted(hidden_part):
-    """sense_shadow_from_render as a table: the sensed region contains blue,
-    EMPTY is seen empty, HIDDEN is still blocked by blue (shrunk to
-    hidden_part), anything else is blocked with no reveal."""
+def _scripted(hidden_part, bodies=(BLUE,)):
+    """sense_shadow_from_render as a table: the sensed region contains blue
+    (or every body in bodies), EMPTY is seen empty, HIDDEN is still blocked
+    by blue (shrunk to hidden_part), anything else is blocked with no
+    reveal."""
     def fake(shadow_boxel, *_a, **_k):
         sid = str(shadow_boxel.id)
         if sid == SENSED:
-            return 'contains_nontarget', 0.0, {BLUE}, None, {BLUE: 12}
+            return ('contains_nontarget', 0.0, set(bodies), None,
+                    {b: 12 for b in bodies})
         if sid == EMPTY:
             return 'clear_but_empty', 0.0, set(), None, {}
         if sid == HIDDEN:
@@ -186,18 +217,27 @@ def _scripted(hidden_part):
     return fake
 
 
-def _run(tmp_path, monkeypatch, *, m7, moved=False, counts=None):
+def _run(tmp_path, monkeypatch, *, m7, moved=False, counts=None, first=False,
+         red=False, caster=None, redetected=()):
     """One sense of SENSED under plan 1 step 1; returns (result, registry,
-    belief, rows, caster, parked)."""
+    belief, rows, caster, parked).  counts is the episode's rediscovery
+    counter itself (passed, not copied, so a test can read it after the
+    sense); redetected names the bodies in belief.redetected (F20's
+    exemption); first, red and caster as in _scene and NothingCaster."""
     execution.M7 = m7
-    render, reg, hidden_part = _scene(moved)
-    monkeypatch.setattr(execution, 'sense_shadow_from_render', _scripted(hidden_part))
-    caster = Caster()
-    env = _env(render, caster)
-    ids = [SENSED, HIDDEN, EMPTY, OTHER]
+    render, reg, hidden_part = _scene(moved, first=first, red=red)
+    names = NAMES_RED if red else NAMES
+    monkeypatch.setattr(execution, 'sense_shadow_from_render',
+                        _scripted(hidden_part, (BLUE, RED) if red else (BLUE,)))
+    caster = caster or Caster()
+    env = _env(render, caster, names)
+    ids = [SENSED, OTHER] if first else [SENSED, HIDDEN, EMPTY, OTHER]
     belief = BeliefState(list(ids), 'target')
+    belief.redetected.update(redetected)
     parked = set()
-    occluder_map = {HIDDEN: ['blue'], EMPTY: ['blue']}
+    occluder_map = {} if first else {HIDDEN: ['blue'], EMPTY: ['blue']}
+    known = {} if first else {'blue': {'name': 'blue', 'pybullet_id': BLUE,
+                                       'position': np.zeros(3)}}
     run_logger.ledger_open(tmp_path)
     try:
         run_logger.dispatch_begin(1, 1, 'sense', ['target', SENSED])
@@ -205,13 +245,11 @@ def _run(tmp_path, monkeypatch, *, m7, moved=False, counts=None):
             action_params=('target', SENSED), env=env, registry=reg,
             belief=belief, viz=None, target_name='target', robot_id=None,
             support_body_ids=frozenset({TABLE}), shadows=list(ids),
-            occluders=['blue'], shadow_occluder_map=occluder_map,
+            occluders=[] if first else ['blue'], shadow_occluder_map=occluder_map,
             blocked_counts={}, blocked_giveup_shadows=parked,
-            nontarget_rediscovery_counts=dict(counts or {}),
-            boxel_centers={}, boxel_to_pybullet={
-                'blue': {'name': 'blue', 'pybullet_id': BLUE,
-                         'position': np.zeros(3)}},
-            object_body_ids={}, body_id_to_name=NAMES, show_free=False)
+            nontarget_rediscovery_counts=counts if counts is not None else {},
+            boxel_centers={}, boxel_to_pybullet=known,
+            object_body_ids={}, body_id_to_name=names, show_free=False)
         run_logger.ledger_event('sense_result', reason=result.reason,
                                 continue_=result.continue_)
         run_logger.dispatch_end('sense_outcome')
@@ -343,4 +381,85 @@ def test_a_moved_body_keeps_its_old_pose_remainder(tmp_path, monkeypatch, main_d
     assert recast and all(not _overlap(kept, r) for r in recast)
     # the new boxel stands at the render's estimate, not at the old pose
     assert blue.max_corner[0] < kept.min_corner[0]
+    assert _g5(tmp_path)[0] == 'PASS', _g5(tmp_path)
+
+
+# ----- R5 of the M7 code review ---------------------------------------------
+
+def test_a_first_discovery_is_cast_against_every_fragment(
+        tmp_path, monkeypatch, main_defaults):
+    # blue was never registered: the row says so, the cast is carved against
+    # every fragment there is (choice C4, a first discovery too), G5 PASS.
+    result, reg, belief, rows, caster, parked = _run(
+        tmp_path, monkeypatch, m7=True, first=True)
+    assert result.reason == 'sense_contains_nontarget'
+    (body, obstacles), = caster.calls
+    assert body == 'blue' and obstacles == [OTHER]
+    assert reg.get_boxel(SENSED) is None and not parked
+    blue = reg.get_boxel('blue')
+    d, = [r for r in rows if r['kind'] == 'sense_discovery']
+    assert d['body'] == 'blue' and not d['rediscovery'] and d['kept'] == []
+    assert d['recast'] and d['recast'] == blue.shadow_boxel_ids
+    assert not d['giveup'] and not d['parked']
+    assert _g5(tmp_path)[0] == 'PASS', _g5(tmp_path)
+
+
+def test_a_first_discovery_that_casts_nothing_fails_g5(
+        tmp_path, monkeypatch, main_defaults):
+    # The known G5 class (review point 3): nothing covers again what the body
+    # hides, the sensed region still leaves the belief, and G5 fails the
+    # step, naming the body as a first discovery.  Pinned here so the gate is
+    # not loosened unseen.
+    result, reg, belief, rows, caster, parked = _run(
+        tmp_path, monkeypatch, m7=True, first=True, caster=NothingCaster())
+    assert [c[0] for c in caster.calls] == ['blue']
+    assert reg.get_boxel(SENSED) is None and not parked
+    assert (SENSED, 'remove', None, 'planned_sense_render') in _belief_rows(rows)
+    d, = [r for r in rows if r['kind'] == 'sense_discovery']
+    assert not d['rediscovery'] and d['recast'] == [] and not d['giveup']
+    status, detail = _g5(tmp_path)
+    assert status == 'FAIL'
+    assert (f'{SENSED} removed with nothing recast and nothing parked '
+            f'(first discovery of blue)') in detail
+
+
+def test_two_bodies_one_at_its_give_up_park_the_region(
+        tmp_path, monkeypatch, main_defaults):
+    # Choice C5: blue at its third rediscovery and red, found for the first
+    # time, in the same sense.  Blue's give-up parks the sensed region; red is
+    # still cast, carved against the parked region; one row per body; G5 PASS.
+    counts = {'blue': 2}
+    result, reg, belief, rows, caster, parked = _run(
+        tmp_path, monkeypatch, m7=True, counts=counts, red=True)
+    assert reg.get_boxel(SENSED) is not None and SENSED in parked
+    assert belief.shadow_status[SENSED] == 'unresolved'
+    calls = dict(caster.calls)
+    assert set(calls) == {'red'}                     # blue's give-up casts nothing
+    assert SENSED in calls['red'] and 'red' not in calls['red']
+    disc = {r['body']: r for r in rows if r['kind'] == 'sense_discovery'}
+    assert set(disc) == {'blue', 'red'}
+    assert disc['blue']['rediscovery'] and disc['blue']['giveup']
+    assert disc['blue']['recast'] == [] and disc['blue']['kept'] == [HIDDEN]
+    assert not disc['red']['rediscovery'] and not disc['red']['giveup']
+    assert disc['red']['recast'] == reg.get_boxel('red').shadow_boxel_ids
+    assert disc['red']['recast'] and disc['blue']['parked'] and disc['red']['parked']
+    assert counts == {'blue': 3}
+    assert _g5(tmp_path)[0] == 'PASS', _g5(tmp_path)
+
+
+def test_the_redetected_exemption_neither_counts_nor_parks(
+        tmp_path, monkeypatch, main_defaults):
+    # Blue entered the registry from a whole-workspace observation and is
+    # found inside a fragment for the first time (F20's exemption): at count
+    # 2 it is not counted and not given up, so the region is not parked and
+    # blue is cast again.  The one place where the give-up predictor and the
+    # discovery loop could drift apart.
+    counts = {'blue': 2}
+    result, reg, belief, rows, caster, parked = _run(
+        tmp_path, monkeypatch, m7=True, counts=counts, redetected=('blue',))
+    assert counts == {'blue': 2} and 'blue' not in belief.redetected
+    assert not parked and reg.get_boxel(SENSED) is None
+    assert [c[0] for c in caster.calls] == ['blue']
+    d, = [r for r in rows if r['kind'] == 'sense_discovery']
+    assert d['rediscovery'] and not d['giveup'] and not d['parked'] and d['recast']
     assert _g5(tmp_path)[0] == 'PASS', _g5(tmp_path)
