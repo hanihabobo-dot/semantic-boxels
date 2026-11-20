@@ -166,6 +166,22 @@ def test_m7_rediscovery_tampering_fails(tmp_path, name, rows):
     assert run(tmp_path, rows)['G5'] == 'FAIL', name
 
 
+@pytest.mark.parametrize('rediscovery,kind', [
+    (True, 'rediscovery of cup_a'), (False, 'first discovery of cup_a')])
+def test_m7_nothing_recast_names_the_body_and_its_kind(tmp_path, rediscovery, kind):
+    rows = _rediscovery(recast=(), adds=())
+    for r in rows:
+        if r['kind'] == 'sense_discovery':
+            r['rediscovery'] = rediscovery
+    run(tmp_path, rows)
+    rep = bg.Report()
+    bg.run_ledger(rep, str(tmp_path))
+    status, detail = {g: (s, d) for g, s, d in rep.rows}['G5']
+    assert status == 'FAIL'
+    assert (f'shadow_3 removed with nothing recast and nothing parked ({kind})'
+            in detail), detail
+
+
 def test_m7_give_up_kept_and_parked_passes(tmp_path):
     rows = _rediscovery(removed=False, recast=(), adds=(), giveup=True, parked=True)
     assert run(tmp_path, rows)['G5'] == 'PASS'
@@ -181,8 +197,9 @@ def test_m7_checks_are_tied_by_plan_and_step(tmp_path):
 
 
 def test_m7_off_discloses_only(tmp_path):
-    # the gate's m7 off (never read from the episode): no sense_discovery
-    # check, the unrendered drop disclosed, not failed
+    # the gate's m7 off (never read from the episode): the sense_discovery
+    # check is skipped, so a contains_nontarget sense without its row passes
+    # (the unrendered drop's disclosure is test_unrendered_rediscovery_depends_on_m7)
     rows = _rediscovery(row=False)
     assert run(tmp_path, rows, m7='off')['G5'] == 'PASS'
 

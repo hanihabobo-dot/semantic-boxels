@@ -862,8 +862,14 @@ def _g5_discoveries(rows, sense_regions):
         if removed and giveup:
             bad.append(f'{where}: {region} removed at an F9 give-up')
         elif removed and not recast:
+            # which bodies, and whether each was found before: a first
+            # discovery that casts nothing is a known class (M7 code review,
+            # point 3), read by hand each time it shows, never exempted
+            found = ', '.join(
+                f"{'rediscovery' if d.get('rediscovery') else 'first discovery'}"
+                f" of {d.get('body')}" for d in disc)
             bad.append(f'{where}: {region} removed with nothing recast '
-                       f'and nothing parked')
+                       f'and nothing parked ({found})')
         elif not removed and not parked:
             bad.append(f'{where}: {region} neither removed nor parked')
         for s in recast:
