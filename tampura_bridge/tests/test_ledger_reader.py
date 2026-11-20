@@ -120,10 +120,11 @@ def test_unrendered_rediscovery_depends_on_m7(tmp_path):
 # ----- TB-46, M7: the rediscovery's G5 checks ------------------------------
 
 def _rediscovery(*, removed=True, recast=('shadow_9',), adds=('shadow_9',),
-                 giveup=False, parked=False, row=True):
+                 giveup=False, parked=False, row=True, suspended=False):
     """clean() whose sense of shadow_3 found cup_a inside it again (plan 1
     step 4): the sensed region's rows, the recast's add rows and the
-    sense_discovery row as M7 writes them."""
+    sense_discovery row as M7 writes them; suspended adds the give-up's
+    m7_suspension start row after the park (Hani, 2026-11-20)."""
     rows = clean()
     k = next(i for i, r in enumerate(rows) if r['kind'] == 'sense_result')
     rows[k]['reason'] = 'sense_contains_nontarget'
@@ -139,6 +140,9 @@ def _rediscovery(*, removed=True, recast=('shadow_9',), adds=('shadow_9',),
     if parked:
         extra.append(dict(at, kind='belief', region='shadow_3', op='status',
                           status='unresolved', channel='strike_park'))
+    if suspended:
+        extra.append(dict(at, kind='m7_suspension', op='start', region='shadow_3',
+                          bodies={'cup_a': 3}, seconds=120.0))
     for s in adds:
         extra.append(dict(at, kind='belief', region=s, op='add',
                           status='unknown', channel='planned_sense_render'))
@@ -193,27 +197,52 @@ def _suspension_over(region='shadow_3', status='unknown'):
             'status': status, 'channel': 'suspension_over'}
 
 
+def _suspension_end(region='shadow_3', ended_by='released'):
+    """The m7_suspension end row release_suspended writes after the belief row."""
+    return {'kind': 'm7_suspension', 'op': 'end', 'region': region,
+            'ended_by': ended_by}
+
+
 def test_m7_suspension_over_after_its_park_passes(tmp_path):
     # Hani, 2026-11-20: the F9 give-up's park ends after its time; the region
-    # goes back to unknown under its own channel
-    rows = _rediscovery(removed=False, recast=(), adds=(), giveup=True, parked=True)
+    # goes back to unknown under its own channel, then the end row
+    rows = _rediscovery(removed=False, recast=(), adds=(), giveup=True,
+                        parked=True, suspended=True)
     rows.insert(-1, _suspension_over())
+    rows.insert(-1, _suspension_end())
     assert run(tmp_path, rows)['G5'] == 'PASS'
 
 
-@pytest.mark.parametrize('name,row', [
-    ('without a park before it', _suspension_over(region='shadow_5')),
-    ('to another status', _suspension_over(status='not_here')),
+def _end_closed(rows):
+    """The suspension's end row before the release row: nothing is open."""
+    rows.insert(-1, _suspension_end())
+    return rows
+
+
+@pytest.mark.parametrize('name,rows,row', [
+    ('another region', _rediscovery(removed=False, recast=(), adds=(), giveup=True,
+                                    parked=True, suspended=True),
+     _suspension_over(region='shadow_5')),
+    ('to another status', _rediscovery(removed=False, recast=(), adds=(), giveup=True,
+                                       parked=True, suspended=True),
+     _suspension_over(status='not_here')),
+    # the third review's point: a strike_park park without a suspension (a
+    # blocked view's, F15's) is not released by a suspension's end
+    ('a park that is no suspension', _rediscovery(removed=False, recast=(), adds=(),
+                                                  giveup=True, parked=True),
+     _suspension_over()),
+    ('after the suspension ended', _end_closed(_rediscovery(
+        removed=False, recast=(), adds=(), giveup=True, parked=True, suspended=True)),
+     _suspension_over()),
 ])
-def test_m7_suspension_over_tampering_fails(tmp_path, name, row):
-    rows = _rediscovery(removed=False, recast=(), adds=(), giveup=True, parked=True)
+def test_m7_suspension_over_tampering_fails(tmp_path, name, rows, row):
     rows.insert(-1, row)
     run(tmp_path, rows)
     rep = bg.Report()
     bg.run_ledger(rep, str(tmp_path))
     status, detail = {g: (s, d) for g, s, d in rep.rows}['G5']
     assert status == 'FAIL', name
-    assert 'suspension_over without a park before it' in detail, detail
+    assert 'suspension_over without an open suspension' in detail, detail
 
 
 def test_m7_checks_are_tied_by_plan_and_step(tmp_path):

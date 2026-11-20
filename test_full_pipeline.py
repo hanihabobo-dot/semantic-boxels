@@ -3416,8 +3416,11 @@ def main(gui=True, run_logger=None, scene_config=None,
 
     # Review round 2 (2026-09-19): a goal object that was seen, then
     # observed gone from its believed region and never seen again ends
-    # as target_lost, not as an exhausted search.
-    if (not success and exit_reason == "all_searched" and target_lost_seen):
+    # as target_lost, not as an exhausted search.  M7's rediscovery_giveup
+    # is an exhausted search too (only suspended regions left), so it
+    # takes the same relabel; the FAILED line still names the suspensions.
+    if (not success and exit_reason in ("all_searched", "rediscovery_giveup")
+            and target_lost_seen):
         exit_reason = "target_lost"
     report_run_outcome(
         success=success,

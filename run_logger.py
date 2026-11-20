@@ -546,7 +546,11 @@ def report_run_outcome(
             # regions left were suspended at the F9 give-up.
             print(f"FAILED: the only shadows left to search are suspended "
                   f"at the F9 give-up (M7): {_suspended_text(belief)}; the "
-                  f"target may be inside")
+                  f"target may be inside"
+                  + (f"; {len(blocked_giveup_shadows)} more given up after "
+                     f"repeated still_blocked outcomes (audit #21), not "
+                     f"observed empty: {sorted(blocked_giveup_shadows)}"
+                     if blocked_giveup_shadows else ""))
         elif exit_reason == "planner_failed":
             _susp = _suspended_text(belief)
             print(f"FAILED: Planner returned no plan "
@@ -583,9 +587,12 @@ def report_run_outcome(
             # came up empty.
             _lost = sorted({e.get("object") for e in (integrity_events or [])
                             if e.get("kind") == "lost"})
+            _susp = _suspended_text(belief)
             print(f"FAILED: the target was seen, then lost from view "
                   f"({_lost}) and never re-detected (#P2 monitor; "
-                  f"{len(remaining)} unsearched shadows remaining)")
+                  f"{len(remaining)} unsearched shadows remaining"
+                  + (f"; suspended at the F9 give-up (M7): {_susp}" if _susp
+                     else "") + ")")
         elif exit_reason == "stack_giveup":
             _worst = sorted((stack_fail_counts or {}).items(),
                             key=lambda kv: -kv[1])[:3]

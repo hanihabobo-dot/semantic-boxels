@@ -122,10 +122,17 @@ class BeliefState:
         """M7's F9 give-up: park the shadow unresolved (the caller names the
         channel) until ``now + seconds``.  ``bodies`` maps each body that
         reached the give-up to its rediscovery count.  A shadow already
-        found is left alone, as mark_unresolved leaves it."""
+        found is left alone, as mark_unresolved leaves it.  A shadow still
+        suspended (no path is known to reach this) has its open suspension
+        ended as 'resuspended' and a new one started, so no row stays open."""
         self.mark_unresolved(shadow_id)
         if self.shadow_status.get(shadow_id) != 'unresolved':
             return
+        old = self.suspended.pop(shadow_id, None)
+        if old is not None:
+            old['end'], old['ended_by'] = now, 'resuspended'
+            ledger_event('m7_suspension', op='end', region=shadow_id,
+                         ended_by='resuspended')
         row = {'region': shadow_id, 'bodies': dict(bodies), 'start': now,
                'until': now + seconds, 'end': None, 'ended_by': None}
         self.suspended[shadow_id] = row

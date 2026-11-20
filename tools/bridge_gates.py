@@ -961,22 +961,27 @@ def run_ledger(report, run_dir, m7='on'):
     # facts, logged by the dispatcher as the step's look_reveals row.
     look_named = {(r.get('plan'), r.get('step')): set(r.get('named') or ())
                   for r in rows if r['kind'] == 'look_reveals'}
-    parked_now = set()      # regions parked by strike_park and not released
+    open_suspensions = set()   # M7: regions with an m7_suspension start, no end yet
     for r in rows:
+        if r['kind'] == 'm7_suspension':
+            if r.get('op') == 'start':
+                open_suspensions.add(r.get('region'))
+            elif r.get('op') == 'end':
+                open_suspensions.discard(r.get('region'))
+            continue
         if r['kind'] != 'belief' or r['op'] == 'add':
             continue
         ch = r.get('channel')
         counts[ch] = counts.get(ch, 0) + 1
-        if ch == 'strike_park' and r.get('status') == 'unresolved':
-            parked_now.add(r['region'])
         if ch == 'suspension_over':
             # M7 (Hani, 2026-11-20): a suspension's end returns a region
-            # parked earlier to unknown, nothing else
+            # suspended at the F9 give-up (its m7_suspension start row, the
+            # end row comes after this one) to unknown, nothing else; a
+            # blocked view's strike_park park is not a suspension
             if r['op'] != 'status' or r.get('status') != 'unknown' \
-                    or r['region'] not in parked_now:
+                    or r['region'] not in open_suspensions:
                 bad5.append(f"{r['region']} {r['op']} {r.get('status')}: "
-                            f"suspension_over without a park before it")
-            parked_now.discard(r['region'])
+                            f"suspension_over without an open suspension")
         elif ch == G5_UNRENDERED:
             unrendered += 1
         elif ch in G5_NO_WRITER:

@@ -75,6 +75,25 @@ def test_a_second_give_up_after_the_release_suspends_again():
     assert b.suspended[S]['until'] == 350.0
 
 
+def test_a_suspension_renewed_while_open_ends_the_first(tmp_path):
+    # third review: no path is known to suspend a region still suspended;
+    # if one does, the first row ends as resuspended rather than stay open
+    run_logger.ledger_open(tmp_path)
+    try:
+        b = _suspended(now=100.0)
+        b.suspend(S, bodies={'e_cups_ud': 4}, now=150.0, seconds=120.0)
+    finally:
+        run_logger.ledger_close()
+    first, second = b.suspensions
+    assert (first['end'], first['ended_by']) == (150.0, 'resuspended')
+    assert (second['start'], second['until'], second['end']) == (150.0, 270.0, None)
+    assert b.suspended == {S: second} and b.get_suspended_shadows() == [S]
+    rows = [json.loads(line) for line in open(tmp_path / 'ledger.jsonl')]
+    assert [(r['op'], r.get('ended_by')) for r in rows
+            if r['kind'] == 'm7_suspension'] == [
+        ('start', None), ('end', 'resuspended'), ('start', None)]
+
+
 def test_the_ledger_rows(tmp_path):
     run_logger.ledger_open(tmp_path)
     try:
@@ -97,12 +116,14 @@ def test_the_ledger_rows(tmp_path):
 
 # ----- the run summary: the FAILED line and the record -----------------------
 
-def _report(tmp_path, capsys, belief, exit_reason, m7_suspend_s=120.0):
+def _report(tmp_path, capsys, belief, exit_reason, m7_suspend_s=120.0,
+            blocked=(), integrity_events=None):
     run_logger.report_run_outcome(
         success=False, exit_reason=exit_reason, goal_kind='holding', goal=None,
         target_name='die', on_relations={}, belief=belief, plan_count=8,
-        shadows=[S, 'shadow_027'], blocked_giveup_shadows=set(),
-        m7_suspend_s=m7_suspend_s, plan_times=[0.5], total_plan_time=0.5,
+        shadows=[S, 'shadow_027'], blocked_giveup_shadows=set(blocked),
+        m7_suspend_s=m7_suspend_s, integrity_events=integrity_events,
+        plan_times=[0.5], total_plan_time=0.5,
         physical_failures=[], physics_failures=[], run_config={'seed': 293},
         run_logger=types.SimpleNamespace(run_dir=tmp_path, log_path=None))
     out = capsys.readouterr().out
@@ -131,6 +152,67 @@ def test_a_planner_failure_names_the_suspended_regions(tmp_path, capsys):
     assert failed == ('FAILED: Planner returned no plan (1 unsearched shadows '
                       'remaining; suspended at the F9 give-up (M7): shadow_026 '
                       '(e_cups_ud rediscovered 3 times))')
+
+
+def test_the_give_up_line_also_names_the_blocked_views(tmp_path, capsys):
+    # third review: blocked views given up (audit #21) are unsearched too
+    b = _suspended()
+    b.mark_unresolved('shadow_027')
+    out, _ = _report(tmp_path, capsys, b, 'rediscovery_giveup',
+                     blocked=['shadow_027'])
+    failed, = [ln for ln in out.splitlines() if ln.startswith('FAILED')]
+    assert failed == ('FAILED: the only shadows left to search are suspended at '
+                      'the F9 give-up (M7): shadow_026 (e_cups_ud rediscovered 3 '
+                      'times); the target may be inside; 1 more given up after '
+                      'repeated still_blocked outcomes (audit #21), not observed '
+                      "empty: ['shadow_027']")
+
+
+def test_a_lost_target_names_the_suspended_regions(tmp_path, capsys):
+    b = _suspended()
+    b.mark_sensed('shadow_027', found=False)
+    lost = [{'kind': 'lost', 'object': 'die'}]
+    out, s = _report(tmp_path, capsys, b, 'target_lost', integrity_events=lost)
+    failed, = [ln for ln in out.splitlines() if ln.startswith('FAILED')]
+    assert failed == ("FAILED: the target was seen, then lost from view (['die']) "
+                      'and never re-detected (#P2 monitor; 0 unsearched shadows '
+                      'remaining; suspended at the F9 give-up (M7): shadow_026 '
+                      '(e_cups_ud rediscovered 3 times))')
+    assert s['exit_reason'] == 'target_lost'
+    assert s['m7_suspensions'][0]['ended_by'] == 'open_at_end'
+    # with nothing suspended the line is as before
+    out, _ = _report(tmp_path, capsys, BeliefState([S], 'die'), 'target_lost',
+                     m7_suspend_s=None, integrity_events=lost)
+    failed, = [ln for ln in out.splitlines() if ln.startswith('FAILED')]
+    assert failed == ("FAILED: the target was seen, then lost from view (['die']) "
+                      'and never re-detected (#P2 monitor; 1 unsearched shadows '
+                      'remaining)')
+
+
+# ----- the ending's relabel at the end of main() (third review) ---------------
+
+def _relabel():
+    """main()'s own relabel statement before report_run_outcome, by ast."""
+    import ast
+    src = REPO / 'test_full_pipeline.py'
+    tree = ast.parse(src.read_text(encoding='utf-8'))
+    main, = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main']
+    stmt, = [n for n in main.body if isinstance(n, ast.If)
+             and 'target_lost_seen' in ast.unparse(n.test)]
+    return compile(ast.Module(body=[stmt], type_ignores=[]), str(src), 'exec')
+
+
+@pytest.mark.parametrize('reason,seen,after', [
+    ('rediscovery_giveup', True, 'target_lost'),   # the target was seen, then lost
+    ('rediscovery_giveup', False, 'rediscovery_giveup'),
+    ('all_searched', True, 'target_lost'),         # as before
+    ('all_searched', False, 'all_searched'),
+    ('planner_failed', True, 'planner_failed'),
+])
+def test_a_target_seen_then_lost_keeps_that_reason(reason, seen, after):
+    names = {'success': False, 'exit_reason': reason, 'target_lost_seen': seen}
+    exec(_relabel(), names)
+    assert names['exit_reason'] == after
 
 
 def test_with_m7_off_the_summary_and_the_lines_are_as_before(tmp_path, capsys):
