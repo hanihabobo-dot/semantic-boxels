@@ -19,10 +19,18 @@ Allowed rewrites (nothing else):
 |---|---|---|
 | R1 | a name `x` becomes `st.<group>.x` (per name, one field per name, the field keeps the name; also inside f-strings) | `name_map` |
 | R2 | a `break` whose loop is outside the cut span becomes `return <sentinel>` | `break_sentinel` |
-| R3 | `return False` / `return None` of the old function in the span become `return <SENTINEL>` | `sentinel_returns` |
+| R3 | `return False` / `return None` of the old function in the span become `return <SENTINEL>` (the code also takes the key `"True"`: a `return True` with a declared sentinel, the same rewrite) | `sentinel_returns` |
 | R4 | `nonlocal` lines are dropped (their names must be in `name_map`) | `drop_nonlocal` |
 | R5 | indentation, compared relative to the first statement | always |
 | R6 | comments: may differ, but every removed, changed or added comment is printed as residual; the contiguous comment block directly above a cut span or a moved def (up to the first blank or code line) is diffed with the span, so dropping it is residual, and keeping it directly above the new def or inside the new function is clean | always |
+
+Two tolerances of the compare, not on the list, both keep the value (R_PHASE0
+1.1, C9): (i) the layout inside one logical line does not count (line
+breaks inside brackets, backslash continuations, spaces between tokens),
+because the compare is by tokens of a logical line; (ii) an f-string is
+compared by its syntax tree, so its spelling does not count when the tree is
+equal (prefix case and order, spaces inside `{}`, the spelling of an
+escape).
 
 Other checks: a cut is a run of sibling statements of one block (no cut
 through a `try`, `with`, `if` or loop); a def span carries its decorators;
@@ -34,6 +42,21 @@ parameter, a local bound before use, a mapped field, a builtin, or a global
 the old code read too and the new module binds; `self.<attr>` reads a mixin
 does not define are listed; a deletion leaves the rest of the file token
 equal and no NAME token of the deleted function.
+
+R's conditions M1 to M8 (R_PHASE0 section 6; build record
+`phase0/build/move_check_M1_M8.md` in the trunk's tracks folder):
+
+| | check | fails as |
+|---|---|---|
+| M1 | one account per touched file (the entries' files, the state class file, `account_files`): old lines minus all old spans against new lines minus all new functions, by tokens, no rewrite; each difference is printed `OUTSIDE outside the entries` (status review, exit 3). A correct cut exits 3: its call is outside the entries | `outside-the-entries` |
+| M2 | every comment is owned by one entry (inside the span, the block directly above it, the block that ends it, for a move the block at the def's indentation above it across blank lines; the same around the new function) or diffed by the account | comment residual |
+| M3 | old spans pairwise disjoint; one new function, one entry | `spans-overlap`, `new-home-shared` |
+| M4 | a mapped name is a local of the old container or a nonlocal of a closure in it; one field from one owning scope | `map-not-local`, `map-field-two-scopes` |
+| M5 | a spec with a name map names `state_classes` (file, groups, optional root); the group's class declares the field | `state-classes-not-named`, `state-class-missing`, `map-field-not-declared` |
+| M7 | a cut: no unmapped name the span binds is read after it, before it inside a loop around it, or in a nested scope; none is declared global or nonlocal outside it; sentinels pairwise different; the header is `def name(params):` only, or the old header's own parts for a cut of a whole body | `live-out-local`, `span-binds-global`, `sentinels-not-distinct`, `cut-header` |
+| M8 | `__x`, bare `super()` and `__class__` in code whose class changes; the globals the old span read are its Name loads | `class-bound-name`, `free-name` |
+
+M6 (rebound names) is global_identity's, below.
 
 Spec (`spec_version` 1):
 
@@ -59,7 +82,7 @@ Spec (`spec_version` 1):
 
 `kind`: `move` compares the whole old def (with decorators) with the whole
 new def; `cut` compares a statement run inside the old function with the
-new function's body (the new header is listed, not compared);
+new function's body (the new header is compared by M7, below);
 `delete` compares the old file minus the def with the new file. Anchors are
 text (they survive line shifts); `*_occurrence` picks one of several
 matches; `start_line`/`end_line` (first lines of the first and last
@@ -73,8 +96,9 @@ python tools/readable/move_check.py SPEC.json --old-root OLD --new-root NEW \
 python tools/readable/move_check.py SPEC.json --old-ref refactor-checkpoint-1 --repo . --new-root .
 ```
 
-Exit codes: 0 clean; 3 only comment residual or warnings (R reads them);
-1 a code residual or a failed rule; 2 the spec or a file could not be read.
+Exit codes: 0 clean; 3 only comment residual, warnings or lines outside the
+entries (R reads them); 1 a code residual or a failed rule; 2 the spec or a
+file could not be read.
 `--map` writes or updates `MIGRATION_MAP.tsv` (old file, old qualname, new
 file, new qualname, phase, kind, old lines, new lines, entry, status; a
 re-run replaces its own entries' rows). `--line-map` writes old line to new
@@ -82,16 +106,17 @@ line for every matched logical line.
 
 Limits: the identity check of cross-file moves (`new_mod.x is old_mod.x`,
 draft 4.1) needs imports and is done by `global_identity.py` (below), not
-here. A comment after a blank line above the span, or below the span, is listed as
-INFO only; a cut whose header comment stays above the call site in the old
-function reads as removed (R reads it). Bound-before-use is a straight-line approximation: a read bound only
+here. A comment near a span that the entry does not own (M2) is listed as
+INFO and diffed by the file account; a cut whose header comment stays above
+the call site in the old function reads as removed in the entry and added
+in the account (R reads both). Bound-before-use is a straight-line approximation: a read bound only
 on some paths is a warning for R. An f-string is compared by prefix, quote
 and `ast.dump`, so spaces inside `{...}` do not count.
 
 Tests: `python -m pytest -q tests/readable/test_move_check.py` (Windows
 Python 3.12 or `/root/armO-venvA/bin/python` 3.11 in WSL).
 
-## global_identity.py: the identity half of pin 44
+## global_identity.py: the identity half of pin 44 (and M6)
 
 Pin 44 (`p44_loggers_globals`) describes every global a function reads by
 type and name; a description cannot tell two instances apart. For each
@@ -117,6 +142,26 @@ the constant was written twice (pin 48 holds the twin constants);
 decorators, defaults and annotations are read at module level and are not
 listed. Tests: `tests/readable/test_global_identity.py` (synthetic old and
 new module pairs; Windows and WSL).
+
+M6 (R_PHASE0 section 6): a global the moved function reads bare fails as
+"rebound at run time" when the tree under `--root` rebinds it in the old
+module: a `global g` with a binding in a function of the old module;
+`<alias>.g = ...`, `+=` or `del` in any file; `setattr`, `delattr` or
+`patch.object` on an alias of the old module (a computed name counts as
+every name); a string `"old.g"` given to `setattr`, `patch` or `delattr`;
+a call with the strings `"old"` and `"g"` first (the gates' `_rebind`); and
+pin 42's `_REBOUND` list (read from pin_outputs.py as text). So `from old
+import g` fails for exactly those names. The read through the module
+(`import old` and `old.g`, or an alias) is accepted: a global whose value is
+the old module itself is "same", and each attribute read on it must exist
+in the old module. The scan reads source only and skips `archive`,
+`_scratch`, `__pycache__`, `node_modules`, `site-packages` and hidden
+folders; a rebinding through a computed module (a loop over
+`sys.modules`) is seen only through pin 42's list. On the worktree it finds
+`args` (test_full_pipeline), `_console` and `finish` (console_ui), the run
+logger's three, `ENABLED` (slip_fixes). move_check still prints the
+module-attribute form as residual (its tokens and its free name differ from
+the old body; the closed list has no rewrite for it), so R reads it there.
 
 ## pin_outputs.py: the pin generator (group `low`)
 
