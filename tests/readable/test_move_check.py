@@ -28,24 +28,72 @@ import move_check as mc  # noqa: E402
 # helpers
 # ---------------------------------------------------------------------------
 
+# M5: a spec that maps names names its state classes. The fixtures' state
+# module declares every field the synthetic and real cuts below map.
+STATE_PY = '''\
+"""State classes of the move_check fixtures (M5)."""
+from dataclasses import dataclass
+
+
+@dataclass
+class Counts:
+    plan_count: int = 0
+    sense_count: int = 0
+
+
+@dataclass
+class Ending:
+    exit_reason: object = None
+    episode_over: bool = False
+
+
+class Setup:
+    def __init__(self):
+        self.planner = None
+        self.args = None
+'''
+
+STATE = {"file": "state.py",
+         "groups": {"counts": "Counts", "ending": "Ending", "setup": "Setup"}}
+
+
 def run(entries, old_files=None, new_files=None, tmp_path=None,
-        old_root=None):
+        old_root=None, state=STATE, extra=None):
+    """Write the old and new trees and run the spec. With `state` (the
+    default) the spec names the fixtures' state classes and state.py is
+    written into the new tree unless the test brings its own."""
     old_dir = Path(old_root) if old_root else tmp_path / "old"
     new_dir = tmp_path / "new"
+    new_files = dict(new_files or {})
+    if state is not None and state["file"] not in new_files:
+        new_files[state["file"]] = STATE_PY
     for d, files in ((old_dir, old_files), (new_dir, new_files)):
         if files:
             d.mkdir(parents=True, exist_ok=True)
             for name, text in files.items():
                 (d / name).write_text(text, encoding="utf-8")
     spec = {"spec_version": 1, "entries": entries}
+    if state is not None:
+        spec["state_classes"] = state
+    spec.update(extra or {})
     return mc.run_spec(spec, mc.file_reader(str(old_dir), None, None),
                        mc.file_reader(str(new_dir), None, None))
 
 
 def one(results):
-    assert len(results) == 1
-    print(mc.format_result(results[0]))
-    return results[0]
+    """The single entry result (the file accounts of M1 follow the entries
+    in run_spec's list; tests of the accounts read them with accounts())."""
+    entries = mc.entry_results(results)
+    assert len(entries) == 1
+    print(mc.format_result(entries[0]))
+    return entries[0]
+
+
+def accounts(results):
+    out = {r.old_file: r for r in results if r.kind == "account"}
+    for r in out.values():
+        print(mc.format_result(r))
+    return out
 
 
 def real_text(rel):
@@ -447,8 +495,14 @@ def test_clean_closure_cut_drops_nonlocal(tmp_path):
 def test_all_three_entries_in_one_spec(tmp_path):
     rs = run([LOOP, EARLY, FINISH], old_files={"old.py": OLD},
              new_files={"new.py": NEW}, tmp_path=tmp_path)
-    assert [r.status for r in rs] == ["clean"] * 3
-    assert mc.exit_code(rs) == 0
+    assert [r.status for r in mc.entry_results(rs)] == ["clean"] * 3
+    assert mc.exit_code(mc.entry_results(rs)) == 0
+    # M1: the fixture's new tree has no main and no old.py, so the file
+    # accounts print the rest of both files for R (exit 3, not 0)
+    acc = accounts(rs)
+    assert sorted(acc) == ["new.py", "old.py", "state.py"]
+    assert acc["old.py"].status == "review" and acc["old.py"].outside
+    assert mc.exit_code(rs) == 3
 
 
 def test_dropped_comment_shows_as_residual(tmp_path):
@@ -569,8 +623,10 @@ def test_b2_cli_dropped_header_exits_nonzero(tmp_path):
     (tmp_path / "old" / "old.py").write_text(B2_OLD_CUT, encoding="utf-8")
     (tmp_path / "new" / "new.py").write_text("def stage_b(st, n):\n" + B2_BODY,
                                              encoding="utf-8")
+    (tmp_path / "new" / "state.py").write_text(STATE_PY, encoding="utf-8")
     spec = tmp_path / "spec.json"
-    spec.write_text(json.dumps({"spec_version": 1, "entries": [B2_CUT]}),
+    spec.write_text(json.dumps({"spec_version": 1, "entries": [B2_CUT],
+                                "state_classes": STATE}),
                     encoding="utf-8")
     p = subprocess.run([sys.executable, str(TOOL), str(spec),
                         "--old-root", str(tmp_path / "old"),
@@ -757,8 +813,10 @@ def _cli(tmp_path, entries, new=NEW, extra=()):
     (tmp_path / "new").mkdir(exist_ok=True)
     (tmp_path / "old" / "old.py").write_text(OLD, encoding="utf-8")
     (tmp_path / "new" / "new.py").write_text(new, encoding="utf-8")
+    (tmp_path / "new" / "state.py").write_text(STATE_PY, encoding="utf-8")
     spec = tmp_path / "spec.json"
-    spec.write_text(json.dumps({"spec_version": 1, "entries": entries}),
+    spec.write_text(json.dumps({"spec_version": 1, "entries": entries,
+                                "state_classes": STATE}),
                     encoding="utf-8")
     cmd = [sys.executable, str(TOOL), str(spec),
            "--old-root", str(tmp_path / "old"),
@@ -774,7 +832,10 @@ def test_cli_clean_writes_map_and_line_map(tmp_path):
     lm = tmp_path / "out" / "line_map.tsv"
     p = _cli(tmp_path, [LOOP, EARLY, FINISH],
              extra=("--map", str(mp), "--line-map", str(lm)))
-    assert p.returncode == 0
+    # the three entries are clean; the file accounts (M1) print the rest of
+    # the fixture's files, so the exit is 3
+    assert p.returncode == 3
+    assert "RESULT: clean" in p.stdout and "OUTSIDE outside the entries" in p.stdout
     rows = mp.read_text(encoding="utf-8").splitlines()
     assert rows[0].split("\t") == mc.MAP_HEADER
     assert len(rows) == 4
@@ -783,7 +844,7 @@ def test_cli_clean_writes_map_and_line_map(tmp_path):
     assert len(lm.read_text(encoding="utf-8").splitlines()) > 5
     # a second run of one entry replaces its row and keeps the others
     p2 = _cli(tmp_path, [EARLY], extra=("--map", str(mp)))
-    assert p2.returncode == 0
+    assert p2.returncode == 3
     rows2 = mp.read_text(encoding="utf-8").splitlines()
     assert len(rows2) == 4
     assert sum(r.split("\t")[8] == "early" for r in rows2[1:]) == 1
@@ -805,3 +866,736 @@ def test_cli_unreadable_spec_exits_2(tmp_path):
     cmd = [sys.executable, str(TOOL), str(tmp_path / "missing.json")]
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     assert p.returncode == 2
+
+
+# ---------------------------------------------------------------------------
+# R's conditions M1 to M8 (R_PHASE0 section 6): one planted bad case each,
+# which must exit nonzero, and a clean twin. The E numbers are R's cases
+# (15 Nov: review/phase0/NOTES_move_check.md and mc_probe.py; 20 Nov:
+# R_PHASE0 section 1.3).
+# ---------------------------------------------------------------------------
+
+def d(text):
+    return textwrap.dedent(text).lstrip("\n")
+
+
+def mv(eid, old_file, old_q, new_file, new_q, **kw):
+    e = {"id": eid, "kind": "move", "phase": "P2",
+         "old": {"file": old_file, "qualname": old_q},
+         "new": {"file": new_file, "qualname": new_q}}
+    e.update(kw)
+    return e
+
+
+def cut(eid, old_q, start, end, new_q, old_file="a.py", new_file="a.py",
+        **kw):
+    e = {"id": eid, "kind": "cut", "phase": "P4",
+         "old": {"file": old_file, "qualname": old_q,
+                 "start_anchor": start, "end_anchor": end},
+         "new": {"file": new_file, "qualname": new_q}}
+    e.update(kw)
+    return e
+
+
+def rules(r):
+    return set(r.rules_failed)
+
+
+# --- M1: the whole-file account -------------------------------------------
+
+E1_OLD = d("""
+    def f(x):
+        return x + 1
+
+
+    def g(x):
+        return x * 2
+    """)
+E1_B = d("""
+    def f(x):
+        return x + 1
+    """)
+
+
+def test_m1_e1_move_with_another_function_changed_is_outside(tmp_path):
+    new_a = d("""
+        def g(x):
+            return x * 3
+        """)
+    rs = run([mv("E1", "a.py", "f", "b.py", "f")], {"a.py": E1_OLD},
+             {"a.py": new_a, "b.py": E1_B}, tmp_path, state=None)
+    assert one(rs).status == "clean"
+    acc = accounts(rs)
+    assert acc["a.py"].status == "review"
+    assert any("x * 2" in o and "x * 3" in o for o in acc["a.py"].outside)
+    assert acc["b.py"].status == "clean"
+    assert mc.exit_code(rs) == 3
+
+
+def test_m1_e1_twin_move_alone_is_clean(tmp_path):
+    new_a = d("""
+        def g(x):
+            return x * 2
+        """)
+    rs = run([mv("E1", "a.py", "f", "b.py", "f")], {"a.py": E1_OLD},
+             {"a.py": new_a, "b.py": E1_B}, tmp_path, state=None)
+    assert [r.status for r in rs] == ["clean"] * 3
+    assert mc.exit_code(rs) == 0
+
+
+E2_OLD = d("""
+    def main(n):
+        print("a", n)
+        print("b", n)
+        print("done")
+        return n
+    """)
+
+
+def test_m1_e2_cut_with_a_statement_dropped_and_no_call_is_outside(tmp_path):
+    new = d("""
+        def step(n):
+            print("a", n)
+            print("b", n)
+
+
+        def main(n):
+            return n
+        """)
+    rs = run([cut("E2", "main", 'print("a"', 'print("b"', "step")],
+             {"a.py": E2_OLD}, {"a.py": new}, tmp_path, state=None)
+    assert one(rs).status == "clean"
+    acc = accounts(rs)["a.py"]
+    assert any('print("done")' in o and "only in old" in o for o in acc.outside)
+    assert mc.exit_code(rs) == 3
+
+
+def test_m1_e2_twin_the_call_alone_is_printed(tmp_path):
+    new = d("""
+        def step(n):
+            print("a", n)
+            print("b", n)
+
+
+        def main(n):
+            step(n)
+            print("done")
+            return n
+        """)
+    rs = run([cut("E2", "main", 'print("a"', 'print("b"', "step")],
+             {"a.py": E2_OLD}, {"a.py": new}, tmp_path, state=None)
+    assert one(rs).status == "clean"
+    acc = accounts(rs)["a.py"]
+    # the call that replaces the cut is the one line R reads
+    assert len(acc.outside) == 1 and "step(n)" in acc.outside[0]
+    assert "only in new" in acc.outside[0] and 'print("done")' not in acc.outside[0]
+
+
+def test_m1_account_files_take_a_file_no_entry_names(tmp_path):
+    other_old = "import os\nLIMIT = 3\n"
+    for other_new, status in (("import os\nLIMIT = 4\n", "review"),
+                              (other_old, "clean")):
+        rs = run([mv("E1", "a.py", "f", "b.py", "f")],
+                 {"a.py": E1_OLD, "c.py": other_old},
+                 {"a.py": d("""
+                     def g(x):
+                         return x * 2
+                     """), "b.py": E1_B, "c.py": other_new},
+                 tmp_path, state=None, extra={"account_files": ["c.py"]})
+        assert accounts(rs)["c.py"].status == status
+
+
+def test_m1_cli_exits_3_and_prints_outside(tmp_path):
+    (tmp_path / "old").mkdir()
+    (tmp_path / "new").mkdir()
+    (tmp_path / "old" / "a.py").write_text(E1_OLD, encoding="utf-8")
+    (tmp_path / "new" / "a.py").write_text("def g(x):\n    return x * 3\n",
+                                           encoding="utf-8")
+    (tmp_path / "new" / "b.py").write_text(E1_B, encoding="utf-8")
+    spec = tmp_path / "spec.json"
+    spec.write_text(json.dumps({"spec_version": 1, "entries": [
+        mv("E1", "a.py", "f", "b.py", "f")]}), encoding="utf-8")
+    mp = tmp_path / "MIGRATION_MAP.tsv"
+    p = subprocess.run([sys.executable, str(TOOL), str(spec),
+                        "--old-root", str(tmp_path / "old"),
+                        "--new-root", str(tmp_path / "new"), "--map", str(mp)],
+                       capture_output=True, text=True, encoding="utf-8",
+                       timeout=120)
+    print(p.stdout, p.stderr)
+    assert p.returncode == 3
+    assert "account a.py" in p.stdout and "OUTSIDE" in p.stdout
+    # the accounts are no rows of MIGRATION_MAP.tsv
+    assert len(mp.read_text(encoding="utf-8").splitlines()) == 2
+
+
+# --- M2: every comment of a touched file matched or residual ---------------
+
+E10A_OLD = d("""
+    def f(x):
+        y = x + 1
+        return y
+        # the end of f: y is never None here
+
+
+    def g():
+        return 0
+    """)
+
+
+def test_m2_e10a_trailing_comment_of_a_moved_def_dropped(tmp_path):
+    rs = run([mv("E10a", "a.py", "f", "b.py", "f")], {"a.py": E10A_OLD},
+             {"a.py": "def g():\n    return 0\n",
+              "b.py": "def f(x):\n    y = x + 1\n    return y\n"},
+             tmp_path, state=None)
+    r = one(rs)
+    assert r.status == "review" and not r.code_residual
+    assert any("removed" in c and "never None" in c for c in r.comment_residual)
+    assert mc.exit_code(rs) == 3
+
+
+def test_m2_e10a_twin_trailing_comment_kept_is_clean(tmp_path):
+    rs = run([mv("E10a", "a.py", "f", "b.py", "f")], {"a.py": E10A_OLD},
+             {"a.py": "def g():\n    return 0\n",
+              "b.py": "def f(x):\n    y = x + 1\n    return y\n"
+                      "    # the end of f: y is never None here\n"},
+             tmp_path, state=None)
+    assert [r.status for r in rs] == ["clean"] * 3
+    assert mc.exit_code(rs) == 0
+
+
+E10B_OLD = d("""
+    def main(n):
+        if n:
+            print("a", n)
+            print("b", n)
+            # the end of the n branch
+        return n
+    """)
+
+
+def e10b_new(trailing):
+    return ("def step(n):\n    print(\"a\", n)\n    print(\"b\", n)\n"
+            + ("    # the end of the n branch\n" if trailing else "")
+            + "\n\ndef main(n):\n    if n:\n        step(n)\n    return n\n")
+
+
+def test_m2_e10b_comment_ending_the_cut_block_dropped(tmp_path):
+    rs = run([cut("E10b", "main", 'print("a"', 'print("b"', "step")],
+             {"a.py": E10B_OLD}, {"a.py": e10b_new(False)}, tmp_path,
+             state=None)
+    r = one(rs)
+    assert r.status == "review"
+    assert any("removed" in c and "end of the n branch" in c
+               for c in r.comment_residual)
+
+
+def test_m2_e10b_twin_kept_at_the_end_of_the_new_function(tmp_path):
+    rs = run([cut("E10b", "main", 'print("a"', 'print("b"', "step")],
+             {"a.py": E10B_OLD}, {"a.py": e10b_new(True)}, tmp_path,
+             state=None)
+    assert one(rs).status == "clean"
+    acc = accounts(rs)["a.py"]
+    assert not acc.comment_residual          # the comment is the entry's
+    assert len(acc.outside) == 1 and "step(n)" in acc.outside[0]
+
+
+def test_m2_a_comment_leading_the_next_statement_is_not_the_cuts(tmp_path):
+    old = d("""
+        def main(n):
+            print("a", n)
+            # about the return
+            return n
+        """)
+    new = ("def step(n):\n    print(\"a\", n)\n\n\n"
+           "def main(n):\n    step(n)\n    # about the return\n    return n\n")
+    rs = run([cut("lead", "main", 'print("a"', 'print("a"', "step")],
+             {"a.py": old}, {"a.py": new}, tmp_path, state=None)
+    assert one(rs).status == "clean"
+    assert not accounts(rs)["a.py"].comment_residual
+
+
+E11_OLD = d("""
+    import os
+
+    # narration: why f joins one fixed part
+    # (one blank line below)
+
+    def f(x):
+        return os.path.join(x, "a")
+    """)
+
+
+def test_m2_e11_comment_block_a_blank_line_above_a_moved_def_dropped(tmp_path):
+    rs = run([mv("E11", "a.py", "f", "b.py", "f")], {"a.py": E11_OLD},
+             {"a.py": "import os\n",
+              "b.py": "import os\n\n\ndef f(x):\n    return os.path.join(x, \"a\")\n"},
+             tmp_path, state=None)
+    r = one(rs)
+    assert r.status == "review"
+    assert sum("comment removed" in c for c in r.comment_residual) == 2
+    assert mc.exit_code(rs) == 3
+
+
+def test_m2_e11_twin_block_kept_a_blank_line_above_the_new_def(tmp_path):
+    rs = run([mv("E11", "a.py", "f", "b.py", "f")], {"a.py": E11_OLD},
+             {"a.py": "import os\n", "b.py": E11_OLD}, tmp_path, state=None)
+    r = one(rs)
+    assert r.status == "clean", r.comment_residual
+    # b.py's `import os` is the one line outside the entries
+    acc = accounts(rs)
+    assert acc["a.py"].status == "clean"
+    assert not acc["b.py"].comment_residual
+
+
+def test_m2_a_comment_no_entry_owns_is_the_accounts(tmp_path):
+    old = "import os\n# a module note\nLIMIT = 3\n\n\n" + E1_OLD
+    for note, status in (("# a module note, changed\n", "review"),
+                         ("# a module note\n", "clean")):
+        new_a = "import os\n" + note + "LIMIT = 3\n\n\ndef g(x):\n    return x * 2\n"
+        rs = run([mv("E1", "a.py", "f", "b.py", "f")], {"a.py": old},
+                 {"a.py": new_a, "b.py": E1_B}, tmp_path, state=None)
+        acc = accounts(rs)["a.py"]
+        assert acc.status == status
+        if status == "review":
+            assert any("a module note" in c for c in acc.comment_residual)
+
+
+# --- M3: disjoint spans, one home per new function --------------------------
+
+def test_m3_e6_one_old_function_to_two_homes(tmp_path):
+    rs = run([mv("E6a", "a.py", "f", "b.py", "f"),
+              mv("E6b", "a.py", "f", "c.py", "f")],
+             {"a.py": E1_B}, {"a.py": "", "b.py": E1_B, "c.py": E1_B},
+             tmp_path, state=None)
+    ents = mc.entry_results(rs)
+    assert all("spans-overlap" in rules(r) for r in ents)
+    assert mc.exit_code(rs) == 1
+
+
+def test_m3_two_entries_one_new_function(tmp_path):
+    rs = run([mv("Ef", "a.py", "f", "b.py", "f"),
+              mv("Eg", "a.py", "g", "b.py", "f")],
+             {"a.py": E1_OLD}, {"a.py": "", "b.py": E1_B}, tmp_path, state=None)
+    assert all("new-home-shared" in rules(r) for r in mc.entry_results(rs))
+
+
+def test_m3_twin_two_functions_two_homes(tmp_path):
+    rs = run([mv("Ef", "a.py", "f", "b.py", "f"),
+              mv("Eg", "a.py", "g", "c.py", "g")],
+             {"a.py": E1_OLD},
+             {"a.py": "", "b.py": E1_B, "c.py": "def g(x):\n    return x * 2\n"},
+             tmp_path, state=None)
+    assert [r.status for r in rs] == ["clean"] * 5
+    assert mc.exit_code(rs) == 0
+
+
+# --- M4: a mapped name is a local of the old container --------------------
+
+E3_OLD = d("""
+    args = None
+
+
+    def main():
+        limit = 3
+        if args is not None:
+            limit = args.limit
+        return limit
+    """)
+
+
+def test_m4_e3_a_module_global_mapped_to_a_field(tmp_path):
+    new = d("""
+        args = None
+
+
+        def pick_limit(st):
+            limit = 3
+            if st.setup.args is not None:
+                limit = st.setup.args.limit
+            return limit
+
+
+        def main():
+            return pick_limit(None)
+        """)
+    rs = run([cut("E3", "main", "limit = 3", "return limit", "pick_limit",
+                  name_map={"args": "st.setup.args"})],
+             {"a.py": E3_OLD}, {"a.py": new}, tmp_path)
+    r = one(rs)
+    assert "map-not-local" in rules(r)
+    assert any("'args'" in m and "global" in m for _r, m in r.errors)
+
+
+def test_m4_a_builtin_mapped_to_a_field(tmp_path):
+    old = "def main(n):\n    print(n)\n    print(n)\n"
+    new = ("def step(st, n):\n    st.setup.print(n)\n    st.setup.print(n)\n\n\n"
+           "def main(n):\n    step(None, n)\n")
+    # print(n) is on two lines: the anchors name the occurrences
+    e = cut("B", "main", "print(n)", "print(n)", "step",
+            name_map={"print": "st.setup.print"})
+    e["old"]["start_occurrence"], e["old"]["end_occurrence"] = 1, 2
+    r = one(run([e], {"a.py": old}, {"a.py": new}, tmp_path))
+    assert "map-not-local" in rules(r)
+
+
+F4X_OLD = d("""
+    def first(n):
+        plan_count = 0
+        plan_count += n
+        return 1
+
+
+    def second(n):
+        plan_count = 0
+        plan_count += n
+        return 2
+    """)
+F4X_NEW = d("""
+    def bump1(st, n):
+        st.counts.plan_count += n
+
+
+    def bump2(st, n):
+        st.counts.plan_count += n
+
+
+    def first(n):
+        plan_count = 0
+        bump1(None, n)
+        return 1
+
+
+    def second(n):
+        plan_count = 0
+        bump2(None, n)
+        return 2
+    """)
+
+
+def test_m4_f4x_two_locals_of_two_functions_to_one_field(tmp_path):
+    m = {"plan_count": "st.counts.plan_count"}
+    rs = run([cut("F1", "first", "plan_count += n", "plan_count += n",
+                  "bump1", name_map=m),
+              cut("F2", "second", "plan_count += n", "plan_count += n",
+                  "bump2", name_map=m)],
+             {"a.py": F4X_OLD}, {"a.py": F4X_NEW}, tmp_path)
+    ents = mc.entry_results(rs)
+    assert all("map-field-two-scopes" in rules(r) for r in ents)
+    assert mc.exit_code(rs) == 1
+
+
+def test_m4_twin_a_closure_nonlocal_is_owned_by_its_function(tmp_path):
+    rs = run([LOOP, FINISH], old_files={"old.py": OLD},
+             new_files={"new.py": NEW}, tmp_path=tmp_path)
+    ents = mc.entry_results(rs)
+    assert [r.status for r in ents] == ["clean", "clean"]
+    assert ents[0].map_owners["st.ending.exit_reason"] == ("exit_reason", "old.py:main")
+    assert ents[1].map_owners["st.ending.exit_reason"] == ("exit_reason", "old.py:main")
+
+
+# --- M5: the state classes are named and declare every mapped field --------
+
+E7_OLD = d("""
+    def main():
+        plan_count = 0
+        plan_count += 1
+        return plan_count
+    """)
+E7_NEW = d("""
+    def bump(st):
+        st.counts.plan_count += 1
+
+
+    def main():
+        return 0
+    """)
+E7_ENTRY = cut("E7", "main", "plan_count += 1", "plan_count += 1", "bump",
+               name_map={"plan_count": "st.counts.plan_count"})
+
+
+def test_m5_e7_mapped_field_the_state_class_does_not_declare(tmp_path):
+    state_py = STATE_PY.replace("    plan_count: int = 0\n",
+                                "    plan_total: int = 0\n")
+    r = one(run([E7_ENTRY], {"a.py": E7_OLD},
+                {"a.py": E7_NEW, "state.py": state_py}, tmp_path))
+    assert "map-field-not-declared" in rules(r)
+
+
+def test_m5_spec_without_state_classes(tmp_path):
+    r = one(run([E7_ENTRY], {"a.py": E7_OLD}, {"a.py": E7_NEW}, tmp_path,
+                state=None))
+    assert "state-classes-not-named" in rules(r)
+
+
+def test_m5_group_without_a_class(tmp_path):
+    state = {"file": "state.py", "groups": {"ending": "Ending"}}
+    r = one(run([E7_ENTRY], {"a.py": E7_OLD}, {"a.py": E7_NEW}, tmp_path,
+                state=state))
+    assert "map-field-not-declared" in rules(r)
+
+
+def test_m5_twin_declared_field_is_clean(tmp_path):
+    r = one(run([E7_ENTRY], {"a.py": E7_OLD}, {"a.py": E7_NEW}, tmp_path))
+    assert r.status == "clean", r.errors
+
+
+# --- M7: cuts ----------------------------------------------------------------
+
+E8_OLD = d("""
+    def main(n):
+        total = n
+        label = str(n)
+        total += 1
+        print(label)
+        return total
+    """)
+
+
+def test_m7_e8_live_out_local(tmp_path):
+    new = d("""
+        def step(n):
+            label = str(n)
+
+
+        def main(n):
+            total = n
+            step(n)
+            total += 1
+            print(label)
+            return total
+        """)
+    rs = run([cut("E8", "main", "label = str(n)", "label = str(n)", "step")],
+             {"a.py": E8_OLD}, {"a.py": new}, tmp_path, state=None)
+    r = one(rs)
+    assert "live-out-local" in rules(r)
+    assert any("'label'" in m and "5" in m for _r, m in r.errors)
+    assert mc.exit_code(rs) == 1
+
+
+def test_m7_e8_twin_a_local_not_read_after_the_span(tmp_path):
+    old = E8_OLD.replace("    print(label)\n", "")
+    new = ("def step(n):\n    label = str(n)\n\n\n"
+           "def main(n):\n    total = n\n    step(n)\n    total += 1\n"
+           "    return total\n")
+    r = one(run([cut("E8", "main", "label = str(n)", "label = str(n)", "step")],
+                {"a.py": old}, {"a.py": new}, tmp_path, state=None))
+    assert r.status == "clean", r.errors
+
+
+LOOP_CARRY_OLD = d("""
+    def main(items):
+        note = ""
+        for x in items:
+            print(note)
+            note = str(x)
+        return 0
+    """)
+
+
+def test_m7_live_out_through_the_loop_around_the_span(tmp_path):
+    new = ("def step(x):\n    note = str(x)\n\n\n"
+           "def main(items):\n    note = \"\"\n    for x in items:\n"
+           "        print(note)\n        step(x)\n    return 0\n")
+    r = one(run([cut("L", "main", "note = str(x)", "note = str(x)", "step")],
+                {"a.py": LOOP_CARRY_OLD}, {"a.py": new}, tmp_path, state=None))
+    assert "live-out-local" in rules(r)
+
+
+def test_m7_twin_a_read_before_the_span_outside_any_loop(tmp_path):
+    old = d("""
+        def main(items):
+            note = ""
+            print(note)
+            note = str(items)
+            return 0
+        """)
+    new = ("def step(items):\n    note = str(items)\n\n\n"
+           "def main(items):\n    note = \"\"\n    print(note)\n"
+           "    step(items)\n    return 0\n")
+    r = one(run([cut("L", "main", "note = str(items)", "note = str(items)",
+                     "step")], {"a.py": old}, {"a.py": new}, tmp_path,
+                state=None))
+    assert r.status == "clean", r.errors
+
+
+def test_m7_live_out_through_a_closure(tmp_path):
+    old = d("""
+        def main(n):
+            def show():
+                return label
+            label = str(n)
+            return show()
+        """)
+    new = ("def step(n):\n    label = str(n)\n\n\n"
+           "def main(n):\n    def show():\n        return label\n"
+           "    step(n)\n    return show()\n")
+    r = one(run([cut("C", "main", "label = str(n)", "label = str(n)", "step")],
+                {"a.py": old}, {"a.py": new}, tmp_path, state=None))
+    assert "live-out-local" in rules(r)
+
+
+def test_m7_e9_span_binds_a_name_declared_global_outside(tmp_path):
+    old = d("""
+        COUNTER = 0
+
+
+        def main(n):
+            global COUNTER
+            print(n)
+            COUNTER = n
+            return 0
+        """)
+    new = ("COUNTER = 0\n\n\ndef step(n):\n    COUNTER = n\n\n\n"
+           "def main(n):\n    global COUNTER\n    print(n)\n    step(n)\n"
+           "    return 0\n")
+    r = one(run([cut("E9", "main", "COUNTER = n", "COUNTER = n", "step")],
+                {"a.py": old}, {"a.py": new}, tmp_path, state=None))
+    assert "span-binds-global" in rules(r)
+
+
+def test_m7_e9_twin_without_the_global(tmp_path):
+    old = "def main(n):\n    print(n)\n    counter = n\n    return 0\n"
+    new = ("def step(n):\n    counter = n\n\n\n"
+           "def main(n):\n    print(n)\n    step(n)\n    return 0\n")
+    r = one(run([cut("E9", "main", "counter = n", "counter = n", "step")],
+                {"a.py": old}, {"a.py": new}, tmp_path, state=None))
+    assert r.status == "clean", r.errors
+
+
+E17_OLD = d("""
+    def main(items):
+        for x in items:
+            if x is None:
+                return False
+            if x == 0:
+                break
+            if x < 0:
+                return None
+        return True
+    """)
+
+
+def e17(names):
+    new = ("BREAK = object()\nEARLY = object()\nNONE_OUT = object()\n\n\n"
+           "def check(x):\n    if x is None:\n        return {f}\n"
+           "    if x == 0:\n        return {b}\n    if x < 0:\n"
+           "        return {n}\n").format(f=names[0], b=names[1], n=names[2])
+    entry = cut("E17", "main", "if x is None:", "if x < 0:", "check",
+                break_sentinel=names[1],
+                sentinel_returns={"False": names[0], "None": names[2]})
+    return entry, new
+
+
+def test_m7_e17_three_ways_out_to_one_sentinel(tmp_path):
+    entry, new = e17(["BREAK", "BREAK", "BREAK"])
+    r = one(run([entry], {"a.py": E17_OLD}, {"a.py": new}, tmp_path,
+                state=None))
+    assert "sentinels-not-distinct" in rules(r)
+    assert not r.code_residual
+
+
+def test_m7_e17_twin_three_distinct_sentinels(tmp_path):
+    entry, new = e17(["EARLY", "BREAK", "NONE_OUT"])
+    r = one(run([entry], {"a.py": E17_OLD}, {"a.py": new}, tmp_path,
+                state=None))
+    assert r.status == "clean", (r.errors, r.code_residual)
+
+
+@pytest.mark.parametrize("header, what", [
+    ("@staticmethod\ndef step(n):", "decorators"),
+    ("def step(n=1):", "default of 'n'"),
+    ("async def step(n):", "async"),
+    ("def step(n) -> int:", "return annotation"),
+    ("def step(n: int):", "annotation of 'n'"),
+])
+def test_m7_cut_header_carries_more_than_def_name_params(tmp_path, header,
+                                                         what):
+    new = (header + '\n    print("a", n)\n    print("b", n)\n\n\n'
+           'def main(n):\n    step(n)\n    print("done")\n    return n\n')
+    r = one(run([cut("H", "main", 'print("a"', 'print("b"', "step")],
+                {"a.py": E2_OLD}, {"a.py": new}, tmp_path, state=None))
+    assert "cut-header" in rules(r)
+    assert any(what in m for rule, m in r.errors if rule == "cut-header")
+
+
+def test_m7_cut_header_twin_plain_header_is_clean(tmp_path):
+    new = ('def step(n):\n    print("a", n)\n    print("b", n)\n\n\n'
+           'def main(n):\n    step(n)\n    print("done")\n    return n\n')
+    r = one(run([cut("H", "main", 'print("a"', 'print("b"', "step")],
+                {"a.py": E2_OLD}, {"a.py": new}, tmp_path, state=None))
+    assert r.status == "clean", r.errors
+
+
+def test_m7_whole_body_cut_keeps_the_old_header_parts_only(tmp_path):
+    # FINISH is a whole closure body: `def _finish(st, label):` is clean
+    # (test_clean_closure_cut_drops_nonlocal); a default the closure did
+    # not have is not
+    new = NEW.replace("def _finish(st, label):", "def _finish(st, label='x'):")
+    r = syn(tmp_path, FINISH, new=new)
+    assert "cut-header" in rules(r)
+
+
+# --- M8: class-bound names, and the span's Name loads ----------------------
+
+E4_OLD = d("""
+    class Env:
+        def __init__(self):
+            self.__count = 0
+
+        def bump(self):
+            self.__count += 1
+            return self.__count
+    """)
+
+
+def test_m8_e4_private_attribute_moved_to_another_class(tmp_path):
+    new_b = "class Placement:\n    def bump(self):\n        self.__count += 1\n        return self.__count\n"
+    r = one(run([mv("E4", "a.py", "Env.bump", "b.py", "Placement.bump")],
+                {"a.py": E4_OLD},
+                {"a.py": "class Env:\n    def __init__(self):\n        self.__count = 0\n",
+                 "b.py": new_b}, tmp_path, state=None))
+    assert "class-bound-name" in rules(r)
+
+
+@pytest.mark.parametrize("body", ["return super().bump()",
+                                  "return __class__.__name__"])
+def test_m8_super_and_class_cell_moved_to_another_class(tmp_path, body):
+    old = f"class Env:\n    def bump(self):\n        {body}\n"
+    r = one(run([mv("S", "a.py", "Env.bump", "b.py", "Placement.bump")],
+                {"a.py": old},
+                {"a.py": "class Env:\n    pass\n",
+                 "b.py": f"class Placement:\n    def bump(self):\n        {body}\n"},
+                tmp_path, state=None))
+    assert "class-bound-name" in rules(r)
+
+
+def test_m8_twin_method_without_class_bound_names(tmp_path):
+    old = "class Env:\n    def bump(self):\n        self.count += 1\n        return self.count\n"
+    r = one(run([mv("S", "a.py", "Env.bump", "b.py", "Placement.bump")],
+                {"a.py": old},
+                {"a.py": "class Env:\n    pass\n",
+                 "b.py": "class Placement:\n    def bump(self):\n        self.count += 1\n        return self.count\n"},
+                tmp_path, state=None))
+    assert "class-bound-name" not in rules(r)
+    assert not r.code_residual
+
+
+def test_m8_item6_an_attribute_spelling_is_no_global_read(tmp_path):
+    # the old span spells LIMIT only as an attribute; the old function reads
+    # the global LIMIT elsewhere. A new body reading the bare global LIMIT
+    # is a free-name failure now (before item 6 the NAME token passed it).
+    old = d("""
+        LIMIT = 3
+
+
+        def main(cfg):
+            print(LIMIT)
+            n = cfg.LIMIT
+            print(n)
+            return 0
+        """)
+    new = ("LIMIT = 3\n\n\ndef step(cfg):\n    n = LIMIT\n    print(n)\n\n\n"
+           "def main(cfg):\n    print(LIMIT)\n    step(cfg)\n    return 0\n")
+    r = one(run([cut("I6", "main", "n = cfg.LIMIT", "print(n)", "step")],
+                {"a.py": old}, {"a.py": new}, tmp_path, state=None))
+    assert any("'LIMIT'" in m for rule, m in r.errors if rule == "free-name")

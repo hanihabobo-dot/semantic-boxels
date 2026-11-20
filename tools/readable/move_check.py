@@ -28,10 +28,36 @@ compare it checks:
     decorators;
   - free names (PLAN 24.3 (f)): every name the new function reads is a
     parameter, a local bound before use, a mapped field (through its
-    parameter `st`), a builtin, or a global that the old code also read as
-    a global (and the new module binds it);
+    parameter `st`), a builtin, or a global that the old span also read as
+    a Name (and the new module binds it);
   - for a deletion: the rest of the file is unchanged and no NAME token of
-    the deleted function remains.
+    the deleted function remains;
+  - R's conditions of R_PHASE0 section 6:
+    M1 a whole-file account: for every file the spec touches (the old and
+       new file of each entry, the state class file, `account_files`), the
+       old logical lines minus all old spans against the new logical lines
+       minus all new functions, by the same token keys; what differs is
+       printed as "outside the entries" (exit 3 at least);
+    M2 every comment of a touched file is diffed by one entry (inside the
+       span, the block directly above it, the block that ends it, and for
+       a move the block above the def after blank lines) or by the account;
+    M3 the old spans of a spec are pairwise disjoint, the new functions
+       too, and a new function is the home of one entry;
+    M4 a mapped name is a local of the old container (or a nonlocal of a
+       closure in it, owned by the enclosing function); a mapped global or
+       builtin fails; one target field in two entries comes from one
+       owning scope;
+    M5 the spec names the state classes (`state_classes`) and every mapped
+       target `st.<group>.<field>` is a field the group's class declares;
+    M7 a cut: a name the span binds and the map does not hold is not read
+       after the span in the old function (nor before it inside a loop
+       around the span, nor in a nested function), and is not declared
+       `global` or `nonlocal` outside the span; the sentinels of one entry
+       differ pairwise; the new header is `def name(params):` only (or,
+       for a cut of a whole body, the old header's decorators, defaults,
+       annotations and `async`);
+    M8 cheap flags: a `__x` name or attribute, `super()` without arguments
+       and `__class__` in code whose class changes.
 It writes MIGRATION_MAP.tsv rows and a per-entry line map.
 
 Run (any Python 3.11+, no pybullet, no pipeline import):
@@ -40,8 +66,9 @@ Run (any Python 3.11+, no pybullet, no pipeline import):
       [--json RESULT.json]
   (--old-ref REF --repo DIR reads the old files from a git ref instead.)
 
-Exit codes: 0 clean; 3 only comment residual or warnings (R reads them);
-1 a code residual or a failed rule; 2 the spec or a file could not be read.
+Exit codes: 0 clean; 3 only comment residual, warnings or lines outside the
+entries (R reads them); 1 a code residual or a failed rule; 2 the spec or a
+file could not be read.
 
 f-strings: Python 3.11 tokenizes an f-string as one STRING token, 3.12+
 splits it. This tool merges the 3.12+ pieces back into one STRING token,
@@ -1001,6 +1028,303 @@ def validate_map(name_map: Dict[str, str],
 
 
 # ---------------------------------------------------------------------------
+# R's conditions inside one entry: M4 (mapped names), M7 (cuts), M8 (flags)
+# ---------------------------------------------------------------------------
+
+def _scope_chain(src: Source, qualname: str):
+    """[(def node, its symbol table)] from the outermost def to `qualname`."""
+    top = symtable.symtable(src.text, src.path, "exec")
+    path = def_path(src.tree, qualname)
+    return [(path[k], find_table(top, path[:k + 1]))
+            for k in range(len(path))]
+
+
+def map_owner(src: Source, container_q: str,
+              name: str) -> Tuple[Optional[str], str]:
+    """M4: the qualname of the function scope that owns `name` as a local,
+    seen from the old container (a nonlocal or free name of a closure is
+    owned by the enclosing function that binds it). (None, why) for a
+    global, a builtin, or a name the container does not know."""
+    chain = _scope_chain(src, container_q)
+    names = [n.name for n, _t in chain]
+    for k in range(len(chain) - 1, -1, -1):
+        node, table = chain[k]
+        if table is None:
+            return None, "the symbol table of the old function is not found"
+        inner = k == len(chain) - 1
+        if not inner and _st_type(table) == "class":
+            continue          # a class body is no enclosing scope
+        try:
+            sym = table.lookup(name)
+        except KeyError:
+            if inner:
+                return None, (f"{name!r} is not a name of the old function "
+                              f"{container_q}")
+            continue
+        if sym.is_global():
+            return None, (f"{name!r} is a module global or a builtin in the "
+                          f"old code, not a local of {container_q}")
+        nonlocal_ = getattr(sym, "is_nonlocal", lambda: False)()
+        if sym.is_free() or nonlocal_:
+            continue
+        if sym.is_local() or sym.is_parameter():
+            return ".".join(names[:k + 1]), ""
+        return None, f"{name!r}: not a local of {names[k]}"
+    return None, f"{name!r} is bound by no enclosing function"
+
+
+def _span_binds(stmts: Sequence[ast.stmt]) -> Tuple[Set[str], Set[str]]:
+    """(names the statements bind in their own scope, names they declare
+    global or nonlocal). Nested scopes are not entered, but a walrus inside
+    a comprehension binds in this scope and is taken."""
+    binds: Set[str] = set()
+    declared: Set[str] = set()
+
+    def visit(n: ast.AST) -> None:
+        for c in ast.iter_child_nodes(n):
+            if isinstance(c, (ast.Global, ast.Nonlocal)):
+                declared.update(c.names)
+            elif isinstance(c, _DEF):
+                binds.add(c.name)
+            elif isinstance(c, ast.Lambda):
+                continue
+            elif isinstance(c, _COMPS):
+                for w in ast.walk(c):
+                    if isinstance(w, ast.NamedExpr) \
+                            and isinstance(w.target, ast.Name):
+                        binds.add(w.target.id)
+            elif isinstance(c, ast.Name) and isinstance(c.ctx, (ast.Store,
+                                                                ast.Del)):
+                binds.add(c.id)
+            elif isinstance(c, ast.alias):
+                if c.name != "*":
+                    binds.add((c.asname or c.name).split(".")[0])
+            elif isinstance(c, ast.ExceptHandler):
+                if c.name:
+                    binds.add(c.name)
+                visit(c)
+            elif hasattr(ast, "MatchAs") and isinstance(
+                    c, (ast.MatchAs, ast.MatchStar)):
+                if c.name:
+                    binds.add(c.name)
+                visit(c)
+            elif hasattr(ast, "MatchMapping") and isinstance(
+                    c, ast.MatchMapping):
+                if c.rest:
+                    binds.add(c.rest)
+                visit(c)
+            else:
+                visit(c)
+
+    for s in stmts:
+        visit(ast.Module(body=[s], type_ignores=[]))
+    return binds, declared
+
+
+def _declared_outside(container: ast.AST, span: Span) -> Dict[str, int]:
+    """`global` and `nonlocal` names of the container's own scope declared
+    outside the span: name -> line."""
+    out: Dict[str, int] = {}
+    inside = {id(s) for s in span.stmts}
+
+    def visit(n: ast.AST) -> None:
+        for c in ast.iter_child_nodes(n):
+            if id(c) in inside or isinstance(c, _SCOPES + _COMPS):
+                continue
+            if isinstance(c, (ast.Global, ast.Nonlocal)):
+                for nm in c.names:
+                    out.setdefault(nm, c.lineno)
+            visit(c)
+
+    for s in container.body:
+        if id(s) in inside:
+            continue
+        if isinstance(s, (ast.Global, ast.Nonlocal)):
+            for nm in s.names:
+                out.setdefault(nm, s.lineno)
+        elif not isinstance(s, _SCOPES):
+            visit(s)
+    return out
+
+
+def _reads_outside(container: ast.AST, span: Span,
+                   names: Set[str]) -> Dict[str, List[int]]:
+    """M7: reads of `names` in the old container outside the span that can
+    see a value the span bound: a read after the span, a read before it
+    inside a loop around the span (the next pass sees it), and any read in
+    a nested function or class of the container (it may run later). Names
+    a nested scope binds itself are not its reads. Reads inside f-strings
+    count."""
+    lo, hi = span.first, span.last
+    inside = {id(s) for s in span.stmts}
+    hits: Dict[str, List[int]] = {}
+
+    def hit(name: str, row: int, shadow: frozenset, nested: bool,
+            loops: list) -> None:
+        if name not in names or name in shadow:
+            return
+        if nested or row > hi or any(lp.lineno <= lo and lp.end_lineno >= hi
+                                     for lp in loops):
+            hits.setdefault(name, []).append(row)
+
+    def visit(n: ast.AST, shadow: frozenset, nested: bool,
+              loops: list) -> None:
+        if id(n) in inside:
+            return
+        if isinstance(n, ast.Name):
+            if isinstance(n.ctx, (ast.Load, ast.Del)):
+                hit(n.id, n.lineno, shadow, nested, loops)
+            return
+        if isinstance(n, ast.AugAssign) and isinstance(n.target, ast.Name):
+            hit(n.target.id, n.target.lineno, shadow, nested, loops)
+            visit(n.value, shadow, nested, loops)
+            return
+        if isinstance(n, ast.Lambda):
+            for d in n.args.defaults + [d for d in n.args.kw_defaults if d]:
+                visit(d, shadow, nested, loops)
+            visit(n.body, shadow | _arg_names(n.args), True, loops)
+            return
+        if isinstance(n, _FUNC):
+            for d in n.decorator_list + n.args.defaults \
+                    + [d for d in n.args.kw_defaults if d]:
+                visit(d, shadow, nested, loops)
+            inner = shadow | _arg_names(n.args) | _local_binds(n)
+            for s in n.body:
+                visit(s, inner, True, loops)
+            return
+        if isinstance(n, ast.ClassDef):
+            for d in n.decorator_list + n.bases:
+                visit(d, shadow, nested, loops)
+            for s in n.body:
+                visit(s, shadow, True, loops)
+            return
+        if isinstance(n, _COMPS):
+            gens = n.generators
+            visit(gens[0].iter, shadow, nested, loops)
+            inner = shadow | set().union(*[_target_names(g.target)
+                                           for g in gens])
+            for k, g in enumerate(gens):
+                if k:
+                    visit(g.iter, inner, nested, loops)
+                for c in g.ifs:
+                    visit(c, inner, nested, loops)
+            if isinstance(n, ast.DictComp):
+                visit(n.key, inner, nested, loops)
+                visit(n.value, inner, nested, loops)
+            else:
+                visit(n.elt, inner, nested, loops)
+            return
+        sub_loops = loops + [n] if isinstance(n, _LOOPS) else loops
+        for c in ast.iter_child_nodes(n):
+            visit(c, shadow, nested, sub_loops)
+
+    for s in container.body:
+        visit(s, frozenset(), False, [])
+    return hits
+
+
+def _param_table(fn: ast.AST) -> Dict[str, Tuple[Optional[str],
+                                                 Optional[str]]]:
+    """name -> (annotation dump, default dump) of every parameter."""
+    a = fn.args
+    pos = a.posonlyargs + a.args
+    out: Dict[str, Tuple[Optional[str], Optional[str]]] = {}
+    pad = [None] * (len(pos) - len(a.defaults)) + list(a.defaults)
+    dump = (lambda x: ast.dump(x) if x is not None else None)
+    for arg, d in zip(pos, pad):
+        out[arg.arg] = (dump(arg.annotation), dump(d))
+    for arg, d in zip(a.kwonlyargs, a.kw_defaults):
+        out[arg.arg] = (dump(arg.annotation), dump(d))
+    for arg in (a.vararg, a.kwarg):
+        if arg is not None:
+            out[arg.arg] = (dump(arg.annotation), None)
+    return out
+
+
+def header_problems(new_fn: ast.AST, ref: Optional[ast.AST]) -> List[str]:
+    """M7: what a cut's new header carries beyond `def name(params):`.
+    With `ref` (a cut of a whole function body: a closure becoming a module
+    function) the old header's decorators, return annotation, `async` and
+    each kept parameter's annotation and default are allowed, nothing
+    more; a parameter the old header lacks (`st`) carries neither."""
+    probs: List[str] = []
+    is_async = isinstance(new_fn, ast.AsyncFunctionDef)
+    if is_async != (isinstance(ref, ast.AsyncFunctionDef) if ref else False):
+        probs.append("async" if is_async else "async dropped")
+    dec = [ast.dump(d) for d in new_fn.decorator_list]
+    if dec != ([ast.dump(d) for d in ref.decorator_list] if ref else []):
+        probs.append("decorators " + (", ".join(ast.unparse(d) for d in
+                                                 new_fn.decorator_list)
+                                       or "dropped"))
+    ret = ast.dump(new_fn.returns) if new_fn.returns is not None else None
+    ref_ret = (ast.dump(ref.returns) if ref is not None
+               and ref.returns is not None else None)
+    if ret != ref_ret:
+        probs.append("return annotation "
+                     + (ast.unparse(new_fn.returns) if new_fn.returns
+                        is not None else "dropped"))
+    tp = [ast.dump(t) for t in getattr(new_fn, "type_params", [])]
+    if tp != ([ast.dump(t) for t in getattr(ref, "type_params", [])]
+              if ref else []):
+        probs.append("type parameters")
+    old_params = _param_table(ref) if ref is not None else {}
+    for name, (ann, dflt) in _param_table(new_fn).items():
+        want = old_params.get(name, (None, None))
+        if ann != want[0]:
+            probs.append(f"annotation of {name!r}")
+        if dflt != want[1]:
+            probs.append(f"default of {name!r}")
+    return probs
+
+
+def _enclosing_class(tree: ast.Module, qualname: str) -> Optional[str]:
+    """The qualname of the innermost class that holds the def `qualname`
+    (its nearest def ancestor that is a class), or None."""
+    path = def_path(tree, qualname)
+    for k in range(len(path) - 2, -1, -1):
+        if isinstance(path[k], ast.ClassDef):
+            return ".".join(p.name for p in path[:k + 1])
+        if isinstance(path[k], _FUNC):
+            # a def inside a function: zero-argument super and __class__
+            # still see the class around that function
+            continue
+    return None
+
+
+def class_bound_uses(stmts: Sequence[ast.AST]) -> List[str]:
+    """M8 (E4): names whose meaning comes from the class the code sits in:
+    a private `__x` name or attribute (mangled with the class name),
+    `super()` without arguments and `__class__`. Nested classes are not
+    entered (they bind their own)."""
+    out: List[str] = []
+
+    def private(s: str) -> bool:
+        return s.startswith("__") and not s.endswith("__")
+
+    def visit(n: ast.AST) -> None:
+        if isinstance(n, ast.ClassDef):
+            return
+        if isinstance(n, ast.Attribute) and private(n.attr):
+            out.append(f"attribute .{n.attr} at old line {n.lineno}")
+        elif isinstance(n, ast.Name) and (private(n.id)
+                                          or n.id == "__class__"):
+            out.append(f"name {n.id} at old line {n.lineno}")
+        elif isinstance(n, ast.Call) and isinstance(n.func, ast.Name) \
+                and n.func.id == "super" and not n.args and not n.keywords:
+            out.append(f"super() without arguments at old line {n.lineno}")
+        for c in ast.iter_child_nodes(n):
+            visit(c)
+
+    for s in stmts:
+        if isinstance(s, _FUNC):
+            for c in ast.iter_child_nodes(s):
+                visit(c)
+        else:
+            visit(s)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Entry check
 # ---------------------------------------------------------------------------
 
@@ -1022,12 +1346,21 @@ class EntryResult:
     info: List[str] = field(default_factory=list)
     rewrites_used: Dict[str, int] = field(default_factory=dict)
     line_map: List[Tuple[int, int]] = field(default_factory=list)
+    # M1: code lines outside every entry (kind "account" only)
+    outside: List[str] = field(default_factory=list)
+    # what the entry owns, for the spec-level checks (M1 to M4)
+    own_old: Optional[Tuple[int, int]] = field(default=None, repr=False)
+    own_new: Optional[Tuple[int, int]] = field(default=None, repr=False)
+    own_old_comments: Set[int] = field(default_factory=set, repr=False)
+    own_new_comments: Set[int] = field(default_factory=set, repr=False)
+    map_owners: Dict[str, Tuple[str, str]] = field(default_factory=dict,
+                                                   repr=False)
 
     @property
     def status(self) -> str:
         if self.errors or self.code_residual:
             return "residual"
-        if self.comment_residual or self.warnings:
+        if self.comment_residual or self.warnings or self.outside:
             return "review"
         return "clean"
 
@@ -1036,6 +1369,8 @@ class EntryResult:
         out = [r for r, _m in self.errors]
         if self.code_residual:
             out.append("token-mismatch")
+        if self.outside:
+            out.append("outside-the-entries")
         return sorted(set(out))
 
 
@@ -1065,6 +1400,59 @@ def _leading_comments(src: Source, first: int) -> List[Tuple[int, str]]:
     r = first - 1
     while r > 0 and r in text and r not in code_rows:
         out.append((r, text[r]))
+        r -= 1
+    return out[::-1]
+
+
+def _row_indent(src: Source, row: int) -> int:
+    line = src.line(row)
+    return len(line) - len(line.lstrip())
+
+
+def _trailing_comments(src: Source, last: int,
+                       body_col: int) -> List[Tuple[int, str]]:
+    """M2: the comment block that ends a span: comment-only lines directly
+    below row `last` (no blank line between), indented at least as the
+    span's statements, when the code line after them (or the end of the
+    file) is indented less, i.e. the block closes the span's block. A
+    comment followed by a sibling statement leads that statement and is
+    not taken."""
+    text = {r: t for r, t in src.comments}
+    code_rows = _code_rows(src)
+    out: List[Tuple[int, str]] = []
+    r = last + 1
+    while r <= len(src.lines) and r in text and r not in code_rows \
+            and _row_indent(src, r) >= body_col:
+        out.append((r, text[r]))
+        r += 1
+    if not out:
+        return []
+    while r <= len(src.lines) and r not in code_rows:
+        r += 1
+    if r <= len(src.lines) and _row_indent(src, r) >= body_col:
+        return []
+    return out
+
+
+def _detached_leading(src: Source, first: int,
+                      def_col: int) -> List[Tuple[int, str]]:
+    """M2 for a moved def: the comment lines above the def's contiguous
+    leading block, across blank lines, up to the code line before, that
+    stand at the def's own indentation (a deeper comment there ends the
+    def before and is that def's trailing block)."""
+    text = {r: t for r, t in src.comments}
+    code_rows = _code_rows(src)
+    r = first - 1
+    while r > 0 and r in text and r not in code_rows:
+        r -= 1
+    out: List[Tuple[int, str]] = []
+    while r > 0 and r not in code_rows:
+        if r in text:
+            if _row_indent(src, r) != def_col:
+                break
+            out.append((r, text[r]))
+        elif src.line(r).strip():
+            break
         r -= 1
     return out[::-1]
 
@@ -1189,6 +1577,45 @@ def _rewrites(src: Source, span: Span, entry: dict, res: EntryResult,
     return rw
 
 
+def _check_cut_bindings(res: EntryResult, entry: dict, span: Span,
+                        name_map: Dict[str, str]) -> None:
+    """M7 for a cut: distinct sentinels (E17), no live-out local (E8), no
+    binding of a name the container declares global or nonlocal (E9)."""
+    sentinels: List[Tuple[str, str]] = []
+    if entry.get("break_sentinel"):
+        sentinels.append(("break", entry["break_sentinel"]))
+    for k, v in (entry.get("sentinel_returns") or {}).items():
+        sentinels.append((f"return {k}", v))
+    seen: Dict[str, str] = {}
+    for what, name in sentinels:
+        if name in seen:
+            res.errors.append((
+                "sentinels-not-distinct",
+                f"{seen[name]} and {what} both become `return {name}`: the "
+                f"caller can no longer tell the two ways out apart"))
+        else:
+            seen[name] = what
+    if list(span.stmts) == list(span.container.body):
+        return       # a whole body: its locals were never visible outside
+    binds, declared_in = _span_binds(span.stmts)
+    free = binds - set(name_map) - declared_in
+    declared_out = _declared_outside(span.container, span)
+    for name in sorted(free & set(declared_out)):
+        res.errors.append((
+            "span-binds-global",
+            f"the span binds {name!r}, which the old function declares "
+            f"global or nonlocal at old line {declared_out[name]}: in the "
+            f"new function it would be a local and the old binding is lost"))
+    reads = _reads_outside(span.container, span, free - set(declared_out))
+    for name in sorted(reads):
+        rows = ", ".join(str(r) for r in sorted(set(reads[name])))
+        res.errors.append((
+            "live-out-local",
+            f"the span binds {name!r} (not in the name map) and the old "
+            f"function reads it outside the span (old lines {rows}): in the "
+            f"new function the binding stays local and is lost"))
+
+
 def check_entry(entry: dict, read_old, read_new,
                 groups: Dict[str, Optional[List[str]]]) -> EntryResult:
     for k in ("id", "kind", "old"):
@@ -1221,19 +1648,50 @@ def check_entry(entry: dict, read_old, read_new,
         res.errors.append((rf.rule, rf.message))
         return res
     res.old_lines = f"{span.first}-{span.last}"
+    res.own_old = (span.first, span.last)
     # B2: the comment block directly above the span is diffed with the span
     # (a delete diffs every comment outside the span with the new file).
-    old_lead = [] if kind == "delete" else _leading_comments(old_src, span.first)
-    lead_rows = {r for r, _t in old_lead}
+    # M2: so are the block that ends the span and, for a move, the block
+    # above the def across blank lines; every other comment of the file is
+    # the account's (run_spec).
+    old_inside = _comments_in(old_src, span.first, span.last)
+    if kind == "delete":
+        old_lead: List[Tuple[int, str]] = []
+        old_trail: List[Tuple[int, str]] = []
+    else:
+        old_lead = _leading_comments(old_src, span.first)
+        body0 = span.stmts[0].body[0] if span.whole_def else span.stmts[0]
+        old_trail = _trailing_comments(
+            old_src, span.last, old_src.char_col(body0.lineno,
+                                                 body0.col_offset))
+        if kind == "move":
+            old_lead = _detached_leading(
+                old_src, span.first, _row_indent(old_src, span.first)) \
+                + old_lead
+    owned_old = old_lead + old_inside + old_trail
+    res.own_old_comments = {r for r, _t in owned_old}
     for r in _adjacent_comments(old_src, span.first, span.last):
-        if r in lead_rows:
+        if r in res.own_old_comments:
             continue
         res.info.append(f"comment adjacent to the old span, outside it "
-                        f"(check where it went): {old_src.path}:{r}: "
+                        f"(the file account diffs it): {old_src.path}:{r}: "
                         f"{old_src.line(r).strip()}")
     if kind == "delete":
         _check_delete(res, entry, old_src, new_src, span, read_new)
         return res
+    container_q = _qualname_of(old_src.tree, span.container)
+    # M4: every mapped name is a local of the old container (or a nonlocal
+    # of a closure in it); its owning scope is kept for the spec-level test
+    # that one field comes from one scope.
+    for name, target in name_map.items():
+        owner, why = map_owner(old_src, container_q, name)
+        if owner is None:
+            res.errors.append(("map-not-local", f"{name!r} -> {target!r}: "
+                               f"{why}"))
+        else:
+            res.map_owners[target] = (name, f"{old['file']}:{owner}")
+    if kind == "cut":
+        _check_cut_bindings(res, entry, span, name_map)
     rw = _rewrites(old_src, span, entry, res, name_map)
     old_ll = _lines_in(old_src, span.first, span.last)
     base_old = old_ll[0].depth
@@ -1244,6 +1702,11 @@ def check_entry(entry: dict, read_old, read_new,
     except SpecError as exc:
         res.errors.append(("new-function-missing", str(exc)))
         return res
+    if not isinstance(new_fn, _FUNC) and kind == "cut":
+        res.errors.append(("new-function-missing",
+                           f"{new['qualname']!r} is a class, not a function"))
+        return res
+    res.own_new = (first_line(new_fn), new_fn.end_lineno)
     if kind == "move":
         n0, n1 = first_line(new_fn), new_fn.end_lineno
         new_ll = _lines_in(new_src, n0, n1)
@@ -1255,8 +1718,22 @@ def check_entry(entry: dict, read_old, read_new,
         n1 = new_fn.end_lineno
         new_ll = _lines_in(new_src, n0, n1)
         c0 = header_end + 1
-        res.info.append("new header (not compared; the free-name check "
-                        "reads its parameters): "
+        # M7: the header of a cut adds nothing that runs at def time or
+        # changes the call: `def name(params):` only, or for a cut of a
+        # whole function body the old function's own header parts
+        whole_body = list(span.stmts) == list(span.container.body) \
+            and isinstance(span.container, _FUNC)
+        probs = header_problems(new_fn, span.container if whole_body
+                                else None)
+        if probs:
+            res.errors.append((
+                "cut-header",
+                f"the new header of a cut is `def name(params):` only"
+                + (" (with the old header's own parts)" if whole_body
+                   else "") + "; it carries: " + "; ".join(probs)))
+        res.info.append("new header (compared for decorators, defaults, "
+                        "annotations and async; the free-name check reads "
+                        "its parameters): "
                         + " ".join(new_src.line(r).strip() for r in
                                    range(first_line(new_fn), header_end + 1)))
     res.new_lines = f"{n0}-{n1}"
@@ -1266,30 +1743,46 @@ def check_entry(entry: dict, read_old, read_new,
     res.rewrites_used = dict(rw.used)
     # B2: the old span's leading comment block counts as kept when it stands
     # directly above the new def or inside the new function; dropped, it is
-    # a removed comment (residual).
+    # a removed comment (residual). M2: the same for the trailing block and
+    # a move's block above the def across blank lines.
     new_lead = _leading_comments(new_src, first_line(new_fn))
-    new_lead_rows = {r for r, _t in new_lead}
-    _diff_comments(res, old_lead + _comments_in(old_src, span.first, span.last),
-                   new_lead + _comments_in(new_src, c0, n1))
+    if kind == "move":
+        new_lead = _detached_leading(new_src, first_line(new_fn),
+                                     _row_indent(new_src, first_line(new_fn))) \
+            + new_lead
+    nbody0 = new_fn.body[0]
+    new_trail = _trailing_comments(
+        new_src, n1, new_src.char_col(nbody0.lineno, nbody0.col_offset))
+    owned_new = new_lead + _comments_in(new_src, c0, n1) + new_trail
+    res.own_new_comments = {r for r, _t in owned_new}
+    _diff_comments(res, owned_old, owned_new)
     for r in _adjacent_comments(new_src, first_line(new_fn), n1):
-        if r in new_lead_rows:
+        if r in res.own_new_comments:
             continue
         res.info.append(f"comment adjacent to the new function, outside it: "
                         f"{new_src.path}:{r}: {new_src.line(r).strip()}")
-    # free names
-    old_names = {t.string for ll in old_ll for t in ll.toks
-                 if t.type == "NAME"}
-    for ll in old_ll:          # names inside f-strings of the span
-        for t in ll.toks:
-            if t.type == "STRING":
-                try:
-                    for n in ast.walk(ast.parse("(" + t.string + ")",
-                                                mode="eval")):
-                        if isinstance(n, ast.Name):
-                            old_names.add(n.id)
-                except SyntaxError:
-                    pass
-    container_q = _qualname_of(old_src.tree, span.container)
+    # M8 (E4): code whose class changes must not lean on the class
+    old_cls_key = _enclosing_class(old_src.tree, container_q)
+    new_cls_key = _enclosing_class(new_src.tree, new["qualname"])
+    if (old["file"], old_cls_key) != (new_file, new_cls_key) \
+            and (old_cls_key or new_cls_key):
+        for use in class_bound_uses(span.stmts):
+            res.errors.append((
+                "class-bound-name",
+                f"{use}: its meaning comes from the class, and the class "
+                f"changes ({old['file']}:{old_cls_key or '(none)'} -> "
+                f"{new_file}:{new_cls_key or '(none)'})"))
+    # free names. REVIEW_PHASE0 item 6 narrowed (M8): the globals the old
+    # span read are its Name loads (and augmented targets), not every NAME
+    # token (attribute and keyword spellings are no reads of a global).
+    old_names: Set[str] = set()
+    for s in span.stmts:
+        for n in ast.walk(s):
+            if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load):
+                old_names.add(n.id)
+            elif isinstance(n, ast.AugAssign) \
+                    and isinstance(n.target, ast.Name):
+                old_names.add(n.target.id)
     old_cls = None
     parts = old["qualname"].split(".")
     if kind == "move" and len(parts) >= 2:
@@ -1410,17 +1903,244 @@ def file_reader(root: Optional[str], ref: Optional[str], repo: Optional[str]):
     return read
 
 
+def _overlap(a: Tuple[int, int], b: Tuple[int, int]) -> bool:
+    return a[0] <= b[1] and b[0] <= a[1]
+
+
+def check_disjoint(results: List[EntryResult]) -> None:
+    """M3 (E6): old spans of one spec are pairwise disjoint, new functions
+    too, and a new function is the home of one entry."""
+    for i, a in enumerate(results):
+        for b in results[i + 1:]:
+            if a.own_old and b.own_old and a.old_file == b.old_file \
+                    and _overlap(a.own_old, b.own_old):
+                for x, y in ((a, b), (b, a)):
+                    x.errors.append((
+                        "spans-overlap",
+                        f"old span {x.old_file}:{x.own_old[0]}-"
+                        f"{x.own_old[1]} overlaps entry {y.entry_id} "
+                        f"({y.own_old[0]}-{y.own_old[1]}): one old line "
+                        f"has one new home"))
+            if a.kind != "delete" and b.kind != "delete" \
+                    and a.new_file == b.new_file and (
+                        a.new_qualname == b.new_qualname
+                        or (a.own_new and b.own_new
+                            and _overlap(a.own_new, b.own_new))):
+                for x, y in ((a, b), (b, a)):
+                    x.errors.append((
+                        "new-home-shared",
+                        f"{x.new_file}:{x.new_qualname} is also the home "
+                        f"(or holds the home) of entry {y.entry_id}: a new "
+                        f"function is the home of one entry"))
+
+
+def check_map_owners(results: List[EntryResult]) -> None:
+    """M4 (F4x): one target field in two entries comes from one owning
+    scope (the same local of the same old function)."""
+    by_target: Dict[str, List[Tuple[EntryResult, str, str]]] = {}
+    for r in results:
+        for target, (name, owner) in r.map_owners.items():
+            by_target.setdefault(target, []).append((r, name, owner))
+    for target, uses in sorted(by_target.items()):
+        owners = sorted({o for _r, _n, o in uses})
+        if len(owners) > 1:
+            for r, name, owner in uses:
+                r.errors.append((
+                    "map-field-two-scopes",
+                    f"{target!r} is mapped from {name!r} of {owner} here and "
+                    f"from locals of {', '.join(o for o in owners if o != owner)}"
+                    f" in other entries: two variables would become one "
+                    f"field"))
+
+
+def _state_fields(src: Source, cls: ast.ClassDef, depth: int = 0) -> Set[str]:
+    """Fields a state class declares: names assigned or annotated in its
+    body, `self.<x>` stores in its methods, and the same of a base class
+    of the same file."""
+    out: Set[str] = set()
+    for s in cls.body:
+        if isinstance(s, ast.AnnAssign) and isinstance(s.target, ast.Name):
+            out.add(s.target.id)
+        elif isinstance(s, ast.Assign):
+            for t in s.targets:
+                out |= _target_names(t)
+    for n in ast.walk(cls):
+        if isinstance(n, ast.Attribute) and isinstance(n.ctx, ast.Store) \
+                and isinstance(n.value, ast.Name) and n.value.id == "self":
+            out.add(n.attr)
+    if depth < 8:
+        for b in cls.bases:
+            if isinstance(b, ast.Name):
+                try:
+                    base = find_qualname(src.tree, b.id)
+                except SpecError:
+                    continue
+                if isinstance(base, ast.ClassDef):
+                    out |= _state_fields(src, base, depth + 1)
+    return out
+
+
+def check_state_classes(spec: dict, results: List[EntryResult],
+                        read_new) -> None:
+    """M5 (E7): the spec names the state classes, `state_classes`:
+    {"file": ..., "groups": {group: class qualname}, "root": optional class
+    that must declare each group}; every mapped target st.<group>.<field>
+    is a field its group's class declares."""
+    entries = spec["entries"]
+    mapped = [(e, r) for e, r in zip(entries, results) if e.get("name_map")]
+    if not mapped:
+        return
+    sc = spec.get("state_classes")
+    if not isinstance(sc, dict) or not sc.get("file") \
+            or not isinstance(sc.get("groups"), dict):
+        for _e, r in mapped:
+            r.errors.append((
+                "state-classes-not-named",
+                "the entry maps names to fields, but the spec names no "
+                "state classes (`state_classes`: file, groups, optional "
+                "root)"))
+        return
+    try:
+        src = read_new(sc["file"])
+    except SpecError as exc:
+        for _e, r in mapped:
+            r.errors.append(("state-class-missing", str(exc)))
+        return
+    fields: Dict[str, Optional[Set[str]]] = {}
+    for group, qual in sc["groups"].items():
+        try:
+            cls = find_qualname(src.tree, qual)
+            fields[group] = (_state_fields(src, cls)
+                             if isinstance(cls, ast.ClassDef) else None)
+        except SpecError:
+            fields[group] = None
+    root_fields = None
+    if sc.get("root"):
+        try:
+            root = find_qualname(src.tree, sc["root"])
+            root_fields = (_state_fields(src, root)
+                           if isinstance(root, ast.ClassDef) else set())
+        except SpecError:
+            root_fields = set()
+    for e, r in mapped:
+        for name, target in e["name_map"].items():
+            parts = str(target).split(".")
+            if len(parts) != 3:
+                r.errors.append(("map-field-not-declared",
+                                 f"{target!r}: a state target is "
+                                 f"st.<group>.<field>"))
+                continue
+            group, fld = parts[1], parts[2]
+            if group not in fields:
+                r.errors.append(("map-field-not-declared",
+                                 f"{target!r}: the spec's state_classes "
+                                 f"name no class for group {group!r}"))
+            elif fields[group] is None:
+                r.errors.append(("state-class-missing",
+                                 f"{target!r}: class "
+                                 f"{sc['groups'][group]!r} of group "
+                                 f"{group!r} is not in {sc['file']}"))
+            elif fld not in fields[group]:
+                r.errors.append(("map-field-not-declared",
+                                 f"{target!r}: class "
+                                 f"{sc['groups'][group]} ({sc['file']}) "
+                                 f"declares no field {fld!r}"))
+            if root_fields is not None and group not in root_fields:
+                r.errors.append(("map-field-not-declared",
+                                 f"{target!r}: the root class "
+                                 f"{sc['root']} declares no group "
+                                 f"{group!r}"))
+
+
+def _read_or_empty(read, rel: str) -> Source:
+    try:
+        return read(rel)
+    except SpecError:
+        return scan_source("", f"{rel} (absent)")
+
+
+def account_files(spec: dict, results: List[EntryResult], read_old,
+                  read_new) -> List[EntryResult]:
+    """M1 and M2: one account per touched file. The old logical lines
+    minus every old span against the new logical lines minus every new
+    function, by the same token keys and no rewrite; the comments no entry
+    owns, old against new. Each difference is printed "outside the
+    entries" (status review, exit 3), so every changed line of the phase is
+    either matched by an entry or printed for R."""
+    files: List[str] = []
+    for r in results:
+        for f in (r.old_file, r.new_file):
+            if f and f not in files:
+                files.append(f)
+    sc = spec.get("state_classes")
+    if isinstance(sc, dict) and sc.get("file") and sc["file"] not in files:
+        files.append(sc["file"])
+    for f in spec.get("account_files", []) or []:
+        if f not in files:
+            files.append(f)
+    out: List[EntryResult] = []
+    for f in sorted(files):
+        old_src = _read_or_empty(read_old, f)
+        new_src = _read_or_empty(read_new, f)
+        acc = EntryResult(f"outside:{f}", "account", "", f, "", f, "")
+        old_ex = [r.own_old for r in results
+                  if r.old_file == f and r.own_old]
+        new_ex = [r.own_new for r in results
+                  if r.kind != "delete" and r.new_file == f and r.own_new]
+        old_ll = [ll for ll in old_src.logical
+                  if not any(a <= ll.start <= b for a, b in old_ex)]
+        new_ll = [ll for ll in new_src.logical
+                  if not any(a <= ll.start <= b for a, b in new_ex)]
+        tmp = EntryResult(acc.entry_id, "account", "", f, "", f, "")
+        _diff_code(tmp, old_src, old_ll, keys_for(old_src, old_ll, 0, None),
+                   new_src, new_ll, keys_for(new_src, new_ll, 0, None))
+        acc.outside = ["outside the entries, " + c for c in tmp.code_residual]
+        old_owned: Set[int] = set()
+        new_owned: Set[int] = set()
+        for r in results:
+            if r.old_file == f:
+                old_owned |= r.own_old_comments
+            if r.kind != "delete" and r.new_file == f:
+                new_owned |= r.own_new_comments
+        _diff_comments(acc, [(r, t) for r, t in old_src.comments
+                             if r not in old_owned],
+                       [(r, t) for r, t in new_src.comments
+                        if r not in new_owned])
+        acc.comment_residual = ["outside the entries, " + c
+                                for c in acc.comment_residual]
+        acc.old_lines = f"{len(old_ll)} lines outside the old spans"
+        acc.new_lines = f"{len(new_ll)} lines outside the new functions"
+        out.append(acc)
+    return out
+
+
 def run_spec(spec: dict, read_old, read_new) -> List[EntryResult]:
+    """The entries, then the spec-level checks M3 to M5 on them, then one
+    account per touched file (kind "account", after the entries)."""
     groups = spec.get("groups") or DEFAULT_GROUPS
-    return [check_entry(e, read_old, read_new, groups)
-            for e in spec["entries"]]
+    results = [check_entry(e, read_old, read_new, groups)
+               for e in spec["entries"]]
+    check_disjoint(results)
+    check_map_owners(results)
+    check_state_classes(spec, results, read_new)
+    return results + account_files(spec, results, read_old, read_new)
+
+
+def entry_results(results: List[EntryResult]) -> List[EntryResult]:
+    return [r for r in results if r.kind != "account"]
 
 
 def format_result(res: EntryResult) -> str:
-    out = [f"entry {res.entry_id} [{res.phase}] {res.kind}: "
-           f"{res.old_file}:{res.old_qualname} [{res.old_lines or '?'}] -> "
-           f"{res.new_file or '(none)'}:{res.new_qualname or '(none)'} "
-           f"[{res.new_lines or '-'}]"]
+    if res.kind == "account":
+        out = [f"account {res.old_file}: everything outside the entries "
+               f"({res.old_lines}; {res.new_lines})"]
+    else:
+        out = [f"entry {res.entry_id} [{res.phase}] {res.kind}: "
+               f"{res.old_file}:{res.old_qualname} [{res.old_lines or '?'}]"
+               f" -> {res.new_file or '(none)'}:"
+               f"{res.new_qualname or '(none)'} [{res.new_lines or '-'}]"]
+    for r in res.outside:
+        out.append("  OUTSIDE " + r.replace("\n", "\n  "))
     if res.rewrites_used:
         out.append("  rewrites used: " + ", ".join(
             f"{k} x{v}" for k, v in sorted(res.rewrites_used.items())))
@@ -1434,8 +2154,8 @@ def format_result(res: EntryResult) -> str:
         out.append(f"  WARN {w}")
     for i in res.info:
         out.append(f"  INFO {i}")
-    verdict = {"clean": "clean", "review": "review (comments or warnings "
-               "only; R reads them)", "residual": "RESIDUAL ("
+    verdict = {"clean": "clean", "review": "review (comments, warnings or "
+               "lines outside the entries only; R reads them)", "residual": "RESIDUAL ("
                + ", ".join(res.rules_failed) + ")"}[res.status]
     out.append(f"  RESULT: {verdict}")
     return "\n".join(out)
@@ -1447,6 +2167,7 @@ MAP_HEADER = ["old_file", "old_qualname", "new_file", "new_qualname",
 
 def write_map(path: str, results: List[EntryResult]) -> None:
     rows: List[List[str]] = []
+    results = entry_results(results)
     ids = {r.entry_id for r in results}
     if os.path.exists(path):
         with open(path, encoding="utf-8") as fh:
@@ -1470,7 +2191,7 @@ def write_line_map(path: str, results: List[EntryResult]) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("entry\told_file\told_line\tnew_file\tnew_line\n")
-        for r in results:
+        for r in entry_results(results):
             for a, b in r.line_map:
                 fh.write(f"{r.entry_id}\t{r.old_file}\t{a}\t{r.new_file}\t"
                          f"{b}\n")
@@ -1520,7 +2241,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"MIGRATION_MAP rows written: {a.map_path}")
     else:
         print("MIGRATION_MAP rows (not written, no --map):")
-        for r in results:
+        for r in entry_results(results):
             print("  " + "\t".join([r.old_file, r.old_qualname,
                                     r.new_file or "", r.new_qualname or "",
                                     r.phase, r.kind]))
@@ -1528,8 +2249,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         write_line_map(a.line_map, results)
     if a.json_path:
         with open(a.json_path, "w", encoding="utf-8") as fh:
-            json.dump([dict(entry=r.entry_id, status=r.status,
-                            rules_failed=r.rules_failed,
+            json.dump([dict(entry=r.entry_id, kind=r.kind, status=r.status,
+                            rules_failed=r.rules_failed, outside=r.outside,
                             errors=r.errors, code_residual=r.code_residual,
                             comment_residual=r.comment_residual,
                             warnings=r.warnings, info=r.info,
