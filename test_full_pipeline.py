@@ -3540,6 +3540,7 @@ if __name__ == "__main__":
         "grip_squeeze_mm": getattr(args, 'grip_squeeze_mm', '0.5'),
         "save_screenshots": getattr(args, 'save_screenshots', 'off'),   # BF#50
         "sense_over_region": getattr(args, 'sense_over_region', 'on'),  # BF#52
+        "m7": getattr(args, 'm7', 'on'),                                # M7, TB-46
         "search_effort_weight": getattr(args, 'search_effort_weight', '1'),          # BF#53
         "search_initial_complexity": getattr(args, 'search_initial_complexity', 3),  # BF#53
         "slip_fixes": slip_fixes.resolve(getattr(args, 'slip_fixes', '')),            # BF#59, BF#62
