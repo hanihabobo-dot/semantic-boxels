@@ -230,3 +230,145 @@ def test_move_check_map_feeds_the_identity_check(tmp_path):
     (new / "newmod.py").write_text(NEW_LOCK, encoding="utf-8")
     (res2,) = gi.check_rows(gi.read_map(str(mp)), new)
     assert not res2["ok"] and res2["globals"]["RENDER_LOCK"].startswith("different")
+
+
+# ---------------------------------------------------------------------------
+# M6 (R_PHASE0 section 6, R's E5 and the B4 probes): rebound names. A bare
+# read of a name the tree rebinds in the old module at run time fails; the
+# read through the module (`import old`, `old.g`) is accepted.
+# ---------------------------------------------------------------------------
+
+FLAGS = textwrap.dedent('''\
+    """The old module: a flag one function rebinds, a mode another module
+    sets by attribute, a limit nobody rebinds."""
+    FLAG = False
+    MODE = "a"
+    LIMIT = 3
+
+
+    def set_flag():
+        global FLAG
+        FLAG = True
+
+
+    def reader():
+        return 1 if FLAG else 0
+
+
+    def mode_reader():
+        return MODE
+
+
+    def limit_reader():
+        return LIMIT
+    ''')
+
+SWITCH = 'import flags\n\n\ndef configure():\n    flags.MODE = "b"\n'
+
+M6_NEW = {
+    # R's E5: `from old import FLAG`, another function rebinds FLAG
+    "new_e5.py": "from flags import FLAG\n\n\ndef reader():\n    return 1 if FLAG else 0\n",
+    # R's probe 3: a switch set from outside by attribute
+    "new_mode.py": "from flags import MODE\n\n\ndef mode_reader():\n    return MODE\n",
+    # the correct form: read through the module
+    "new_through.py": "import flags\n\n\ndef reader():\n    return 1 if flags.FLAG else 0\n",
+    "new_alias.py": "import flags as fl\n\n\ndef reader():\n    return 1 if fl.FLAG else 0\n",
+    "new_nope.py": "import flags\n\n\ndef reader():\n    return 1 if flags.NOPE else 0\n",
+    # a name nobody rebinds, imported by value: stays OK
+    "new_limit.py": "from flags import LIMIT\n\n\ndef limit_reader():\n    return LIMIT\n",
+}
+
+
+@pytest.fixture
+def flags_tree(tmp_path):
+    (tmp_path / "flags.py").write_text(FLAGS, encoding="utf-8")
+    (tmp_path / "switch.py").write_text(SWITCH, encoding="utf-8")
+    for name, text in M6_NEW.items():
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    return tmp_path
+
+
+def frow(new_file, q):
+    return row(new_file, q, q, old_file="flags.py")
+
+
+def test_m6_e5_from_import_of_a_name_another_function_rebinds_fails(flags_tree):
+    (res,) = gi.check_rows([frow("new_e5.py", "reader")], flags_tree, extra_rebound=[])
+    print(gi.format_results([res]))
+    assert not res["ok"]
+    assert res["globals"]["FLAG"].startswith("rebound at run time")
+    assert "set_flag() declares global FLAG" in res["globals"]["FLAG"]
+
+
+def test_m6_from_import_of_a_switch_set_by_attribute_fails(flags_tree):
+    (res,) = gi.check_rows([frow("new_mode.py", "mode_reader")], flags_tree,
+                           extra_rebound=[])
+    assert not res["ok"]
+    assert "switch.py:5 flags.MODE assigned" in res["globals"]["MODE"]
+
+
+@pytest.mark.parametrize("new_file", ["new_through.py", "new_alias.py"])
+def test_m6_twin_read_through_the_module_is_accepted(flags_tree, new_file):
+    (res,) = gi.check_rows([frow(new_file, "reader")], flags_tree, extra_rebound=[])
+    print(gi.format_results([res]))
+    assert res["ok"], res
+    assert list(res["globals"].values()) == ["same"]
+
+
+def test_m6_read_through_the_module_of_a_missing_name_fails(flags_tree):
+    (res,) = gi.check_rows([frow("new_nope.py", "reader")], flags_tree, extra_rebound=[])
+    assert not res["ok"] and "NOPE is not bound" in res["globals"]["flags"]
+
+
+def test_m6_twin_a_name_nobody_rebinds_by_value_is_ok(flags_tree):
+    (res,) = gi.check_rows([frow("new_limit.py", "limit_reader")], flags_tree,
+                           extra_rebound=[])
+    assert res["ok"], res
+
+
+@pytest.mark.parametrize("patch, where", [
+    ("import flags\n\n\ndef test_x(monkeypatch):\n"
+     "    monkeypatch.setattr(flags, 'LIMIT', 9)\n", "setattr(flags, 'LIMIT')"),
+    ("from unittest import mock\n\n\ndef test_x():\n"
+     "    with mock.patch('flags.LIMIT', 9):\n        pass\n", "patch('flags.LIMIT')"),
+    ("from unittest import mock\nimport flags as f\n\n\ndef test_x():\n"
+     "    with mock.patch.object(f, 'LIMIT', 9):\n        pass\n", "object(f, 'LIMIT')"),
+    ("def install(w):\n    _rebind('flags', 'LIMIT', w)\n", "_rebind('flags', 'LIMIT')"),
+    ("import flags\n\n\ndef install(name, w):\n    setattr(flags, name, w)\n",
+     "a computed name"),
+])
+def test_m6_patches_in_tests_and_gates_count_as_rebinding(flags_tree, patch, where):
+    (flags_tree / "tests").mkdir()
+    (flags_tree / "tests" / "test_patch.py").write_text(patch, encoding="utf-8")
+    (res,) = gi.check_rows([frow("new_limit.py", "limit_reader")], flags_tree,
+                           extra_rebound=[])
+    print(gi.format_results([res]))
+    assert not res["ok"]
+    assert where in res["globals"]["LIMIT"]
+
+
+def test_m6_pin42_list_counts_as_rebinding(flags_tree):
+    (res,) = gi.check_rows([frow("new_limit.py", "limit_reader")], flags_tree,
+                           extra_rebound=[("flags", "LIMIT")])
+    assert not res["ok"] and "pin 42" in res["globals"]["LIMIT"]
+    # the default reads pin 42's list from pin_outputs.py
+    pairs = gi.gate_rebound()
+    assert ("pddlstream_planner", "solve") in pairs and ("robot_utils", "solve_ik") in pairs
+
+
+def test_m6_rebound_sites_skip_archive_and_scratch(flags_tree):
+    for d in ("archive", "_scratch"):
+        (flags_tree / d).mkdir()
+        (flags_tree / d / "old_copy.py").write_text(
+            "import flags\nflags.LIMIT = 4\n", encoding="utf-8")
+    sites = gi.rebound_sites(flags_tree, "flags")
+    assert sorted(sites) == ["FLAG", "MODE"]
+
+
+def test_m6_cli_e5_exits_1(flags_tree):
+    _write_map(flags_tree / "e5.tsv", [frow("new_e5.py", "reader")])
+    p = subprocess.run([sys.executable, str(TOOL), "--map", str(flags_tree / "e5.tsv"),
+                        "--root", str(flags_tree)], capture_output=True, text=True,
+                       timeout=300, cwd=str(flags_tree))
+    print(p.stdout, p.stderr)
+    assert p.returncode == 1 and "DIFFERS FLAG: rebound at run time" in p.stdout
