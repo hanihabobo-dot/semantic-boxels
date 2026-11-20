@@ -178,6 +178,12 @@ class SceneConfig:
     # existing scenes/runs are unaffected.  The tray-stack goal mode
     # (audit #49 commit 3) auto-enables it.
     enable_tray: bool = False
+    # C-09: the declared upper bound (m) on a target's largest full
+    # extent, what the agent may know of a target's size before it sees
+    # the target.  main() counts every target at this size when it sets
+    # auto_cell.  None: not declared, each target counts its own size
+    # (stack and other scenes without occluders: every target in view).
+    target_extent: Optional[float] = None
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +224,7 @@ def default_scene() -> SceneConfig:
         ],
         occluder_positions=[[0.1, 0.2], [0.2, -0.1], [0.0, -0.2]],
         target_positions=[[0.1, 0.4], [0.2, 0.1], [0.0, -0.1], [0.3, -0.2]],
+        target_extent=0.04,  # C-09: the 0.04 m target cubes above
     )
 
 
@@ -251,6 +258,7 @@ def mixed_shapes_scene(seed: int = 42) -> SceneConfig:
         occluder_positions=[[0.5, 0.2], [0.6, -0.1], [0.4, -0.2]],
         target_positions=[[0.5, 0.4], [0.6, 0.1], [0.4, -0.1], [0.7, -0.2]],
         seed=seed,
+        target_extent=0.06,  # C-09: the tallest target specs above (0.06 m)
     )
 
 
@@ -345,9 +353,10 @@ def scalability_scene(n_occluders: int = 3, n_targets: int = 4,
             ObjectSpec(ObjectShape.BOX, [xy_half, xy_half, z_half],
                        mass=0.5)
         )
+    target_half_max = 0.020  # C-09: target_extent declares twice this
     targets = [
         ObjectSpec(ObjectShape.BOX,
-                   [rng.uniform(0.015, 0.020)] * 3,
+                   [rng.uniform(0.015, target_half_max)] * 3,
                    mass=0.1)
         for _ in range(n_targets)
     ]
@@ -385,6 +394,8 @@ def scalability_scene(n_occluders: int = 3, n_targets: int = 4,
         seed=seed,
         n_hidden_targets=n_hidden,
         constrain_to_reach=True,
+        # C-09: without occluders every target is in view, none declared.
+        target_extent=2 * target_half_max if n_occluders else None,
     )
 
 

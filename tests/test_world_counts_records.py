@@ -597,9 +597,9 @@ def test_a_generated_scene_row_of_their_arm_carries_the_fields(tmp_path, monkeyp
     assert row['drop_detector'].startswith(wc.CANNOT_HAPPEN)
     assert row['collision_detector'].startswith(wc.NOT_DETECTED)
     assert row['clean_success'] is None
-    # their reward with no readable final world does not count under DV-1: no success, never clean,
-    # and the arm's detector words stay
+    # their reward with no readable final world counts as a non-success under DV-1 (R2 of the G13
+    # review, classify_t's UNREAD_WHY; 1580c85): no success, never clean, the detector words stay
     unread = dict(rec, final_world=None, standard_read=False, standard_success=False)
     row = _gen_row(tmp_path, monkeypatch, 'T', unread)
-    assert row['counts'] is False and row['success'] is False and row['t_reward_success'] is True
+    assert row['counts'] is True and row['success'] is False and row['t_reward_success'] is True
     assert row['drop_detector'].startswith(wc.CANNOT_HAPPEN) and row['clean_success'] is False

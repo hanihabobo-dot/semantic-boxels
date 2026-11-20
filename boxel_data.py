@@ -56,6 +56,14 @@ class BoxelData:
     # M8 C2: how many complete detections have set pose_radius (the
     # observe bound resets its strikes when this moves on).
     complete_detections: int = 0
+    # BF#65 option 1 (D6, model tweak M2; interior_regions.py): a SHADOW
+    # boxel is 'lateral' (the space behind its caster, shadow_calculator)
+    # or 'interior' (the space under a cover whose class declares a
+    # cavity); an OBJECT boxel lists the interior regions it owns apart
+    # from shadow_boxel_ids, whose cleanups must not drop them.  to_dict
+    # names both only where they differ from the defaults.
+    region_kind: str = 'lateral'
+    interior_boxel_ids: List[str] = field(default_factory=list)
 
     @classmethod
     def from_center_extent(cls, center, extent,
@@ -79,6 +87,14 @@ class BoxelData:
         return float(np.prod(dims))
 
     def to_dict(self) -> Dict[str, Any]:
+        d = self._to_dict_base()
+        if self.region_kind != 'lateral':
+            d["region_kind"] = self.region_kind
+        if self.interior_boxel_ids:
+            d["interior_boxel_ids"] = list(self.interior_boxel_ids)
+        return d
+
+    def _to_dict_base(self) -> Dict[str, Any]:
         return {
             "id": self.id,
             "boxel_type": self.boxel_type.value,
@@ -112,6 +128,8 @@ class BoxelData:
             neighbor_ids=data.get("neighbor_ids", {}),
             on_surface=data.get("on_surface"),
             surface_z=data.get("surface_z"),
+            region_kind=data.get("region_kind", 'lateral'),
+            interior_boxel_ids=data.get("interior_boxel_ids", []),
         )
 
 

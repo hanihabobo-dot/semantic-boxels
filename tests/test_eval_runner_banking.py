@@ -167,3 +167,106 @@ def test_aggregate_relabels_a_cell_whose_run_directory_another_cell_names(
     assert by_goal['holding']['success'] is True
     assert by_goal['find-and-tray-stack']['success'] is False
     assert by_goal['find-and-tray-stack']['exit_reason'] == 'summary_mismatch'
+
+
+# ----- C-01: a crash of the pipeline is filed as a crash -----------------
+# test_full_pipeline.py ends an exception in main() with exit code 70
+# (tests/test_pipeline_entry_exit_codes.py); it used to exit 1, the code
+# of a failed episode.
+
+CRASH_EXIT = 70
+TRACEBACK = ('Traceback (most recent call last):\n'
+             '  File "test_full_pipeline.py", line 3343, in <module>\n'
+             '    success = main(\n'
+             '  File "test_full_pipeline.py", line 2009, in main\n'
+             '    raise RuntimeError(\n'
+             'RuntimeError: the planner state is broken\n')
+SOLVED = {'success': True, 'exit_reason': 'success'}
+GAVE_UP = {'success': False, 'exit_reason': 'planner_failed'}
+
+
+def _pipeline_that_ends(returncode, stderr='', verdict=None):
+    """subprocess.run for run_cell: the process ends with returncode and
+    stderr; with a verdict it wrote its timing_summary.json before that."""
+    def fake_run(argv, capture_output, text, timeout, cwd):
+        if verdict is not None:
+            d = Path(cwd) / 'logs' / 'run_2026-11-14_00-00-01'
+            d.mkdir(parents=True)
+            run_config = {k: HOLD[k] for k in
+                          ('scene', 'seed', 'goal', 'baseline', 'unit_costs',
+                           'min_boxel_size')}
+            (d / 'timing_summary.json').write_text(json.dumps(
+                dict(verdict, plan_count=2, total_planning_time_s=1.0,
+                     run_config=run_config)))
+        return types.SimpleNamespace(returncode=returncode, stdout='',
+                                     stderr=stderr)
+    return fake_run
+
+
+def _cell_file(out, name):
+    return out / 'cells' / er.cell_tag(HOLD) / name
+
+
+def test_a_crashed_cell_is_a_crash_row_with_the_end_of_its_traceback(
+        sweep, monkeypatch):
+    out, _ = sweep
+    warnings = ''.join(f'warning {i}\n' for i in range(30))
+    monkeypatch.setattr(er.subprocess, 'run',
+                        _pipeline_that_ends(CRASH_EXIT, warnings + TRACEBACK))
+    row = er.run_cell(HOLD, out, 60, [], skip_existing=False)
+    assert row['success'] is False
+    assert row['exit_reason'] == 'crash_exit70'
+    # the last 20 lines of stderr: the traceback's six and the 14 before them
+    assert er.STDERR_TAIL_LINES == 20
+    assert row['stderr_tail'] == ([f'warning {i}' for i in range(16, 30)]
+                                  + TRACEBACK.splitlines())
+    stored = json.loads(_cell_file(out, 'timing_summary.json').read_text())
+    assert stored['exit_reason'] == 'crash_exit70'
+    assert stored['stderr_tail'] == row['stderr_tail']
+    # the whole output stays in the cell's stdout.log, as before
+    assert (warnings + TRACEBACK) in _cell_file(out, 'stdout.log').read_text()
+    # the row goes into aggregated.jsonl whole; the CSV stays flat
+    rows = _aggregated_rows(out, [HOLD])
+    assert rows[0]['exit_reason'] == 'crash_exit70'
+    assert rows[0]['stderr_tail'] == row['stderr_tail']
+    header = (out / 'aggregated.csv').read_text().splitlines()[0]
+    assert 'stderr_tail' not in header.split(',')
+
+
+def test_a_crash_after_the_summary_is_a_crash_row_too(sweep, monkeypatch):
+    # main() wrote timing_summary.json (a success) and then raised.  Exit 1
+    # banked that verdict; the crash code is read before any summary.
+    out, _ = sweep
+    monkeypatch.setattr(er.subprocess, 'run',
+                        _pipeline_that_ends(CRASH_EXIT, TRACEBACK, SOLVED))
+    row = er.run_cell(HOLD, out, 60, [], skip_existing=False)
+    assert row['success'] is False
+    assert row['exit_reason'] == 'crash_exit70'
+    assert row['stderr_tail'] == TRACEBACK.splitlines()
+    assert 'plan_count' not in row                # the summary is not banked
+    assert not _cell_file(out, 'run_dir.txt').exists()
+
+
+@pytest.mark.parametrize('returncode, verdict', [(0, SOLVED), (1, GAVE_UP)])
+def test_exit_0_and_exit_1_rows_are_the_runs_summary_as_before(
+        sweep, monkeypatch, returncode, verdict):
+    out, _ = sweep
+    monkeypatch.setattr(er.subprocess, 'run',
+                        _pipeline_that_ends(returncode, 'a warning\n', verdict))
+    row = er.run_cell(HOLD, out, 60, [], skip_existing=False)
+    assert row['success'] is verdict['success']
+    assert row['exit_reason'] == verdict['exit_reason']
+    assert row['plan_count'] == 2
+    assert 'stderr_tail' not in row
+    assert _cell_file(out, 'run_dir.txt').exists()
+
+
+def test_exit_1_without_a_summary_stays_no_summary(sweep, monkeypatch):
+    # What a pipeline from before C-01 leaves for a crash, and what a crash
+    # in the entry block outside main() still leaves.
+    out, _ = sweep
+    monkeypatch.setattr(er.subprocess, 'run',
+                        _pipeline_that_ends(1, TRACEBACK))
+    row = er.run_cell(HOLD, out, 60, [], skip_existing=False)
+    assert row['exit_reason'] == 'no_summary'
+    assert 'stderr_tail' not in row

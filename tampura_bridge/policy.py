@@ -32,6 +32,7 @@ from typing import Optional
 import numpy as np
 import pybullet as p
 
+import look_domain
 import m8_domain
 import robot_utils
 import slip_fixes
@@ -219,15 +220,29 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 fov=task_spec.EYE_FOV_DEG,
                 aspect=task_spec.EYE_WIDTH / task_spec.EYE_HEIGHT,
                 nearVal=task_spec.EYE_NEAR, farVal=task_spec.EYE_FAR)
+            camera_view = tuple(view)
+            camera_proj = tuple(proj)
+            if cfg.switches.get('eye', 'fixed') == 'arm':
+                # Path 9, --eye arm: no fixed eye.  Empty matrices match no
+                # render (gate_hooks._close compares lengths), so G20 lets
+                # through only the wrist cameras at their FK pose; None would
+                # leave every render unchecked (gate_hooks._make_camera).
+                camera_view = ()
+                camera_proj = ()
             # B4 / M8: the domain the planner loads (the generated one
             # with M8 on), the same path for main() and G10's runtime pin.
-            domain_file = m8_domain.domain_file(cfg.switches.get('m8', 'on') == 'on')
+            if look_domain.mode_of(cfg.switches.get('look', 'off')) != 'off':
+                domain_file = look_domain.domain_file(
+                    cfg.switches.get('look'),
+                    cfg.switches.get('m8', 'on') == 'on')         # path 9
+            else:
+                domain_file = m8_domain.domain_file(cfg.switches.get('m8', 'on') == 'on')
             gate_hooks.install(gate_hooks.GateConfig(
                 executing_client=c, robot_id=robot,
                 arm_joints=tuple(model.arm_joints),
                 task_body_ids=frozenset(world.objects),
                 has_object_boxel=has_object_boxel,
-                camera_view=tuple(view), camera_proj=tuple(proj),
+                camera_view=camera_view, camera_proj=camera_proj,
                 wrist_robots={c: robot},
                 mission_goal=('and', ('holding', target[0]),
                               ('at_config', 'q_home')),

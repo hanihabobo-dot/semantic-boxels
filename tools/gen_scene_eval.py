@@ -130,6 +130,7 @@ import json
 import math
 import os
 import re
+import shlex
 import shutil
 import statistics
 import subprocess
@@ -480,8 +481,11 @@ def run_one(a, arm, seed, rep, attempt, scene, order):
                              snapshot=(a.snapshot_o2 if arm == 'O2' else a.snapshot),
                              cwd=cwd, cap=a.cap)
         shots_on = a.shots != 'none'
+        # --o-args (paper_jobs 2026-11-19): pipeline flags for arm O and O2, e.g. the camera
+        # ('--look boxel --eye arm') and BF#65's '--interior-regions on'; recorded in metadata.json
+        o_extra = tuple(shlex.split(getattr(a, 'o_args', '') or ''))
         rec = se.run_episode(ns, ARM_O, seed, rep,
-                             extra_args=('--save-screenshots', 'on') if shots_on else (),
+                             extra_args=o_extra + (('--save-screenshots', 'on') if shots_on else ()),
                              extra_env={'BOXEL_EYE_IMAGES': '1'} if shots_on else None)
         # the bridge's outcome and the pipeline's own goal check must both say success (score_rec)
         ok, why, row_success, timed_out, t_reward, te, capped = score_rec(arm, rec, scene)
@@ -610,6 +614,7 @@ def run(a):
     if not os.path.isfile(md_path):
         bc.write_json(md_path, {'snapshot': a.snapshot, 'scenes': a.scenes, 'seeds': seeds,
                                 'reps': a.reps, 'cap_s': a.cap, 'arm_o': ARM_O, 'shots': a.shots,
+                                'o_args': getattr(a, 'o_args', ''),
                                 'arms': list(arms), 'snapshot_o2': getattr(a, 'snapshot_o2', None),
                                 'python_o': a.python_o, 'venv_t': a.venv_t,
                                 'tampura_work': a.tampura_work, 'host': os.uname().nodename,
@@ -1290,6 +1295,9 @@ def main(argv=None):
                     help="rule 16: MemAvailable under this stops the job after the episode (default 4; 0 only records)")
     ap.add_argument('--peak-report-gb', type=float, default=None,
                     help="rule 16: a peak RSS over this is flagged peak_over_6gb (default 6; 0 only records)")
+    ap.add_argument('--o-args', default='',
+                    help="extra pipeline flags for arm O and O2, one quoted string (e.g. "
+                         "'--interior-regions on --look boxel --eye arm'); recorded in metadata.json")
     ap.add_argument('--t-headline', choices=('standard', 'reward'), default='standard',
                     help="--report only: arm T's headline criterion, the standard test (default, DV-1) or their own "
                          "reward; both are printed per episode and counted either way (T_HEADLINE)")
