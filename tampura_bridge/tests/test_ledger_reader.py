@@ -117,6 +117,102 @@ def test_unrendered_rediscovery_depends_on_m7(tmp_path):
     assert run(tmp_path, rows, m7='off')['G5'] == 'PASS'
 
 
+# ----- TB-46, M7: the rediscovery's G5 checks ------------------------------
+
+def _rediscovery(*, removed=True, recast=('shadow_9',), adds=('shadow_9',),
+                 giveup=False, parked=False, row=True):
+    """clean() whose sense of shadow_3 found cup_a inside it again (plan 1
+    step 4): the sensed region's rows, the recast's add rows and the
+    sense_discovery row as M7 writes them."""
+    rows = clean()
+    k = next(i for i, r in enumerate(rows) if r['kind'] == 'sense_result')
+    rows[k]['reason'] = 'sense_contains_nontarget'
+    at = {'plan': 1, 'step': 4}
+    extra = []
+    if removed:
+        extra.append(dict(at, kind='belief', region='shadow_3', op='remove',
+                          status=None, channel='planned_sense_render'))
+    else:
+        rows = [r for r in rows if not (r['kind'] == 'belief'
+                                        and r['region'] == 'shadow_3')]
+        k = next(i for i, r in enumerate(rows) if r['kind'] == 'sense_result')
+    if parked:
+        extra.append(dict(at, kind='belief', region='shadow_3', op='status',
+                          status='unresolved', channel='strike_park'))
+    for s in adds:
+        extra.append(dict(at, kind='belief', region=s, op='add',
+                          status='unknown', channel='planned_sense_render'))
+    if row:
+        extra.append(dict(at, kind='sense_discovery', body='cup_a',
+                          region='shadow_3', rediscovery=True,
+                          kept=['shadow_1'], recast=list(recast),
+                          giveup=giveup, parked=parked))
+    return rows[:k] + extra + rows[k:]
+
+
+def test_m7_rediscovery_with_a_recast_passes(tmp_path):
+    assert run(tmp_path, _rediscovery())['G5'] == 'PASS'
+
+
+@pytest.mark.parametrize('name,rows', [
+    ('no sense_discovery row', _rediscovery(row=False)),
+    ('removed, nothing recast', _rediscovery(recast=(), adds=())),
+    ('removed at a give-up', _rediscovery(recast=(), adds=(), giveup=True)),
+    ('recast without its add row', _rediscovery(adds=())),
+    ('kept, not parked', _rediscovery(removed=False, recast=(), adds=(),
+                                      giveup=True)),
+])
+def test_m7_rediscovery_tampering_fails(tmp_path, name, rows):
+    assert run(tmp_path, rows)['G5'] == 'FAIL', name
+
+
+@pytest.mark.parametrize('rediscovery,kind', [
+    (True, 'rediscovery of cup_a'), (False, 'first discovery of cup_a')])
+def test_m7_nothing_recast_names_the_body_and_its_kind(tmp_path, rediscovery, kind):
+    rows = _rediscovery(recast=(), adds=())
+    for r in rows:
+        if r['kind'] == 'sense_discovery':
+            r['rediscovery'] = rediscovery
+    run(tmp_path, rows)
+    rep = bg.Report()
+    bg.run_ledger(rep, str(tmp_path))
+    status, detail = {g: (s, d) for g, s, d in rep.rows}['G5']
+    assert status == 'FAIL'
+    assert (f'shadow_3 removed with nothing recast and nothing parked ({kind})'
+            in detail), detail
+
+
+def test_m7_give_up_kept_and_parked_passes(tmp_path):
+    rows = _rediscovery(removed=False, recast=(), adds=(), giveup=True, parked=True)
+    assert run(tmp_path, rows)['G5'] == 'PASS'
+
+
+def test_m7_checks_are_tied_by_plan_and_step(tmp_path):
+    # the same discovery row written at another step backs nothing
+    rows = _rediscovery()
+    for r in rows:
+        if r['kind'] == 'sense_discovery':
+            r['step'] = 3
+    assert run(tmp_path, rows)['G5'] == 'FAIL'
+
+
+def test_m7_off_discloses_only(tmp_path):
+    # the gate's m7 off (never read from the episode): the sense_discovery
+    # check is skipped, so a contains_nontarget sense without its row passes
+    # (the unrendered drop's disclosure is test_unrendered_rediscovery_depends_on_m7)
+    rows = _rediscovery(row=False)
+    assert run(tmp_path, rows, m7='off')['G5'] == 'PASS'
+
+
+@pytest.mark.parametrize('m7', ['on', 'off'])
+def test_rediscovery_render_has_no_writer(tmp_path, m7):
+    rows = clean()
+    rows.insert(-1, {'kind': 'belief', 'plan': 1, 'step': 4,
+                     'region': 'shadow_5', 'op': 'remove', 'status': None,
+                     'channel': 'rediscovery_render'})
+    assert run(tmp_path, rows, m7=m7)['G5'] == 'FAIL'
+
+
 def _m8_rows(region='shadow_3'):
     """clean() with M8's three-argument sense and an observe that ends
     its plan (plan 2)."""

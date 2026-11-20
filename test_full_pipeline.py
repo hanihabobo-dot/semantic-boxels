@@ -864,6 +864,9 @@ def main(gui=True, run_logger=None, scene_config=None,
     # run says --interior-regions on.  Set every run; it also clears the
     # previous run's "seen under a cover" records.
     interior_regions.configure(getattr(args, 'interior_regions', 'off'))
+    # M7 (TB-46): a rediscovery keeps the still-hidden fragments; set every run.
+    import execution
+    execution.M7 = getattr(args, 'm7', 'on') == 'on'
     # The two known domains must match the switch (a caller may pass
     # another file deliberately; that one is not judged here).
     _dom = os.path.abspath(domain_file) if domain_file else m8_domain.LIVE_FILE
@@ -3537,6 +3540,7 @@ if __name__ == "__main__":
         "grip_squeeze_mm": getattr(args, 'grip_squeeze_mm', '0.5'),
         "save_screenshots": getattr(args, 'save_screenshots', 'off'),   # BF#50
         "sense_over_region": getattr(args, 'sense_over_region', 'on'),  # BF#52
+        "m7": getattr(args, 'm7', 'on'),                                # M7, TB-46
         "search_effort_weight": getattr(args, 'search_effort_weight', '1'),          # BF#53
         "search_initial_complexity": getattr(args, 'search_initial_complexity', 3),  # BF#53
         "slip_fixes": slip_fixes.resolve(getattr(args, 'slip_fixes', '')),            # BF#59, BF#62

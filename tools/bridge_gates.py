@@ -150,9 +150,14 @@ for _scene, _seeds in (('1747173590', (1, 2, 3, 4, 8, 14, 15, 18)),
 
 # G5: the enumerated channels behind a SHADOW boxel's belief change.
 G5_CHANNELS = ('planned_sense_render', 'sweep_render', 'lost_caster_render',
-               'rediscovery_render', 'strike_park', 'observed_before_placement',
+               'strike_park', 'observed_before_placement',
                'planned_look_render')       # path 9: a look's named regions only
 G5_UNRENDERED = 'superseded_unrendered'
+# M7's own channel in the audit's G5 text.  M7 as built (TB-46) has no
+# render test of its own: the F16 sweep tests the old fragments on the same
+# render first and writes sweep_render.  No code writes this channel, so a
+# row that names it fails: a pass for a label nothing explains.
+G5_NO_WRITER = ('rediscovery_render',)
 # G3: how a dispatched step may end (run_logger.STEP_END_STATUSES less
 # 'unlabelled', which always fails).
 G3_STATUSES = ('ok', 'sense_outcome', 'integrity_replan',
@@ -825,6 +830,54 @@ def read_ledger(run_dir):
     return rows
 
 
+def _g5_discoveries(rows, sense_regions):
+    """G5 with M7 on (TB-46 review b1, b2): a sense whose sense_result row
+    says contains_nontarget (matched by plan and step, never by row order)
+    is backed by its sense_discovery rows.  The sensed region may leave the
+    belief only when a body found in it was cast again (its new fragments
+    re-cover what the body hides from that view); at an F9 give-up it stays,
+    parked.  Returns the failures."""
+    bad = []
+    contains = sorted({(r.get('plan'), r.get('step')) for r in rows
+                       if r['kind'] == 'sense_result'
+                       and r.get('reason') == 'sense_contains_nontarget'},
+                      key=str)
+    for key in contains:
+        where = f'plan {key[0]} step {key[1]}'
+        region = sense_regions.get(key)
+        mine = [r for r in rows if (r.get('plan'), r.get('step')) == key]
+        disc = [r for r in mine if r['kind'] == 'sense_discovery']
+        belief = [r for r in mine if r['kind'] == 'belief']
+        removed = any(r['region'] == region and r['op'] == 'remove' for r in belief)
+        parked = any(r['region'] == region and r['op'] == 'status'
+                     and r.get('status') == 'unresolved'
+                     and r.get('channel') == 'strike_park' for r in belief)
+        recast = [s for d in disc for s in (d.get('recast') or ())]
+        giveup = any(d.get('giveup') for d in disc)
+        added = {r['region'] for r in belief if r['op'] == 'add'}
+        if not disc:
+            bad.append(f'{where}: contains_nontarget sense of {region} '
+                       f'without a sense_discovery row')
+            continue
+        if removed and giveup:
+            bad.append(f'{where}: {region} removed at an F9 give-up')
+        elif removed and not recast:
+            # which bodies, and whether each was found before: a first
+            # discovery that casts nothing is a known class (M7 code review,
+            # point 3), read by hand each time it shows, never exempted
+            found = ', '.join(
+                f"{'rediscovery' if d.get('rediscovery') else 'first discovery'}"
+                f" of {d.get('body')}" for d in disc)
+            bad.append(f'{where}: {region} removed with nothing recast '
+                       f'and nothing parked ({found})')
+        elif not removed and not parked:
+            bad.append(f'{where}: {region} neither removed nor parked')
+        for s in recast:
+            if s not in added:
+                bad.append(f'{where}: recast {s} has no add row')
+    return bad
+
+
 def run_ledger(report, run_dir, m7='on'):
     rows = read_ledger(run_dir)
     closes = [r for r in rows if r['kind'] == 'ledger_close']
@@ -914,6 +967,8 @@ def run_ledger(report, run_dir, m7='on'):
         counts[ch] = counts.get(ch, 0) + 1
         if ch == G5_UNRENDERED:
             unrendered += 1
+        elif ch in G5_NO_WRITER:
+            bad5.append(f"{r['region']} {r['op']}: channel {ch} has no writer")
         elif ch not in G5_CHANNELS:
             bad5.append(f"{r['region']} {r['op']} {r.get('status')}: no channel")
         elif ch == 'planned_sense_render':
@@ -929,6 +984,8 @@ def run_ledger(report, run_dir, m7='on'):
                             f"not this region")
     if unrendered and m7 == 'on':
         bad5.append(f'{unrendered} unrendered rediscovery removals with M7 on')
+    if m7 == 'on':
+        bad5.extend(_g5_discoveries(rows, sense_regions))
     detail = ', '.join(f'{k}={v}' for k, v in sorted(counts.items(),
                                                        key=lambda kv: str(kv[0])))
     if unrendered and m7 == 'off':
