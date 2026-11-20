@@ -599,6 +599,14 @@ def _note_rules():
         (re.compile(r'^giveup parole (\d+)/2: (\S+)'),
          lambda m: f'`{m.group(2)}` gets another chance after 4 replans '
                    f'(parole {m.group(1)} of 2)'),
+        # M7 (Hani, 2026-11-20): the F9 give-up's suspension and its end
+        (re.compile(r'^(\S+): a body found in it reaches the F9 give-up.*?'
+                    r'suspending \S+ for (\d+) s.*?: (.*)$'),
+         lambda m: f'I keep finding the same thing in `{m.group(1)}` '
+                   f'({m.group(3)}), so I set that space aside for '
+                   f'{m.group(2)} s'),
+        (re.compile(r'^\[M7\] (\S+) is back in the search'),
+         lambda m: f'`{m.group(1)}` is back on my list: its time aside is over'),
         (re.compile(r'^stop_before_planning: returning'),
          lambda m: 'stopping before planning, as asked'),
         (re.compile(r'^\[D7\] initial arm readback is not at q_home(.*)$'),

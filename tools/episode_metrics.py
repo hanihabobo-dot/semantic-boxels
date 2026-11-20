@@ -149,6 +149,29 @@ def metrics(run_dir):
     m['goal_home_moves'] = goal_home_moves
     reasons = Counter(r.get('reason') for r in rows if r.get('kind') == 'sense_result')
     m['sense_outcomes'] = ', '.join(f"{k} x{v}" for k, v in sorted(reasons.items())) or None
+    # M7 (Hani, 2026-11-20): every F9 give-up suspension, its start and end
+    # in seconds from the ledger's opening, from the ledger's m7_suspension
+    # rows (so a run killed at the cap has them too); [] when M7 is on and
+    # nothing was suspended, absent with M7 off.
+    if 'm7_suspend_s' in ts or any(r.get('kind') == 'm7_suspension' for r in rows):
+        t0 = opens[0]['t'] if opens else 0.0
+        susp, open_rows = [], {}
+        for r in rows:
+            if r.get('kind') != 'm7_suspension':
+                continue
+            if r.get('op') == 'start':
+                open_rows[r.get('region')] = row = {
+                    'region': r.get('region'), 'bodies': r.get('bodies'),
+                    'plan': r.get('plan'), 'start_s': round(r['t'] - t0, 3),
+                    'seconds': r.get('seconds'), 'end_s': None,
+                    'ended_by': 'open_at_end'}
+                susp.append(row)
+            elif r.get('op') == 'end' and r.get('region') in open_rows:
+                row = open_rows.pop(r.get('region'))
+                row['end_s'] = round(r['t'] - t0, 3)
+                row['ended_by'] = r.get('ended_by')
+        m['m7_suspend_s'] = ts.get('m7_suspend_s')
+        m['m7_suspensions'] = susp
     if 'success' in ts:
         m['outcome'] = ('success' if ts.get('success') else
                         f"failure ({ts.get('exit_reason')})")

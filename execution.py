@@ -2945,17 +2945,22 @@ def handle_observe_action(*, env, registry, viz, obj, robot_id, pose_known):
 # main() sets it every run from --m7 (default on); off is the cleanup of
 # before, line for line.
 M7 = True
+# Hani, 2026-11-20 (TB-46 review b1 (i)): with M7 the F9 give-up suspends the
+# sensed region for this many seconds of wall time (time.perf_counter), then
+# the loop offers it to the planner again (BeliefState.release_suspended).
+M7_SUSPEND_S = 120.0
 
 
 def _m7_giveup_names(discovered_names, *, env, registry, belief,
                      sense_detections, nontarget_rediscovery_counts):
     """M7: the discovered bodies for which the discovery loop below will
-    reach the F9 give-up (no recast), read before the loop runs.  The same
-    tests as the loop: a body it skips (unknown, below the detection
-    minimum) is not one; a counted rediscovery adds one to the count."""
+    reach the F9 give-up (no recast), read before the loop runs, each with
+    the rediscovery count the loop will give it.  The same tests as the
+    loop: a body it skips (unknown, below the detection minimum) is not
+    one; a counted rediscovery adds one to the count."""
     if nontarget_rediscovery_counts is None:
-        return []
-    out = []
+        return {}
+    out = {}
     for name in discovered_names:
         if env.objects.get(name) is None or sense_detections.get(name) is None:
             continue
@@ -2963,7 +2968,7 @@ def _m7_giveup_names(discovered_names, *, env, registry, belief,
         if registry.get_boxel(name) is not None and name not in belief.redetected:
             count += 1
         if count >= 3:
-            out.append(name)
+            out[name] = count
     return out
 
 
@@ -3373,23 +3378,29 @@ def handle_sense_action(
         # met the discovered body did not see what lies behind it, and a
         # body given up casts no new fragment that would cover it again.
         # So the sensed fragment is not removed: it stays, parked
-        # unresolved (counted per episode), and no region leaves the
-        # belief unobserved.
-        _m7_park = False
+        # unresolved, and no region leaves the belief unobserved.  The park
+        # is a suspension of M7_SUSPEND_S (Hani, 2026-11-20): then the
+        # region is offered again, and a further rediscovery suspends it
+        # again.
+        _m7_giveups = {}
         if M7 and sense_outcome == "contains_nontarget":
-            _m7_park = bool(_m7_giveup_names(
+            _m7_giveups = _m7_giveup_names(
                 [body_id_to_name[b] for b in detected_bodies
                  if b in body_id_to_name],
                 env=env, registry=registry, belief=belief,
                 sense_detections=sense_detections,
-                nontarget_rediscovery_counts=nontarget_rediscovery_counts))
+                nontarget_rediscovery_counts=nontarget_rediscovery_counts)
+        _m7_park = bool(_m7_giveups)
         if _m7_park:
             print(f"    {shadow_id}: a body found in it reaches the F9 "
-                  f"give-up, so nothing re-covers what it hides; parking "
-                  f"{shadow_id} UNRESOLVED instead of marking it empty (M7)")
-            blocked_giveup_shadows.add(sid_str)
+                  f"give-up, so nothing re-covers what it hides; suspending "
+                  f"{shadow_id} for {M7_SUSPEND_S:.0f} s instead of marking "
+                  f"it empty (M7): "
+                  + ', '.join(f"{n} rediscovered {c} times"
+                              for n, c in _m7_giveups.items()))
             with provenance('strike_park'):
-                belief.mark_unresolved(sid_str)
+                belief.suspend(sid_str, bodies=_m7_giveups,
+                               now=time.perf_counter(), seconds=M7_SUSPEND_S)
         else:
             belief.mark_sensed(sid_str, found=False)
 
