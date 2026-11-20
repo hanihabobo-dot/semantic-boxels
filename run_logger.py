@@ -909,6 +909,12 @@ def parse_pipeline_args(argv=None):
              "class declares a cavity is a hiding region, searched by "
              "moving the object away (on), or no such region (off, the "
              "default).")
+    # M7 (PAPER_AUDIT M7, BF#15, TB-46): on, the default by BF#15.
+    parser.add_argument(
+        '--m7', choices=['off', 'on'], default='on',
+        help="M7: a sense that finds a registered body again keeps its "
+             "still-hidden fragments and carves the new ones against every "
+             "fragment (on, the default), or drops them unrendered (off).")
     # BF#53 (2026-10-30), the optimistic search's settings.  pddlstream
     # weighs a stream result's effort into the search's costs only with
     # effort_weight set; without it every attempt of the adaptive loop may

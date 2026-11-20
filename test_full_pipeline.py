@@ -864,6 +864,9 @@ def main(gui=True, run_logger=None, scene_config=None,
     # run says --interior-regions on.  Set every run; it also clears the
     # previous run's "seen under a cover" records.
     interior_regions.configure(getattr(args, 'interior_regions', 'off'))
+    # M7 (TB-46): a rediscovery keeps the still-hidden fragments; set every run.
+    import execution
+    execution.M7 = getattr(args, 'm7', 'on') == 'on'
     # The two known domains must match the switch (a caller may pass
     # another file deliberately; that one is not judged here).
     _dom = os.path.abspath(domain_file) if domain_file else m8_domain.LIVE_FILE
