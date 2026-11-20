@@ -34,7 +34,7 @@ SWITCH_VALUES = {
     'world_counts': 'auto', 'corridor_test': 'cell+object',
     'search_effort_weight': '1', 'search_initial_complexity': '3',
     'slip_fixes': 'force_hold,grasp_wrist_home,pose_radius_keep,solver_iters',
-    'save_screenshots': 'off', 'interior_regions': 'off',
+    'save_screenshots': 'off', 'interior_regions': 'off', 'm7': 'on',
 }
 
 

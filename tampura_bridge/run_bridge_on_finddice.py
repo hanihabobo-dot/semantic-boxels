@@ -184,6 +184,8 @@ def main():
     # (interior_regions.py; task_spec.HOLLOW_CAVITY declares the cavities),
     # passed through like the switches; off unless asked.
     ap.add_argument('--interior-regions', choices=('off', 'on'), default='off')
+    # M7 (TB-46, BF#15): on by default, passed through like the switches.
+    ap.add_argument('--m7', choices=('off', 'on'), default='on')
     # GF10 (BF#38): the pick close's squeeze (0.5 mm since BF#44), passed through like the switches.
     ap.add_argument('--grip-squeeze-mm', type=float, default=0.5)
     # BF#53: the optimistic search's settings (run_logger's flags of the
@@ -311,6 +313,7 @@ def main():
                   'pick_aperture_from_pose': a.pick_aperture_from_pose,
                   'sense_over_region': a.sense_over_region,
                   'interior_regions': a.interior_regions,
+                  'm7': a.m7,
                   'grip_squeeze_mm': str(a.grip_squeeze_mm),
                   'world_counts': a.world_counts,
                   'corridor_test': a.corridor_test,
