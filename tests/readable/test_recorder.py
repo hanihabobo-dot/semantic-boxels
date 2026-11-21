@@ -522,6 +522,14 @@ _ENTRIES = {
                           "except Exception as e:\n"
                           "    error = f'{type(e).__name__}: {e}'\n"
                           "sys.exit(1)\n"),
+    # The replay stub's stop (tests/readable/replay_stub.py): a BaseException,
+    # which an except Exception lets pass.
+    'replay_stop': ("class ReplayTapeError(BaseException):\n"
+                    "    pass\n"
+                    "try:\n"
+                    "    raise ReplayTapeError('call 3 but the tape holds 2 calls')\n"
+                    "except Exception:\n"
+                    "    pass\n"),
 }
 
 
@@ -559,16 +567,19 @@ def _child_in_process(tmp_path, monkeypatch, entry):
     ('exit70_no_hook', 70, 'system_exit', None),
     ('hook_then_exit1', 1, 'system_exit', "KeyError: 'missing_key'"),
     ('raised_out', 1, 'raised ValueError: seed 3 rejected', 'ValueError: seed 3 rejected'),
-    ('caught_then_exit1', 1, 'system_exit', None)])
+    ('caught_then_exit1', 1, 'system_exit', None),
+    ('replay_stop', 5, 'raised ReplayTapeError: call 3 but the tape holds 2 calls',
+     'ReplayTapeError: call 3 but the tape holds 2 calls')])
 def test_child_crash_record(tmp_path, monkeypatch, capsys, entry, code, how, last):
     """SPEC D7: the child's own sys.excepthook writes rec/CRASH.txt and then
     calls the hook it replaced; how is crash_exit70 only for exit 70 after a
     call of the hook (a 70 without one stays system_exit, another code
-    after a call too); an exception out of the entry keeps today's record,
-    and so does a crash the entry keeps itself and ends with exit 1, as the
-    bridge does (no CRASH.txt).  Catches the hook not installed, the old
-    hook not called, any 70 taken for a crash, CRASH.txt not written, and
-    CRASH.txt written for an exit without the hook's call."""
+    after a call too); an exception out of the entry keeps today's record
+    (exit 1, the replay stub's ReplayTapeError 5), and so does a crash the
+    entry keeps itself and ends with exit 1, as the bridge does (no
+    CRASH.txt).  Catches the hook not installed, the old hook not called,
+    any 70 taken for a crash, CRASH.txt not written, CRASH.txt written for
+    an exit without the hook's call, and the replay's stop given exit 1."""
     got_code, exit_, crash, prev_calls = _child_in_process(tmp_path, monkeypatch, entry)
     assert (got_code, exit_) == (code, {'code': code, 'how': how})
     if last is None:
@@ -643,6 +654,11 @@ def test_episode_notes_name_the_crash_record_and_the_pins_write_them():
     for word in ('does not pass the C-01 handler', 'execute_fn', 'child_exit is system_exit', 'no rec/CRASH.txt',
                  'result.json outcome (status crashed)', 'bridge_episode.json'):
         assert word in rec.BRIDGE_CRASH_NOTE, word
+    # The replay's stop leaves the entry too (its codes: test_child_crash_record).
+    stub = _load('readable_replay_stub', HERE / 'replay_stub.py')
+    assert not issubclass(stub.ReplayTapeError, Exception)
+    for word in (stub.ReplayTapeError.__name__, 'a BaseException', 'exit code 1 (5 for ReplayTapeError)'):
+        assert word in rec.RAISED_NOTE, word
     tree = ast.parse((REPO / 'tools' / 'readable' / 'pin_outputs.py').read_text(encoding='utf-8'))
     fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_episode_notes')
     calls = [n.func.attr for n in ast.walk(fn) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)]

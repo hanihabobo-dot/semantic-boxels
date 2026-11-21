@@ -1620,9 +1620,11 @@ BRIDGE_CRASH_NOTE = (
     'goes on to its own end, so child_exit is system_exit with code 1, no rec/CRASH.txt is written, and '
     'the error stands in result.json outcome (status crashed) and in bridge_episode.json')
 RAISED_NOTE = (
-    'an exception that leaves the entry keeps today\'s record too (SPEC D7): a pre-flight rejection, or '
-    'an exception of the bridge driver\'s own code outside that handler; how "raised <type>: <message>", '
-    'rec/CRASH.txt from its traceback')
+    'an exception that leaves the entry keeps today\'s record too (SPEC D7): a pre-flight rejection, an '
+    'exception of the bridge driver\'s own code outside that handler, or the replay stub\'s ReplayTapeError '
+    '(a solver call beyond the tape, or one that raised in the live run: a BaseException, which the except '
+    'Exception of C-01 and of execute_fn let pass); how "raised <type>: <message>", exit code 1 (5 for '
+    'ReplayTapeError), rec/CRASH.txt from its traceback')
 
 
 def episode_notes():
