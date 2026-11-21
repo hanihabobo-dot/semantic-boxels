@@ -67,10 +67,11 @@ READABLE_TFP_COPY) runs a planted copy of test_full_pipeline.py for the
 planted-change checks of PLAN 24.3 (e) only.
 
 After the child the parent writes RESULT.json and the normalised outputs
-(``norm/``): times, pids and wall clocks removed, ``plan_obj`` ints and
-``Type@id`` strings mapped to their order of first use (PLAN 24.3 (d)),
-paths and stamps masked.  Nothing here edits a plan between planner and
-executor in the pipeline: the replay is test code (PLAN D9).
+(``norm/``): times and wall clocks masked to ``<s>`` with their keys kept
+(SPEC D6), the ledger's pid removed, ``plan_obj`` ints and ``Type@id``
+strings mapped to their order of first use (PLAN 24.3 (d)), paths and
+stamps masked.  Nothing here edits a plan between planner and executor in
+the pipeline: the replay is test code (PLAN D9).
 """
 import argparse
 import ast
@@ -1247,9 +1248,13 @@ def run_episode(name, mode, run_dir, tape=None, rng='restore', trace_main=False,
 TYPE_AT_ID = re.compile(r'\b([A-Za-z_][A-Za-z0-9_]*)@(\d+)\b')
 HEX_ADDR = re.compile(r'0x[0-9a-fA-F]{6,}')
 STAMP = re.compile(r'\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}')
-# Ledger fields that are times or clocks (index episode_path.md section 5).
-LEDGER_DROP = {'t', 'wall'}
-LEDGER_DROP_BY_KIND = {'ledger_open': {'pid'}, 'plan': {'plan_time_s'}}
+# Ledger fields that are times or clocks (index episode_path.md section 5):
+# masked, the key kept (SPEC D6, R's ruling on the older time keys); every
+# *_s field of a bridge_timing row too.
+LEDGER_TIME_KEYS = {'t', 'wall'}
+LEDGER_TIME_KEYS_BY_KIND = {'plan': {'plan_time_s'}}
+# The process id is no time and not in that ruling: removed as before.
+LEDGER_DROP_BY_KIND = {'ledger_open': {'pid'}}
 # Console text that is a time (masked, the rest of the line kept).
 CONSOLE_MASKS = [
     (re.compile(r'elapsed=\d+\.\d+s'), 'elapsed=<T>s'),
@@ -1335,52 +1340,6 @@ def _read_jsonl(path):
     return rows
 
 
-def norm_ledger(rows, mask):
-    ids = IdMap()
-    out = []
-    for r in rows or []:
-        r = dict(r)
-        for k in LEDGER_DROP | LEDGER_DROP_BY_KIND.get(r.get('kind'), set()):
-            r.pop(k, None)
-        kind = r.get('kind')
-        if kind == 'bridge_timing':
-            r = {k: v for k, v in r.items() if not k.endswith('_s')}
-        if kind == 'driver_clock' and isinstance(r.get('events'), list):
-            r['events'] = [e[0] if isinstance(e, list) and e else e for e in r['events']]
-        pid = r.get('plan_id', r.get('plan'))
-        if 'plan_obj' in r:
-            r['plan_obj'] = ids.obj(pid, r['plan_obj'])
-        r = _walk(r, lambda s: ids.text(pid, mask(s)))
-        out.append(r)
-    return out
-
-
-EYE_DROP = {'t_wall'}
-
-
-def norm_eye(rows, mask):
-    out = []
-    for r in rows or []:
-        r = {k: v for k, v in r.items() if k not in EYE_DROP}
-        if isinstance(r.get('extra'), dict):
-            r['extra'] = {k: v for k, v in r['extra'].items() if k != 'plan_time_s'}
-        out.append(_walk(r, mask))
-    return out
-
-
-SUMMARY_DROP = {'total_planning_time_s', 'per_call_planning_time_s', 'counts_cost_s'}
-
-
-def _drop_time_keys(obj):
-    if isinstance(obj, dict):
-        return {k: _drop_time_keys(v) for k, v in obj.items()
-                if not (k in SUMMARY_DROP or (k.endswith('_s') and isinstance(v, (int, float))
-                                              and not isinstance(v, bool)))}
-    if isinstance(obj, list):
-        return [_drop_time_keys(v) for v in obj]
-    return obj
-
-
 SECONDS_MASK = '<s>'
 
 
@@ -1405,6 +1364,81 @@ def mask_seconds(obj):
     return obj
 
 
+def _ledger_time_key(kind, key):
+    return (key in LEDGER_TIME_KEYS or key in LEDGER_TIME_KEYS_BY_KIND.get(kind, ())
+            or (kind == 'bridge_timing' and key.endswith('_s')))
+
+
+def _masked_event(e):
+    """A driver clock event [name, t]: the name kept, the time masked."""
+    return ([e[0]] + [_seconds_masked(x) for x in e[1:]]) if isinstance(e, list) and e else e
+
+
+def norm_ledger(rows, mask):
+    ids = IdMap()
+    out = []
+    for r in rows or []:
+        kind = r.get('kind')
+        r = {k: (_seconds_masked(v) if _ledger_time_key(kind, k) else v)
+             for k, v in r.items() if k not in LEDGER_DROP_BY_KIND.get(kind, ())}
+        if kind == 'driver_clock' and isinstance(r.get('events'), list):
+            r['events'] = [_masked_event(e) for e in r['events']]
+        pid = r.get('plan_id', r.get('plan'))
+        if 'plan_obj' in r:
+            r['plan_obj'] = ids.obj(pid, r['plan_obj'])
+        r = _walk(r, lambda s: ids.text(pid, mask(s)))
+        out.append(r)
+    return out
+
+
+# eye.jsonl's wall times (SPEC D6): masked, the key kept.  sim_t, the
+# simulation's own clock, is compared.
+EYE_TIME_KEYS = {'t_wall'}
+EYE_EXTRA_TIME_KEYS = {'plan_time_s'}
+
+
+def norm_eye(rows, mask):
+    out = []
+    for r in rows or []:
+        r = {k: (_seconds_masked(v) if k in EYE_TIME_KEYS else v) for k, v in r.items()}
+        if isinstance(r.get('extra'), dict):
+            r['extra'] = {k: (_seconds_masked(v) if k in EYE_EXTRA_TIME_KEYS else v)
+                          for k, v in r['extra'].items()}
+        out.append(_walk(r, mask))
+    return out
+
+
+# timing_summary.json's M7 keys (SPEC D6, its first part) are built last in
+# WP-B (R's advice, Job 10); until then they are treated as before.
+M7_SUMMARY_KEYS = ('m7_suspend_s', 'm7_suspensions')
+
+
+def _drop_time_keys(obj):
+    """The old rule, now for the M7 keys only: every number under a key
+    that ends in _s removed with its key."""
+    if isinstance(obj, dict):
+        return {k: _drop_time_keys(v) for k, v in obj.items()
+                if not (k.endswith('_s') and isinstance(v, (int, float)) and not isinstance(v, bool))}
+    if isinstance(obj, list):
+        return [_drop_time_keys(v) for v in obj]
+    return obj
+
+
+def norm_times(obj):
+    """timing_summary.json, world_counts.json and bridge_episode.json (SPEC
+    D6, R's ruling on the older time keys): mask_seconds, so every number
+    under a key that ends in _s, also in a list under such a key, becomes
+    '<s>' and the key stays.  The three keys the normaliser dropped by name
+    (total_planning_time_s, per_call_planning_time_s, counts_cost_s) end in
+    _s and are among them.  The top-level M7 keys keep the old rule."""
+    if not isinstance(obj, dict):
+        return mask_seconds(obj)
+    out = {}
+    for k, v in obj.items():
+        out.update(_drop_time_keys({k: v}) if k in M7_SUMMARY_KEYS else mask_seconds({k: v}))
+    return out
+
+
 # first_plan.json: the parts whose times are masked (the attribute records).
 FIRST_PLAN_SECONDS_MASKED = ('planner_attributes', 'streams_attributes')
 
@@ -1420,10 +1454,13 @@ def episode_notes():
     (pin_outputs._episode_notes): what the normaliser does, the crash
     record."""
     return [
-        'normalised by record_episode.normalise: ledger t, wall, ledger_open.pid, plan.plan_time_s, '
-        'bridge_timing *_s and driver_clock times removed; plan_obj and Type@id mapped to their order '
-        'of first use keyed by plan id; eye t_wall and extra.plan_time_s removed; timing_summary and '
-        'world_counts time keys removed; console times masked; paths and stamps masked',
+        'normalised by record_episode.normalise: times masked to <s> with their keys kept, null kept '
+        '(SPEC D6): ledger t and wall, plan.plan_time_s, every bridge_timing *_s and the time of each '
+        'driver_clock event; eye t_wall and extra.plan_time_s; every number under a key ending in _s '
+        'in timing_summary, world_counts and bridge_episode, and bridge_episode time_deltas; the M7 '
+        'keys of timing_summary as before (m7_suspend_s and the *_s numbers of m7_suspensions removed); '
+        'ledger_open.pid removed; plan_obj and Type@id mapped to their order of first use keyed by plan '
+        'id; console times masked; paths and stamps masked',
         'rec/CRASH.txt (SPEC D7): the recorder\'s sys.excepthook writes it when the boxels entry shows a '
         'crash of main() (C-01, test_full_pipeline.py:3681-3699), then calls the hook it replaced; '
         f'child_exit.how is {CRASH_HOW} only for exit code {CRASH_EXIT_CODE} after that call (a '
@@ -1456,11 +1493,13 @@ def norm_bridge_episode(obj, mask):
     if not isinstance(obj, dict):
         return obj
     obj = dict(obj)
-    obj.pop('time_deltas', None)
-    drv = obj.get('driver_clock') or obj.get('driver')
+    if 'time_deltas' in obj:              # the driver's wall clock per step: the list kept
+        obj['time_deltas'] = _seconds_masked(obj['time_deltas'])
+    key = 'driver_clock' if obj.get('driver_clock') else 'driver'
+    drv = obj.get(key)
     if isinstance(drv, dict) and isinstance(drv.get('events'), list):
-        drv['events'] = [e[0] if isinstance(e, list) and e else e for e in drv['events']]
-    return _walk(_drop_time_keys(obj), mask)
+        obj[key] = dict(drv, events=[_masked_event(e) for e in drv['events']])
+    return _walk(norm_times(obj), mask)
 
 
 def normalise(run_dir):
@@ -1478,7 +1517,7 @@ def normalise(run_dir):
             out['eye.json'] = norm_eye(eye, mask)
         for f in ('timing_summary.json', 'world_counts.json'):
             if (pr / f).exists():
-                out[f] = _walk(_drop_time_keys(json.loads((pr / f).read_text(encoding='utf-8'))), mask)
+                out[f] = _walk(norm_times(json.loads((pr / f).read_text(encoding='utf-8'))), mask)
         for f in ('boxel_data.json', 'problem_initial.pddl'):
             if (pr / f).exists():
                 txt = (pr / f).read_text(encoding='utf-8')

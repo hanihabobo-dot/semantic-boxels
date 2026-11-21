@@ -382,18 +382,32 @@ def test_plain_form_names_containers_and_refuses_objects_inside():
     assert rec.plain_form('one line') == 'one line'
 
 
-def _run_folder(tmp_path, first_plan=None, crash=None):
-    """A run folder as the parent leaves it (RESULT.json, stdout, rec/),
-    with no pipeline run directory: what normalise reads of it."""
+def _run_folder(tmp_path, first_plan=None, crash=None, pipeline=None, bridge=None):
+    """A run folder as the parent leaves it (RESULT.json, stdout, rec/):
+    what normalise reads of it.  pipeline ({file name: rows of a .jsonl or
+    the object of a .json}) makes the pipeline run directory beside it,
+    bridge the folder's save/bridge_episode.json; without them there is
+    none."""
     run = tmp_path / 'run'
     (run / 'rec').mkdir(parents=True)
+    pr = None
+    if pipeline is not None:
+        pr = tmp_path / 'pipeline_run'
+        pr.mkdir()
+        for name, obj in pipeline.items():
+            text = (''.join(json.dumps(r) + '\n' for r in obj) if name.endswith('.jsonl')
+                    else json.dumps(obj))
+            (pr / name).write_text(text, encoding='utf-8')
     rec.write_json(run / 'RESULT.json', {'mode': 'first-plan', 'status': 'ended', 'rc': 0,
-                                         'pipeline_run_dir': None})
+                                         'pipeline_run_dir': None if pr is None else str(pr)})
     (run / 'stdout.txt').write_text('', encoding='utf-8')
     if first_plan is not None:
         rec.write_json(run / 'rec' / 'first_plan.json', first_plan)
     if crash is not None:
         (run / 'rec' / 'CRASH.txt').write_text(crash, encoding='utf-8')
+    if bridge is not None:
+        (run / 'save').mkdir()
+        rec.write_json(run / 'save' / 'bridge_episode.json', bridge)
     return run
 
 
@@ -945,3 +959,142 @@ def test_record_set_stores_the_counts_and_records_the_twin_right_after(tmp_path,
     assert rec.record_set(tmp_path / 'a', ['f141'], log=lambda s: None) == 0    # one set, two calls
     assert list(json.loads((tmp_path / 'a' / 'STORE.json').read_text(encoding='utf-8'))) == [
         'f204', 'f204_m7off', 'f140', 'f141']
+
+
+# ---------------------------------------------------------------------------
+# Item 8: D6 for the older time keys (masked, the key kept)
+# ---------------------------------------------------------------------------
+
+def _raw_episode(times=0.0, count=5):
+    """The raw outputs of one episode in the shapes of T9's br0: every wall
+    time moved by times, and count, a number that is no time, in each of
+    the five files."""
+    t = 837.0 + times
+    ledger = [
+        {'t': t, 'wall': 1795247506.5 + times, 'kind': 'ledger_open', 'pid': 1146},
+        {'t': t + 0.1, 'wall': 1795247506.6 + times, 'kind': 'driver_clock',
+         'events': [['seeded', 832.9 + times], ['rollout_start', 836.9 + times]], 'seed': 0},
+        {'t': t + 0.2, 'wall': 1795247506.7 + times, 'kind': 'bridge_timing', 'd9_setup_s': 0.5 + times,
+         'env_build_s': 1.25 + times, 'client': count},
+        {'t': t + 1.0, 'wall': 1795247507.5 + times, 'kind': 'plan', 'plan_id': 1, 'call': 'mission',
+         'plan_time_s': 1.25 + times, 'plan_obj': 140001, 'actions': [['move', 'q0']]},
+        {'t': None, 'wall': 1795247508.0 + times, 'kind': 'step', 'plan': 1, 'step': 1, 'action': 'move'},
+        {'t': t + 2.0, 'wall': 1795247509.0 + times, 'kind': 'm7_suspension', 'op': 'start',
+         'region': 'shadow_1', 'bodies': {'cup': 3}, 'seconds': 120.0},
+    ]
+    eye = [
+        {'k': 1, 'tag': 'initial observation', 't_wall': 0.11 + times, 'sim_step': 0, 'sim_t': 0.0},
+        {'k': 2, 'tag': 'plan#1 planned', 't_wall': 1.44 + times, 'sim_step': 360, 'sim_t': 1.5,
+         'extra': {'plan_time_s': 1.25 + times, 'n_actions': count}},
+    ]
+    summary = {
+        'success': True, 'plan_count': 1,
+        'm8': {'per_plan': [{'twin_render_s': 0.42 + times, 'twin_renders': count, 'build_s': None,
+                             'over_region_s': 0.155 + times, 'plan': 1}]},
+        'total_planning_time_s': 1.25 + times, 'per_call_planning_time_s': [1.25 + times],
+        'm7_suspend_s': 120.0,
+        'm7_suspensions': [{'region': 'shadow_1', 'bodies': {'cup': 3}, 'start_s': 2.0 + times,
+                            'until_s': 122.0 + times, 'end_s': None, 'ended_by': 'open_at_end'}],
+        'counts_cost_s': 0.05 + times}
+    counts = {'drops': [], 'mode': 'counts', 'steps': count, 'closed': True, 'check_s': 0.05 + times}
+    bridge = {'seed': 0, 'rewards': [0.0, 1.0], 'time_deltas': [9.59 + times, 9.62 + times],
+              'driver_clock': {'events': [['seeded', 832.9 + times]], 'seed': 0},
+              'ledger_gates': [['G18', 'PASS', f'initialize return to rollout start {0.027 + times:.3f} s '
+                                               f'(initialize_call +{0.008 + times:.3f} s)']],
+              'drops': count, 'counts_cost_s': 0.05 + times}
+    return {'ledger.jsonl': ledger, 'eye.jsonl': eye, 'timing_summary.json': summary,
+            'world_counts.json': counts}, bridge
+
+
+def _norm_episode(folder, **kw):
+    pipeline, bridge = _raw_episode(**kw)
+    return rec.normalise(_run_folder(folder, pipeline=pipeline, bridge=bridge))
+
+
+_TIME_FILES = ('ledger.json', 'eye.json', 'timing_summary.json', 'world_counts.json', 'bridge_episode.json')
+
+
+def test_ledger_and_eye_times_masked_keys_and_rows_kept_pid_removed(tmp_path):
+    """R's ruling on the older time keys (SPEC D6): t, wall, plan_time_s,
+    the bridge_timing *_s, the driver_clock event times, t_wall and
+    extra.plan_time_s become <s>, null stays null, every key and row stays
+    in its order; the pid is removed as before; sim_t and the M7 row's
+    configured length are compared.  Catches a time dropped or left in, a
+    kept pid and a masked null."""
+    pipeline, _ = _raw_episode()
+    n = rec.normalise(_run_folder(tmp_path, pipeline=pipeline))
+    s = '<s>'
+    led = n['ledger.json']
+    assert led[0] == {'t': s, 'wall': s, 'kind': 'ledger_open'}
+    assert led[1]['events'] == [['seeded', s], ['rollout_start', s]] and led[1]['seed'] == 0
+    assert led[2] == {'t': s, 'wall': s, 'kind': 'bridge_timing', 'd9_setup_s': s, 'env_build_s': s, 'client': 5}
+    assert led[3]['plan_time_s'] == s and led[3]['plan_obj'] == 'obj#1'
+    assert led[4]['t'] is None and led[4]['wall'] == s
+    assert led[5]['seconds'] == 120.0 and led[5]['t'] == s
+    assert [list(r) for r in led] == [[k for k in r if k != 'pid'] for r in pipeline['ledger.jsonl']]
+    eye = n['eye.json']
+    assert [r['t_wall'] for r in eye] == [s, s] and [r['sim_t'] for r in eye] == [0.0, 1.5]
+    assert eye[1]['extra'] == {'plan_time_s': s, 'n_actions': 5}
+    assert [list(r) for r in eye] == [list(r) for r in pipeline['eye.jsonl']]
+
+
+def test_timing_files_mask_every_s_number_m7_keys_as_before(tmp_path):
+    """timing_summary.json and world_counts.json: every number under a key
+    ending in _s, the three keys once dropped by name among them, becomes
+    <s>, also in a list; null stays.  The M7 keys keep the old rule until
+    D6's M7 part (item 10): m7_suspend_s and the numbers of start_s and
+    until_s removed, end_s null kept.  Catches the old drop, the M7 part
+    built early and a masked null."""
+    pipeline, _ = _raw_episode()
+    n = rec.normalise(_run_folder(tmp_path, pipeline=pipeline))
+    s = '<s>'
+    ts = n['timing_summary.json']
+    assert (ts['total_planning_time_s'], ts['per_call_planning_time_s'], ts['counts_cost_s']) == (s, [s], s)
+    assert ts['m8']['per_plan'] == [{'twin_render_s': s, 'twin_renders': 5, 'build_s': None,
+                                     'over_region_s': s, 'plan': 1}]
+    assert 'm7_suspend_s' not in ts
+    assert ts['m7_suspensions'] == [{'region': 'shadow_1', 'bodies': {'cup': 3}, 'end_s': None,
+                                     'ended_by': 'open_at_end'}]
+    assert list(ts) == [k for k in pipeline['timing_summary.json'] if k != 'm7_suspend_s']
+    assert n['world_counts.json'] == {'drops': [], 'mode': 'counts', 'steps': 5, 'closed': True, 'check_s': s}
+
+
+def test_bridge_episode_time_deltas_and_s_numbers_masked_list_kept(tmp_path):
+    """bridge_episode.json: time_deltas keeps its list with every number
+    masked, counts_cost_s and the driver_clock event times masked, the G18
+    detail's seconds masked by the console masks, the rest compared."""
+    pipeline, bridge = _raw_episode()
+    be = rec.normalise(_run_folder(tmp_path, pipeline=pipeline, bridge=bridge))['bridge_episode.json']
+    s = '<s>'
+    assert be['time_deltas'] == [s, s] and be['counts_cost_s'] == s and be['rewards'] == [0.0, 1.0]
+    assert be['driver_clock'] == {'events': [['seeded', s]], 'seed': 0}
+    assert be['ledger_gates'] == [['G18', 'PASS', 'initialize return to rollout start <T> s '
+                                                  '(initialize_call +<T> s)']]
+    assert list(be) == list(bridge) and be['drops'] == 5
+
+
+def test_runs_that_differ_in_times_alone_normalise_equal_a_count_shows(tmp_path):
+    """Two runs whose wall times differ normalise to the same five files;
+    a number that is no time shows in each of them.  Catches a time left
+    in and a mask so wide that it hides a count."""
+    a = _norm_episode(tmp_path / 'a')
+    b = _norm_episode(tmp_path / 'b', times=7.5)
+    c = _norm_episode(tmp_path / 'c', count=6)
+    assert {f: a[f] for f in _TIME_FILES} == {f: b[f] for f in _TIME_FILES}
+    assert [f for f in _TIME_FILES if a[f] == c[f]] == []
+
+
+def test_episode_notes_name_every_masked_time_key():
+    """The normalisation line of every episode pin's NOTES names each time
+    key the code masks, the mask, the M7 keys left as before and the pid
+    still removed; nothing of the old removals."""
+    line = rec.episode_notes()[0]
+    keys = [*rec.LEDGER_TIME_KEYS, *[k for ks in rec.LEDGER_TIME_KEYS_BY_KIND.values() for k in ks],
+            *rec.EYE_TIME_KEYS, *rec.EYE_EXTRA_TIME_KEYS, *rec.M7_SUMMARY_KEYS, rec.SECONDS_MASK]
+    for word in keys + ['bridge_timing *_s', 'driver_clock', 'time_deltas', 'timing_summary', 'world_counts',
+                        'bridge_episode', 'null kept', 'SPEC D6']:
+        assert word in line, word
+    for kind, dropped in rec.LEDGER_DROP_BY_KIND.items():
+        for k in dropped:
+            assert f'{kind}.{k} removed' in line
+    assert 'times removed' not in line and 'time keys removed' not in line

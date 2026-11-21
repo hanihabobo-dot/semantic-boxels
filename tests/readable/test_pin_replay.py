@@ -332,8 +332,8 @@ def test_ledger_normalisation_maps_ids_by_first_use():
         {'t': 1.0, 'wall': 2.0, 'kind': 'note', 'text': '<obj at 0x7f00deadbeef>'},
     ]
     n = rec.norm_ledger(rows, lambda s: s)
-    assert n[0] == {'kind': 'ledger_open'}
-    assert n[1]['plan_obj'] == 'obj#1' and 'plan_time_s' not in n[1] and 't' not in n[1]
+    assert n[0] == {'t': '<s>', 'wall': '<s>', 'kind': 'ledger_open'}           # SPEC D6: masked, pid removed
+    assert n[1]['plan_obj'] == 'obj#1' and n[1]['plan_time_s'] == '<s>' and n[1]['t'] == '<s>'
     assert n[1]['actions'] == [['move', 'q0', 'Trajectory@#1'], ['pick', 'a', 'Grasp@#2']]
     assert n[2]['plan_obj'] == 'obj#1' and n[2]['args'] == ['q0', 'Trajectory@#1']
     # A reused address in a later plan is a new token (keyed by plan id).

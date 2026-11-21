@@ -4788,10 +4788,10 @@ def p35b_bridge_table(out):
 # cwd and environment as run.ps1 builds them).  The caller runs the group
 # under flock /root/sb_pipeline.lock and through the health gate (PLAN rule
 # 17); nothing here takes the lock.  The written files are the episode's
-# normalised outputs (record_episode.normalise: times, pids and wall clocks
-# removed, plan_obj and Type@id mapped to their order of first use, paths
-# and stamps masked); files named INFO_* (line numbers, seconds) are not
-# compared.
+# normalised outputs (record_episode.normalise: times and wall clocks
+# masked to <s> with their keys kept, pids removed, plan_obj and Type@id
+# mapped to their order of first use, paths and stamps masked); files named
+# INFO_* (line numbers, seconds) are not compared.
 #
 #   p30_*            pin 30's real runs: rp0 with a synthetic one-call tape,
 #                    a no-plan with no text (planner_failed) and a no-plan
