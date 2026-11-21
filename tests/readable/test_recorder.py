@@ -1051,13 +1051,13 @@ def test_ledger_and_eye_times_masked_keys_and_rows_kept_pid_removed(tmp_path):
     assert [list(r) for r in eye] == [list(r) for r in pipeline['eye.jsonl']]
 
 
-def test_timing_files_mask_every_s_number_m7_keys_as_before(tmp_path):
+def test_timing_files_mask_every_s_number_m7_rows_masked_length_kept(tmp_path):
     """timing_summary.json and world_counts.json: every number under a key
     ending in _s, the three keys once dropped by name among them, becomes
-    <s>, also in a list; null stays.  The M7 keys keep the old rule until
-    D6's M7 part (item 10): m7_suspend_s and the numbers of start_s and
-    until_s removed, end_s null kept.  Catches the old drop, the M7 part
-    built early and a masked null."""
+    <s>, also in a list; null stays.  The M7 keys as D6's M7 part says
+    (item 10): m7_suspend_s kept with its value, start_s and until_s of
+    each m7_suspensions row masked, end_s null kept.  Catches the old drop
+    and a masked null."""
     pipeline, _ = _raw_episode()
     n = rec.normalise(_run_folder(tmp_path, pipeline=pipeline))
     s = '<s>'
@@ -1065,10 +1065,10 @@ def test_timing_files_mask_every_s_number_m7_keys_as_before(tmp_path):
     assert (ts['total_planning_time_s'], ts['per_call_planning_time_s'], ts['counts_cost_s']) == (s, [s], s)
     assert ts['m8']['per_plan'] == [{'twin_render_s': s, 'twin_renders': 5, 'build_s': None,
                                      'over_region_s': s, 'plan': 1}]
-    assert 'm7_suspend_s' not in ts
-    assert ts['m7_suspensions'] == [{'region': 'shadow_1', 'bodies': {'cup': 3}, 'end_s': None,
-                                     'ended_by': 'open_at_end'}]
-    assert list(ts) == [k for k in pipeline['timing_summary.json'] if k != 'm7_suspend_s']
+    assert ts['m7_suspend_s'] == 120.0          # D6's M7 part (item 10c): the length stays with its value
+    assert ts['m7_suspensions'] == [{'region': 'shadow_1', 'bodies': {'cup': 3}, 'start_s': s, 'until_s': s,
+                                     'end_s': None, 'ended_by': 'open_at_end'}]
+    assert list(ts) == list(pipeline['timing_summary.json'])
     assert n['world_counts.json'] == {'drops': [], 'mode': 'counts', 'steps': 5, 'closed': True, 'check_s': s}
 
 
@@ -1099,11 +1099,13 @@ def test_runs_that_differ_in_times_alone_normalise_equal_a_count_shows(tmp_path)
 
 def test_episode_notes_name_every_masked_time_key():
     """The normalisation line of every episode pin's NOTES names each time
-    key the code masks, the mask, the M7 keys left as before and the pid
-    still removed; nothing of the old removals."""
+    key the code masks, the mask, the M7 keys (the length and each time key
+    of a suspension row, read from run_logger) and the pid still removed;
+    nothing of the old removals."""
     line = rec.episode_notes()[0]
     keys = [*rec.LEDGER_TIME_KEYS, *[k for ks in rec.LEDGER_TIME_KEYS_BY_KIND.values() for k in ks],
-            *rec.EYE_TIME_KEYS, *rec.EYE_EXTRA_TIME_KEYS, *rec.M7_SUMMARY_KEYS, rec.SECONDS_MASK]
+            *rec.EYE_TIME_KEYS, *rec.EYE_EXTRA_TIME_KEYS, rec.M7_LENGTH_KEY, rec.M7_ROWS_KEY,
+            *_suspension_row_keys(), rec.SECONDS_MASK]
     for word in keys + ['bridge_timing *_s', 'driver_clock', 'time_deltas', 'timing_summary', 'world_counts',
                         'bridge_episode', 'null kept', 'SPEC D6']:
         assert word in line, word
@@ -1111,6 +1113,43 @@ def test_episode_notes_name_every_masked_time_key():
         for k in dropped:
             assert f'{kind}.{k} removed' in line
     assert 'times removed' not in line and 'time keys removed' not in line
+    assert 'as before' not in line and 'm7_suspensions removed' not in line
+
+
+def _suspension_row_keys():
+    """The keys of an m7_suspensions row, read from the dict that
+    run_logger.suspension_rows builds (run_logger.py:421-423)."""
+    tree = ast.parse((REPO / 'run_logger.py').read_text(encoding='utf-8'))
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'suspension_rows')
+    row, = [n for n in ast.walk(fn) if isinstance(n, ast.Dict)]
+    return [k.value for k in row.keys]
+
+
+def test_m7_rows_keep_every_key_their_times_masked_the_length_kept(tmp_path):
+    """SPEC D6's M7 part (U2 and R's ruling; item 10c): each m7_suspensions
+    row keeps the keys run_logger.suspension_rows writes, those ending in
+    _s with a number masked and null kept; region, bodies and ended_by are
+    compared as they are, a body whose name ends in _s too; m7_suspend_s,
+    the configured length, keeps its value, so D4's length shows and the
+    rest stays equal.  Catches a row's times dropped or left in, the length
+    masked or dropped, a mask that reaches into bodies, a masked null."""
+    keys = _suspension_row_keys()
+    masked = [k for k in keys if k.endswith('_s')]
+    pipeline, _ = _raw_episode()
+    first = pipeline['timing_summary.json']['m7_suspensions'][0]
+    assert list(first) == keys and masked
+    first.update(bodies={'cup': 3, 'lid_s': 2}, end_s=130.5, ended_by='released')
+    second = dict(first, region='shadow_2', end_s=None, ended_by='open_at_end')
+    pipeline['timing_summary.json']['m7_suspensions'].append(second)
+    ts = rec.normalise(_run_folder(tmp_path / 'a', pipeline=pipeline))['timing_summary.json']
+    assert ts['m7_suspend_s'] == pipeline['timing_summary.json']['m7_suspend_s']
+    assert ts['m7_suspensions'] == [{k: ('<s>' if k in masked and v is not None else v) for k, v in r.items()}
+                                    for r in (first, second)]
+    assert ts['m7_suspensions'][0]['bodies'] == {'cup': 3, 'lid_s': 2} and ts['m7_suspensions'][1]['end_s'] is None
+    pipeline['timing_summary.json']['m7_suspend_s'] = rec.D4_SET['execution.M7_SUSPEND_S']
+    long = rec.normalise(_run_folder(tmp_path / 'b', pipeline=pipeline))['timing_summary.json']
+    assert long['m7_suspend_s'] == rec.D4_SET['execution.M7_SUSPEND_S'] != ts['m7_suspend_s']
+    assert dict(long, m7_suspend_s=None) == dict(ts, m7_suspend_s=None)
 
 
 # ---------------------------------------------------------------------------

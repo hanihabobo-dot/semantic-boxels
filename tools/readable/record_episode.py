@@ -1504,20 +1504,20 @@ def norm_eye(rows, mask):
     return out
 
 
-# timing_summary.json's M7 keys (SPEC D6, its first part) are built last in
-# WP-B (R's advice, Job 10); until then they are treated as before.
-M7_SUMMARY_KEYS = ('m7_suspend_s', 'm7_suspensions')
+# timing_summary.json's M7 keys (SPEC D6, its first part, U2; written by
+# run_logger.report_run_outcome, run_logger.py:711-713).  m7_suspend_s is
+# the configured length, not a measurement: it stays with its value.  Each
+# m7_suspensions row (run_logger.suspension_rows) keeps every key: those
+# that end in _s (start_s, until_s, end_s) have a number masked and null
+# kept; region, bodies and ended_by are compared as they are.
+M7_LENGTH_KEY = 'm7_suspend_s'
+M7_ROWS_KEY = 'm7_suspensions'
 
 
-def _drop_time_keys(obj):
-    """The old rule, now for the M7 keys only: every number under a key
-    that ends in _s removed with its key."""
-    if isinstance(obj, dict):
-        return {k: _drop_time_keys(v) for k, v in obj.items()
-                if not (k.endswith('_s') and isinstance(v, (int, float)) and not isinstance(v, bool))}
-    if isinstance(obj, list):
-        return [_drop_time_keys(v) for v in obj]
-    return obj
+def _m7_row_masked(row):
+    if not isinstance(row, dict):
+        return mask_seconds(row)
+    return {k: (_seconds_masked(v) if isinstance(k, str) and k.endswith('_s') else v) for k, v in row.items()}
 
 
 def norm_times(obj):
@@ -1526,12 +1526,18 @@ def norm_times(obj):
     under a key that ends in _s, also in a list under such a key, becomes
     '<s>' and the key stays.  The three keys the normaliser dropped by name
     (total_planning_time_s, per_call_planning_time_s, counts_cost_s) end in
-    _s and are among them.  The top-level M7 keys keep the old rule."""
+    _s and are among them.  The top-level M7 keys as D6 says: the length
+    kept, the rows' own time keys masked."""
     if not isinstance(obj, dict):
         return mask_seconds(obj)
     out = {}
     for k, v in obj.items():
-        out.update(_drop_time_keys({k: v}) if k in M7_SUMMARY_KEYS else mask_seconds({k: v}))
+        if k == M7_LENGTH_KEY:
+            out[k] = v
+        elif k == M7_ROWS_KEY and isinstance(v, list):
+            out[k] = [_m7_row_masked(r) for r in v]
+        else:
+            out.update(mask_seconds({k: v}))
     return out
 
 
@@ -1573,8 +1579,9 @@ def episode_notes():
         'normalised by record_episode.normalise: times masked to <s> with their keys kept, null kept '
         '(SPEC D6): ledger t and wall, plan.plan_time_s, every bridge_timing *_s and the time of each '
         'driver_clock event; eye t_wall and extra.plan_time_s; every number under a key ending in _s '
-        'in timing_summary, world_counts and bridge_episode, and bridge_episode time_deltas; the M7 '
-        'keys of timing_summary as before (m7_suspend_s and the *_s numbers of m7_suspensions removed); '
+        'in timing_summary, world_counts and bridge_episode, and bridge_episode time_deltas; in '
+        'timing_summary m7_suspend_s, the configured length, compared with its value, and in each '
+        'm7_suspensions row start_s, until_s and end_s masked, region, bodies and ended_by compared; '
         'ledger_open.pid removed; plan_obj and Type@id mapped to their order of first use keyed by plan '
         'id; console times masked; paths and stamps masked',
         'rec/CRASH.txt (SPEC D7): the recorder\'s sys.excepthook writes it when the boxels entry shows a '
