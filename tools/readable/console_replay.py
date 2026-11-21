@@ -948,10 +948,10 @@ def _made_bridge_tag2(r):
     r.end('look_outcome')                                                      # test_full_pipeline.py:2605
     r.line('', '  Executing: sense')                                           # test_full_pipeline.py:2200
     r.step(2, 2, 'sense', 'dice', 'shadow_of_cup__02')
+    # in the tag's order: handle_sense_action prints and suspends (execution.py:3393-3403), writes
+    # the discovery row in its loop over the bodies found (3484, 3689), and returns; then main
+    # writes sense_result and ends the step (test_full_pipeline.py:2461-2464)
     r.line('    Sensing shadow_of_cup__02 (fixed camera)...')                  # execution.py:3027
-    r.row('sense_result', reason='sense_contains_nontarget', region='shadow_of_cup__02')
-    r.row('sense_discovery', body='ball', region='shadow_of_cup__02', rediscovery=True, kept=['shadow_of_ball'],
-          recast=[], giveup=True, parked=True)                                # execution.py:3689-3694
     r.line('    shadow_of_cup__02: a body found in it reaches the F9 give-up, so nothing re-covers what it '
            'hides; suspending shadow_of_cup__02 for 120 s instead of marking it empty (M7): ball '
            'rediscovered 3 times')                                            # execution.py:3395-3400
@@ -959,7 +959,10 @@ def _made_bridge_tag2(r):
           channel='strike_park')                                              # belief.py:112 (execution.py:3401-3403)
     r.row('m7_suspension', op='start', region='shadow_of_cup__02', bodies={'ball': 3},
           seconds=120.0)                                                      # belief.py:140-141
-    r.end('sense_outcome')
+    r.row('sense_discovery', body='ball', region='shadow_of_cup__02', rediscovery=True, kept=['shadow_of_ball'],
+          recast=[], giveup=True, parked=True)                                # execution.py:3689-3694
+    r.row('sense_result', reason='sense_contains_nontarget', continue_=False)  # test_full_pipeline.py:2461-2462
+    r.end('sense_outcome')                                                     # test_full_pipeline.py:2464
     # the loop head of plan 3: the suspension's time is over (test_full_pipeline.py:1845-1849)
     r.row('belief', region='shadow_of_cup__02', op='status', status='unknown',
           channel='suspension_over')                                          # belief.py:155
