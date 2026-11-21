@@ -987,15 +987,21 @@ def test_ledger_counts_count_the_rows_d3_and_d4_decide_on():
 
 def test_twin_rule_of_d3():
     """A sense_discovery row or a contains_nontarget sense: a twin, also for
-    a D entry; none for an entry that sets --m7 itself, none without such
-    a row (an unlocalizable sense alone included)."""
+    a D entry and an R entry; none for an entry that sets --m7 itself, none
+    without such a row (an unlocalizable sense alone included).  R has no
+    sense action with the look (SPEC D1), so no such row is expected there,
+    but the rule is the same: catches a rule that gives R no twin."""
     c = rec.ledger_counts
     assert rec.twin_rule('f204', c(_ROWS))['name'] == 'f204_m7off'
     assert rec.twin_rule('f140', c(_ROWS[:3])) == {'name': None, 'reasons': [], 'none_because': 'no such row'}
     assert rec.twin_rule('rp0', c(_ROWS[3:4]))['name'] == 'rp0_m7off'
     assert rec.twin_rule('br0', c(_ROWS[4:5]))['reasons'] == ['1 sense_discovery row(s)']
-    off = rec.twin_rule('f204_m7off', c(_ROWS))
-    assert off['name'] is None and off['none_because'] == 'the entry sets --m7 itself'
+    assert rec.twin_rule('r140', c(_ROWS[4:5]))['name'] == 'r140_m7off'
+    assert rec.twin_rule('r141', c(_ROWS[:3])) == {'name': None, 'reasons': [], 'none_because': 'no such row'}
+    assert rec.twin_rule('rp0_look', c(_ROWS[3:4]))['name'] == 'rp0_look_m7off'
+    for twin in ('f204_m7off', 'r140_m7off'):
+        off = rec.twin_rule(twin, c(_ROWS))
+        assert off['name'] is None and off['none_because'] == 'the entry sets --m7 itself'
 
 
 def _fake_recorder(monkeypatch, ledgers, status=None, sets_seen=None):
