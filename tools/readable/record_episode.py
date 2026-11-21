@@ -2079,10 +2079,18 @@ def coverage_compare(trace_files, baseline, old_path, new_path=TFP):
 # ---------------------------------------------------------------------------
 
 # At storing (SPEC D3, D4): the rows the two rules decide on, counted in the
-# recording's ledger.  A sense whose outcome is contains_nontarget and that
-# reaches M7's code ends with this reason (execution.py:3743,
-# reason=f"sense_{sense_outcome}"; M7's code starts at 3386); the
-# unlocalizable case returns before it (3372-3373) and does not count.
+# recording's ledger by the names the tag's code writes them with (each read
+# again from that code by test_recorder.py's
+# test_the_names_the_counts_rest_on_are_the_tag_s).
+M7_SUSPENSION_KIND = 'm7_suspension'          # belief.py:134, 140 and 162
+M7_SUSPENSION_START_OP = 'start'              # its op at belief.py:140
+M7_SUSPENSION_END_OP = 'end'                  # its op at belief.py:134 and 162
+SENSE_DISCOVERY_KIND = 'sense_discovery'      # execution.py:3689-3690, written with M7 on only
+SENSE_RESULT_KIND = 'sense_result'            # test_full_pipeline.py:2461, reason=sense_result.reason
+# A sense whose outcome is contains_nontarget and that reaches M7's code ends
+# with this reason (execution.py:3743, reason=f"sense_{sense_outcome}"; M7's
+# code starts at 3386); the unlocalizable case returns before it (3372-3373)
+# and does not count.
 NONTARGET_REASON = 'sense_contains_nontarget'
 
 
@@ -2093,11 +2101,11 @@ def ledger_counts(rows):
          'sense_result_contains_nontarget': 0}
     for r in rows or []:
         kind = r.get('kind')
-        if kind == 'm7_suspension':
-            c['m7_suspension_end' if r.get('op') == 'end' else 'm7_suspension_start'] += 1
-        elif kind == 'sense_discovery':
+        if kind == M7_SUSPENSION_KIND:
+            c['m7_suspension_end' if r.get('op') == M7_SUSPENSION_END_OP else 'm7_suspension_start'] += 1
+        elif kind == SENSE_DISCOVERY_KIND:
             c['sense_discovery'] += 1
-        elif kind == 'sense_result' and r.get('reason') == NONTARGET_REASON:
+        elif kind == SENSE_RESULT_KIND and r.get('reason') == NONTARGET_REASON:
             c['sense_result_contains_nontarget'] += 1
     return c
 

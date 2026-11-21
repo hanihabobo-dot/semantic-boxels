@@ -1034,6 +1034,66 @@ def test_ledger_counts_count_the_rows_d3_and_d4_decide_on():
     assert rec.ledger_counts(None) == rec.ledger_counts([])
 
 
+def test_the_names_the_counts_rest_on_are_the_tag_s():
+    """Every name D3's and D4's counts and D6's M7 masks look for is one the
+    tag's code writes: the three row kinds among pin 40's ledger_kinds()
+    (read from every ledger_event call), the suspension's ops those of its
+    ledger_event calls, the contains_nontarget reason the f-string of
+    execution.py makes from the outcome M7's branch compares, the sense
+    row's reason taken from that result, the two timing-summary keys among
+    those run_logger writes, and each name of SET_NAMES a top-level name of
+    its module.  Catches a name the reference spells otherwise, which would
+    give counts of 0 with every other test green."""
+    po = _load('pin_outputs', REPO / 'tools' / 'readable' / 'pin_outputs.py')
+    kinds = po.ledger_kinds()
+    for k in (rec.M7_SUSPENSION_KIND, rec.SENSE_DISCOVERY_KIND, rec.SENSE_RESULT_KIND):
+        assert k in kinds, k
+
+    def calls_of(tree, kind):
+        return [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+                and ast.unparse(n.func).split('.')[-1] == 'ledger_event' and n.args
+                and isinstance(n.args[0], ast.Constant) and n.args[0].value == kind]
+    sites = [s for s in po._call_sites('ledger_event') if s['kind'] == rec.M7_SUSPENSION_KIND]
+    ops = [ast.literal_eval(k.value) for f in sorted({s['file'] for s in sites})
+           for n in calls_of(ast.parse((REPO / f).read_text(encoding='utf-8')), rec.M7_SUSPENSION_KIND)
+           for k in n.keywords if k.arg == 'op']
+    assert sites and len(ops) == len(sites)
+    assert set(ops) == {rec.M7_SUSPENSION_START_OP, rec.M7_SUSPENSION_END_OP}
+    c = rec.ledger_counts([{'kind': rec.M7_SUSPENSION_KIND, 'op': op} for op in ops])
+    assert (c['m7_suspension_start'], c['m7_suspension_end']) == (ops.count(rec.M7_SUSPENSION_START_OP),
+                                                                  ops.count(rec.M7_SUSPENSION_END_OP))
+    ex = ast.parse((REPO / 'execution.py').read_text(encoding='utf-8'))
+    under_m7 = [(ast.unparse(cmp.left), cmp.comparators[0].value) for n in ast.walk(ex)
+                if isinstance(n, ast.BoolOp) and isinstance(n.op, ast.And)
+                and any(isinstance(v, ast.Name) and v.id == 'M7' for v in n.values)
+                for cmp in n.values if isinstance(cmp, ast.Compare) and len(cmp.ops) == 1
+                and isinstance(cmp.ops[0], ast.Eq) and isinstance(cmp.comparators[0], ast.Constant)]
+    assert len(under_m7) == 1, under_m7          # if M7 and sense_outcome == "contains_nontarget"
+    var, outcome = under_m7[0]
+    made = [k.value.values[0].value for n in ast.walk(ex) if isinstance(n, ast.Call) for k in n.keywords
+            if k.arg == 'reason' and isinstance(k.value, ast.JoinedStr) and len(k.value.values) == 2
+            and isinstance(k.value.values[0], ast.Constant) and isinstance(k.value.values[1], ast.FormattedValue)
+            and ast.unparse(k.value.values[1].value) == var]
+    assert len(made) == 1 and rec.NONTARGET_REASON == made[0] + outcome
+    tfp = ast.parse((REPO / 'test_full_pipeline.py').read_text(encoding='utf-8'))
+    sense_rows = calls_of(tfp, rec.SENSE_RESULT_KIND)
+    assert sense_rows and all(ast.unparse(k.value).endswith('.reason') for n in sense_rows
+                              for k in n.keywords if k.arg == 'reason')
+    assert calls_of(ex, rec.SENSE_DISCOVERY_KIND)
+    rl = ast.parse((REPO / 'run_logger.py').read_text(encoding='utf-8'))
+    summary = {k.value: v for n in ast.walk(rl) if isinstance(n, ast.Dict)
+               for k, v in zip(n.keys, n.values) if isinstance(k, ast.Constant)}
+    assert rec.M7_LENGTH_KEY in summary and rec.M7_ROWS_KEY in summary
+    assert ast.unparse(summary[rec.M7_ROWS_KEY]).startswith('suspension_rows(')
+    for name in rec.SET_NAMES:
+        mod, attr = name.split('.')
+        tree = ast.parse((REPO / f'{mod}.py').read_text(encoding='utf-8'))
+        assert [n for n in tree.body if isinstance(n, (ast.Assign, ast.AnnAssign)) and attr in
+                [t.id for t in (n.targets if isinstance(n, ast.Assign) else [n.target])
+                 if isinstance(t, ast.Name)]], name
+    assert set(rec.D4_SET) <= set(rec.SET_NAMES)
+
+
 def test_twin_rule_of_d3():
     """A sense_discovery row or a contains_nontarget sense: a twin, also for
     a D entry and an R entry; none for an entry that sets --m7 itself, none
