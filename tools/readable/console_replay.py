@@ -927,8 +927,10 @@ def _made_bridge_tag2(r):
            "and no grasp reaches it.  Not registered as an object; interior_of_cup is where to look once cup "
            "is moved (BF#65 (d))")                                           # interior_regions.py:389-394
     r.row('seen_under', target='dice', cover='cup', region='interior_of_cup', pixels=85)  # interior_regions.py:395-396
-    # plan 2: a look that leaves cup's pose open (look_outcome), a sense whose body reaches M7's
-    # F9 give-up (the region suspended, not marked empty)
+    # plan 2: a look of cup whose own region stays blocked (look_blocked: the target was not seen in
+    # it, look_action.py:494-504; a boxel look that does not go on only ends, test_full_pipeline.py:
+    # 2559-2606), then a sense whose body reaches M7's F9 give-up (the region suspended, not marked
+    # empty)
     r.line('', '=== PLAN #2 ===', 'Unknown shadows remaining: 2')
     r.plan(2, [['look', 'cup', 'shadow_of_cup__01', 'view__look_cup_1', 'cfg:look_cup_1'],
                ['sense', 'dice', 'shadow_of_cup__02'], ['sense', 'dice', 'interior_of_cup']], goal=goal)
@@ -936,14 +938,13 @@ def _made_bridge_tag2(r):
     r.step(2, 1, 'look', 'cup', 'shadow_of_cup__01', 'view__look_cup_1', 'cfg:look_cup_1')
     r.line('    look shadow_of_cup__01: still_blocked (40% hidden)',           # look_action.py:437-438
            '    look: shadow_of_cup__01 blocked [strike 1/3]',                 # look_action.py:485
-           "    look cup from look_cup_1: look_pose_incomplete; named regions ['shadow_of_cup__01'], "
+           "    look cup from look_cup_1: look_blocked; named regions ['shadow_of_cup__01'], "
            "objects ['cup'], re-posed [], registered []")                     # look_action.py:505-507
-    r.row('look_reveals', config='look_cup_1', named=['shadow_of_cup__01'])    # test_full_pipeline.py:2545
-    r.row('look_result', reason='look_pose_incomplete', continue_=False, obj='cup', region='shadow_of_cup__01',
+    r.row('look_reveals', config='look_cup_1', named=['shadow_of_cup__01', 'cup'])  # test_full_pipeline.py:2545
+    r.row('look_result', reason='look_blocked', continue_=False, obj='cup', region='shadow_of_cup__01',
           config='look_cup_1', outcomes={'shadow_of_cup__01': 'still_blocked'},
           hidden={'shadow_of_cup__01': 0.4}, reposed=[], found_in=None, registered=[],
           blocked=['shadow_of_cup__01'], parked=[])                           # test_full_pipeline.py:2546-2555
-    r.line('    [look] pose strike 1/3 for cup')                               # test_full_pipeline.py:2591-2592
     r.end('look_outcome')                                                      # test_full_pipeline.py:2605
     r.line('', '  Executing: sense')                                           # test_full_pipeline.py:2200
     r.step(2, 2, 'sense', 'dice', 'shadow_of_cup__02')
