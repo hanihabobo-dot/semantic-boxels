@@ -14,6 +14,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -187,6 +188,34 @@ def test_tabletop_look_entry_is_run_boxels_look_boxel_eye_arm():
         assert '--interior-regions' not in e['argv']
     with pytest.raises(rec.EntryError):
         rec.entry('br0_look')                # the bridge is not run boxels
+
+
+def test_tabletop_entry_notes_name_headless_and_the_recorder_s_words():
+    """SPEC D18 (1): rp<seed>_look is, apart from the recorder's own words,
+    what run boxels -Look boxel -Eye arm builds (pin 32's line for seed 0).
+    The D entries start run boxels -Headless, whose --no-gui (run.ps1:214)
+    is one of those words; the NOTES name -Headless and every word the
+    recorder adds.  The flags' order is read from run.ps1's command line.
+    Catches a line that names the launcher without -Headless or leaves a
+    word out."""
+    ps1 = (REPO / 'run.ps1').read_text(encoding='utf-8')
+    assert f"$nogui = if ($Headless) {{ ' {rec.HEADLESS_WORD}' }} else {{ '' }}" in ps1
+    found = re.findall(r'\$mine = "test_full_pipeline\.py\$nogui((?: --[a-z-]+ \$\w+)+)"', ps1)
+    assert len(found) == 1
+    flags = re.findall(r'(--[a-z-]+) \$\w+', found[0])
+    for s in range(5):
+        name = f'rp{s}_look'
+        argv = rec.entry(name)['argv']
+        i = argv.index('--log-level')
+        words = [x for x in argv[:i] if x == rec.HEADLESS_WORD] + argv[i:]
+        assert words == [rec.HEADLESS_WORD, '--log-level', 'normal', '--no-telemetry']
+        rest = [x for x in argv[:i] if x != rec.HEADLESS_WORD]
+        assert rest[:-4][0::2] == flags and rest[-4:] == rec.LOOK_ARGV
+        line = rec.entry_notes(name)[1]
+        for word in ('run boxels -Headless -Look boxel -Eye arm starts it', f"own words {' '.join(words)} (",
+                     f"{rec.HEADLESS_WORD} is -Headless's", 'what run boxels -Look boxel -Eye arm builds',
+                     'pin 32 holds for seed 0', 'no --interior-regions'):
+            assert word in line, (name, word)
 
 
 def test_d_entries_are_unchanged():

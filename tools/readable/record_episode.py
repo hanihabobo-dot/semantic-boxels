@@ -15,9 +15,10 @@ recorded or replayed (Phase 0 of the readable migration, PLAN 5.2 pin 47 and
 Episodes: the table EPISODES (configuration D), f<seed> and r<seed> (the
 paper's arms F and R on a generated find_dice scene: the harness's command
 for arm O, then the declared string, see "Entries beyond the table"), a
-boxels entry with _look (the tabletop start `run boxels -Look boxel -Eye
-arm`), and any of these with _m7off (its --m7 off twin).  The parent takes
-an episode's argv from its entry only; it refuses positional arguments.
+boxels entry with _look (the tabletop start `run boxels -Headless -Look
+boxel -Eye arm`), and any of these with _m7off (its --m7 off twin).  The
+parent takes an episode's argv from its entry only; it refuses positional
+arguments.
 --record-set counts, at storing, the ledger rows SPEC D3 and D4 decide on
 (STORED.json beside each tape, STORE.json over the set), records a run
 that holds m7_suspension rows again at once with execution.M7_SUSPEND_S =
@@ -158,12 +159,15 @@ PIN47_EPISODES = ('rp0', 'rp1', 'rp1o3', 'stack0', 'br0', 'br5')
 #                     the arm (its P4_O_ARGS, read by text), then
 #                     --log-level normal, the one departure (R_PHASE0 3.3:
 #                     the recorder needs the entry's plain exit).  SPEC D2.
-#   <rp entry>_look   a tabletop D entry (kind boxels) as `run boxels -Look
-#                     boxel -Eye arm` starts it (PLAN 5.8's tabletop start in
-#                     R; run.ps1:129 and 138 add ` --look boxel` and
-#                     ` --eye arm` after the launcher's command): those four
-#                     words before the recorder's own additions.  run.ps1 has
-#                     no switch for --interior-regions, so this start has none.
+#   <rp entry>_look   a tabletop D entry (kind boxels) as `run boxels
+#                     -Headless -Look boxel -Eye arm` starts it (PLAN 5.8's
+#                     tabletop start in R; run.ps1:129 and 138 add ` --look
+#                     boxel` and ` --eye arm` after the launcher's command):
+#                     those four words before the recorder's own additions.
+#                     Without --no-gui (-Headless's) and those additions it is
+#                     run.ps1's `run boxels -Look boxel -Eye arm` (SPEC D18
+#                     (1)).  run.ps1 has no switch for --interior-regions, so
+#                     this start has none.
 #   <entry>_m7off     the entry's --m7 off twin (SPEC D3): `--m7 off` after
 #                     the command the entry reproduces (for F and R after
 #                     the declared string, as tracks/evalfinal/m7/checks/
@@ -182,6 +186,7 @@ CONFIG_ARMS = {'f': 'F', 'r': 'R'}          # entry prefix: the arm's letter in 
 TWIN_SUFFIX = '_m7off'
 LOOK_SUFFIX = '_look'
 LOOK_ARGV = ['--look', 'boxel', '--eye', 'arm']    # run.ps1:129 ($Look boxel) and :138 (-Eye arm)
+HEADLESS_WORD = '--no-gui'      # run.ps1:214, what -Headless adds to run boxels (every boxels D entry)
 _CONFIG_ENTRY = re.compile(r'(?P<cfg>[fr])(?P<seed>[1-9][0-9]*)$')
 # The recorder's own additions at the end of every entry's argv (the
 # departures from the command an entry reproduces); a twin's --m7 off goes
@@ -432,10 +437,15 @@ def entry_notes(name):
     if spec['config'] == 'D':
         lines = [f'episode {name}: {spec["kind"]}, argv {spec["argv"]}']
     elif 'tabletop_of' in spec:
+        argv = spec['argv']
+        i = argv.index(DEPARTURE_FLAG)
+        words = [x for x in argv[:i] if x == HEADLESS_WORD] + argv[i:]     # -Headless's, the departures
         lines = [f'episode {name}: configuration R on the tabletop, {spec["kind"]}, argv {spec["argv"]}',
-                 f'the tabletop start of PLAN 5.8: {spec["tabletop_of"]} as run boxels -Look boxel -Eye arm '
-                 f'starts it (run.ps1 adds --look boxel and --eye arm after the launcher\'s command); no '
-                 f'--interior-regions (run.ps1 has no switch for it)']
+                 f'the tabletop start of PLAN 5.8 (SPEC D18 (1)): {spec["tabletop_of"]} as run boxels -Headless '
+                 f'-Look boxel -Eye arm starts it (run.ps1 adds --look boxel and --eye arm after the launcher\'s '
+                 f'command); apart from the recorder\'s own words {" ".join(words)} ({words[0]} is -Headless\'s, '
+                 f'as in every D entry), its argv is what run boxels -Look boxel -Eye arm builds for the seed, '
+                 f'the line pin 32 holds for seed 0; no --interior-regions (run.ps1 has no switch for it)']
     else:
         h, dec = spec['harness'], spec['declared']
         lines = [f'episode {name}: configuration {spec["config"]}, bridge on the generated scene of seed '
@@ -2213,7 +2223,7 @@ def main(argv=None):
     ap.add_argument('--episode', type=entry_name,
                     help=f'{", ".join(sorted(EPISODES))} (configuration D), f<seed> or r<seed> '
                          f'(F or R on a generated scene), a boxels entry with {LOOK_SUFFIX} (run boxels '
-                         f'-Look boxel -Eye arm), each also with {TWIN_SUFFIX} (its --m7 off twin)')
+                         f'-Headless -Look boxel -Eye arm), each also with {TWIN_SUFFIX} (its --m7 off twin)')
     ap.add_argument('--print-argv', action='store_true',
                     help='print what --episode starts (command, cwd, environment, sources) and start nothing')
     ap.add_argument('--mode', choices=('record', 'replay', 'first-plan'))
