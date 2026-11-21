@@ -455,8 +455,10 @@ def entry_notes(name):
                      + (': the path of the paper\'s kept F rows (wave 2 ran before M7 existed)'
                         if spec['config'] == 'F' else ''))
     elif spec['config'] != 'D':
-        lines.append('m7: no --m7, the trunk\'s default (on); its twin with --m7 off is '
-                     f'{name}{TWIN_SUFFIX} (SPEC D3)')
+        # The twin exists only if D3's rule asks for it when the tape is
+        # stored (twin_rule, STORED.json's twin), so the line says "if".
+        lines.append('m7: no --m7, the trunk\'s default (on); its --m7 off twin, if D3\'s rule asks for one '
+                     f'when the tape is stored (STORED.json twin), is {name}{TWIN_SUFFIX} (SPEC D3)')
     return lines
 
 

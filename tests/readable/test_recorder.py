@@ -197,6 +197,26 @@ def test_d_entries_are_unchanged():
         assert rec.entry_notes(name) == [f'episode {name}: {spec["kind"]}, argv {spec["argv"]}']
 
 
+def test_config_entry_notes_name_the_sources_and_the_twin_only_as_d3_may_ask():
+    """The NOTES of an F or R entry (SPEC D2): the declaration's file, line
+    and blob, the harness's file, BOXEL_EYE_IMAGES and P4_SHOTS; the m7 line
+    names the --m7 off twin as one D3's rule may ask for when the tape is
+    stored, not as one that exists; a twin's line says whose twin it is.
+    Catches a line that names a twin whether or not one is recorded."""
+    for name, arm in (('f140', 'F'), ('r141', 'R')):
+        notes = rec.entry_notes(name)
+        d = rec.declared_string(arm)
+        text = '\n'.join(notes)
+        for word in (d['file'], f"line {d['line']}", d['git_blob_sha1'], 'BOXEL_EYE_IMAGES=0', 'P4_SHOTS=none',
+                     rec.harness_arm_o()['files']['harness']):
+            assert word in text, word
+        m7 = [ln for ln in notes if ln.startswith('m7: ')]
+        assert len(m7) == 1 and m7[0].startswith("m7: no --m7, the trunk's default (on)")
+        assert f"twin, if D3's rule asks for one when the tape is stored (STORED.json twin), is {name}_m7off" in m7[0]
+    off = [ln for ln in rec.entry_notes('f140_m7off') if ln.startswith('m7: ')]
+    assert len(off) == 1 and off[0].startswith('m7: the --m7 off twin of f140 (SPEC D3)')
+
+
 def test_unknown_names_are_refused():
     for bad in ('f0140', 'f99', 'x1', 'f', 'r140x', ''):
         with pytest.raises(rec.EntryError):
