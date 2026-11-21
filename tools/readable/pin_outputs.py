@@ -2992,14 +2992,51 @@ def p44_loggers_globals(out):
 
 # ----- pin 45: fresh imports -----------------------------------------------
 
+# REVIEW_PHASE0 item 12: whether console_ui.install_early ran before pybullet was imported.  An
+# audit hook sees the start of the first import of console_ui and of pybullet; from the start of
+# console_ui's import until pybullet's import starts (to the end when pybullet came first or not
+# at all) a trace function sees every call of console_ui.install_early, its caller's module, its
+# module_name argument and what it returned (a call after pybullet's import cannot change the
+# answer, and tracing the rest of an import doubles the pin's time).  They import nothing and
+# change none of the facts the pin stores.
+_EARLY_HOOKS = r'''
+early = []
+_early_seen = set()
+_early_file = os.path.join(repo, 'console_ui.py')
+def _early_audit(event, args):
+    if event == 'import' and args[0] in ('console_ui', 'pybullet') and args[0] not in _early_seen:
+        _early_seen.add(args[0])
+        early.append({'event': 'import', 'module': args[0]})
+        sys.settrace(_early_trace if args[0] == 'console_ui' else None)
+def _early_trace(frame, event, arg):
+    code = frame.f_code
+    if code.co_name != 'install_early' or os.path.abspath(code.co_filename) != _early_file:
+        return None
+    back = frame.f_back
+    row = {'event': 'call', 'function': 'console_ui.install_early',
+           'caller': back.f_globals.get('__name__') if back is not None else None,
+           'module_name': frame.f_locals.get('module_name')}
+    early.append(row)
+    def _early_return(frame, event, arg):
+        if event == 'exception':
+            row['raised'] = arg[0].__name__
+        elif event == 'return':
+            row['returned'] = arg
+        return _early_return
+    return _early_return
+sys.addaudithook(_early_audit)
+'''
+
 _FRESH = r'''
 import importlib, json, logging, os, sys
 repo, name = sys.argv[1], sys.argv[2]
+''' + _EARLY_HOOKS + r'''
 err = None
 try:
     importlib.import_module(name)
 except BaseException as ex:
     err = type(ex).__name__ + ': ' + str(ex)
+sys.settrace(None)
 order = list(sys.modules)
 def in_repo(m):
     f = getattr(sys.modules.get(m), '__file__', None) or ''
@@ -3015,7 +3052,35 @@ res = {'import_error': err, 'sys_path': sys.path, 'repo_modules_in_order': repo_
                                      if ('console_ui' in order and 'pybullet' in order) else None,
        'pybullet_loaded': 'pybullet' in order}
 print('@@JSON ' + json.dumps(res))
+print('@@EARLY ' + json.dumps(early))
 '''
+
+# An entry script run as __main__ (runpy, sys.path[0] its folder as for `python script`), with the
+# same hooks; the arguments end in --help, so the script stops at its parser.
+_ENTRY_EARLY = r'''
+import json, os, runpy, sys
+repo, script = sys.argv[1], sys.argv[2]
+''' + _EARLY_HOOKS + r'''
+sys.argv = [script] + sys.argv[3:]
+sys.path.insert(0, os.path.dirname(script))
+code = None
+try:
+    runpy.run_path(script, run_name='__main__')
+except SystemExit as ex:
+    code = ex.code
+sys.settrace(None)
+print('@@EARLY ' + json.dumps({'events': early, 'system_exit': code}))
+'''
+
+
+def _early_order(events):
+    """One fresh interpreter's install_early record: the events in order, and whether
+    console_ui.install_early was called before the import of pybullet began (None when pybullet was
+    not imported)."""
+    calls = [i for i, e in enumerate(events) if e['event'] == 'call']
+    pyb = next((i for i, e in enumerate(events) if e == {'event': 'import', 'module': 'pybullet'}), None)
+    return {'events': events,
+            'install_early_ran_before_pybullet': None if pyb is None else bool(calls) and calls[0] < pyb}
 
 
 @pin('low', 'p45_fresh_imports', 'P45: each root module and tampura_bridge.policy imported first in a fresh interpreter', timeout=1200)
@@ -3023,18 +3088,37 @@ def p45_fresh_imports(out):
     tw = '/root/tampura-work'
     masker = Masker([(REPO, '<REPO>'), (tw, '<TW>')])
     res = {}
+    early = {}
+    tb_path = ':'.join([str(REPO), str(REPO / 'pddlstream_lib'), f'{tw}/tampura', f'{tw}/tampura_environments'])
     mods = [p.stem for p in sorted(REPO.glob('*.py'))] + ['tampura_bridge.policy']
     for m in mods:
         env = dict(os.environ)
         if m.startswith('tampura_bridge'):
-            env['PYTHONPATH'] = ':'.join([str(REPO), str(REPO / 'pddlstream_lib'), f'{tw}/tampura',
-                                          f'{tw}/tampura_environments'])
+            env['PYTHONPATH'] = tb_path
         p = subprocess.run([sys.executable, '-c', _FRESH, str(REPO), m], capture_output=True, text=True,
                            timeout=180, cwd=os.getcwd(), env=env)
         line = next((ln for ln in p.stdout.splitlines() if ln.startswith('@@JSON ')), None)
         res[m] = json.loads(masker(line[7:])) if line else {'no_output': f'rc {p.returncode}',
                                                            'stderr_tail': masker(p.stderr[-600:])}
+        eline = next((ln for ln in p.stdout.splitlines() if ln.startswith('@@EARLY ')), None)
+        early[m] = _early_order(json.loads(eline[8:])) if eline else None
     out.json('fresh_imports.json', res)
+    entries = {}
+    for script, argv, env_path in (('test_full_pipeline.py', ['--no-gui', '--help'], None),
+                                   ('tampura_bridge/run_bridge_on_finddice.py', ['--help'], tb_path)):
+        env = dict(os.environ)
+        if env_path:
+            env['PYTHONPATH'] = env_path
+        p = subprocess.run([sys.executable, '-c', _ENTRY_EARLY, str(REPO), str(REPO / script)] + argv,
+                           capture_output=True, text=True, timeout=180, cwd=os.getcwd(), env=env)
+        eline = next((ln for ln in p.stdout.splitlines() if ln.startswith('@@EARLY ')), None)
+        if eline:
+            d = json.loads(eline[8:])
+            entries[' '.join([script] + argv)] = {**_early_order(d['events']), 'system_exit': d['system_exit']}
+        else:
+            entries[' '.join([script] + argv)] = {'no_output': f'rc {p.returncode}',
+                                                  'stderr_tail': masker(p.stderr[-600:])}
+    out.json('fresh_install_early.json', {'imports': early, 'entry_scripts': entries})
     p = subprocess.run([sys.executable, str(REPO / 'test_full_pipeline.py'), '--no-gui', '--help'],
                        capture_output=True, text=True, timeout=180, cwd=os.getcwd())
     out.json('entry_help.json', {'rc': p.returncode, 'stdout_sha256': text_digest(p.stdout),
@@ -3045,6 +3129,16 @@ def p45_fresh_imports(out):
              'sys.modules order and slip_fixes.KNOWN order kept (order is the point); repo modules = those '
              'whose __file__ lies in the repo')
     out.note('entry_help: python test_full_pipeline.py --no-gui --help (the --help path installs no console)')
+    out.note('fresh_install_early.json (REVIEW_PHASE0 item 12): in the same fresh interpreters an audit hook '
+             'records the start of the first import of console_ui and of pybullet, and a trace function, on '
+             "from the start of console_ui's import until pybullet's import starts (to the end when pybullet "
+             'came first or not at all), every call of console_ui.install_early (caller module, module_name, '
+             'returned), in order; '
+             'install_early_ran_before_pybullet is whether the first call came before the pybullet import '
+             '(null when pybullet was not imported); entry_scripts: test_full_pipeline.py --no-gui --help and '
+             'tampura_bridge/run_bridge_on_finddice.py --help run as __main__ by runpy with sys.path[0] the '
+             "script's folder and the same hooks (--help: install_early returns False, no console is "
+             'installed; the smart-level install itself redirects the terminal and is not run here)')
 
 
 # ----- pin 48: twin constants ----------------------------------------------
