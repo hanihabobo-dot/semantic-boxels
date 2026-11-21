@@ -68,6 +68,17 @@ REPO = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve()
 PIN_TIMEOUT_S = 600
 
+# Gate 7, REVIEW_PHASE0 item 5 (R's rule 4 as amended, PLAN 5.1): the last NOTES line of every pin
+# of group low (run_child).  The check behind it is WP-A's (record, item 9): every low pin run
+# with the children's PYTHONHASHSEED=1 gave the same outputs as under 0.
+LOW_ORDER_NOTE = ("lists compared in an order that comes from a set (R's rule 4 as amended, REVIEW_PHASE0 "
+                  "item 5): none in this pin's outputs; at gate 7 every low pin gave the same outputs under "
+                  "PYTHONHASHSEED=1 as under 0 (plain() refuses a set, so the pin sorts any set it writes)")
+
+# Gate 7, SPEC D10 (REVIEW_PHASE0 item 1, R_PHASE0 3.1): the one NOTES line of pins 41, 44 and 48.
+D10_NOTE = ("D10 (REVIEW_PHASE0 item 1): {} use the old code's file and qualname, and the stored outputs keep "
+            "those names; the compare maps a new name back through MIGRATION_MAP.tsv (due before P2)")
+
 # group -> {pin id: Pin}, in registration order.
 GROUPS = {}
 
@@ -256,6 +267,8 @@ def run_child(group, pin_id, out_dir):
     o = Out(folder, masker)
     try:
         p.func(o)
+        if group == 'low':
+            o.note(LOW_ORDER_NOTE)
         o.close()
         return 0
     except Exception:
@@ -2547,6 +2560,7 @@ def p41_rng_sites(out):
              'random.shuffle when rng is None; the AST cannot tell')
     out.note('not done here: the call chain of main (the global order of draws at run time); that is a '
              'property of calls, covered by the episode pins (34, 47)')
+    out.note(D10_NOTE.format('the keys "file::qualname"'))
 
 
 # ----- pin 42: gate surface ------------------------------------------------
@@ -2988,6 +3002,7 @@ def p44_loggers_globals(out):
              'an instance; loggers: per function in source order [level, receiver, logger name]')
     out.note('this pin stores the table; the identity check across old and new modules after a move '
              '(new_mod.x is old_mod.x) is a runtime step of each cut, not done here')
+    out.note(D10_NOTE.format('the keys "file::qualname" of loggers.json, globals.json and free_variables.json'))
 
 
 # ----- pin 45: fresh imports -----------------------------------------------
@@ -3200,6 +3215,7 @@ def p48_twin_constants(out):
              'line numbers only in INFO_lines.json; sbatch_caps.json: lines with 900 or 1800 in root and '
              'tools/cluster *.sbatch files')
     _p48_tag2(out)
+    out.note(D10_NOTE.format('the file and qualname fields of twins.json and twins_tag2.json'))
 
 
 # Gate 7 (INDEX_PINS P5, PLAN 4.4 trap 8, R_PHASE0 3.3, U3): the twins the look and M7 code
