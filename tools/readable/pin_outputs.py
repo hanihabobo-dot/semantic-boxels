@@ -1092,6 +1092,212 @@ def _parse_case(rl, argv, sys_rest, prog='test_full_pipeline.py'):
     return r
 
 
+# Gate 7 (INDEX_PINS P1, PLAN 5.2 rows 22, 23, 32, SPEC D2): the five flags the parser gained
+# since refactor-checkpoint-1, their choices read from its syntax tree; the F and R strings read
+# from wave 2's declaration by text; the harness's command for arm O, caught at its Popen; the
+# bridge driver's switches and the argv policy.py builds from them, by slices of their syntax
+# trees executed (as pin 23 does with the __main__ block); and REVIEW_PHASE0 item 2, the eval
+# presets' cell_to_argv lists through parse_pipeline_args.
+
+TAG2_FLAGS = ('--look', '--eye', '--eye-start-joints', '--interior-regions', '--m7')
+DECLARATION_WAVE2 = 'archive/tampura_bridge_plan_2026-10-25/tracks/evalfinal/wave2/DECLARATION.md'
+DRIVER = 'tampura_bridge/run_bridge_on_finddice.py'
+
+
+def git_blob_sha1(data):
+    """The hash git gives these bytes as a text blob under core.autocrlf=true (CRLF stored as LF),
+    so the same on a CRLF and on an LF checkout."""
+    lf = data.replace(b'\r\n', b'\n')
+    return hashlib.sha1(b'blob %d\x00' % len(lf) + lf).hexdigest()
+
+
+def declared_o_args():
+    """({'F': .., 'R': ..}, source) from wave 2's declaration (D2): for each arm the one line that
+    starts it ('- F,', '- R,'), which must run arm O ('P4_ARMS=O,'), and the one value inside
+    P4_O_ARGS='...' on that line; any other count fails.  source: the path and the blob hash."""
+    import re
+    data = (REPO / DECLARATION_WAVE2).read_bytes()
+    found = {}
+    for arm in ('F', 'R'):
+        lines = [ln for ln in data.decode('utf-8').splitlines() if ln.startswith(f'- {arm},')]
+        if len(lines) != 1:
+            raise LookupError(f'{DECLARATION_WAVE2}: {len(lines)} lines start the {arm} arm, not one')
+        if 'P4_ARMS=O,' not in lines[0]:
+            raise LookupError(f'{DECLARATION_WAVE2}: the {arm} line does not run arm O: {lines[0]!r}')
+        values = re.findall(r"P4_O_ARGS='([^']*)'", lines[0])
+        if len(values) != 1:
+            raise LookupError(f"{DECLARATION_WAVE2}: {len(values)} P4_O_ARGS='...' on the {arm} line, not one")
+        found[arm] = values[0]
+    return found, {'path': DECLARATION_WAVE2, 'git_blob_sha1': git_blob_sha1(data)}
+
+
+def _flag_specs(flags):
+    """{flag: {'choices', 'default'}} of the add_argument calls in run_logger.parse_pipeline_args,
+    read from its syntax tree; a flag without such a call fails."""
+    tree = ast.parse((REPO / 'run_logger.py').read_text(encoding='utf-8'))
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'parse_pipeline_args')
+    specs = {}
+    for node in ast.walk(fn):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == 'add_argument' and node.args
+                and isinstance(node.args[0], ast.Constant) and node.args[0].value in flags):
+            kw = {k.arg: k.value for k in node.keywords}
+            specs[node.args[0].value] = {
+                'choices': ast.literal_eval(kw['choices']) if 'choices' in kw else None,
+                'default': ast.literal_eval(kw['default']) if 'default' in kw else None}
+    missing = [f for f in flags if f not in specs]
+    if missing:
+        raise LookupError(f'run_logger.parse_pipeline_args has no add_argument for {missing}')
+    return {f: specs[f] for f in flags}
+
+
+def _module_literal(path, name):
+    """The value of the one module-level assignment to name in path, by ast.literal_eval."""
+    tree = ast.parse((REPO / path).read_text(encoding='utf-8'))
+    vals = [ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
+            and any(isinstance(t, ast.Name) and t.id == name for t in n.targets)]
+    if len(vals) != 1:
+        raise LookupError(f'{path} binds {name} {len(vals)} times at module level, not once')
+    return vals[0]
+
+
+def _writes_keys(st, target):
+    """True for a statement that only adds keys to the dict whose source text is target: an
+    assignment to target[...], or an if statement whose branches hold only such statements."""
+    if isinstance(st, ast.Assign):
+        return all(isinstance(t, ast.Subscript) and ast.unparse(t.value) == target for t in st.targets)
+    if isinstance(st, ast.If):
+        return all(_writes_keys(s, target) for s in st.body + st.orelse)
+    return False
+
+
+def harness_argv_arm_o(o_args, seed=140):
+    """(ARM_O, the command) the paper's harness builds for arm O with the declared string o_args:
+    tools/gen_scene_eval.py's ARM_O (read from its syntax tree) and tuple(shlex.split(o_args)), as
+    its run_one passes them with P4_SHOTS=none (so no --save-screenshots), handed to
+    tools/slip_eval.run_episode, whose subprocess.Popen is replaced by one that keeps the command
+    and stops the call: no process starts.  The python and the snapshot are the placeholders
+    <PYTHON> and <SNAPSHOT>; the save directory is relative to the work folder."""
+    import shlex
+    import types
+    arm_o = _module_literal('tools/gen_scene_eval.py', 'ARM_O')
+    saved = list(sys.path)
+    try:
+        se = sys.modules.get('slip_eval') or _load_tool('slip_eval')
+    finally:
+        sys.path[:] = saved
+
+    class _Caught(Exception):
+        pass
+    seen = {}
+
+    def popen(cmd, **kw):
+        seen['cmd'] = list(cmd)
+        raise _Caught
+    real = se.subprocess
+    se.subprocess = types.SimpleNamespace(Popen=popen, TimeoutExpired=subprocess.TimeoutExpired,
+                                          STDOUT=subprocess.STDOUT, PIPE=subprocess.PIPE)
+    try:
+        ns = types.SimpleNamespace(out='harness', python='<PYTHON>', snapshot='<SNAPSHOT>', cwd='.', cap=900)
+        try:
+            se.run_episode(ns, arm_o, seed, 1, extra_args=tuple(shlex.split(o_args)))
+        except _Caught:
+            pass
+    finally:
+        se.subprocess = real
+    if 'cmd' not in seen:
+        raise LookupError('tools/slip_eval.run_episode reached no Popen')
+    return arm_o, seen['cmd']
+
+
+def driver_config(driver_argv):
+    """(cfg, policy_argv, after) for the bridge driver started with driver_argv.  Its main()'s
+    statements from 'ap = argparse.ArgumentParser()' through 'a = ap.parse_args()' run with
+    sys.argv = [the driver's file name] + driver_argv (bridge_policy stands in by its DRAW_KINDS,
+    read from policy.py's syntax tree; it feeds one help text); the keywords log_level,
+    max_plan_time and switches of its one EpisodeConfig(...) call are evaluated, and the statements
+    right after that call that only add keys to cfg.switches run (after: their first lines).
+    policy_argv: the argument of policy.py's one parse_pipeline_args(...) call, evaluated with
+    that cfg.  exec and eval here run the repository's own code (the reference under the pin,
+    read from its files), as pin 23 runs its slice of the __main__ block."""
+    import argparse as argparse_mod
+    import types
+    import slip_fixes
+    body = next(n for n in ast.parse((REPO / DRIVER).read_text(encoding='utf-8')).body
+                if isinstance(n, ast.FunctionDef) and n.name == 'main').body
+    texts = [ast.unparse(s) for s in body]
+    starts = [i for i, t in enumerate(texts) if t.startswith('ap = argparse.ArgumentParser(')]
+    ends = [i for i, t in enumerate(texts) if t == 'a = ap.parse_args()']
+    cfgs = [i for i, s in enumerate(body) if isinstance(s, ast.Assign) and texts[i].startswith('cfg = ')
+            and isinstance(s.value, ast.Call) and ast.unparse(s.value.func) == 'bridge_policy.EpisodeConfig']
+    if not (len(starts) == len(ends) == len(cfgs) == 1 and starts[0] < ends[0] < cfgs[0]):
+        raise LookupError(f'{DRIVER} main(): parser {starts} .. {ends}, EpisodeConfig {cfgs}: not one each in order')
+    ns = {'argparse': argparse_mod, 'os': os, 'time': time,
+          'bridge_policy': types.SimpleNamespace(
+              DRAW_KINDS=_module_literal('tampura_bridge/policy.py', 'DRAW_KINDS'))}
+    saved = sys.argv
+    sys.argv = [Path(DRIVER).name] + list(driver_argv)
+    try:
+        exec(compile(ast.Module(body=body[starts[0]:ends[0] + 1], type_ignores=[]), DRIVER, 'exec'), ns)
+    finally:
+        sys.argv = saved
+    kw = {k.arg: k.value for k in body[cfgs[0]].value.keywords}
+    env = {'a': ns['a'], 'slip_fixes': slip_fixes}
+    cfg = types.SimpleNamespace(**{k: eval(compile(ast.Expression(body=kw[k]), DRIVER, 'eval'), env)
+                                   for k in ('log_level', 'max_plan_time', 'switches')})
+    after = []
+    for st in body[cfgs[0] + 1:]:
+        if not _writes_keys(st, 'cfg.switches'):
+            break
+        after.append(st)
+    exec(compile(ast.Module(body=after, type_ignores=[]), DRIVER, 'exec'), {'a': ns['a'], 'cfg': cfg})
+    calls = [n for n in ast.walk(ast.parse((REPO / 'tampura_bridge' / 'policy.py').read_text(encoding='utf-8')))
+             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == 'parse_pipeline_args']
+    if len(calls) != 1 or len(calls[0].args) != 1:
+        raise LookupError(f'tampura_bridge/policy.py: {len(calls)} parse_pipeline_args(...) calls, not one')
+    policy_argv = eval(compile(ast.Expression(body=calls[0].args[0]), 'tampura_bridge/policy.py', 'eval'),
+                       {'cfg': cfg})
+    return cfg, policy_argv, [ast.unparse(s).splitlines()[0] for s in after]
+
+
+def _cli_corpus_tag2(specs, declared):
+    """(name, argv, None) for the five flags: each choice, one value outside the choices, the free
+    text of --eye-start-joints empty and as a list; --eye arm without and with a look; the
+    declared F and R strings alone."""
+    import shlex
+    cases = []
+    for flag, spec in specs.items():
+        stem = flag[2:].replace('-', '_')
+        if spec['choices']:
+            cases += [(f'{stem}_{c}', [flag, c], None) for c in spec['choices']]
+            cases.append((f'{stem}_bad_choice', [flag, 'nowhere'], None))
+        else:
+            cases += [(f'{stem}_empty', [flag, ''], None),
+                      (f'{stem}_list', [flag, '0,-0.5,0,-2,0,1.5,0.8'], None)]
+    cases += [('eye_arm_without_look', ['--eye', 'arm'], None),
+              ('look_boxel_eye_arm', ['--look', 'boxel', '--eye', 'arm'], None),
+              ('declared_F', shlex.split(declared['F']), None),
+              ('declared_R', shlex.split(declared['R']), None)]
+    return cases
+
+
+def _compact(lines, limit=100):
+    """pin 31's form for a list of JSON lines: the count, the sha256 of the lines joined by
+    newlines, and the lines, or the first and the last 20 of more than limit."""
+    entry = {'n': len(lines), 'sha256': text_digest('\n'.join(lines))}
+    if len(lines) <= limit:
+        entry['lines'] = lines
+    else:
+        entry['first'], entry['last'] = lines[:20], lines[-20:]
+    return entry
+
+
+def _bridge_configs():
+    """[(name, o_args)]: arm O alone, then the declared F and R strings."""
+    declared, _ = declared_o_args()
+    return [('O', ''), ('F', declared['F']), ('R', declared['R'])]
+
+
 @pin('low', 'p22_cli', 'R22: run_logger.parse_pipeline_args over an argv corpus (vars, errors, --help)')
 def p22_cli(out):
     import run_logger as rl
@@ -1103,13 +1309,60 @@ def p22_cli(out):
         res.append({'case': name, 'argv': argv, 'sys_argv_rest': sys_rest, **_parse_case(rl, argv, sys_rest)})
     out.json('cli.json', res)
     out.text('help.txt', next(r['stdout'] for r in res if r['case'] == 'help'))
+    # Gate 7: the tag's flags, the F and R strings, the bridge's argv, the eval cells.
+    import eval_runner as er
+    specs = _flag_specs(TAG2_FLAGS)
+    declared, source = declared_o_args()
+    cases = [{'case': name, 'argv': argv, 'sys_argv_rest': sys_rest, **_parse_case(rl, argv, sys_rest)}
+             for name, argv, sys_rest in _cli_corpus_tag2(specs, declared)]
+    bridge = []
+    for name, o_args in _bridge_configs():
+        arm_o, cmd = harness_argv_arm_o(o_args)
+        cfg, policy_argv, after = driver_config(cmd[2:])
+        bridge.append({'config': name, 'o_args': o_args, 'arm_o': arm_o, 'harness_cmd': cmd,
+                       'cfg_switches_keys_in_order': list(cfg.switches),
+                       'cfg': {'log_level': cfg.log_level, 'max_plan_time': cfg.max_plan_time,
+                               'switches': cfg.switches},
+                       'statements_after_cfg': after, 'policy_argv': policy_argv,
+                       **_parse_case(rl, policy_argv, cmd[2:], prog=Path(DRIVER).name)})
+    out.json('cli_tag2.json', {'flags': specs, 'declared': declared, 'cases': cases, 'bridge': bridge})
+    cells = {}
+    for preset, matrix in er.MATRIX_PRESETS.items():
+        lines = []
+        for c in er.iterate_matrix(matrix):
+            argv = er.cell_to_argv(c, [])[1:]
+            lines.append(json.dumps(plain([er.cell_tag(c), _parse_case(rl, argv[1:], None, prog=argv[0])]),
+                                    ensure_ascii=False))
+        cells[preset] = _compact(lines)
+    out.json('cell_argv.json', cells)
+    out.note('cli_tag2.json (gate 7, INDEX_PINS P1): flags: the add_argument calls of the five flags added '
+             'since refactor-checkpoint-1 (' + ', '.join(TAG2_FLAGS) + '), choices and default read from '
+             'run_logger.py\'s syntax tree; cases: each choice, a value outside the choices, the free text of '
+             '--eye-start-joints, --eye arm without a look (the parser takes it; main refuses it), and the '
+             'declared F and R strings alone; parsed as in cli.json')
+    out.note(f'declared: the P4_O_ARGS strings of the F and R arms read by text from {source["path"]} '
+             f'(git blob {source["git_blob_sha1"]}): the one line that starts each arm, the one value '
+             'inside P4_O_ARGS=\'...\' (D2)')
+    out.note('bridge: for arm O alone, F and R: harness_cmd is the command tools/slip_eval.run_episode builds '
+             'for ARM_O of tools/gen_scene_eval.py with tuple(shlex.split(o_args)) (P4_SHOTS=none: no '
+             '--save-screenshots), caught at its Popen; cfg: the bridge driver\'s main() from its ArgumentParser '
+             'through parse_args() run on harness_cmd[2:], then EpisodeConfig\'s log_level, max_plan_time and '
+             'switches (keys in their insertion order) and the statements after it that add keys to '
+             'cfg.switches; policy_argv: the argument of policy.py\'s parse_pipeline_args call evaluated with '
+             'that cfg; parsed with sys.argv = [run_bridge_on_finddice.py] + harness_cmd[2:]')
+    out.note('cell_argv.json (REVIEW_PHASE0 item 2): every cell of every eval_runner preset, '
+             'cell_to_argv(cell, [])[2:] through parse_pipeline_args with sys.argv = cell_to_argv(cell, [])[1:]; '
+             'per preset pin 31\'s form: count, sha256 of the lines, the lines or the first and last 20 of more '
+             'than 100 (one compact JSON [tag, parse] per line)')
 
 
 # ----- pin 23: run_config --------------------------------------------------
 
 def _main_block_slice(tree, first_text, last_target):
     """The statements of the __main__ block from the one whose source starts
-    with first_text through the assignment to last_target."""
+    with first_text through the assignment to last_target and the statements
+    right after it that only add keys to last_target (D9: the tag adds
+    run_config["eye"] in an if statement after the dict)."""
     for node in tree.body:
         if (isinstance(node, ast.If) and isinstance(node.test, ast.Compare)
                 and isinstance(node.test.left, ast.Name) and node.test.left.id == '__name__'):
@@ -1127,7 +1380,33 @@ def _main_block_slice(tree, first_text, last_target):
             break
     if start is None or end is None:
         raise LookupError(f'slice {first_text!r} .. {last_target!r} not found')
+    while end + 1 < len(body) and _writes_keys(body[end + 1], last_target):
+        end += 1
     return body[start:end + 1]
+
+
+def _run_config_case(rl, tfp, code, name, argv):
+    """One row of pin 23: the parse, then the slice executed with those args."""
+    p = _parse_case(rl, argv, None)
+    if 'value' not in p:
+        return {'case': name, 'parse': p}
+    saved = sys.argv
+    sys.argv = ['test_full_pipeline.py'] + argv
+    args = rl.parse_pipeline_args(argv)
+    sys.argv = saved
+    ns = dict(vars(tfp))
+    ns['args'] = args
+    r = outcome(exec, code, ns)
+    row = {'case': name, 'argv': argv, **{k: v for k, v in r.items() if k != 'value'}}
+    if 'run_config' in ns and 'raises' not in r:
+        rc = ns['run_config']
+        row['run_config_keys_in_order'] = list(rc)
+        row['run_config'] = rc
+        row['scene_cfg'] = {'occluders': len(ns['scene_cfg'].occluders),
+                            'targets': len(ns['scene_cfg'].targets),
+                            'n_hidden_targets': ns['scene_cfg'].n_hidden_targets,
+                            'enable_tray': getattr(ns['scene_cfg'], 'enable_tray', None)}
+    return row
 
 
 @pin('low', 'p23_run_config', 'R23: the __main__ run_config dict for an argv corpus (AST slice executed)')
@@ -1139,7 +1418,8 @@ def p23_run_config(out):
     stmts = _main_block_slice(tree, 'random.seed(args.seed)', 'run_config')
     code = compile(ast.Module(body=stmts, type_ignores=[]), 'test_full_pipeline.py', 'exec')
     out.note('the statements of the __main__ block from "random.seed(args.seed)" through the run_config '
-             'assignment (seeding, scene_builders, scene_cfg, the tray switch, effective counts, run_config) '
+             'assignment and the statements right after it that only add keys to run_config (seeding, '
+             'scene_builders, scene_cfg, the tray switch, effective counts, run_config, the "eye" key: D9) '
              'are cut out with ast and executed in a copy of test_full_pipeline\'s globals with args from '
              'parse_pipeline_args; nothing else of the block runs')
     out.json('slice.json', [ast.unparse(s).splitlines()[0] for s in stmts])
@@ -1154,30 +1434,37 @@ def p23_run_config(out):
                                 '--m10', 'off', '--pick-aperture-from-pose', 'off', '--grip-squeeze-mm', '1',
                                 '--slip-fixes', 'none', '--search-sample-ratio', '0.25']),
                ('uniform', ['--baseline', 'uniform', '--uniform-cell-size', '0.1', '--min-boxel-size', '0.04'])]
-    res = []
-    for name, argv in corpus:
-        p = _parse_case(rl, argv, None)
-        if 'value' not in p:
-            res.append({'case': name, 'parse': p})
-            continue
-        saved = sys.argv
-        sys.argv = ['test_full_pipeline.py'] + argv
-        args = rl.parse_pipeline_args(argv)
-        sys.argv = saved
-        ns = dict(vars(tfp))
-        ns['args'] = args
-        r = outcome(exec, code, ns)
-        row = {'case': name, 'argv': argv, **{k: v for k, v in r.items() if k != 'value'}}
-        if 'run_config' in ns and 'raises' not in r:
-            rc = ns['run_config']
-            row['run_config_keys_in_order'] = list(rc)
-            row['run_config'] = rc
-            row['scene_cfg'] = {'occluders': len(ns['scene_cfg'].occluders),
-                                'targets': len(ns['scene_cfg'].targets),
-                                'n_hidden_targets': ns['scene_cfg'].n_hidden_targets,
-                                'enable_tray': getattr(ns['scene_cfg'], 'enable_tray', None)}
-        res.append(row)
+    res = [_run_config_case(rl, tfp, code, name, argv) for name, argv in corpus]
     out.json('run_config.json', res)
+    # Gate 7: the tag's flags and the F and R strings (INDEX_PINS P1), the eval cells (REVIEW item 2).
+    import shlex
+    import eval_runner as er
+    specs = _flag_specs(TAG2_FLAGS)
+    declared, source = declared_o_args()
+    tag2 = [(f'{flag[2:].replace("-", "_")}_{c}', ['--no-gui', flag, c])
+            for flag, spec in specs.items() for c in (spec['choices'] or ())]
+    tag2 += [('eye_start_joints_list', ['--no-gui', '--eye-start-joints', '0,-0.5,0,-2,0,1.5,0.8']),
+             ('look_boxel_eye_arm', ['--no-gui', '--look', 'boxel', '--eye', 'arm']),
+             ('look_centred_eye_arm', ['--no-gui', '--look', 'centred', '--eye', 'arm']),
+             ('declared_F', ['--no-gui'] + shlex.split(declared['F'])),
+             ('declared_R', ['--no-gui'] + shlex.split(declared['R']))]
+    out.json('run_config_tag2.json', [_run_config_case(rl, tfp, code, name, argv) for name, argv in tag2])
+    cells = {}
+    for preset, matrix in er.MATRIX_PRESETS.items():
+        cells[preset] = _compact([json.dumps(plain(_run_config_case(rl, tfp, code, er.cell_tag(c),
+                                                                    er.cell_to_argv(c, [])[2:])),
+                                             ensure_ascii=False) for c in er.iterate_matrix(matrix)])
+    out.json('cell_run_config.json', cells)
+    out.note('run_config_tag2.json (gate 7, INDEX_PINS P1): --no-gui with each choice of the four flags of '
+             + ', '.join(f for f in TAG2_FLAGS if specs[f]['choices']) + ' (read from run_logger.py\'s syntax '
+             'tree), --eye-start-joints as a list, --look boxel and centred with --eye arm, and the declared F '
+             f'and R strings (read by text from {source["path"]}, git blob {source["git_blob_sha1"]}); rows as '
+             'in run_config.json. The slice never runs main(), so --eye arm without a look shows the key that '
+             'main would refuse')
+    out.note('cell_run_config.json (REVIEW_PHASE0 item 2): every cell of every eval_runner preset, '
+             'cell_to_argv(cell, [])[2:] as the argv of a row as in run_config.json, the case named by the '
+             'cell tag; per preset pin 31\'s form (count, sha256 of the lines, the lines or the first and last '
+             '20 of more than 100)')
 
 
 # ----- pins 24, 25: goal logic, carry schedule -----------------------------
@@ -1533,28 +1820,66 @@ def p32_run_ps1(out):
         ('boxels_scene_goal', "boxels -Seed 0 -Scene stack -Goal stack -Occluders 0"),
         ('alias_d', "tampura -Seed 1 -D"),
     ]
-    script = []
-    for name, args in cases:
-        script += [f"'@@CASE {name}'", "$global:LASTEXITCODE = 0",
-                   f"& '{win}' {args}{'' if name == 'alias_d' else ' -DryRun'} *>&1 | ForEach-Object {{ \"$_\" }}",
-                   "'@@RC ' + $LASTEXITCODE"]
-    proc = subprocess.run([pwsh, '-NoProfile', '-NonInteractive', '-Command', '; '.join(script)],
-                          capture_output=True, text=True, timeout=300, cwd=str(REPO))
-    stamp = re.compile(r'\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}')
-    text = stamp.sub('<STAMP>', proc.stdout.replace('\r\n', '\n'))
-    res, cur = [], None
-    for line in text.split('\n'):
-        if line.startswith('@@CASE '):
-            cur = {'case': line[7:], 'args': dict(cases)[line[7:]], 'lines': []}
-            res.append(cur)
-        elif line.startswith('@@RC '):
-            cur['rc'] = line[5:]
-        elif cur is not None and line:
-            cur['lines'].append(line)
-    out.json('dry_runs.json', {'pwsh_rc': proc.returncode, 'stderr': stamp.sub('<STAMP>', proc.stderr),
-                               'cases': res})
+    win_repo = subprocess.run(['wslpath', '-w', str(REPO)], capture_output=True, text=True,
+                              check=True).stdout.strip()
+
+    def dry_runs(cases, catch=False):
+        script = []
+        for name, args in cases:
+            call = f"& '{win}' {args}{'' if name == 'alias_d' else ' -DryRun'} *>&1 | ForEach-Object {{ \"$_\" }}"
+            if catch:       # a refused parameter: its error id, not the message in the host's language
+                call = f"try {{ {call} }} catch {{ '@@ERROR ' + $_.FullyQualifiedErrorId }}"
+            script += [f"'@@CASE {name}'", "$global:LASTEXITCODE = 0", call, "'@@RC ' + $LASTEXITCODE"]
+        proc = subprocess.run([pwsh, '-NoProfile', '-NonInteractive', '-Command', '; '.join(script)],
+                              capture_output=True, text=True, encoding='utf-8', errors='replace',
+                              timeout=300, cwd=str(REPO))
+        stamp = re.compile(r'\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}')
+        text = stamp.sub('<STAMP>', proc.stdout.replace('\r\n', '\n').replace(win_repo, '<REPO>'))
+        res, cur = [], None
+        for line in text.split('\n'):
+            if line.startswith('@@CASE '):
+                cur = {'case': line[7:], 'args': dict(cases)[line[7:]], 'lines': []}
+                res.append(cur)
+            elif line.startswith('@@RC '):
+                cur['rc'] = line[5:]
+            elif cur is not None and line:
+                cur['lines'].append(line)
+        return {'pwsh_rc': proc.returncode,
+                'stderr': stamp.sub('<STAMP>', proc.stderr.replace(win_repo, '<REPO>')), 'cases': res}
+    out.json('dry_runs.json', dry_runs(cases))
     out.note('pwsh.exe -NoProfile -NonInteractive through WSL interop, one call for all cases; host output '
              'merged (*>&1); the folder stamp masked as <STAMP>; the checkout path masked as <REPO>')
+    # Gate 7 (INDEX_PINS P1): -Look and -Eye with every value of their ValidateSet (read from run.ps1),
+    # a value outside it, -Eye arm without a look, --m7 off and the declared F and R strings through -Args.
+    src = (REPO / 'run.ps1').read_text(encoding='utf-8')
+    sets = {}
+    for par in ('Look', 'Eye'):
+        found = re.findall(r"\[ValidateSet\(([^)]*)\)\]\[string\]\$" + par + r"\b", src)
+        if len(found) != 1:
+            raise LookupError(f'run.ps1: {len(found)} ValidateSet lines for ${par}, not one')
+        sets[par] = [v for v in re.findall(r"'([^']*)'", found[0]) if v]
+    declared, source = declared_o_args()
+    if any("'" in v for v in declared.values()):
+        raise ValueError(f'a declared string holds a quote: {declared}')
+    tag2 = []
+    for target in ('tampura', 'boxels'):
+        tag2 += [(f'{target}_look_{v}', f"{target} -Seed 0 -Look {v}") for v in sets['Look']]
+        tag2 += [(f'{target}_eye_{v}_alone', f"{target} -Seed 0 -Eye {v}") for v in sets['Eye']]
+        tag2 += [(f'{target}_look_{v}_eye_arm', f"{target} -Seed 0 -Look {v} -Eye arm")
+                 for v in sets['Look']]
+        tag2 += [(f'{target}_look_bad', f"{target} -Seed 0 -Look nowhere"),
+                 (f'{target}_eye_bad', f"{target} -Seed 0 -Eye nowhere"),
+                 (f'{target}_m7_off_args', f"{target} -Seed 0 -Args '--m7 off'"),
+                 (f'{target}_declared_F', f"{target} -Seed 0 -Headless -Args '{declared['F']}'"),
+                 (f'{target}_declared_R', f"{target} -Seed 0 -Headless -Args '{declared['R']}'")]
+    out.json('dry_runs_tag2.json', {'validate_sets': sets, 'declared': declared, **dry_runs(tag2, catch=True)})
+    out.note('dry_runs_tag2.json (gate 7, INDEX_PINS P1): a second pwsh call as above, for run tampura and run '
+             'boxels: -Look with each value of its ValidateSet and with -Eye arm, -Eye with each value alone '
+             '(the sets read from run.ps1\'s param block), a value outside each set, -Args \'--m7 off\', and the '
+             f'declared F and R strings as -Args with -Headless (read by text from {source["path"]}, git blob '
+             f'{source["git_blob_sha1"]}); each call inside try/catch, a refused call written as "@@ERROR" and '
+             'its FullyQualifiedErrorId (the message itself is in the host\'s language); the Windows path of the '
+             'checkout is masked as <REPO> too')
 
 
 # ----- pin 33: records of a recorded run -----------------------------------
