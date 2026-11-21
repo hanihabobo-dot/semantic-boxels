@@ -1813,6 +1813,10 @@ def p31_eval_matrix(out):
     mode = {'m': None}
     counter = {'n': 0}
 
+    long_tail = '\n'.join(['Traceback (most recent call last):'] + [f'  frame {k}' for k in range(1, 24)]
+                          + ["KeyError: 'red_object'"]) + '\n'
+    short_tail = "Traceback (most recent call last):\n  frame 1\nKeyError: 'red_object'\n"
+
     def fake_run(argv, capture_output, text, timeout, cwd):
         m = mode['m']
         counter['n'] += 1
@@ -1820,7 +1824,9 @@ def p31_eval_matrix(out):
             raise sp.TimeoutExpired(argv, timeout)
         if m == 'crash':
             return sp.CompletedProcess(argv, 3, 'some output', 'Traceback ...')
-        if m in ('good', 'mismatch'):
+        if m in ('crash70_long', 'crash70_short'):          # gate 7: C-01's exit 70
+            return sp.CompletedProcess(argv, 70, 'some output', long_tail if m == 'crash70_long' else short_tail)
+        if m in ('good', 'mismatch', 'crash70_after_summary'):
             d = Path('logs') / f'run_fake_{counter["n"]:02d}'
             d.mkdir(parents=True)
             rc = {'scene': cell['scene'], 'seed': cell['seed'] + (7 if m == 'mismatch' else 0),
@@ -1830,6 +1836,8 @@ def p31_eval_matrix(out):
                 rc['min_boxel_size'] = cell['min_boxel_size']
             (d / 'timing_summary.json').write_text(json.dumps(
                 {'run_config': rc, 'success': True, 'plan_count': 3, 'total_planning_time_s': 1.5}))
+            if m == 'crash70_after_summary':
+                return sp.CompletedProcess(argv, 70, 'ok', short_tail)
             return sp.CompletedProcess(argv, 0, 'ok', '')
         if m == 'preflight':
             return sp.CompletedProcess(argv, 1, '', 'x\n[pre-flight] seed 0 rejected: no scene\n')
@@ -1850,6 +1858,32 @@ def p31_eval_matrix(out):
             files[f.name] = f.read_text(encoding='utf-8')
         runs.append({'mode': m, 'skip_existing': skip, **r, 'files': files})
     out.json('run_cell.json', runs)
+    # Gate 7 (INDEX_PINS P6, trap 11): C-01's crash_exit70 row with its stderr_tail, after the
+    # modes above (the fake clock and the run counter go on from them).
+    runs = []
+    for i, (m, call) in enumerate((('crash70_long', 'run_cell'), ('crash70_short', 'run_cell'),
+                                   ('crash70_after_summary', 'run_cell'),
+                                   ('crash70_long', 'run_cell_counted'))):
+        mode['m'] = m
+        sweep = Path(f'sweep_tag2_{i}_{m}_{call}')
+        r = outcome(getattr(er, call), cell, sweep, 30.0, [], False)
+        cdir = sweep / 'cells' / er.cell_tag(cell)
+        files = {f.name: f.read_text(encoding='utf-8') for f in sorted(cdir.glob('*'))}
+        runs.append({'mode': m, 'call': call, **r, 'files': files,
+                     'run_dirs_in_logs': sorted(p.name for p in Path('logs').glob('*'))})
+    agg = outcome(er.aggregate, Path('sweep_tag2_0_crash70_long_run_cell'))
+    if 'value' in agg:
+        agg['value'] = Path(agg['value']).name
+    agg['files'] = {n: (Path('sweep_tag2_0_crash70_long_run_cell') / n).read_text(encoding='utf-8')
+                    for n in ('aggregated.csv', 'aggregated.jsonl')}
+    out.json('run_cell_tag2.json', {'stderr_tail_lines': er.STDERR_TAIL_LINES,
+                                    'long_stderr_lines': len(long_tail.splitlines()),
+                                    'runs': runs, 'aggregate_of_the_first': agg})
+    out.note('run_cell_tag2.json (gate 7, INDEX_PINS P6): the fake run also answers exit 70 (C-01: an exception '
+             'in main exits 70) with a stderr of 25 lines and of 3, and once after writing a run\'s summary '
+             '(the exit code is read first: a crash row, that summary not banked); the last mode runs '
+             'run_cell_counted; aggregate over the first sweep (stderr_tail is in aggregated.jsonl, not in the '
+             'csv); run_dirs_in_logs: the fake runs\' folders after each call')
 
 
 # ----- pin 32: run.ps1 dry runs --------------------------------------------
