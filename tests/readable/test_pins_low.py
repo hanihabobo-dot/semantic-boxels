@@ -17,6 +17,11 @@ and run, in WSL under the pipeline lock (R's rule 5):
 Files named INFO_* (line numbers and other information) are not compared.
 The two small tests at the end check the comparator itself and need no
 golden folder.
+
+A relative READABLE_GOLDEN is taken against pytest's working directory, and
+one that names no existing folder is refused (SPEC D11, gate 7); the three
+tests after the comparator's show the same for the variables a pin child
+reads, and need no golden folder either.
 """
 import difflib
 import json
@@ -30,7 +35,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / 'tools' / 'readable'))
 import pin_outputs as po  # noqa: E402
 
-GOLDEN = os.environ.get('READABLE_GOLDEN')
+GOLDEN = po.readable_path(po.GOLDEN_VAR)   # absolute, or None when unset (SPEC D11)
 PINS = list(po.GROUPS['low'])
 needs_golden = pytest.mark.skipif(
     not GOLDEN,
@@ -94,3 +99,48 @@ def test_plain_refuses_a_set_and_keeps_floats_exact():
     with pytest.raises(TypeError):
         po.plain({'a': {1, 2}})
     assert po.dumps(po.plain([0.1 + 0.2, float('inf')])) == '[\n 0.30000000000000004,\n Infinity\n]\n'
+
+
+def test_relative_readable_paths_are_made_absolute_in_the_parent(tmp_path, monkeypatch):
+    """SPEC D11 (C10): a relative READABLE_TAPES or READABLE_RENDER_FIXTURE is made absolute
+    against the parent's working directory before a child starts, so the child, whose working
+    directory is its work folder, reads the folder the parent meant.  Catches a relative value
+    passed to the child as typed; READABLE_GOLDEN goes through the same function."""
+    (tmp_path / 'tapes').mkdir()
+    (tmp_path / 'fixture').mkdir()
+    work = tmp_path / 'work'
+    work.mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(po.TAPES_VAR, 'tapes')
+    monkeypatch.setenv(po.RENDER_FIXTURE_VAR, 'fixture/../fixture')
+    want = {po.TAPES_VAR: str((tmp_path / 'tapes').resolve()),
+            po.RENDER_FIXTURE_VAR: str((tmp_path / 'fixture').resolve())}
+    assert po.child_paths() == want
+    env = po.child_env(work)
+    for var, value in want.items():
+        assert env[var] == value and Path(env[var]).is_absolute()
+        assert not (work / os.environ[var]).exists()    # the value as typed, read from the child's folder
+    assert po.readable_path(po.GOLDEN_VAR, {po.GOLDEN_VAR: 'tapes'}) == (tmp_path / 'tapes').resolve()
+    assert po.readable_path(po.GOLDEN_VAR, {}) is None
+    assert po.readable_path(po.GOLDEN_VAR, {po.GOLDEN_VAR: ''}) is None
+
+
+def test_missing_readable_path_is_refused_before_any_child(tmp_path, monkeypatch):
+    """SPEC D11: a READABLE variable that names no existing path stops run_group with a message
+    before any child starts and before the output folder is made.  Catches a missing path
+    passed on to the children (each failing on its own, or reading the default instead)."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(po.RENDER_FIXTURE_VAR, 'no_such_fixture')
+    out = tmp_path / 'out'
+    with pytest.raises(po.ReadablePathError, match="READABLE_RENDER_FIXTURE='no_such_fixture' names "):
+        po.run_group('low', out, only=['p24_goals'], log=lambda s: None)
+    assert not out.exists()
+    with pytest.raises(po.ReadablePathError, match='READABLE_GOLDEN'):
+        po.readable_path(po.GOLDEN_VAR, {po.GOLDEN_VAR: 'no_such_golden'})
+
+
+def test_default_paths_are_built_from_repo():
+    """SPEC D11 (C10): the default folders are built from the file's place (REPO), never from
+    the working directory.  Catches a default made relative."""
+    assert po.REPO == Path(po.__file__).resolve().parents[2]
+    assert po.RENDER_FIXTURE_DEFAULT.is_absolute() and po.REPO in po.RENDER_FIXTURE_DEFAULT.parents

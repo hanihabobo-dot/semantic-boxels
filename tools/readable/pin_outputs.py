@@ -239,7 +239,47 @@ def rel(path):
 # Child and parent
 # ---------------------------------------------------------------------------
 
-def child_env(work):
+# SPEC D11 (C10, R_PHASE0 "G1 and G2 read" point 1): a pin child runs with its work folder as
+# the working directory, so the READABLE variables it reads (TAPES_VAR, RENDER_FIXTURE_VAR) are
+# made absolute in the parent, against the parent's working directory, before any child starts,
+# and a value that names no existing path is refused.  The tests resolve READABLE_GOLDEN (read
+# in the parent) with the same function.  Every default path is built from REPO.
+GOLDEN_VAR = 'READABLE_GOLDEN'
+
+
+class ReadablePathError(ValueError):
+    """A READABLE variable names a path that does not exist."""
+
+
+def readable_path(var, environ=None, cwd=None):
+    """The path the variable var names, made absolute against cwd (default: this process's
+    working directory) and resolved; None when var is unset or empty.  A value naming no
+    existing path is refused with ReadablePathError."""
+    value = (os.environ if environ is None else environ).get(var)
+    if not value:
+        return None
+    base = Path(os.getcwd() if cwd is None else cwd)
+    path = (base / value).resolve()
+    if not path.exists():
+        raise ReadablePathError(f'{var}={value!r} names {path}, which does not exist (a relative value is '
+                                f'taken against the working directory {base})')
+    return path
+
+
+def child_paths(environ=None, cwd=None):
+    """{variable: absolute path} for the READABLE variables a pin child reads that are set
+    (readable_path refuses a missing one)."""
+    paths = {}
+    for var in (TAPES_VAR, RENDER_FIXTURE_VAR):
+        path = readable_path(var, environ, cwd)
+        if path is not None:
+            paths[var] = str(path)
+    return paths
+
+
+def child_env(work, paths=None):
+    """The environment of a pin child; paths (default: child_paths()) replaces the READABLE
+    variables by their absolute values."""
     env = dict(os.environ)
     for k in ('FORCE_COLOR', 'NO_COLOR', 'SB_CONSOLE_ASCII', 'SB_AUDIO', 'SB_VOICE',
               'PYTHONSTARTUP', 'PYTHONINSPECT', 'BOXEL_EYE_IMAGES'):
@@ -249,6 +289,7 @@ def child_env(work):
                 'LC_ALL': 'C.UTF-8', 'LANG': 'C.UTF-8', 'TERM': 'dumb',
                 'MPLBACKEND': 'Agg', 'PYTHONPATH': str(REPO),
                 'PYTHONIOENCODING': 'utf-8'})
+    env.update(child_paths() if paths is None else paths)
     return env
 
 
@@ -279,6 +320,7 @@ def run_child(group, pin_id, out_dir):
 
 
 def run_group(group, out_dir, only=None, log=print):
+    paths = child_paths()              # D11: before any child starts (and before --out is made)
     out = Path(out_dir).resolve()
     out.mkdir(parents=True, exist_ok=True)
     logs = out / "_logs"
@@ -300,7 +342,7 @@ def run_group(group, out_dir, only=None, log=print):
         try:
             proc = subprocess.run(
                 [sys.executable, str(HERE), '--child', '--group', group, '--only', pid,
-                 '--out', str(out)], cwd=str(work), env=child_env(work),
+                 '--out', str(out)], cwd=str(work), env=child_env(work, paths),
                 capture_output=True, text=True, timeout=pins[pid].timeout)
             rc = proc.returncode
             (logs / f"{pid}.log").write_text(
@@ -391,7 +433,10 @@ def main(argv=None):
     only = [s for s in (a.only or '').split(',') if s]
     if a.child:
         return run_child(a.group, only[0], a.out)
-    return run_group(a.group, a.out, only)
+    try:
+        return run_group(a.group, a.out, only)
+    except ReadablePathError as ex:
+        ap.error(str(ex))
 
 
 # ===========================================================================
