@@ -23,14 +23,15 @@ arguments.
 (STORED.json beside each tape, STORE.json over the set), records a run
 that holds m7_suspension rows again at once with execution.M7_SUSPEND_S =
 1e9 (D4; the first recording kept as <name>.as_recorded, the value in the
-tape's META.json), and records the --m7 off twin D3 asks for right after,
-unless the call names it or the set holds it from an earlier call (so a
-twin can have a call, and a hold of the lock, of its own).
+tape's META.json), and records the --m7 off twin D3 asks for right after.
 
 The tool never takes the pipeline lock itself: its caller runs it under
 ``flock /root/sb_pipeline.lock`` (a nested flock on the same file from a
 child would wait for ever).  Whole episodes go through the health gate
-(tracks/meeting_2026-11-13/scripts/gate_run.ps1).
+(tracks/meeting_2026-11-13/scripts/gate_run.ps1).  A set may be recorded
+one episode per call, a hold of the lock each: a twin D3 asks for is not
+recorded again when the set holds its recording from an earlier call (its
+STORED.json), and a name the call gives is recorded (its folder replaced).
 
 The parent starts one child interpreter per episode (cwd, environment and
 argv as ``run boxels -Headless`` and ``run tampura -Headless`` build them,
@@ -70,10 +71,7 @@ Scripted tapes (tools/readable/scripted_tapes.py) replay like live ones;
 ``--stubs JSON`` sets the test-level executor stubs of
 tests/readable/executor_stubs.py in the child, and ``--tfp-copy`` (or
 READABLE_TFP_COPY) runs a planted copy of test_full_pipeline.py for the
-planted-change checks of PLAN 24.3 (e) only (a relative value is read
-against the working directory of the process that calls run_episode, which
-under pin_outputs.py is the pin's work folder, so give it absolute; a copy
-that is not there is refused).  ``--set NAME=VALUE`` (SPEC
+planted-change checks of PLAN 24.3 (e) only.  ``--set NAME=VALUE`` (SPEC
 D5, NAME from the closed list SET_NAMES, VALUE read by float()) sets a
 module value in the child right after the module is executed; the applied
 pair goes to rec/SET.json, to a recording's tape/META.json and to
@@ -86,6 +84,12 @@ After the child the parent writes RESULT.json and the normalised outputs
 strings mapped to their order of first use (PLAN 24.3 (d)), paths and
 stamps masked.  Nothing here edits a plan between planner and executor in
 the pipeline: the replay is test code (PLAN D9).
+
+A relative --tfp-copy or READABLE_TFP_COPY is read against the working
+directory of the process that calls run_episode, which under pin_outputs.py
+is the pin's work folder, so give it absolute; the child and RESULT.json
+get the resolved copy, and a copy that is not there is refused before
+anything starts.
 """
 import argparse
 import ast
@@ -1293,11 +1297,11 @@ def run_episode(name, mode, run_dir, tape=None, rng='restore', trace_main=False,
     stubs: executor stubs (tests/readable/executor_stubs.py config, a dict
     or JSON text) for a scripted tape.  tfp_copy (default: the variable
     READABLE_TFP_COPY): a planted copy of test_full_pipeline.py run instead
-    of the checkout's, for the planted-change checks of PLAN 24.3 (e) only;
-    a relative value is read against this process's working directory, and
-    a copy that is not there is refused (TfpCopyError); the resolved copy
-    is named in RESULT.json and INFO files only, never in a compared
-    output.  sets: {NAME: VALUE} of SPEC D5, set in the child; a
+    of the checkout's, for the planted-change checks of PLAN 24.3 (e) only
+    (a relative value is read against this process's working directory, and
+    a copy that is not there is refused with TfpCopyError before anything);
+    the copy is named in RESULT.json and INFO files only, never in a
+    compared output.  sets: {NAME: VALUE} of SPEC D5, set in the child; a
     recording writes them to its tape's META.json, a replay takes them from
     there and refuses a sets that differs."""
     entry(name)                          # an unknown name fails before run_dir is touched
@@ -2217,10 +2221,7 @@ def record_set(out_dir, episodes, log=print):
     At storing, the counts and the rules of D3 and D4 go beside the tape
     (STORED.json) and into out_dir/STORE.json; a recording D4 asks for is
     made again at once with D4_SET (the first kept as <name>.as_recorded);
-    a twin D3 asks for is recorded right after, unless this call names it
-    or the set holds its recording from an earlier call (its STORED.json):
-    a set may be recorded one episode per call, a twin in a call of its
-    own.  A name the call gives is always recorded (its folder replaced)."""
+    a twin D3 asks for is recorded right after, unless the set names it."""
     for name in episodes:                # every name resolves before the first recording
         entry(name)
     worst = 0
@@ -2244,6 +2245,10 @@ def record_set(out_dir, episodes, log=print):
         store[name] = stored
         twin = stored['twin']['name']
         if twin and twin not in episodes and twin not in store and twin not in queue:
+            # Nor when the set holds its recording from an earlier call (its
+            # STORED.json): a set may be recorded one episode per call, a twin
+            # in a call of its own.  A name the call gives is always recorded
+            # (its folder replaced).
             held = Path(out_dir) / twin / 'STORED.json'
             if held.exists():
                 status = json.loads(held.read_text(encoding='utf-8')).get('status')
@@ -2334,7 +2339,7 @@ def main(argv=None):
         res = run_episode(a.episode, a.mode, a.run_dir, tape=a.tape, rng=a.rng,
                           trace_main=a.trace_main, timeout=a.timeout, stubs=a.stubs,
                           tfp_copy=a.tfp_copy, sets=dict(a.set))
-    except (SetError, TfpCopyError) as ex:
+    except SetError as ex:
         ap.error(str(ex))
     return 0 if res['status'] == 'ended' and res['child_exit'].get('code') is not None else 1
 

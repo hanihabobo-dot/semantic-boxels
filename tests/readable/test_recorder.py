@@ -276,6 +276,52 @@ def test_print_argv_starts_nothing(monkeypatch, capsys, tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
+def test_planted_copy_is_read_where_run_episode_runs_and_refused_when_not_there(tmp_path, monkeypatch):
+    """READABLE_TFP_COPY (or tfp_copy) is read against the working directory
+    of the process that calls run_episode, which under pin_outputs.py is the
+    pin child's work folder: the child and RESULT.json get the resolved
+    path, and a copy that is not there is refused before the run folder is
+    touched and before any child starts, from the command line too.
+    Catches a relative value passed on as it is (an episode run without the
+    plant, or the plant's path wrong in RESULT.json) and a missing copy that
+    starts a child."""
+    cmds = []
+
+    class Proc:                              # the recorder's Popen: the command kept, nothing starts
+        def __init__(self, cmd, **kw):
+            cmds.append(cmd)
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            pass
+    monkeypatch.setattr(rec.subprocess, 'Popen', Proc)
+    quiet = lambda s: None
+    copy = tmp_path / 'plants' / 'test_full_pipeline.py'
+    copy.parent.mkdir()
+    copy.write_text('# a planted copy\n', encoding='utf-8')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(rec.TFP_COPY_VAR, 'plants/test_full_pipeline.py')
+    res = rec.run_episode('rp0', 'record', tmp_path / 'run', log=quiet)
+    assert cmds[0][cmds[0].index('--tfp-copy') + 1] == str(copy.resolve()) == res['tfp_copy']
+    assert json.loads((tmp_path / 'run' / 'RESULT.json').read_text(encoding='utf-8'))['tfp_copy'] == str(copy.resolve())
+    work = tmp_path / 'work'                 # a pin child's working directory
+    work.mkdir()
+    monkeypatch.chdir(work)
+    (tmp_path / 'run2').mkdir()
+    (tmp_path / 'run2' / 'kept.txt').write_text('x', encoding='utf-8')
+    with pytest.raises(rec.TfpCopyError, match='is not a file here') as ex:
+        rec.run_episode('rp0', 'record', tmp_path / 'run2', log=quiet)
+    assert str(work / 'plants' / 'test_full_pipeline.py') in str(ex.value)
+    assert len(cmds) == 1 and (tmp_path / 'run2' / 'kept.txt').exists()
+    with pytest.raises(rec.TfpCopyError, match='is not a file here'):
+        rec.main(['--episode', 'rp0', '--mode', 'record', '--run-dir', str(tmp_path / 'run3')])
+    assert len(cmds) == 1 and not (tmp_path / 'run3').exists()
+    monkeypatch.setenv(rec.TFP_COPY_VAR, str(copy))
+    assert rec.run_episode('rp0', 'record', tmp_path / 'run4', log=quiet)['tfp_copy'] == str(copy.resolve())
+
+
 # ---------------------------------------------------------------------------
 # P8, E3 and R's S-b: the module switches and the first-plan record
 # ---------------------------------------------------------------------------
@@ -1052,15 +1098,13 @@ def test_ledger_counts_count_the_rows_d3_and_d4_decide_on():
 
 
 def test_the_names_the_counts_rest_on_are_the_tag_s():
-    """Every name D3's and D4's counts and D6's M7 masks look for is one the
-    tag's code writes: the three row kinds among pin 40's ledger_kinds()
-    (read from every ledger_event call), the suspension's ops those of its
-    ledger_event calls, the contains_nontarget reason the f-string of
-    execution.py makes from the outcome M7's branch compares, the sense
-    row's reason taken from that result, the two timing-summary keys among
-    those run_logger writes, and each name of SET_NAMES a top-level name of
-    its module.  Catches a name the reference spells otherwise, which would
-    give counts of 0 with every other test green."""
+    """Every name D3's and D4's counts look for is one the tag's code writes:
+    the three row kinds among pin 40's ledger_kinds() (read from every
+    ledger_event call), the suspension's ops those of its ledger_event
+    calls, the contains_nontarget reason the f-string of execution.py makes
+    from the outcome M7's branch compares, the sense row's reason taken
+    from that result.  Catches a name the reference spells otherwise, which
+    would give counts of 0 with every other test green."""
     po = _load('pin_outputs', REPO / 'tools' / 'readable' / 'pin_outputs.py')
     kinds = po.ledger_kinds()
     for k in (rec.M7_SUSPENSION_KIND, rec.SENSE_DISCOVERY_KIND, rec.SENSE_RESULT_KIND):
@@ -1097,6 +1141,16 @@ def test_the_names_the_counts_rest_on_are_the_tag_s():
     assert sense_rows and all(ast.unparse(k.value).endswith('.reason') for n in sense_rows
                               for k in n.keywords if k.arg == 'reason')
     assert calls_of(ex, rec.SENSE_DISCOVERY_KIND)
+
+
+def test_the_names_of_item_10_are_the_tag_s():
+    """The names of item 10's three commits (D6's M7 masks 9c53420, D5
+    0e60e20, D4 f1479a5), kept apart from the counts' test so that a redo
+    of one of them finds fix round 1's reading of its names here alone:
+    the two timing-summary keys among those run_logger writes, the rows by
+    suspension_rows, each name of SET_NAMES a top-level name of its module,
+    D4_SET's names among them.  Catches a name the reference spells
+    otherwise."""
     rl = ast.parse((REPO / 'run_logger.py').read_text(encoding='utf-8'))
     summary = {k.value: v for n in ast.walk(rl) if isinstance(n, ast.Dict)
                for k, v in zip(n.keys, n.values) if isinstance(k, ast.Constant)}
@@ -1133,8 +1187,8 @@ def test_twin_rule_of_d3():
 def _fake_recorder(monkeypatch, ledgers, status=None, sets_seen=None):
     """run_episode replaced by one that writes, as the real one does, the
     normalised ledger it is given, RESULT.json with the folder's paths and
-    a tape META.json for a set, into its folder made new; the names asked
-    for in calls, the sets in sets_seen."""
+    a tape META.json for a set; the names asked for in calls, the sets in
+    sets_seen."""
     calls = []
 
     def fake(name, mode, run_dir, log=print, sets=None, **k):
@@ -1143,8 +1197,6 @@ def _fake_recorder(monkeypatch, ledgers, status=None, sets_seen=None):
         if sets_seen is not None:
             sets_seen.append(sets)
         run_dir = Path(run_dir).resolve()
-        if run_dir.exists():                 # a folder of that name is replaced, as run_episode does
-            shutil.rmtree(run_dir)
         (run_dir / 'norm').mkdir(parents=True)
         (run_dir / 'tape').mkdir()
         (run_dir / 'norm' / 'ledger.json').write_text(json.dumps(ledgers.get(name, [])), encoding='utf-8')
@@ -1193,6 +1245,13 @@ def test_a_twin_the_set_holds_from_an_earlier_call_is_not_recorded_again(tmp_pat
     into the same set, its first recording replaced."""
     rows = _ROWS[:5]          # a contains_nontarget sense and a discovery, no m7_suspension row (no D4)
     calls = _fake_recorder(monkeypatch, {'f204': rows, 'f204_m7off': []})
+    fake = rec.run_episode
+
+    def replacing(name, mode, run_dir, **k):     # a folder of that name is replaced, as run_episode does
+        if Path(run_dir).exists():
+            shutil.rmtree(run_dir)
+        return fake(name, mode, run_dir, **k)
+    monkeypatch.setattr(rec, 'run_episode', replacing)
     logs = []
     assert rec.record_set(tmp_path, ['f204_m7off'], log=logs.append) == 0
     assert calls == ['f204_m7off']
@@ -1518,42 +1577,6 @@ def test_recording_puts_the_set_in_the_tape_meta_and_the_replay_takes_it(tmp_pat
         rec.run_episode('rp0', 'replay', tmp_path / 'rep3', tape=tmp_path / 'plain' / 'tape',
                         sets={name: 1e9}, log=quiet)
     assert len(cmds) == started + 1 and not (tmp_path / 'rep2').exists() and not (tmp_path / 'rep3').exists()
-
-
-def test_planted_copy_is_read_where_run_episode_runs_and_refused_when_not_there(tmp_path, monkeypatch, capsys):
-    """READABLE_TFP_COPY (or tfp_copy) is read against the working directory
-    of the process that calls run_episode, which under pin_outputs.py is the
-    pin child's work folder: the child and RESULT.json get the resolved
-    path, and a copy that is not there is refused before the run folder is
-    touched and before any child starts; the parent turns the refusal into
-    a usage error.  Catches a relative value passed on as it is (an episode
-    run without the plant, or the plant's path wrong in RESULT.json) and a
-    missing copy that starts a child."""
-    cmds = _fake_popen(monkeypatch)
-    quiet = lambda s: None
-    copy = tmp_path / 'plants' / 'test_full_pipeline.py'
-    copy.parent.mkdir()
-    copy.write_text('# a planted copy\n', encoding='utf-8')
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv(rec.TFP_COPY_VAR, 'plants/test_full_pipeline.py')
-    res = rec.run_episode('rp0', 'record', tmp_path / 'run', log=quiet)
-    assert cmds[0][cmds[0].index('--tfp-copy') + 1] == str(copy.resolve()) == res['tfp_copy']
-    assert json.loads((tmp_path / 'run' / 'RESULT.json').read_text(encoding='utf-8'))['tfp_copy'] == str(copy.resolve())
-    work = tmp_path / 'work'                 # a pin child's working directory
-    work.mkdir()
-    monkeypatch.chdir(work)
-    (tmp_path / 'run2').mkdir()
-    (tmp_path / 'run2' / 'kept.txt').write_text('x', encoding='utf-8')
-    with pytest.raises(rec.TfpCopyError, match='is not a file here') as ex:
-        rec.run_episode('rp0', 'record', tmp_path / 'run2', log=quiet)
-    assert str(work / 'plants' / 'test_full_pipeline.py') in str(ex.value)
-    assert len(cmds) == 1 and (tmp_path / 'run2' / 'kept.txt').exists()
-    with pytest.raises(SystemExit) as ex:
-        rec.main(['--episode', 'rp0', '--mode', 'record', '--run-dir', str(tmp_path / 'run3')])
-    assert ex.value.code == 2 and len(cmds) == 1 and not (tmp_path / 'run3').exists()
-    assert 'is not a file here' in capsys.readouterr().err
-    monkeypatch.setenv(rec.TFP_COPY_VAR, str(copy))
-    assert rec.run_episode('rp0', 'record', tmp_path / 'run4', log=quiet)['tfp_copy'] == str(copy.resolve())
 
 
 _STAND_IN = 'M7_SUSPEND_S = 120.0\n\n\ndef suspend_length():\n    return M7_SUSPEND_S\n'
