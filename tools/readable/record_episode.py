@@ -1108,7 +1108,13 @@ def _absolute_log_dir(mod):
 
 # C-01 (test_full_pipeline.py:3681-3699): an exception out of main() is shown
 # through sys.excepthook after the clean-up, then the entry exits 70; the
-# eval runner files that ending as crash_exit70 (SPEC D7, trap 11).
+# eval runner files that ending as crash_exit70 (SPEC D7, trap 11).  A bridge
+# episode does not pass C-01: the bridge calls main() inside its execute_fn,
+# whose except Exception keeps the type and message as the episode's error
+# and raises nothing (tampura_bridge/policy.py:291-301 and 315-319); the
+# driver goes on, its outcome is crashed (tools/bridge_gates.py
+# episode_outcome) and its main returns 1, so the child ends with
+# SystemExit(1) and no hook is called (BRIDGE_CRASH_NOTE).
 CRASH_EXIT_CODE = 70
 CRASH_HOW = 'crash_exit70'
 
@@ -1571,6 +1577,21 @@ ORDER_NOTES = [
 ]
 
 
+# SPEC D7's two cases that keep today's record ("the NOTES say so"): a crash
+# of main() in a bridge episode (see CRASH_EXIT_CODE), and an exception out
+# of the entry, which child_main writes as before.
+BRIDGE_CRASH_NOTE = (
+    'a crash of main() in a bridge episode keeps today\'s record (SPEC D7): it does not pass the C-01 '
+    'handler, since the bridge calls main() inside its execute_fn, whose except Exception '
+    '(tampura_bridge/policy.py:315-319) keeps the type and message as the episode\'s error; the driver '
+    'goes on to its own end, so child_exit is system_exit with code 1, no rec/CRASH.txt is written, and '
+    'the error stands in result.json outcome (status crashed) and in bridge_episode.json')
+RAISED_NOTE = (
+    'an exception that leaves the entry keeps today\'s record too (SPEC D7): a pre-flight rejection, or '
+    'an exception of the bridge driver\'s own code outside that handler; how "raised <type>: <message>", '
+    'rec/CRASH.txt from its traceback')
+
+
 def episode_notes():
     """The NOTES lines every episode pin writes after its entry's own
     (pin_outputs._episode_notes): what the normaliser does, the crash
@@ -1587,10 +1608,10 @@ def episode_notes():
         'rec/CRASH.txt (SPEC D7): the recorder\'s sys.excepthook writes it when the boxels entry shows a '
         'crash of main() (C-01, test_full_pipeline.py:3681-3699), then calls the hook it replaced; '
         f'child_exit.how is {CRASH_HOW} only for exit code {CRASH_EXIT_CODE} after that call (a '
-        f'{CRASH_EXIT_CODE} without it stays system_exit); an exception that leaves the entry (a '
-        'pre-flight rejection; a crash in a bridge episode, which does not pass the C-01 handler) is '
-        'written as before, how "raised ..."; compared: crash.json, the last line (type and message); '
-        'the frames, which hold line numbers, are INFO_crash.txt',
+        f'{CRASH_EXIT_CODE} without it stays system_exit); a run with rec/CRASH.txt has crash.json, its '
+        'last line (type and message), compared, and INFO_crash.txt, the frames, which hold line numbers',
+        BRIDGE_CRASH_NOTE,
+        RAISED_NOTE,
         *ORDER_NOTES,
     ]
 

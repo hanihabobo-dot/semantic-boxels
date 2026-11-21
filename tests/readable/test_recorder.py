@@ -464,6 +464,14 @@ _ENTRIES = {
     'exit70_no_hook': "import sys\nsys.exit(70)\n",
     'hook_then_exit1': _C01.replace('CODE', '1'),
     'raised_out': "raise ValueError('seed 3 rejected')\n",
+    # The bridge's shape (tampura_bridge/policy.py:291-319): the crash is
+    # kept as the episode's error, no hook is called, the driver exits 1.
+    'caught_then_exit1': ("import sys\n"
+                          "try:\n"
+                          "    {}['missing_key']\n"
+                          "except Exception as e:\n"
+                          "    error = f'{type(e).__name__}: {e}'\n"
+                          "sys.exit(1)\n"),
 }
 
 
@@ -500,14 +508,17 @@ def _child_in_process(tmp_path, monkeypatch, entry):
     ('c01_exit70', 70, 'crash_exit70', "KeyError: 'missing_key'"),
     ('exit70_no_hook', 70, 'system_exit', None),
     ('hook_then_exit1', 1, 'system_exit', "KeyError: 'missing_key'"),
-    ('raised_out', 1, 'raised ValueError: seed 3 rejected', 'ValueError: seed 3 rejected')])
+    ('raised_out', 1, 'raised ValueError: seed 3 rejected', 'ValueError: seed 3 rejected'),
+    ('caught_then_exit1', 1, 'system_exit', None)])
 def test_child_crash_record(tmp_path, monkeypatch, capsys, entry, code, how, last):
     """SPEC D7: the child's own sys.excepthook writes rec/CRASH.txt and then
     calls the hook it replaced; how is crash_exit70 only for exit 70 after a
     call of the hook (a 70 without one stays system_exit, another code
-    after a call too); an exception out of the entry keeps today's record.
-    Catches the hook not installed, the old hook not called, any 70 taken
-    for a crash, and CRASH.txt not written."""
+    after a call too); an exception out of the entry keeps today's record,
+    and so does a crash the entry keeps itself and ends with exit 1, as the
+    bridge does (no CRASH.txt).  Catches the hook not installed, the old
+    hook not called, any 70 taken for a crash, CRASH.txt not written, and
+    CRASH.txt written for an exit without the hook's call."""
     got_code, exit_, crash, prev_calls = _child_in_process(tmp_path, monkeypatch, entry)
     assert (got_code, exit_) == (code, {'code': code, 'how': how})
     if last is None:
@@ -573,10 +584,76 @@ def test_episode_notes_name_the_crash_record_and_the_pins_write_them():
     for word in ('rec/CRASH.txt', rec.CRASH_HOW, 'system_exit', 'pre-flight', 'bridge', 'crash.json',
                  'INFO_crash.txt'):
         assert word in notes, word
+    # SPEC D7's two cases that keep today's record, a line each: a crash of
+    # main() in a bridge episode is not an exception out of the entry.
+    lines = rec.episode_notes()
+    assert [ln for ln in lines if 'bridge episode' in ln] == [rec.BRIDGE_CRASH_NOTE]
+    assert [ln for ln in lines if '"raised' in ln] == [rec.RAISED_NOTE]
+    assert 'raised' not in rec.BRIDGE_CRASH_NOTE and 'pre-flight' in rec.RAISED_NOTE
+    for word in ('does not pass the C-01 handler', 'execute_fn', 'child_exit is system_exit', 'no rec/CRASH.txt',
+                 'result.json outcome (status crashed)', 'bridge_episode.json'):
+        assert word in rec.BRIDGE_CRASH_NOTE, word
     tree = ast.parse((REPO / 'tools' / 'readable' / 'pin_outputs.py').read_text(encoding='utf-8'))
     fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_episode_notes')
     calls = [n.func.attr for n in ast.walk(fn) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)]
     assert 'episode_notes' in calls and 'entry_notes' in calls
+
+
+def _tries_around(tree, pred):
+    """For each node pred accepts: the try statements whose body holds it,
+    the innermost last (a handler, else or finally part is not the body)."""
+    found = []
+
+    def walk(node, stack):
+        if pred(node):
+            found.append(stack)
+        if isinstance(node, ast.Try):
+            for s in node.body:
+                walk(s, stack + [node])
+            for s in node.handlers + node.orelse + node.finalbody:
+                walk(s, stack)
+            return
+        for child in ast.iter_child_nodes(node):
+            walk(child, stack)
+    walk(tree, [])
+    return found
+
+
+def test_bridge_crash_note_rests_on_the_bridge_s_code():
+    """BRIDGE_CRASH_NOTE rests on the tag's bridge: main() is called once,
+    inside a try whose except Exception keeps the error as cfg.out['error']
+    and raises nothing; the driver hands that error to episode_outcome,
+    which makes it crashed (run here from its own source); the driver's main
+    returns the code the note names when the outcome is no success, and the
+    entry ends with console_ui.finish(main()).  Catches the note filing a
+    bridge crash among the exceptions out of the entry, or a code of its own."""
+    pol = ast.parse((REPO / 'tampura_bridge' / 'policy.py').read_text(encoding='utf-8'))
+    around = _tries_around(pol, lambda n: isinstance(n, ast.Call)
+                           and ast.unparse(n.func) == 'test_full_pipeline.main')
+    assert len(around) == 1 and around[0], 'main() is called once, inside a try'
+    handlers = [h for h in around[0][-1].handlers if h.type is not None and ast.unparse(h.type) == 'Exception']
+    assert len(handlers) == 1
+    assert [n for n in ast.walk(handlers[0]) if isinstance(n, ast.Assign)
+            and [ast.unparse(t) for t in n.targets] == ["cfg.out['error']"]]
+    assert not [n for n in ast.walk(handlers[0]) if isinstance(n, ast.Raise)]
+    gates = ast.parse((REPO / 'tools' / 'bridge_gates.py').read_text(encoding='utf-8'))
+    fn = next(n for n in gates.body if isinstance(n, ast.FunctionDef) and n.name == 'episode_outcome')
+    ns = {}
+    exec(compile(ast.Module(body=[fn], type_ignores=[]), 'tools/bridge_gates.py', 'exec'), ns)
+    out = ns['episode_outcome']([1.0], 'KeyError: x', types.SimpleNamespace(rows=[]))
+    assert (out['status'], out['success'], out['error']) == ('crashed', False, 'KeyError: x')
+    drv = ast.parse((REPO / 'tampura_bridge' / 'run_bridge_on_finddice.py').read_text(encoding='utf-8'))
+    main = next(n for n in drv.body if isinstance(n, ast.FunctionDef) and n.name == 'main')
+    outcome = [n for n in ast.walk(main) if isinstance(n, ast.Call)
+               and ast.unparse(n.func).endswith('episode_outcome')]
+    assert len(outcome) == 1 and ast.unparse(outcome[0].args[1]) == "cfg.out.get('error')"
+    last = main.body[-1]
+    assert isinstance(last, ast.Return) and isinstance(last.value, ast.IfExp)
+    assert ast.unparse(last.value.test) == "cfg.out['outcome']['success']"
+    code = ast.literal_eval(last.value.orelse)
+    assert code != rec.CRASH_EXIT_CODE and f'system_exit with code {code},' in rec.BRIDGE_CRASH_NOTE
+    tail = [n for n in drv.body if isinstance(n, ast.If) and ast.unparse(n.test) == "__name__ == '__main__'"]
+    assert len(tail) == 1 and ast.unparse(tail[0].body[-1]) == 'console_ui.finish(main())'
 
 
 # ---------------------------------------------------------------------------
