@@ -29,7 +29,7 @@ import json
 import os
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePath
 
 import pytest
 
@@ -187,8 +187,32 @@ def test_pin_test_files_resolve_golden_as_the_tool_does(tmp_path):
             (f.name, refused)
 
 
-def test_default_paths_are_built_from_repo():
+# A fresh interpreter imports pin_outputs from the given folder and prints its module-level paths.
+_PATHS_PROBE = r'''
+import json, sys
+from pathlib import PurePath
+sys.path.insert(0, sys.argv[1])
+import pin_outputs as po
+print('@@PATHS ' + json.dumps({k: str(v) for k, v in sorted(vars(po).items()) if isinstance(v, PurePath)}))
+'''
+
+
+def test_default_paths_are_built_from_repo(tmp_path):
     """SPEC D11 (C10): the default folders are built from the file's place (REPO), never from
-    the working directory.  Catches a default made relative."""
+    the working directory: absolute and under REPO here, and every module-level path of
+    pin_outputs (REPO, HERE and the defaults) the same when it is imported in a fresh interpreter
+    whose working directory is another folder.  Catches a default made relative, and one built
+    from the working directory (which equals REPO while pytest runs in the checkout)."""
     assert po.REPO == Path(po.__file__).resolve().parents[2]
     assert po.RENDER_FIXTURE_DEFAULT.is_absolute() and po.REPO in po.RENDER_FIXTURE_DEFAULT.parents
+    here = {k: str(v) for k, v in sorted(vars(po).items()) if isinstance(v, PurePath)}
+    assert 'RENDER_FIXTURE_DEFAULT' in here, here
+    env = {k: v for k, v in os.environ.items() if not k.startswith('READABLE_')}
+    env['PYTHONDONTWRITEBYTECODE'] = '1'
+    p = subprocess.run([sys.executable, '-c', _PATHS_PROBE, str(Path(po.__file__).parent)], cwd=str(tmp_path),
+                       env=env, capture_output=True, text=True, timeout=180)
+    line = next((ln for ln in p.stdout.splitlines() if ln.startswith('@@PATHS ')), None)
+    assert line is not None, (p.returncode, p.stderr[-800:])
+    there = json.loads(line[len('@@PATHS '):])
+    assert there == here, {k: (here.get(k), there.get(k)) for k in sorted(set(here) | set(there))
+                           if here.get(k) != there.get(k)}
