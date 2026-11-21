@@ -931,7 +931,7 @@ def _made_bridge_tag2(r):
     # it, look_action.py:494-504; a boxel look that does not go on only ends, test_full_pipeline.py:
     # 2559-2606), then a sense whose body reaches M7's F9 give-up (the region suspended, not marked
     # empty)
-    r.line('', '=== PLAN #2 ===', 'Unknown shadows remaining: 2')
+    r.line('', '=== PLAN #2 ===', 'Unknown shadows remaining: 2')              # test_full_pipeline.py:1902, 1907
     r.plan(2, [['look', 'cup', 'shadow_of_cup__01', 'view__look_cup_1', 'cfg:look_cup_1'],
                ['sense', 'dice', 'shadow_of_cup__02'], ['sense', 'dice', 'interior_of_cup']], goal=goal)
     r.line('', '  Executing: look')                                            # test_full_pipeline.py:2200
@@ -970,7 +970,7 @@ def _made_bridge_tag2(r):
     r.line('  [M7] shadow_of_cup__02 is back in the search: its 120 s suspension at the F9 give-up is '
            'over')                                                            # test_full_pipeline.py:1847-1849
     # plan 3: no plan through the region dice was seen under
-    r.line('', '=== PLAN #3 ===', 'Unknown shadows remaining: 2')
+    r.line('', '=== PLAN #3 ===', 'Unknown shadows remaining: 2')              # test_full_pipeline.py:1902, 1907
     r.plan(3, None, dt=1.5, goal=goal)
     r.line("  [interior] no plan through interior_of_cup alone: the record 'dice seen under a cover' ends; "
            "every unknown region is on offer again (BF#65 (d))")              # interior_regions.py:415-417
@@ -978,7 +978,7 @@ def _made_bridge_tag2(r):
     # plan 4: the Wumpus world's two statuses (wumpus/narrate.py:128, an action that returned not
     # ok and a move into a pit or the wumpus's cell); a bridge run never writes them, the console
     # reads every status of run_logger.STEP_END_STATUSES
-    r.line('', '=== PLAN #4 ===')
+    r.line('', '=== PLAN #4 ===')                                              # test_full_pipeline.py:1902
     r.plan(4, [['move', 'p1-2'], ['move', 'p2-2']], dt=0.25, goal=['holding', 'gold'])
     r.step(4, 1, 'move', 'p1-2')
     r.end('action_failed')
