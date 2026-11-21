@@ -49,8 +49,11 @@ The child patches only inside its own process, never a pipeline file:
               table of PLAN 24.3 (b)); it changes no value.
   first-plan  ``PDDLStreamPlanner.plan`` is replaced by a recorder that
               writes its keyword arguments, the module switches set by
-              main's stage B, the RNG digests and (bridge) the gate counts,
-              then raises StopAtPlan.  main's parameters at entry come from a
+              main's stage B (and the arm camera's follow flag on main's
+              env), every attribute of the planner and of its streams (a
+              plain value as itself, anything else by its type), the RNG
+              digests and (bridge) the gate counts, then raises
+              StopAtPlan.  main's parameters at entry come from a
               sys.setprofile hook that removes itself at main's first call.
 
 Scripted tapes (tools/readable/scripted_tapes.py) replay like live ones;
@@ -746,9 +749,33 @@ def _plain_value(v, depth=0):
     return {'type': type(v).__name__}
 
 
-def module_switches():
-    """The module state main's stage B sets (test_full_pipeline.py 767-806),
-    read at the first plan() call."""
+def main_frame(path=TFP, depth=12):
+    """The frame of `main` of test_full_pipeline.py (path: the file that runs
+    as that module) up the stack from the caller: plan()'s caller, or the
+    caller of a wrapper around plan().  None when it is not there."""
+    want = os.path.realpath(path)
+    f = sys._getframe(1)
+    for _ in range(depth):
+        if f is None:
+            return None
+        code = f.f_code
+        if code.co_name == 'main' and os.path.realpath(code.co_filename) == want:
+            return f
+        f = f.f_back
+    return None
+
+
+FOLLOW_KEY = "arm_eye.following(main's env)"
+NO_MAIN_FRAME = "main's frame not found"
+
+
+def module_switches(main_locals=None):
+    """The module state main's stage B sets (test_full_pipeline.py 802-869),
+    read at the first plan() call, with execution.M7, M7_SUSPEND_S and
+    interior_regions.ENABLED as the modules hold them; and the arm camera's
+    follow flag, which arm_eye.follow_arm sets on main's env, not on a
+    module (arm_eye.py:184-211): main_locals are the locals of main's frame
+    (None: that frame was not found, and the record says so)."""
     out = {}
     mods = sys.modules
     if 'pose_belief' in mods:
@@ -777,10 +804,116 @@ def module_switches():
         wc = mods['world_counts']
         out['world_counts._noticed'] = dict(wc._noticed)
         out['world_counts._reported'] = dict(wc._reported)
+    if 'interior_regions' in mods:
+        out['interior_regions.ENABLED'] = mods['interior_regions'].ENABLED
+    if 'execution' in mods:
+        ex = mods['execution']
+        out['execution.M7'] = ex.M7
+        out['execution.M7_SUSPEND_S'] = ex.M7_SUSPEND_S
+    if 'arm_eye' in mods:
+        out[FOLLOW_KEY] = (NO_MAIN_FRAME if main_locals is None
+                           else mods['arm_eye'].following(main_locals.get('env')))
     return out
 
 
-def make_first_plan_recorder(orig_plan, rec_dir):
+# S-b (PLAN 5.2 row 34, SPEC D15): the attributes of the planner and of its
+# streams at the first plan() call.  A plain value is recorded as itself; an
+# object only by its type, so look_on and look_mode show by value and
+# m8_views and look_views as null or set.
+
+NOT_PLAIN = type('NotPlain', (), {'__repr__': lambda self: 'NOT_PLAIN'})()
+PLAIN_DEPTH = 8
+
+
+def _set_order(x):
+    if isinstance(x, (int, float)) and not isinstance(x, bool):
+        return (0, x, '')
+    return (1, 0, json.dumps(x, sort_keys=True, allow_nan=True))
+
+
+def plain_form(v, depth=0):
+    """v as JSON if it is plain, else NOT_PLAIN.  Plain: None, bool, int,
+    float, str (one of more than one line as its line count and sha256), and
+    lists, tuples, sets, dicts and numpy arrays made of plain values, nested
+    at most PLAIN_DEPTH deep.  A list stays a list and a dict with str keys
+    a dict (in its own order); any other container names its type:
+    {"tuple": [...]}, {"frozenset": [sorted]}, {"ndarray": [...], "dtype":
+    ...}, {"dict": [[key, value], ...]} for other keys.  An instance of any
+    other class (the pipeline's RobotConfig, a registry, a views object) is
+    not plain, and neither is a container that holds one."""
+    if v is None or isinstance(v, (bool, int, float)):
+        return v
+    if isinstance(v, str):
+        if '\n' in v:
+            return {'str_lines': len(v.splitlines()),
+                    'sha256': hashlib.sha256(v.encode('utf-8')).hexdigest()}
+        return v
+    if depth >= PLAIN_DEPTH:
+        return NOT_PLAIN
+    if isinstance(v, (list, tuple, set, frozenset)):
+        items = [plain_form(x, depth + 1) for x in v]
+        if any(x is NOT_PLAIN for x in items):
+            return NOT_PLAIN
+        if isinstance(v, (set, frozenset)):
+            return {type(v).__name__: sorted(items, key=_set_order)}
+        return items if type(v) is list else {type(v).__name__: items}
+    if isinstance(v, dict):
+        keys = [plain_form(k, depth + 1) for k in v]
+        values = [plain_form(x, depth + 1) for x in v.values()]
+        if any(x is NOT_PLAIN for x in keys + values):
+            return NOT_PLAIN
+        if type(v) is dict and all(isinstance(k, str) for k in v):
+            return dict(zip(v.keys(), values))
+        return {type(v).__name__: [[k, x] for k, x in zip(keys, values)]}
+    if hasattr(v, 'dtype') and hasattr(v, 'shape') and hasattr(v, 'tolist'):   # numpy
+        form = plain_form(v.tolist(), depth + 1)
+        if form is NOT_PLAIN:
+            return NOT_PLAIN
+        return {type(v).__name__: form, 'dtype': str(v.dtype)}
+    return NOT_PLAIN
+
+
+def attribute_record(obj):
+    """Every attribute of obj (vars(obj), sorted by name): a plain value as
+    plain_form gives it; anything else as {"object": its type}, with "len"
+    for a container and "qualname" for a callable.  None for None."""
+    if obj is None:
+        return None
+    try:
+        items = sorted(vars(obj).items())
+    except TypeError:
+        return {'object': type(obj).__name__, 'vars': None}
+    out = {}
+    for name, v in items:
+        form = plain_form(v)
+        if form is NOT_PLAIN:
+            form = {'object': type(v).__name__}
+            if isinstance(v, (list, tuple, dict, set, frozenset)):
+                form['len'] = len(v)
+            elif callable(v):
+                form['qualname'] = getattr(v, '__qualname__', None)
+        out[name] = form
+    return out
+
+
+def first_plan_notes():
+    """The NOTES lines of the first-plan record's parts added in gate 7."""
+    return [
+        'first_plan.json module_switches: also execution.M7, execution.M7_SUSPEND_S and '
+        'interior_regions.ENABLED as the modules hold them at the first plan() call (the recorder sets '
+        f'none of them), and "{FOLLOW_KEY}": arm_eye.following of the env in main\'s frame (follow_arm '
+        f'marks the env, not a module; "{NO_MAIN_FRAME}" if the frame is not up the stack)',
+        'first_plan.json planner_attributes and streams_attributes (R\'s S-b, PLAN 5.2 row 34): every '
+        'attribute of the planner and of planner.streams at the first plan() call, by name; a plain '
+        'value as itself (a multi-line string as its line count and sha256, a container other than a '
+        'list or a str-keyed dict by its type), any other value as {object: its type} with len or '
+        'qualname: so look_on and look_mode by value, m8_views and look_views as null or set',
+        'normalised: in planner_attributes and streams_attributes every number under a key that ends '
+        'in _s (wall seconds, e.g. last_m8_stats.twin_render_s) is <s>, the key kept, null kept',
+    ]
+
+
+def make_first_plan_recorder(orig_plan, rec_dir, main_file=TFP):
     import functools
     import inspect
     sig = inspect.signature(orig_plan)
@@ -790,9 +923,10 @@ def make_first_plan_recorder(orig_plan, rec_dir):
         bound = sig.bind(self, *args, **kwargs)
         bound.apply_defaults()
         arguments = {k: _plain_value(v) for k, v in bound.arguments.items() if k != 'self'}
+        frame = main_frame(main_file)
         rec = {'plan_kwargs': arguments,
                'plan_kwargs_passed': sorted(kwargs),
-               'module_switches': module_switches(),
+               'module_switches': module_switches(None if frame is None else frame.f_locals),
                'rng_digest': rng_digest(),
                'planner': {'type': type(self).__name__,
                            'search_options': _plain_value(getattr(self, 'search_options', None)),
@@ -800,7 +934,10 @@ def make_first_plan_recorder(orig_plan, rec_dir):
                            'domain_sha256': hashlib.sha256(
                                getattr(self, 'domain_pddl', '').encode('utf-8')).hexdigest(),
                            'stream_sha256': hashlib.sha256(
-                               getattr(self, 'stream_pddl', '').encode('utf-8')).hexdigest()}}
+                               getattr(self, 'stream_pddl', '').encode('utf-8')).hexdigest()},
+               'planner_attributes': attribute_record(self),
+               'streams_attributes': attribute_record(getattr(self, 'streams', None))}
+        del frame
         gh = sys.modules.get('tampura_bridge.gate_hooks')
         if gh is not None and gh.installed():
             rec['gate'] = {'counts': gh.counts(), 'info': dict(gh._info), 'steps': dict(gh._steps),
@@ -915,8 +1052,11 @@ def child_main(a):
                 stub.install(mod, a.tape, rec, rng=a.rng)
         sys.meta_path.insert(0, _PatchOnLoad('pddlstream_planner', patch))
     elif a.mode == 'first-plan':
+        main_file = os.path.abspath(a.tfp_copy) if a.tfp_copy else TFP
+
         def patch(mod):
-            mod.PDDLStreamPlanner.plan = make_first_plan_recorder(mod.PDDLStreamPlanner.plan, rec)
+            mod.PDDLStreamPlanner.plan = make_first_plan_recorder(mod.PDDLStreamPlanner.plan, rec,
+                                                                  main_file=main_file)
         sys.meta_path.insert(0, _PatchOnLoad('pddlstream_planner', patch))
         _install_main_params_hook(rec, TFP)
     else:
@@ -1204,6 +1344,40 @@ def _drop_time_keys(obj):
     return obj
 
 
+SECONDS_MASK = '<s>'
+
+
+def _seconds_masked(v):
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return SECONDS_MASK
+    if isinstance(v, list):
+        return [_seconds_masked(x) for x in v]
+    return mask_seconds(v)
+
+
+def mask_seconds(obj):
+    """Every number under a key that ends in _s (wall seconds, the
+    pipeline's naming), also inside a list under such a key, replaced by
+    '<s>': the key stays, null stays null, nothing is dropped (SPEC D6,
+    PLAN 5.1)."""
+    if isinstance(obj, dict):
+        return {k: (_seconds_masked(v) if isinstance(k, str) and k.endswith('_s') else mask_seconds(v))
+                for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [mask_seconds(v) for v in obj]
+    return obj
+
+
+# first_plan.json: the parts whose times are masked (the attribute records).
+FIRST_PLAN_SECONDS_MASKED = ('planner_attributes', 'streams_attributes')
+
+
+def norm_first_plan(obj):
+    if not isinstance(obj, dict):
+        return obj
+    return {k: (mask_seconds(v) if k in FIRST_PLAN_SECONDS_MASKED else v) for k, v in obj.items()}
+
+
 def norm_console(text, mask):
     lines = []
     for ln in text.splitlines():
@@ -1266,7 +1440,8 @@ def normalise(run_dir):
     for f in ('first_plan.json', 'main_params.json'):
         p = run_dir / 'rec' / f
         if p.exists():
-            out[f] = _walk(json.loads(p.read_text(encoding='utf-8')), mask)
+            obj = json.loads(p.read_text(encoding='utf-8'))
+            out[f] = _walk(norm_first_plan(obj) if f == 'first_plan.json' else obj, mask)
     summary = out.get('timing_summary.json') or {}
     out['result.json'] = {
         'mode': res['mode'], 'status': res['status'], 'rc': res['rc'],

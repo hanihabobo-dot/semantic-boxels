@@ -4882,6 +4882,8 @@ def _first_plan(out, name):
              'its bound arguments, the stage B module switches, the RNG digest and the gate counts, then '
              'raises StopAtPlan; main\'s parameters from a sys.setprofile hook at its first call')
     out.note('first_plan.json known_empty_shadows and other set-valued arguments: sorted_from_set lists')
+    for line in tool.first_plan_notes():     # gate 7: P8, E3 and R's S-b
+        out.note(line)
     _write_norm_files(out, work / 'run')
     out.text('INFO_seconds.txt', f"{res['seconds']}\n")
 
