@@ -19,19 +19,22 @@ The two small tests at the end check the comparator itself and need no
 golden folder.
 
 A relative READABLE_GOLDEN is taken against pytest's working directory, and
-one that names no existing folder is refused (SPEC D11, gate 7); the three
-tests after the comparator's show the same for the variables a pin child
-reads, and need no golden folder either.
+one that names no existing folder is refused (SPEC D11, gate 7); the tests
+after the comparator's show the same for the variables a pin child reads and
+for the READABLE_GOLDEN of every pin test file, and need no golden folder
+either.
 """
 import difflib
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
+HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO / 'tools' / 'readable'))
 import pin_outputs as po  # noqa: E402
 
@@ -137,6 +140,51 @@ def test_missing_readable_path_is_refused_before_any_child(tmp_path, monkeypatch
     assert not out.exists()
     with pytest.raises(po.ReadablePathError, match='READABLE_GOLDEN'):
         po.readable_path(po.GOLDEN_VAR, {po.GOLDEN_VAR: 'no_such_golden'})
+
+
+# A fresh interpreter imports one test file by its path and prints what its GOLDEN became.
+_GOLDEN_PROBE = r'''
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location('golden_probe', sys.argv[1])
+mod = importlib.util.module_from_spec(spec)
+try:
+    spec.loader.exec_module(mod)
+except Exception as ex:
+    print('@@ERROR', type(ex).__name__, ex)
+else:
+    print('@@GOLDEN', mod.GOLDEN)
+'''
+
+
+def _golden_as_imported(test_file, value, cwd):
+    """The '@@' line a fresh interpreter prints after importing test_file with READABLE_GOLDEN=value
+    (the other READABLE variables unset) and the working directory cwd."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith('READABLE_')}
+    env.update({po.GOLDEN_VAR: value, 'PYTHONDONTWRITEBYTECODE': '1'})
+    p = subprocess.run([sys.executable, '-c', _GOLDEN_PROBE, str(test_file)], cwd=str(cwd), env=env,
+                       capture_output=True, text=True, timeout=180)
+    lines = [ln for ln in p.stdout.splitlines() if ln.startswith('@@')]
+    assert p.returncode == 0 and len(lines) == 1, (test_file.name, p.returncode, p.stdout[-400:], p.stderr[-800:])
+    return lines[0]
+
+
+def test_pin_test_files_resolve_golden_as_the_tool_does(tmp_path):
+    """SPEC D11: every test file here that names READABLE_GOLDEN resolves it with po.readable_path:
+    imported in a fresh interpreter whose working directory is tmp_path, it makes a relative value
+    absolute against that folder and refuses one that names no folder with the tool's message.
+    The files are found by the variable's name in their text.  Catches a file that reads the
+    variable as typed (a relative value kept relative, a missing folder passed on to the golden
+    tests)."""
+    files = [f for f in sorted(HERE.glob('test_*.py')) if po.GOLDEN_VAR in f.read_text(encoding='utf-8')]
+    assert Path(__file__).name in [f.name for f in files], files
+    (tmp_path / 'golden').mkdir()
+    want = f"@@GOLDEN {(tmp_path / 'golden').resolve()}"
+    for f in files:
+        got = _golden_as_imported(f, 'golden', tmp_path)
+        assert got == want, (f.name, got)
+        refused = _golden_as_imported(f, 'no_such_golden', tmp_path)
+        assert refused.startswith(f"@@ERROR ReadablePathError {po.GOLDEN_VAR}='no_such_golden' names "), \
+            (f.name, refused)
 
 
 def test_default_paths_are_built_from_repo():
