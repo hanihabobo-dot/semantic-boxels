@@ -915,6 +915,10 @@ def first_plan_notes():
         'qualname: so look_on and look_mode by value, m8_views and look_views as null or set',
         'normalised: in planner_attributes and streams_attributes every number under a key that ends '
         'in _s (wall seconds, e.g. last_m8_stats.twin_render_s) is <s>, the key kept, null kept',
+        'a list compared in an order that comes from a set (R\'s rule 4 as amended, REVIEW_PHASE0 item 5): '
+        'first_plan.json planner_attributes.shadow_occluder_map, each shadow\'s blockers as '
+        'execution.compute_shadow_blockers leaves them, list(blocker_set), compared in that order under '
+        'PYTHONHASHSEED=0; a set or frozenset value itself is written sorted by the recorder',
     ]
 
 
@@ -1449,10 +1453,30 @@ def norm_first_plan(obj):
     return {k: (mask_seconds(v) if k in FIRST_PLAN_SECONDS_MASKED else v) for k, v in obj.items()}
 
 
+# R's rule 4 as amended (R_PHASE0 3.1, REVIEW_PHASE0 item 5): the lists of the
+# episode pins compared in an order that comes from a set, read from the
+# tag's code at gate 7 (WP-B item 9).
+ORDER_NOTES = [
+    'lists compared in an order that comes from a set (R\'s rule 4 as amended, REVIEW_PHASE0 item 5): '
+    'facts.json, the facts of each plan call in the planner\'s order, which is the init list after '
+    'random.shuffle(init) in PDDLStreamPlanner._build_init; before the shuffle that list takes the '
+    'iteration order of sets of names: the blockers of each shadow (execution.compute_shadow_blockers '
+    'keeps list(blocker_set), which the blocks_view_at loop over planner.shadow_occluder_map reads), '
+    'the blocked (free cell, shadow) pairs (the set blocking of _compute_placement_view_blocks, read '
+    'as placement_blocks) and the objects of the clear and on_table facts (the set all_obj_ids); '
+    'compared in that order under PYTHONHASHSEED=0, and a red from it is real until shown to be '
+    'order only',
+    'ledger.json: look_reveals.named lists the reveals facts in the order of planner.last_init, that '
+    'shuffled list (look boxel); run_logger._ledger_default writes a set handed to ledger_event in its '
+    'iteration order, and no call site hands one. boxel_data.json: no list built from a set (the '
+    'registry\'s insertion order, shadow_boxel_ids in append order). Both read from the code at gate 7',
+]
+
+
 def episode_notes():
     """The NOTES lines every episode pin writes after its entry's own
     (pin_outputs._episode_notes): what the normaliser does, the crash
-    record."""
+    record, the lists compared in an order that comes from a set."""
     return [
         'normalised by record_episode.normalise: times masked to <s> with their keys kept, null kept '
         '(SPEC D6): ledger t and wall, plan.plan_time_s, every bridge_timing *_s and the time of each '
@@ -1468,6 +1492,7 @@ def episode_notes():
         'pre-flight rejection; a crash in a bridge episode, which does not pass the C-01 handler) is '
         'written as before, how "raised ..."; compared: crash.json, the last line (type and message); '
         'the frames, which hold line numbers, are INFO_crash.txt',
+        *ORDER_NOTES,
     ]
 
 

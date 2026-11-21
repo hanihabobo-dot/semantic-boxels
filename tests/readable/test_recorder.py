@@ -1098,3 +1098,67 @@ def test_episode_notes_name_every_masked_time_key():
         for k in dropped:
             assert f'{kind}.{k} removed' in line
     assert 'times removed' not in line and 'time keys removed' not in line
+
+
+# ---------------------------------------------------------------------------
+# Item 9: REVIEW_PHASE0 item 5's NOTES for the episode pins
+# ---------------------------------------------------------------------------
+
+# (file of the tag, function, statement): what each claim of the order NOTES
+# rests on.
+_ORDER_SITES = [
+    ('pddlstream_planner.py', '_build_init', 'random.shuffle(init)'),
+    ('pddlstream_planner.py', '_build_init',
+     'for shadow_id, blocker_ids in self.shadow_occluder_map.items():'),
+    ('pddlstream_planner.py', '_build_init', 'for (free_id, shadow_id) in placement_blocks:'),
+    ('pddlstream_planner.py', '_build_init', 'all_obj_ids = {fact[1] for fact in init'),
+    ('pddlstream_planner.py', '_build_init', 'for obj_id in all_obj_ids:'),
+    ('pddlstream_planner.py', '_compute_placement_view_blocks', 'blocking = set()'),
+    ('pddlstream_planner.py', '_compute_placement_view_blocks', 'return blocking, egregious'),
+    ('pddlstream_planner.py', 'create_problem', 'self.last_init = init'),
+    ('execution.py', 'compute_shadow_blockers', 'blocker_set = set()'),
+    ('execution.py', 'compute_shadow_blockers', 'blockers[shadow_id] = list(blocker_set)'),
+    ('test_full_pipeline.py', 'main', '_named = [str(f[2]) for f in planner.last_init'),
+    ('test_full_pipeline.py', 'main', "ledger_event('look_reveals', config=look_q.name, named=_named)"),
+    ('run_logger.py', '_ledger_default', 'return list(obj)'),
+]
+
+
+def _site_holds(text, fn, stmt):
+    """The statement stands once in the one function of that name."""
+    fns = [n for n in ast.walk(ast.parse(text)) if isinstance(n, ast.FunctionDef) and n.name == fn]
+    return len(fns) == 1 and ast.get_source_segment(text, fns[0]).count(stmt) == 1
+
+
+def test_order_notes_rest_on_the_tag_s_code():
+    """Each site the order NOTES describe stands in the tag's code as they
+    say: the shuffle of the init list, the three sets read before it, the
+    shuffled list kept as last_init and read for look_reveals, the ledger's
+    writing of a set.  Catches a NOTES line that no longer matches the
+    code (a changed site fails here, as the sorted blockers below do)."""
+    texts = {f: (REPO / f).read_text(encoding='utf-8') for f in {s[0] for s in _ORDER_SITES}}
+    assert [s for s in _ORDER_SITES if not _site_holds(texts[s[0]], s[1], s[2])] == []
+    sorted_blockers = texts['execution.py'].replace('blockers[shadow_id] = list(blocker_set)',
+                                                    'blockers[shadow_id] = sorted(blocker_set)')
+    assert not _site_holds(sorted_blockers, 'compute_shadow_blockers',
+                           'blockers[shadow_id] = list(blocker_set)')
+
+
+def test_order_notes_name_each_list_and_the_sets_it_comes_from():
+    """R's rule 4 as amended: the NOTES of every episode pin name each list
+    compared in an order that comes from a set (facts.json, the ledger's
+    look_reveals.named), the sets, and boxel_data.json as found without
+    one; the first-plan pins also name planner_attributes.shadow_occluder_map.
+    Catches a list or a set left unnamed and the notes not written."""
+    notes = '\n'.join(rec.episode_notes())
+    for word in ('facts.json', 'random.shuffle(init)', '_build_init', 'compute_shadow_blockers',
+                 'list(blocker_set)', 'shadow_occluder_map', '_compute_placement_view_blocks',
+                 'placement_blocks', 'all_obj_ids', 'look_reveals.named', 'planner.last_init',
+                 '_ledger_default', 'boxel_data.json', 'PYTHONHASHSEED=0', "R's rule 4",
+                 'REVIEW_PHASE0 item 5', 'real until shown to be order only'):
+        assert word in notes, word
+    first = '\n'.join(rec.first_plan_notes())
+    for word in ('planner_attributes.shadow_occluder_map', 'list(blocker_set)', 'PYTHONHASHSEED=0',
+                 "R's rule 4"):
+        assert word in first, word
+    assert rec.plain_form({'b', 'a'}) == {'set': ['a', 'b']}        # "written sorted by the recorder"
