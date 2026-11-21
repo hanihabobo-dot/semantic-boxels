@@ -2451,6 +2451,185 @@ def p42_gate_surface(out):
              'which are not compared')
     out.note('fact 6 reads tests/**/*.py and tampura_bridge/tests/**/*.py: setattr(X, "name", ...) and '
              'patch.object(X, "name") on an alias X of test_full_pipeline, and "test_full_pipeline.name" strings')
+    _p42_tag2(out, trees)
+
+
+# Gate 7 (INDEX_PINS P4, PLAN 4.4): the module run state of traps 2, 14, 15 and 16, the names M6's
+# list holds for them.
+_RUN_STATE = [('interior_regions', 'ENABLED'), ('interior_regions', '_seen_under'),
+              ('interior_regions', '_no_plan_regions'), ('run_logger', '_ledger_t0'),
+              ('execution', 'M7'), ('execution', 'M7_SUSPEND_S')]
+
+
+def _run_state_fact(trees, mod, name):
+    """Where one module-level name of run state is bound, rebound, read and changed, by the
+    syntax trees of the AST pins' scope: its module-level binding (kind and value text), the
+    module's functions with 'global name', the module's bare loads and stores of the name per
+    function, the method calls on it and the item stores and deletes (name[...] = ..., del
+    name[...]) per function (a container changed in place), and in the other files the loads and
+    stores of mod.name and every 'from mod import name' (a copy by value).  Names are not resolved
+    by scope: a bare name is counted wherever it is spelled."""
+    from collections import Counter
+    home = f'{mod}.py'
+    binding = None
+    for node in trees[home].body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
+            binding = ['assign', ast.unparse(node.value)]
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == name:
+            binding = ['annotated assign', ast.unparse(node.annotation),
+                       ast.unparse(node.value) if node.value is not None else None]
+    glob, loads, stores, methods, items = set(), Counter(), Counter(), Counter(), Counter()
+
+    def on_home(node, qual):
+        if isinstance(node, ast.Global) and name in node.names:
+            glob.add(qual)
+        if isinstance(node, ast.Name) and node.id == name:
+            (loads if isinstance(node.ctx, ast.Load) else stores)[qual] += 1
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name) and node.func.value.id == name):
+            methods[(qual, node.func.attr)] += 1
+        if (isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name) and node.value.id == name
+                and isinstance(node.ctx, (ast.Store, ast.Del))):
+            items[(qual, 'store' if isinstance(node.ctx, ast.Store) else 'del')] += 1
+    _walk_scoped(trees[home], on_home)
+    m_loads, m_stores, by_value = Counter(), Counter(), []
+    for r, tree in trees.items():
+        if r == home:
+            continue
+
+        def on(node, qual, r=r):
+            if (isinstance(node, ast.Attribute) and node.attr == name and isinstance(node.value, ast.Name)
+                    and node.value.id == mod):
+                (m_loads if isinstance(node.ctx, ast.Load) else m_stores)[(r, qual)] += 1
+            if isinstance(node, ast.ImportFrom) and not node.level and node.module == mod:
+                by_value.extend([r, qual, a.asname] for a in node.names if a.name in (name, '*'))
+        _walk_scoped(tree, on)
+    return {'binding': binding, 'global_in': sorted(glob),
+            'bare_loads': [[q, n] for q, n in sorted(loads.items())],
+            'bare_stores': [[q, n] for q, n in sorted(stores.items())],
+            'method_calls': [[q, m, n] for (q, m), n in sorted(methods.items())],
+            'item_writes': [[q, k, n] for (q, k), n in sorted(items.items())],
+            'module_loads': [[r, q, n] for (r, q), n in sorted(m_loads.items())],
+            'module_stores': [[r, q, n] for (r, q), n in sorted(m_stores.items())],
+            'from_imports': sorted(by_value)}
+
+
+def _follow_arm_standin():
+    """Trap 1 at run time, on a stand-in env (no physics client): arm_eye.follow_arm patches the
+    instance, the class keeps its method, and a call through the instance runs use_start_view
+    first.  arm_eye.start_camera, the one pybullet reader on that path, is replaced for the call by
+    a stand-in that returns a camera named by its arguments; restored afterwards."""
+    import types
+    import arm_eye
+
+    class StandInEnv:
+        def _view_and_projection_matrices(self):
+            return ['matrices of', self.camera_position, self.fov]
+    env = StandInEnv()
+    env.objects = {'robot': types.SimpleNamespace(object_id=7)}
+    env.client_id = 0
+    env.camera_position, env.fov = 'fixed camera', 60
+    env.shadow_calculator = types.SimpleNamespace(camera_position='fixed camera')
+    calls = []
+
+    def start_camera(robot_id, physics_client=0):
+        calls.append([robot_id, physics_client])
+        return {n: f'{n} of the arm camera, call {len(calls)}' for n in arm_eye.CAMERA_ATTRIBUTES}
+    method = StandInEnv.__dict__['_view_and_projection_matrices']
+    res = {'before': {'instance_attribute': '_view_and_projection_matrices' in vars(env),
+                      'following': arm_eye.following(env)}}
+    real = arm_eye.start_camera
+    arm_eye.start_camera = start_camera
+    try:
+        arm_eye.follow_arm(env)
+        res['after_follow_arm'] = {
+            'instance_attribute': '_view_and_projection_matrices' in vars(env),
+            'instance_attribute_is_the_class_method': vars(env).get('_view_and_projection_matrices') is method,
+            'class_attribute_is_the_class_method': type(env).__dict__['_view_and_projection_matrices'] is method,
+            'following': arm_eye.following(env), 'flag': [arm_eye.FOLLOW_FLAG, getattr(env, arm_eye.FOLLOW_FLAG)],
+            'start_camera_calls': list(calls)}
+        value = env._view_and_projection_matrices()
+        res['after_one_call'] = {'returned': value, 'start_camera_calls': list(calls),
+                                 'env_camera': {n: getattr(env, n) for n in arm_eye.CAMERA_ATTRIBUTES},
+                                 'shadow_calculator_camera_position': env.shadow_calculator.camera_position}
+    finally:
+        arm_eye.start_camera = real
+    return res
+
+
+def _p42_tag2(out, trees):
+    """Gate 7: trap 1 (the instance patch), the run state of traps 2, 14, 15, 16, and REVIEW
+    item 13 (solve by any spelling), as facts 8 to 13 in facts_tag2.json."""
+    attr = '_view_and_projection_matrices'
+    vpm = _module_binds(trees['boxel_env.py'], f'BoxelTestEnv.{attr}')
+    assigned, type_reads, calls, cam_writes, info = [], [], [], [], []
+    arm_setattr, solve_calls, solve_imports = [], [], []
+    for r, tree in trees.items():
+        def on(node, qual, r=r):
+            if isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+                for t in (node.targets if isinstance(node, ast.Assign) else [node.target]):
+                    if isinstance(t, ast.Attribute) and t.attr == attr:
+                        assigned.append([r, qual, ast.unparse(node).splitlines()[0]])
+                        info.append(['assigned', r, qual, node.lineno])
+                    if isinstance(t, ast.Attribute) and t.attr == 'camera_position':
+                        cam_writes.append([r, qual, ast.unparse(node).splitlines()[0]])
+                        info.append(['camera_position', r, qual, node.lineno])
+            if (isinstance(node, ast.Attribute) and node.attr == attr and isinstance(node.value, ast.Call)
+                    and isinstance(node.value.func, ast.Name) and node.value.func.id == 'type'):
+                type_reads.append([r, qual, ast.unparse(node)])
+                info.append(['type_read', r, qual, node.lineno])
+            if isinstance(node, ast.Call):
+                fn = node.func
+                if isinstance(fn, ast.Attribute) and fn.attr == attr:
+                    calls.append([r, qual, ast.unparse(fn.value)])
+                    info.append(['call', r, qual, node.lineno])
+                if r == 'arm_eye.py' and isinstance(fn, ast.Name) and fn.id == 'setattr':
+                    arm_setattr.append([qual, ast.unparse(node)])
+                if (isinstance(fn, ast.Name) and fn.id == 'solve') or (isinstance(fn, ast.Attribute)
+                                                                       and fn.attr == 'solve'):
+                    solve_calls.append([r, qual, ast.unparse(fn)])
+                    info.append(['solve_call', r, qual, node.lineno])
+            if isinstance(node, ast.ImportFrom):
+                for a in node.names:
+                    if a.name == 'solve' or a.asname == 'solve':
+                        solve_imports.append([r, qual, '.' * node.level + (node.module or ''), a.name, a.asname])
+            if isinstance(node, ast.Import):
+                for a in node.names:
+                    if a.asname == 'solve':
+                        solve_imports.append([r, qual, a.name, None, a.asname])
+        _walk_scoped(tree, on)
+    ae = trees['arm_eye.py']
+    facts = [
+        {'fact': 8, 'trap': 1, 'subject': f'BoxelTestEnv.{attr} in the class body (reachable as '
+                                          f'type(env).{attr})', 'found': vpm is not None},
+        {'fact': 9, 'trap': 1, 'subject': f'{attr}: assignments to an attribute of that name, reads through '
+                                          'type(...), and every call (its receiver)',
+         'assigned': sorted(assigned), 'type_reads': sorted(type_reads), 'calls': sorted(calls)},
+        {'fact': 10, 'trap': 1, 'subject': 'the camera attributes: assignments to an attribute camera_position, '
+                                           'setattr calls in arm_eye.py, arm_eye.CAMERA_ATTRIBUTES and FOLLOW_FLAG',
+         'camera_position_assignments': sorted(cam_writes), 'arm_eye_setattr': sorted(arm_setattr),
+         'CAMERA_ATTRIBUTES': _module_literal('arm_eye.py', 'CAMERA_ATTRIBUTES'),
+         'FOLLOW_FLAG': _module_literal('arm_eye.py', 'FOLLOW_FLAG'),
+         'follow_arm_defined': _module_binds(ae, 'follow_arm') is not None,
+         'use_start_view_defined': _module_binds(ae, 'use_start_view') is not None},
+        {'fact': 11, 'trap': 1, 'subject': 'arm_eye.follow_arm on a stand-in env, run', **_follow_arm_standin()},
+        {'fact': 12, 'traps': '2, 14, 15, 16', 'subject': 'module run state: binding, global, bare and module '
+                                                         'reads and writes, in-place changes, copies by value',
+         'names': {f'{m}.{n}': _run_state_fact(trees, m, n) for m, n in _RUN_STATE}},
+        {'fact': 13, 'review_item': 13, 'subject': 'solve by any spelling: calls of solve and of x.solve, and '
+                                                   'every import that binds the name solve (its scope)',
+         'calls': sorted(solve_calls), 'imports': sorted(solve_imports, key=lambda s: [str(x) for x in s])},
+    ]
+    out.json('facts_tag2.json', facts)
+    out.json('INFO_lines_tag2.json', sorted(info))
+    out.note('facts_tag2.json (gate 7, INDEX_PINS P4, PLAN 4.4 traps 1, 2, 14, 15, 16, REVIEW_PHASE0 item 13): '
+             'facts 8 to 13, over the same syntax trees as facts 1 to 7; sites as [file, qualname, text] sorted, '
+             'line numbers only in INFO_lines_tag2.json (not compared)')
+    out.note('fact 11 is the one fact that runs code: arm_eye imported, follow_arm called on a stand-in env '
+             '(a class with its own _view_and_projection_matrices, no physics client) with arm_eye.start_camera '
+             'replaced for the call by a stand-in; then one call of env._view_and_projection_matrices()')
+    out.note('fact 12 counts Name nodes by spelling, not by scope (a local of the same name would count); '
+             'the run-state names are those of PLAN 4.4 traps 2, 14, 15 and 16 (M6\'s list)')
 
 
 # ----- pin 43: import block ------------------------------------------------
