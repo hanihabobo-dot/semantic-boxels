@@ -381,13 +381,18 @@ def test_plain_form_names_containers_and_refuses_objects_inside():
     assert rec.plain_form('one line') == 'one line'
 
 
-def _first_plan_run(tmp_path, first_plan):
+def _run_folder(tmp_path, first_plan=None, crash=None):
+    """A run folder as the parent leaves it (RESULT.json, stdout, rec/),
+    with no pipeline run directory: what normalise reads of it."""
     run = tmp_path / 'run'
     (run / 'rec').mkdir(parents=True)
     rec.write_json(run / 'RESULT.json', {'mode': 'first-plan', 'status': 'ended', 'rc': 0,
                                          'pipeline_run_dir': None})
     (run / 'stdout.txt').write_text('', encoding='utf-8')
-    rec.write_json(run / 'rec' / 'first_plan.json', first_plan)
+    if first_plan is not None:
+        rec.write_json(run / 'rec' / 'first_plan.json', first_plan)
+    if crash is not None:
+        (run / 'rec' / 'CRASH.txt').write_text(crash, encoding='utf-8')
     return run
 
 
@@ -402,7 +407,7 @@ def test_first_plan_seconds_masked_in_the_attribute_records_keys_kept(tmp_path):
     raw = {'plan_kwargs': {'max_s': 3}, 'module_switches': {'execution.M7_SUSPEND_S': 120.0},
            'planner_attributes': {'last_m8_stats': stats, 'look_on': False},
            'streams_attributes': {'step_s': 0.25, 'counter': 2}}
-    n = rec.normalise(_first_plan_run(tmp_path, raw))['first_plan.json']
+    n = rec.normalise(_run_folder(tmp_path, first_plan=raw))['first_plan.json']
     assert n['planner_attributes']['last_m8_stats'] == {
         'twin_render_s': '<s>', 'twin_renders': 3, 'build_s': None, 'per_call_s': ['<s>', '<s>']}
     assert list(n['planner_attributes']['last_m8_stats']) == list(stats)
@@ -423,3 +428,137 @@ def test_first_plan_notes_name_the_new_parts_and_the_pins_write_them():
     fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_first_plan')
     calls = [n.func.attr for n in ast.walk(fn) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)]
     assert 'first_plan_notes' in calls
+
+
+# ---------------------------------------------------------------------------
+# D7: the crash record under C-01
+# ---------------------------------------------------------------------------
+
+_TOOL = REPO / 'tools' / 'readable' / 'record_episode.py'
+# C-01's shape (test_full_pipeline.py:3681-3699): the exception is kept, the
+# hook shows it, then the entry exits with the code.
+_C01 = ("import sys\n"
+        "try:\n"
+        "    {}['missing_key']\n"
+        "except Exception:\n"
+        "    crash = sys.exc_info()\n"
+        "sys.excepthook(*crash)\n"
+        "sys.exit(CODE)\n")
+_ENTRIES = {
+    'c01_exit70': _C01.replace('CODE', '70'),
+    'exit70_no_hook': "import sys\nsys.exit(70)\n",
+    'hook_then_exit1': _C01.replace('CODE', '1'),
+    'raised_out': "raise ValueError('seed 3 rejected')\n",
+}
+
+
+class _Exit(BaseException):
+    pass
+
+
+def _child_in_process(tmp_path, monkeypatch, entry):
+    """record_episode's child (main --child) on a small entry, in this
+    process: os._exit raises instead, and what the child sets on sys is put
+    back.  The hook it replaces is a recorder of its own calls."""
+    script = tmp_path / 'entry.py'
+    script.write_text(_ENTRIES[entry], encoding='utf-8')
+    prev_calls = []
+
+    def prev_hook(*exc):
+        prev_calls.append(exc)
+
+    def fake_exit(code):
+        raise _Exit(code)
+    monkeypatch.setattr(rec.os, '_exit', fake_exit)
+    monkeypatch.setattr(sys, 'excepthook', prev_hook)
+    for name in ('argv', 'path', 'meta_path'):
+        monkeypatch.setattr(sys, name, list(getattr(sys, name)))
+    with pytest.raises(_Exit) as ex:
+        rec.main(['--child', '--rec', str(tmp_path / 'rec'), '--script', str(script), '--mode', 'record',
+                  '--tape', str(tmp_path / 'tape')])
+    crash = tmp_path / 'rec' / 'CRASH.txt'
+    return (ex.value.args[0], json.loads((tmp_path / 'rec' / 'EXIT.json').read_text(encoding='utf-8')),
+            crash.read_text(encoding='utf-8') if crash.exists() else None, prev_calls)
+
+
+@pytest.mark.parametrize('entry, code, how, last', [
+    ('c01_exit70', 70, 'crash_exit70', "KeyError: 'missing_key'"),
+    ('exit70_no_hook', 70, 'system_exit', None),
+    ('hook_then_exit1', 1, 'system_exit', "KeyError: 'missing_key'"),
+    ('raised_out', 1, 'raised ValueError: seed 3 rejected', 'ValueError: seed 3 rejected')])
+def test_child_crash_record(tmp_path, monkeypatch, capsys, entry, code, how, last):
+    """SPEC D7: the child's own sys.excepthook writes rec/CRASH.txt and then
+    calls the hook it replaced; how is crash_exit70 only for exit 70 after a
+    call of the hook (a 70 without one stays system_exit, another code
+    after a call too); an exception out of the entry keeps today's record.
+    Catches the hook not installed, the old hook not called, any 70 taken
+    for a crash, and CRASH.txt not written."""
+    got_code, exit_, crash, prev_calls = _child_in_process(tmp_path, monkeypatch, entry)
+    assert (got_code, exit_) == (code, {'code': code, 'how': how})
+    if last is None:
+        assert crash is None
+    else:
+        assert crash.startswith('Traceback (most recent call last):')
+        assert crash.rstrip('\n').splitlines()[-1] == last
+    hooked = entry in ('c01_exit70', 'hook_then_exit1')
+    assert [c[0] for c in prev_calls] == ([KeyError] if hooked else [])
+    capsys.readouterr()
+
+
+def test_c01_crash_in_a_child_process_exits_70_with_the_traceback_on_stderr(tmp_path):
+    """The same as a real child: its own process, its own exit code; the
+    replaced hook (Python's own) still prints the traceback to stderr."""
+    script = tmp_path / 'entry.py'
+    script.write_text(_ENTRIES['c01_exit70'], encoding='utf-8')
+    p = subprocess.run([sys.executable, '-B', str(_TOOL), '--child', '--rec', str(tmp_path / 'rec'),
+                        '--script', str(script), '--mode', 'record', '--tape', str(tmp_path / 'tape')],
+                       capture_output=True, text=True, timeout=120, cwd=str(tmp_path))
+    assert p.returncode == 70, p.stderr
+    assert json.loads((tmp_path / 'rec' / 'EXIT.json').read_text(encoding='utf-8')) == {
+        'code': 70, 'how': 'crash_exit70'}
+    assert "KeyError: 'missing_key'" in p.stderr and 'Traceback (most recent call last):' in p.stderr
+    assert (tmp_path / 'rec' / 'CRASH.txt').read_text(encoding='utf-8').rstrip().endswith("KeyError: 'missing_key'")
+
+
+def test_crash_txt_normalised_last_line_compared_frames_info(tmp_path):
+    """Of CRASH.txt the last line is compared (crash.json); the frames, with
+    their line numbers, go to INFO_crash.txt (no compare reads INFO_
+    files); paths masked in both."""
+    text = (f'Traceback (most recent call last):\n  File "{REPO}/test_full_pipeline.py", line 2860, in main\n'
+            '    transit_loss_counts[obj_str]\n'
+            f"KeyError: 'red_object' at {REPO}/x\n\n")
+    n = rec.normalise(_run_folder(tmp_path, crash=text))
+    assert n['crash.json'] == {'last_line': "KeyError: 'red_object' at <REPO>/x"}
+    assert n['INFO_crash.txt'].startswith('Traceback') and 'line 2860' in n['INFO_crash.txt']
+    assert str(REPO) not in n['INFO_crash.txt'] and n['INFO_crash.txt'].endswith("<REPO>/x\n")
+    assert [k for k in n if 'crash' in k.lower()] == ['crash.json', 'INFO_crash.txt']
+    assert 'crash.json' not in rec.normalise(_run_folder(tmp_path / 'b'))
+
+
+def test_c01_site_is_excepthook_then_finish_with_the_code_the_recorder_takes():
+    """crash_exit70 rests on C-01's shape in the entry: sys.excepthook(*crash)
+    and then console_ui.finish(N), once; N is the recorder's code."""
+    tree = ast.parse((REPO / 'test_full_pipeline.py').read_text(encoding='utf-8'))
+    found = []
+    for node in ast.walk(tree):
+        body = getattr(node, 'body', None)
+        if not isinstance(body, list):
+            continue
+        for a, b in zip(body, body[1:]):
+            if (isinstance(a, ast.Expr) and isinstance(a.value, ast.Call)
+                    and ast.unparse(a.value.func) == 'sys.excepthook'
+                    and isinstance(b, ast.Expr) and isinstance(b.value, ast.Call)
+                    and ast.unparse(b.value.func) == 'console_ui.finish'):
+                found.append(ast.literal_eval(b.value.args[0]))
+    assert found == [rec.CRASH_EXIT_CODE]
+
+
+def test_episode_notes_name_the_crash_record_and_the_pins_write_them():
+    notes = '\n'.join(rec.episode_notes())
+    for word in ('rec/CRASH.txt', rec.CRASH_HOW, 'system_exit', 'pre-flight', 'bridge', 'crash.json',
+                 'INFO_crash.txt'):
+        assert word in notes, word
+    tree = ast.parse((REPO / 'tools' / 'readable' / 'pin_outputs.py').read_text(encoding='utf-8'))
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_episode_notes')
+    calls = [n.func.attr for n in ast.walk(fn) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)]
+    assert 'episode_notes' in calls and 'entry_notes' in calls

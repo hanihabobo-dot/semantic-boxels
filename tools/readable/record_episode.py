@@ -1019,6 +1019,35 @@ def _absolute_log_dir(mod):
     mod.RunLogger.__init__ = __init__
 
 
+# C-01 (test_full_pipeline.py:3681-3699): an exception out of main() is shown
+# through sys.excepthook after the clean-up, then the entry exits 70; the
+# eval runner files that ending as crash_exit70 (SPEC D7, trap 11).
+CRASH_EXIT_CODE = 70
+CRASH_HOW = 'crash_exit70'
+
+
+class CrashHook:
+    """The child's sys.excepthook: writes the traceback to rec/CRASH.txt,
+    then calls the hook it replaced, so stderr shows what it shows without
+    the recorder.  `calls` counts the calls; a failed write never reaches
+    the pipeline's own handler."""
+
+    def __init__(self, path):
+        self.path, self.calls, self.prev = Path(path), 0, None
+
+    def install(self):
+        self.prev = sys.excepthook
+        sys.excepthook = self
+
+    def __call__(self, etype, value, tb):
+        self.calls += 1
+        try:
+            self.path.write_text(''.join(traceback.format_exception(etype, value, tb)), encoding='utf-8')
+        except Exception as ex:
+            print(f'[record_episode] CRASH.txt not written: {type(ex).__name__}: {ex}', file=sys.stderr)
+        self.prev(etype, value, tb)
+
+
 def child_main(a):
     rec = Path(a.rec)
     rec.mkdir(parents=True, exist_ok=True)
@@ -1065,6 +1094,8 @@ def child_main(a):
         trace = _LineTrace(TFP)
     sys.argv = [script] + list(a.argv)
     sys.path[0] = os.path.dirname(os.path.abspath(a.script))
+    crash_hook = CrashHook(rec / 'CRASH.txt')
+    crash_hook.install()
     code, how = 0, 'returned'
     try:
         if trace is not None:
@@ -1076,6 +1107,8 @@ def child_main(a):
         code = ex.code if isinstance(ex.code, int) else (0 if ex.code is None else 1)
         if not isinstance(ex.code, (int, type(None))):
             how = f'system_exit: {ex.code}'
+        elif code == CRASH_EXIT_CODE and crash_hook.calls:
+            how = CRASH_HOW
     except StopAtPlan:
         how, code = 'stopped at the first plan() call', 0
     except BaseException as ex:
@@ -1378,6 +1411,33 @@ def norm_first_plan(obj):
     return {k: (mask_seconds(v) if k in FIRST_PLAN_SECONDS_MASKED else v) for k, v in obj.items()}
 
 
+def episode_notes():
+    """The NOTES lines every episode pin writes after its entry's own
+    (pin_outputs._episode_notes): what the normaliser does, the crash
+    record."""
+    return [
+        'normalised by record_episode.normalise: ledger t, wall, ledger_open.pid, plan.plan_time_s, '
+        'bridge_timing *_s and driver_clock times removed; plan_obj and Type@id mapped to their order '
+        'of first use keyed by plan id; eye t_wall and extra.plan_time_s removed; timing_summary and '
+        'world_counts time keys removed; console times masked; paths and stamps masked',
+        'rec/CRASH.txt (SPEC D7): the recorder\'s sys.excepthook writes it when the boxels entry shows a '
+        'crash of main() (C-01, test_full_pipeline.py:3681-3699), then calls the hook it replaced; '
+        f'child_exit.how is {CRASH_HOW} only for exit code {CRASH_EXIT_CODE} after that call (a '
+        f'{CRASH_EXIT_CODE} without it stays system_exit); an exception that leaves the entry (a '
+        'pre-flight rejection; a crash in a bridge episode, which does not pass the C-01 handler) is '
+        'written as before, how "raised ..."; compared: crash.json, the last line (type and message); '
+        'the frames, which hold line numbers, are INFO_crash.txt',
+    ]
+
+
+def crash_record(text, mask):
+    """rec/CRASH.txt's compared part (SPEC D7): its last line, the
+    exception's type and message.  The frames hold line numbers, so the
+    whole text goes to INFO_crash.txt, which no compare reads."""
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    return {'last_line': mask(lines[-1]) if lines else None}
+
+
 def norm_console(text, mask):
     lines = []
     for ln in text.splitlines():
@@ -1442,6 +1502,11 @@ def normalise(run_dir):
         if p.exists():
             obj = json.loads(p.read_text(encoding='utf-8'))
             out[f] = _walk(norm_first_plan(obj) if f == 'first_plan.json' else obj, mask)
+    crash = run_dir / 'rec' / 'CRASH.txt'
+    if crash.exists():
+        text = crash.read_text(encoding='utf-8', errors='replace')
+        out['crash.json'] = crash_record(text, mask)
+        out['INFO_crash.txt'] = mask(text).rstrip('\n') + '\n'
     summary = out.get('timing_summary.json') or {}
     out['result.json'] = {
         'mode': res['mode'], 'status': res['status'], 'rc': res['rc'],
