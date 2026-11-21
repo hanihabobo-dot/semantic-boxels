@@ -2,8 +2,8 @@
 # run_procs.sh: the pipeline's processes in WSL, behind run.ps1 (run ps, run
 # kill, its busy refusal and the clean-up after every run).  Each one is a
 # python running test_full_pipeline.py, run_bridge_on_finddice.py,
-# run_planner.py or tools/draw_equiv_run.py (BF#68: the check harness that
-# runs the bridge driver in its own process).
+# run_planner.py, run_wumpus.py or tools/draw_equiv_run.py (BF#68: the check
+# harness that runs the bridge driver in its own process).
 #   bash run_procs.sh list                     one line each; nothing when none
 #   bash run_procs.sh busy                     list's lines of the ones run.ps1 started (its refusal)
 #   bash run_procs.sh ps                       list's lines, then the jobs under the pipeline lock
@@ -19,7 +19,7 @@
 # (nothing written to its run directory for 12 min; a long plan search looks
 # the same, so that one is only a hint).
 # run.ps1 feeds this file to bash through tr -d '\r', so CRLF does no harm.
-PAT='test_full_pipeline\.py|run_bridge_on_finddice\.py|run_planner\.py|draw_equiv_run\.py'
+PAT='test_full_pipeline\.py|run_bridge_on_finddice\.py|run_planner\.py|run_wumpus\.py|draw_equiv_run\.py'
 
 PIPE_PAT=$PAT   # the pipeline's own pattern (label); a test narrows PAT below, never this
 pipeline_pids() {
@@ -69,6 +69,11 @@ what() {   # a short name from the command line
         save=$(sed -n 's/.*--save-dir \([^ ]*\).*/\1/p' <<< "$c")
         printf 'bridge find_dice seed %s, %s, %s' "${seed:-?}" \
             "$([ "$vis" = 1 ] && echo GUI || echo headless)" "$(basename "${save:-?}")"
+    elif [[ "$c" == *run_wumpus.py* ]]; then
+        seed=$(sed -n 's/.*--seed \([0-9]*\).*/\1/p' <<< "$c")
+        scene=$(sed -n 's/.*--size \([0-9]*\).*/\1/p' <<< "$c")
+        vis=$(sed -n 's/.*--vis \([0-9]\).*/\1/p' <<< "$c")
+        printf 'wumpus N=%s seed %s, %s' "${scene:-?}" "${seed:-?}" "$([ "$vis" = 1 ] && echo GUI || echo headless)"
     elif [[ "$c" == *draw_equiv_run.py* ]]; then
         seed=$(sed -n 's/.*--global-seed \([0-9]*\).*/\1/p' <<< "$c")
         vis=$(sed -n 's/.*--vis \([0-9]\).*/\1/p' <<< "$c")

@@ -31,6 +31,11 @@ class ObjectInfo:
     is_visible: bool  # Whether object is currently visible from camera
     is_occluder: bool  # Whether this object is an occluder (larger cube)
     is_tray: bool = False  # audit #49 — fixed-base support surface (not pickable)
+    # BF#65 option 1 (D6, model tweak M2): the cavity the object's CLASS is
+    # declared to have, open towards the table: its inner footprint and
+    # height (x, y, z in metres).  None: a solid body (every object of our
+    # own scenes).  Read by interior_regions.py only.
+    cavity: Optional[np.ndarray] = None
 
 
 class OctreeNode:

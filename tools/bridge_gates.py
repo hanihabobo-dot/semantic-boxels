@@ -150,14 +150,22 @@ for _scene, _seeds in (('1747173590', (1, 2, 3, 4, 8, 14, 15, 18)),
 
 # G5: the enumerated channels behind a SHADOW boxel's belief change.
 G5_CHANNELS = ('planned_sense_render', 'sweep_render', 'lost_caster_render',
-               'rediscovery_render', 'strike_park', 'observed_before_placement')
+               'strike_park', 'observed_before_placement',
+               'planned_look_render',       # path 9: a look's named regions only
+               'suspension_over')           # M7: back to unknown after an F9 park only
 G5_UNRENDERED = 'superseded_unrendered'
+# M7's own channel in the audit's G5 text.  M7 as built (TB-46) has no
+# render test of its own: the F16 sweep tests the old fragments on the same
+# render first and writes sweep_render.  No code writes this channel, so a
+# row that names it fails: a pass for a label nothing explains.
+G5_NO_WRITER = ('rediscovery_render',)
 # G3: how a dispatched step may end (run_logger.STEP_END_STATUSES less
 # 'unlabelled', which always fails).
 G3_STATUSES = ('ok', 'sense_outcome', 'integrity_replan',
                'motion_resolve_failed', 'pick_failure', 'place_failure',
                'stack_failure', 'empty_hand', 'stale_precondition',
-               'home_not_reached', 'observe_ok', 'observe_incomplete')
+               'home_not_reached', 'observe_ok', 'observe_incomplete',
+               'look_outcome')              # path 9
 G4_TOL_M = 1e-6
 # G18: the arm O driver's clock stamps, in order.  Between their
 # initialize() returning and the rollout's first env.step it may only load
@@ -539,6 +547,16 @@ def _m8_domain():
     return mod
 
 
+def _look_domain():
+    if REPO not in sys.path:        # look_domain imports m8_domain
+        sys.path.insert(0, REPO)
+    spec = importlib.util.spec_from_file_location(
+        'look_domain', os.path.join(REPO, 'look_domain.py'))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def run_domain(report):
     d, s = _pddl_sha('domain_pddlstream.pddl'), _pddl_sha('stream.pddl')
     report.add('G10', 'INFO', f"domain_pddlstream.pddl {d[:16]}  "
@@ -561,6 +579,19 @@ def run_domain(report):
         report.add('G10', 'PASS', f'{rel(m8.GENERATED_FILE)} {m8.sha(want)[:16]} '
                                   f'= regenerated (live + M8 delta); an OFF run '
                                   f'must load the live file, an ON run this one')
+    # Path 9: the look domain is the same text plus the look delta, regenerated.
+    if os.path.isfile(os.path.join(REPO, 'look_domain.py')):
+        look = _look_domain()
+        for mode, path in look.GENERATED_FILES.items():
+            want_l = look.generate(look.read(look.LIVE_FILE), mode)
+            have_l = look.read(path) if os.path.isfile(path) else None
+            report.add('G10', 'PASS' if have_l == want_l else 'FAIL',
+                       f'{rel(path)} {look.sha(want_l)[:16]} = '
+                       f'regenerated (live + M8 delta + {mode} look delta); a '
+                       f'--look {mode} run must load this one'
+                       if have_l == want_l else
+                       f'{rel(path)} is missing or not the regenerated live '
+                       f'domain plus the {mode} look delta')
 
 
 def ledger_domain(report, rows):
@@ -574,6 +605,14 @@ def ledger_domain(report, rows):
     bad = []
     for r in doms:
         on = bool((r.get('switches') or {}).get('M8'))
+        if (r.get('switches') or {}).get('look'):       # path 9
+            look = _look_domain()
+            mode = look.mode_of(r['switches']['look'])
+            want = look.sha(look.generate(live, mode))
+            if r.get('sha') != want:
+                bad.append(f"look {mode}: loaded {r.get('file')} "
+                           f"{str(r.get('sha'))[:16]} != {want[:16]}")
+            continue
         want = m8.sha(m8.generate(live) if on else live)
         if r.get('sha') != want:
             bad.append(f"M8 {'on' if on else 'off'}: loaded {r.get('file')} "
@@ -792,6 +831,54 @@ def read_ledger(run_dir):
     return rows
 
 
+def _g5_discoveries(rows, sense_regions):
+    """G5 with M7 on (TB-46 review b1, b2): a sense whose sense_result row
+    says contains_nontarget (matched by plan and step, never by row order)
+    is backed by its sense_discovery rows.  The sensed region may leave the
+    belief only when a body found in it was cast again (its new fragments
+    re-cover what the body hides from that view); at an F9 give-up it stays,
+    parked.  Returns the failures."""
+    bad = []
+    contains = sorted({(r.get('plan'), r.get('step')) for r in rows
+                       if r['kind'] == 'sense_result'
+                       and r.get('reason') == 'sense_contains_nontarget'},
+                      key=str)
+    for key in contains:
+        where = f'plan {key[0]} step {key[1]}'
+        region = sense_regions.get(key)
+        mine = [r for r in rows if (r.get('plan'), r.get('step')) == key]
+        disc = [r for r in mine if r['kind'] == 'sense_discovery']
+        belief = [r for r in mine if r['kind'] == 'belief']
+        removed = any(r['region'] == region and r['op'] == 'remove' for r in belief)
+        parked = any(r['region'] == region and r['op'] == 'status'
+                     and r.get('status') == 'unresolved'
+                     and r.get('channel') == 'strike_park' for r in belief)
+        recast = [s for d in disc for s in (d.get('recast') or ())]
+        giveup = any(d.get('giveup') for d in disc)
+        added = {r['region'] for r in belief if r['op'] == 'add'}
+        if not disc:
+            bad.append(f'{where}: contains_nontarget sense of {region} '
+                       f'without a sense_discovery row')
+            continue
+        if removed and giveup:
+            bad.append(f'{where}: {region} removed at an F9 give-up')
+        elif removed and not recast:
+            # which bodies, and whether each was found before: a first
+            # discovery that casts nothing is a known class (M7 code review,
+            # point 3), read by hand each time it shows, never exempted
+            found = ', '.join(
+                f"{'rediscovery' if d.get('rediscovery') else 'first discovery'}"
+                f" of {d.get('body')}" for d in disc)
+            bad.append(f'{where}: {region} removed with nothing recast '
+                       f'and nothing parked ({found})')
+        elif not removed and not parked:
+            bad.append(f'{where}: {region} neither removed nor parked')
+        for s in recast:
+            if s not in added:
+                bad.append(f'{where}: recast {s} has no add row')
+    return bad
+
+
 def run_ledger(report, run_dir, m7='on'):
     rows = read_ledger(run_dir)
     closes = [r for r in rows if r['kind'] == 'ledger_close']
@@ -870,13 +957,35 @@ def run_ledger(report, run_dir, m7='on'):
         # appended sensing configuration.
         if s['action'] == 'sense' and len(s['args']) >= 2:
             sense_regions[(s['plan'], s['step'])] = s['args'][1]
+    # Path 9: the regions and objects a look names are its (reveals ?q .)
+    # facts, logged by the dispatcher as the step's look_reveals row.
+    look_named = {(r.get('plan'), r.get('step')): set(r.get('named') or ())
+                  for r in rows if r['kind'] == 'look_reveals'}
+    open_suspensions = set()   # M7: regions with an m7_suspension start, no end yet
     for r in rows:
+        if r['kind'] == 'm7_suspension':
+            if r.get('op') == 'start':
+                open_suspensions.add(r.get('region'))
+            elif r.get('op') == 'end':
+                open_suspensions.discard(r.get('region'))
+            continue
         if r['kind'] != 'belief' or r['op'] == 'add':
             continue
         ch = r.get('channel')
         counts[ch] = counts.get(ch, 0) + 1
-        if ch == G5_UNRENDERED:
+        if ch == 'suspension_over':
+            # M7 (Hani, 2026-11-20): a suspension's end returns a region
+            # suspended at the F9 give-up (its m7_suspension start row, the
+            # end row comes after this one) to unknown, nothing else; a
+            # blocked view's strike_park park is not a suspension
+            if r['op'] != 'status' or r.get('status') != 'unknown' \
+                    or r['region'] not in open_suspensions:
+                bad5.append(f"{r['region']} {r['op']} {r.get('status')}: "
+                            f"suspension_over without an open suspension")
+        elif ch == G5_UNRENDERED:
             unrendered += 1
+        elif ch in G5_NO_WRITER:
+            bad5.append(f"{r['region']} {r['op']}: channel {ch} has no writer")
         elif ch not in G5_CHANNELS:
             bad5.append(f"{r['region']} {r['op']} {r.get('status')}: no channel")
         elif ch == 'planned_sense_render':
@@ -884,8 +993,16 @@ def run_ledger(report, run_dir, m7='on'):
             if planned != r['region']:
                 bad5.append(f"{r['region']} {r['op']}: sense render of "
                             f"{planned}, not this region")
+        elif ch == 'planned_look_render':
+            named = look_named.get((r.get('plan'), r.get('step')))
+            if named is None or r['region'] not in named:
+                bad5.append(f"{r['region']} {r['op']}: look render named "
+                            f"{sorted(named) if named is not None else None}, "
+                            f"not this region")
     if unrendered and m7 == 'on':
         bad5.append(f'{unrendered} unrendered rediscovery removals with M7 on')
+    if m7 == 'on':
+        bad5.extend(_g5_discoveries(rows, sense_regions))
     detail = ', '.join(f'{k}={v}' for k, v in sorted(counts.items(),
                                                        key=lambda kv: str(kv[0])))
     if unrendered and m7 == 'off':
@@ -903,6 +1020,19 @@ def run_ledger(report, run_dir, m7='on'):
     report.add('G15', 'FAIL' if missing else 'PASS',
                f'no outcome for {missing[:5]}' if missing else
                f'{len(sense_steps)} senses, each classified on its planned region')
+    # G15 for the look (path 9): every look step has its look_reveals row
+    # (what the plan named) and its look_result row (what the render did).
+    look_steps = [s for s in steps if s['action'] == 'look']
+    if look_steps:
+        have_r = {(r.get('plan'), r.get('step')) for r in rows
+                  if r['kind'] == 'look_result'}
+        have_n = set(look_named)
+        miss = [f"plan {s['plan']} step {s['step']}" for s in look_steps
+                if (s['plan'], s['step']) not in have_r
+                or (s['plan'], s['step']) not in have_n]
+        report.add('G15L', 'FAIL' if miss else 'PASS',
+                   f'no look_reveals or look_result for {miss[:5]}' if miss else
+                   f'{len(look_steps)} looks, each with its named set and its result')
 
     # G10 on the run: the loaded domain matches the M8 switch.
     ledger_domain(report, rows)

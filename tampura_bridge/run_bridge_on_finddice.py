@@ -172,6 +172,20 @@ def main():
     for flag in ('--m8', '--m9', '--m10', '--pick-aperture-from-pose',
                  '--sense-over-region'):
         ap.add_argument(flag, choices=('off', 'on'), default='on')
+    # Path 9 (BF#68): one look action from a free-space boxel in place of
+    # sense and observe; passed through only when on, so an off run's switches
+    # (and its record) are those of before.
+    ap.add_argument('--look', choices=('off', 'on', 'boxel', 'centred'), default='off')
+    # Path 9, the arm camera only (arm_eye): every image from the arm camera
+    # (main() refuses it without a look); passed through only when arm, so a
+    # fixed run's switches (and its record) are those of before.
+    ap.add_argument('--eye', choices=('fixed', 'arm'), default='fixed')
+    # BF#65 option 1 (D6, model tweak M2): the hiding region under a cup
+    # (interior_regions.py; task_spec.HOLLOW_CAVITY declares the cavities),
+    # passed through like the switches; off unless asked.
+    ap.add_argument('--interior-regions', choices=('off', 'on'), default='off')
+    # M7 (TB-46, BF#15): on by default, passed through like the switches.
+    ap.add_argument('--m7', choices=('off', 'on'), default='on')
     # GF10 (BF#38): the pick close's squeeze (0.5 mm since BF#44), passed through like the switches.
     ap.add_argument('--grip-squeeze-mm', type=float, default=0.5)
     # BF#53: the optimistic search's settings (run_logger's flags of the
@@ -199,7 +213,8 @@ def main():
                     default='cell+object')
     # BF#68 (run tampura -Draw): what the GUI shows besides the scene, a comma
     # list of policy.DRAW_KINDS.  Nothing here reaches the executing world or
-    # a camera render; it is ignored without --vis 1.
+    # the result of a camera render (cameras only reads it); it is ignored
+    # without --vis 1.
     ap.add_argument('--draw', default='',
                     help='comma list of what the GUI draws: '
                          + ', '.join(bridge_policy.DRAW_KINDS))
@@ -288,18 +303,27 @@ def main():
         seed=a.global_seed, scene_file=scene.name_seen,
         log_dir=os.path.join(config['save_dir'], 'ours'), vis=bool(a.vis),
         draw=frozenset(draw),
+        # BF#68, --draw cameras: the observer's pictures go here (absolute:
+        # execute_fn changes into the run's work directory).
+        camera_dir=(os.path.abspath(os.path.join(config['save_dir'], 'cameras'))
+                    if 'cameras' in draw else ''),
         stop_before_planning=bool(a.stop_before_planning),
         log_level=a.log_level, max_plan_time=a.max_plan_time,
         switches={'m8': a.m8, 'm9': a.m9, 'm10': a.m10,
                   'pick_aperture_from_pose': a.pick_aperture_from_pose,
                   'sense_over_region': a.sense_over_region,
+                  'interior_regions': a.interior_regions,
+                  'm7': a.m7,
                   'grip_squeeze_mm': str(a.grip_squeeze_mm),
                   'world_counts': a.world_counts,
                   'corridor_test': a.corridor_test,
                   'search_effort_weight': a.search_effort_weight,
                   'search_initial_complexity': str(a.search_initial_complexity),
                   'slip_fixes': slip_fixes.resolve(a.slip_fixes),
-                  'save_screenshots': a.save_screenshots})
+                  'save_screenshots': a.save_screenshots,
+                  **({'look': a.look} if a.look != 'off' else {})})
+    if a.eye != 'fixed':                                  # path 9, the arm camera only
+        cfg.switches['eye'] = a.eye
     cfg.driver = {'events': events, 'seed': config['global_seed'],
                   'rng_untouched': rng_untouched,
                   'pythonhashseed': os.environ.get('PYTHONHASHSEED')}

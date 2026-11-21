@@ -1,4 +1,4 @@
-% !TEX root = ../main.tex
+% !TEX root = ../long.tex
 
 \chapter{Findings and Fixes}
 \label{ch:findings}
@@ -86,10 +86,12 @@ November Hani watched our arm drop a tall occluder during a carry in two runs of
 acceleration limit, so every junction kicks the box until it levers the fingers apart;
 and the carry's motion check treats space the robot has not seen as free, so the box can
 strike a hidden object. The first has a candidate cure that already exists, the
-acceleration-limited carry of \BF{59}, which removed the swing losses in the probes (6
-of 20 episodes lost to the swing without it, none of 20 with it); the second goes to
-path 14. The four-fix set of \BF{59} loses these boxes where the base setting keeps them
-on seed 3 (3 of 3 against 0 of 3), a limit of that set that the die measurements could
+acceleration-limited carry of \BF{59}, which removed the swing losses (a lost-grip record
+in 20 of 48 episodes without it and in none of 48 with it, in the A/B of 12 November; 4
+seeds build no scene); the second goes to path 14. The four-fix set of \BF{59} loses these
+boxes where the base setting keeps them: in that A/B on 8 of the 16 seeds, the reverse on
+none ($p = 0.008$; seed 3: 2 of 3 against 0 of 3, and 3 of 3 against 0 of 3 in the first
+probe), a limit of that set that the die measurements could
 not show (\Cref{sec:path3}, \TK{3}). The success count of our arm does not tell a
 success with such a drop from a clean one, which is why rule 18 records drops and
 collisions (\Cref{sec:catalogue}).
@@ -133,15 +135,21 @@ for the same seed (\BF{8}). The campaigns use the cluster's map: seeds 1, 2, 3, 
 11, 12, 13 and 16 the third (\BF{8}). A GUI run on the laptop prints the mismatch
 and goes on, flagged; headless runs stop; no run is scored from a GUI (\BF{39}).
 
-\paragraph{One success test.} TAMPURA's own test reads, from its abstract belief,
+\paragraph{Two success tests, ours the stricter.} TAMPURA's own test reads, from its abstract belief,
 whether the target is held and the arm is at home; the carry is by pose resets
 (\BF{35}). Hani decided on 29
 October that both arms get one environment and one criterion (\BF{35}), and on 7
 November Hani decided for path 6 that our physical world-state test is the standard
-success test of both arms, with TAMPURA's own reward beside it (\TK{6}). For TAMPURA's
-arm on the fresh scenes this needs its final world, which exists only inside its process
-after the rollout; the amendment of \BF{70} reads it there with reads only, and has been
-built, reviewed and checked but never run (\Cref{sec:path6}).
+success test of both arms, with TAMPURA's own reward beside it (\TK{6}). On 15 November
+Hani reversed this for TAMPURA's arm (\ID{decisions}{Hani's decisions}): TAMPURA is
+counted by its own success criterion, and the shared test with the 5\,mm pad bound
+does not decide its success. Our arm is judged by a stricter criterion than
+TAMPURA's: the die physically held between both finger pads and the arm at home,
+where TAMPURA's reward reads its abstract belief after a kinematic carry. Every
+comparison in this report counts TAMPURA by its reward and ours by our physical test;
+none was ever scored with the shared test. Where the shared test is read on TAMPURA's
+final world (\BF{70}), it is a second number beside TAMPURA's own, never its success
+count (\Cref{sec:path6}).
 
 \paragraph{The success criterion itself is under review.} On the evening of 7 November
 Hani said that a single drop might be reason to count an episode as a failure. On 8
@@ -151,9 +159,116 @@ clean success (no drop, no collision) must be printed beside success. The arms o
 report, whose records hold no such counts, are not re-scored (rule 18,
 \ID{tracksstate}{tracks state file}; \Cref{sec:catalogue}).
 
+\paragraph{How the code counts drops and collisions.} Added on 14 November: since the
+state of this report the fields were built into our pipeline (TB-22), and the review
+of the code found that the code counts two of them in another way than the written
+rule names them (\ID{review}{code review}). \texttt{drops} is the count of the
+pipeline's own drop detector: a body counts as carried once both finger pads hold it
+and it touches nothing but the robot, and as dropped when it then has no finger
+contact for three checks in a row, or when the gripper opens on it, outside the
+release of a place. The rule names the telemetry's grip-lost event instead. The
+detector sees more than that event, because it does not ask how wide the fingers
+are: a body that pushes the fingers open on its way out still counts, and so does one
+knocked out of the hand onto another body. \texttt{collisions} counts the bodies that
+the arm or a body in its grip touched in an action and that then moved more than
+3\,mm from where the first touch found them, a body knocked off the table among them;
+each body counts once per action. The rule also counts what the executor itself
+reports as a contact; the code keeps that apart, in \texttt{collisions\_reported}, and
+it does not spoil a clean success. On 14 November Hani judged the difference not
+significant, and the code's way of counting stands.
+
+\paragraph{Crashes and hangs of our system.} Hani's standing rule of 15 November: our
+system may not crash on any seed, and any such crash is investigated. Every crash or
+hang of our arm in the evaluations this report counts, read from the records
+(\Cref{tab:our-crashes}). Each counts as a failure of our arm where its evaluation is
+counted.
+
+\begin{table}[tbp]
+\centering
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}P{3.0cm}P{1.6cm}YP{2.1cm}@{}}
+\toprule
+evaluation & seed & cause on record & entry \\
+\midrule
+\BF{63} run 1, generated scenes & 136, rep.\ 1 & hung at start-up before loading its scene,
+killed at the 900\,s cap; in the cluster's slow hour, on a start-up that read the venv,
+code and scene from the network volume; console and stdout hold only the banner and
+``Starting up'', and no log folder exists, so the stall came before TAMPURA's logger was
+set up, in the imports or the configuration load; 1 of 161 runs of our arm, the retry
+took 59\,s. A start-up stall on the cluster's network volume; the exact call is not
+recoverable and no defect of our code was found. It counts as our failure & TB-15
+(placed as far as the files allow) \\
+B8 campaigns (30 Oct) & all 80 & our arm wrote into a read-only folder & \BF{54}, fixed \\
+the mirror (path 5) & 0, first start & harness: arm S was started with a run directory
+as its working directory, and the stable pipeline joins a relative log path onto it &
+review of E03; no BUGS entry \\
+\cuncert, path 2 (arm A0) & 5 & AttributeError inside TAMPURA's inspect on its empty
+motion plan, after a drop (TB-19's unchecked line) & TB-32, open \\
+\cuncert, path 7 (arm A1) & 5 & the same line; the inspect guard now covers it
+(\Cref{sec:path7}) & TB-32, guarded in A1 \\
+\cuncert, path 2, before the declared batch & 0 to 4 & an AABB unpacking slip of ours,
+in every row; rows deleted, not counted & tasks state file \\
+\slamcol, path 2, before the declared batch & 0 to 4 (2 calls) & hop(x, x) missing,
+then the translator trap TB-18, in every row before any action; rows deleted, not
+counted & TB-18 \\
+\bottomrule
+\end{tabularx}
+\caption[Crashes and hangs of our system.]{Crashes and hangs of our system in the
+evaluations this report counts. Runs stopped at a time cap (the time cuts, the Wumpus
+world at 15x15) and runs cut by our runner's restart are in their own sections.}
+\label{tab:our-crashes}
+\end{table}
+
+\paragraph{Which camera fed each evaluation.} Hani's rule of 15 November: what the user
+sees never reaches the robot or the planner, the two side panes of the GUI show only
+what the robot sees, and every evaluation fed the user's view is redone, unless it
+tested something unrelated to the view and ran every instance under the same feed
+(\ID{decisions}{Hani's decisions}). The fixed overhead camera is the user's view. Every
+evaluation of our arm that this report counts perceived through one fixed camera: the
+first image, the detection, the census and every shadow cast. On \fdice\ that camera
+stands where TAMPURA's hand camera is at home, but it does not move with the arm. The
+arm's camera served only inside the observe action, and the GUI's side panes show the
+fixed camera. The first code that feeds the robot's camera only is path 9's step 3
+(\TK{9}); no counted evaluation ran on it. TAMPURA's arm used its own hand camera
+everywhere except the first batch of path 5, where it was given our fixed camera.
+\Cref{tab:feeds} sorts the evaluations by this rule (\ID{feeds}{feed inventory}). Each
+number of ours that a redo replaces stays in this report, named as fed the fixed
+camera, until the redo exists.
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}p{3.1cm}Y@{}}
+\toprule
+verdict & evaluations \\
+\midrule
+redone (our arm on the robot's camera) & \BF{63} runs 1 to 3 against TAMPURA; the die-slip
+campaign's line against TAMPURA (120 of 120 against 40 of 60, \BF{59}); path 5's mirror,
+with its first batch's TAMPURA arm; the scenes that hide the target; \BF{65}; \BF{64}; the
+look action (\TK{9}, owed anyway); the perception fixes F20 and F21; the thesis sweep and
+its CB\#113 rerun, and the thesis pipeline against TAMPURA that rests on it; the running
+\BF{65} regression evaluation \\
+kept: unrelated to the view, same feed on every arm & the die-slip fixes against the base
+(\BF{59}); TB-23 and the carry switches; TB-25's planner flag; the time cuts (\BF{53});
+the squeeze probe; the A/A (\BF{7}); B3's acceptance (\BF{10}); the pick floor A-07; the
+harness and merge checks \\
+kept: no image of ours, or a camera on the robot & the Wumpus grid and LW1 alone; LW1 and
+our setup driving the robot (a camera on the robot's mast; for our setup still to
+confirm); paths 2, 7 and 8 on \cuncert\ and \slamcol\ (TAMPURA's own observations);
+TAMPURA alone (\BF{9}); the pad-gap probe (\BF{70}) \\
+void & the B8 campaigns' arm of ours (\BF{54}); the discarded first bridge \\
+\bottomrule
+\end{tabularx}
+\caption[Evaluations by the camera that fed our arm.]{Evaluations by the camera that fed
+our arm, under Hani's rule of 15 November. Probes and design checks that report
+measurements, not rates, are in the inventory and not listed here.}
+\label{tab:feeds}
+\end{table}
+
 \paragraph{Noise and the test for plan counts.} Run to run, the unchanged pipeline
-on our holding scene gave 31 of 40 and 30 of 40 successes, three outcome flips and
-different plan counts on 16 of 35 seeds (\BF{7}). A per-seed plan-count rule fails
+on our holding scene gave 31 of 35 and 30 of 35 successes (seeds 4, 6, 12, 106 and
+115 build no scene), three outcome flips and different plan counts on 16 of the 35
+seeds (\BF{7}). A per-seed plan-count rule fails
 a change that does nothing, about 96\,\% of the time, so the record replaced it by a
 permutation test fixed before any run: reference and candidate each run 40 seeds
 three times, interleaved, and the test passes when its $p$ value is at least 0.05
@@ -250,6 +365,8 @@ default'' & \BF{62} \\
 every cluster run approved on its own & \BF{63} \\
 6 Nov & Attribute boxelization is saved as far future work; the dev tracks start from a
 stable base & \BF{66}, \BF{68} \\
+15 Nov & TAMPURA counts by its own success criterion; ours is reported as the stricter
+one; the shared test does not decide TAMPURA's success & \ID{decisions}{Hani's decisions} \\
 \bottomrule
 \end{tabularx}
 \caption{Decisions of the record that shape the results.}
@@ -324,10 +441,11 @@ Our wall clock of 144.4\,s per successful episode is on par with TAMPURA's 166\,
 and 65.6\,\% against at least 63\,\% (comparison) &
 The parity sentences are to be deleted unless the intervals support them. On
 generated scenes ours is ahead and the lead is not significant (57 of 80 against 46
-of 76, $p = 0.12$) & \PW{4}, \BF{63} \\
+of 80, four of TAMPURA's runs crashed, $p = 0.061$) & \PW{4}, \BF{63} \\
 TAMPURA's laptop baseline of 11 of 20 (comparison) &
 The tree it ran on had one import fix; seeds load different scenes on laptop and
-cluster; as shipped on the cluster TAMPURA solved 13 of 20 & \BF{3}, \BF{8}, \BF{9} \\
+cluster; as shipped on the cluster TAMPURA solved 13 of 20, 1 crashed & \BF{3},
+\BF{8}, \BF{9} \\
 Shadow cells under-cover the region an object hides (limitations) &
 Our regions begin at the object's back face and never cover the space under it, so
 a die at a cup's pose lies in none of them & \BF{65} \\
@@ -335,7 +453,8 @@ Holding is scored by one physical test &
 It is scored by two: the weld in the thesis sweep, the pads at 0.5\,N now & \TK{6} \\
 \bottomrule
 \end{tabularx}
-\caption{Statements of the thesis that the record qualifies.}
+\caption[Statements of the thesis that the record qualifies.]{Statements of the thesis
+that the record qualifies. \validitynote{failures}}
 \label{tab:qualify}
 \end{table}
 
@@ -363,7 +482,8 @@ figure it uses and does not smooth the rest over.
   \texttt{grip\_squeeze\_mm} 3.0. The report follows \BF{48}.
   \item \BF{59} counts TAMPURA's 60 episodes on the shipped scenes as 40 successes, the
   one crash included as a censored failure; \BF{63} counts 40 of 59 valid episodes for
-  the same scenes. The report gives both where it uses them.
+  the same scenes. The report uses 40 of 60: on 14 November Hani decided that the crash
+  is a failure.
   \item Our mean discounted return on run 2 of the generated scenes is 0.585 over 80
   episodes by the step-equivalence convention, 0.592 over the 76 pairs, 0.600 over 80
   without the observes, and 0.698 over 80 under the one-action harness of today

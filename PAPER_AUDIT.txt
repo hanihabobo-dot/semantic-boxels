@@ -10255,6 +10255,35 @@ BF#70 [BUILT, REVIEWED, CHECKED; NOT RUN]  THE G13 AMENDMENT: ARM T'S FINAL
   word, reviewed and checked, built and not run; the 2 mm bound is the
   session's reading and is disclosed as such.
 
+BF#72 [RECORDED; A COUNTING CHANGE, NOT YET MERGED]  C-07: A RECORD'S
+  plan_count IS THE NUMBER OF PLANNER ROUNDS, AND A no_plan_while_holding
+  ROUND'S PLANNING TIME IS COUNTED  (pre-freeze fix fd37f3e on track/prefreeze,
+  picked as 66a0a61 on track/trial2; entry by the readable thread on the
+  Fable review of 2026-11-19, reviews/REVIEW_DECISIONS_2026-11-19.md,
+  decision 2, change 5)
+  WHAT: before C-07, a record's plan_count counted the plans that came back,
+  so an episode that ended on all_searched, target_lost or
+  no_plan_while_holding left its last, failed round out; that round's
+  planning time was also dropped for no_plan_while_holding.  With C-07 the
+  record counts every planner round and every round's time.  The live
+  counter the planner keeps during an episode is unchanged; only the record
+  written at the end moves.
+  EFFECT ON NUMBERS: for those three outcome kinds, plan_count in a record
+  is one higher than the same episode recorded before fd37f3e, and the
+  planning time of a no_plan_while_holding episode gains its last round.
+  Success, clean success and every other field are unchanged.  So any
+  comparison of plan counts or planning time across fd37f3e shows a step
+  that is this counting change, not a change of behaviour; such a
+  comparison names this entry, or recounts the older records the new way.
+  EVIDENCE: the C-07 review round (0 bugs) and its unit tests
+  (archive/tampura_bridge_plan_2026-10-25/tracks/prefreeze/STATE.md); the
+  trial branch's unit suite 864 passed with the one failure the trunk also
+  has (TB-42) (tracks/prefreeze/trial2/RESULT.md).  No episode has yet been
+  recorded with C-07; the identity check of 2026-11-19 stops at the first
+  partition, before the code C-07 touches.
+  HONESTY CLASS: a recording rule changed in the open, its effect named for
+  each field before it reaches a number.
+
 ================================================================================
 #P5. [OPEN T2]  CONSIDER ADOPTING TAMPURA'S CONTROLLERS
 ================================================================================

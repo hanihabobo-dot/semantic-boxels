@@ -26,7 +26,13 @@ take different actions and nothing downstream is comparable.  So:
     up to that point (the ledger rows before it, the eye records of the plans
     before it, every render whose ledger row lies before it), and the streams
     that do not depend on the plan are still judged whole: the gate counts,
-    the global RNG states, the bodies and body ids of every client.
+    the bodies and body ids of every client.  The global RNG states are judged
+    whole when the two planners ran the same RRT-Connect searches, and only
+    then: RRT-Connect (streams.py: _random_config, the goal bias, the shortcut
+    smoothing) draws from the global numpy and random generators, so a planner
+    that went round a blocked path by search in one run and by a direct move
+    in the other leaves another state behind (seed 106: 1 search in 3 runs,
+    the same final state in all three; 0 searches in the fourth, another one).
 
 Lines, as the verdict names them:
   floor      both runs have a ledger, eye records and renders (a missing file
@@ -56,8 +62,11 @@ Lines, as the verdict names them:
              debug lines, so a difference there is reported, never judged
   gates      the violation counts of the gate record (judged), and the info
              counters (reported)
-  final      the global RNG states, the bodies of every client and the exit
-             code, after the driver ended
+  final      the bodies of every client and the exit code, after the driver
+             ended
+  rng        the global RNG states after the driver ended: judged when both
+             planners ran the same RRT-Connect searches (read from the run
+             log), reported (info) when they ran different ones
   drew       --drawing (required) names the arm that drew (a, b) or none: the
              arm that should have drawn has more debug lines and labels than
              the other (the base issues no labels), and with none neither has
@@ -82,6 +91,13 @@ VOLATILE_KEYS = {'t', 'wall', 't_wall', 'pid', 'plan_obj', 'run_dir',
                  'time_deltas', 'driver', 'save_dir', 'plan_actions'}
 ADDR = re.compile(r'@\d+')
 PLAN_TAG = re.compile(r'plan#(\d+)')
+# The lines streams.plan_motion logs (INFO unless noted): the query (DEBUG), the
+# start of an RRT-Connect search, and how it ended.
+RRT_QUERY = re.compile(r'streams: plan_motion: (\S+) -> (\S+)\s')
+RRT_START = 'running RRT-Connect'
+RRT_END = re.compile(r'streams: plan_motion: (RRT path \d+ wps -> smoothed \d+ wps|'
+                     r'RRT-Connect failed \(\d+ iters\))')
+RNG_KEYS = ('numpy_state', 'random_state')
 # What of the episode record is judged when the runs took different plans (the
 # gate record's counters follow the steps taken, so the `gates` and `bodies`
 # lines judge its violation counts and body counts instead).
@@ -114,6 +130,27 @@ def plan_split(ledger):
             r = dict(r, actions=acts[:n])
         out.append(r)
     return out, tails
+
+
+def rrt_runs(log_path):
+    """The RRT-Connect searches the planner ran, in order, read from the run
+    log: (the motion query 'from -> to', how the search ended).  They matter
+    because each search draws from the global RNG (see the module docstring);
+    the same searches from the same state draw the same numbers."""
+    runs, query = [], None
+    opener = gzip.open if log_path.endswith('.gz') else open
+    with opener(log_path, 'rt', encoding='utf-8', errors='replace') as f:
+        for line in f:
+            m = RRT_QUERY.search(line)
+            if m:
+                query = f"{m.group(1)} -> {m.group(2)}"
+            elif RRT_START in line:
+                runs.append([query, None])
+            else:
+                m = RRT_END.search(line)
+                if m and runs and runs[-1][1] is None:
+                    runs[-1][1] = m.group(1)
+    return [tuple(r) for r in runs]
 
 
 def _open(path):
@@ -191,6 +228,12 @@ def load(run):
     out['final'] = read_json(os.path.join(run, 'probe_final.json'), 'probe_final.json')
     ledger, n = _newest(os.path.join(ep, 'ours', 'run_*', 'ledger.jsonl'))
     eye, _ = _newest(os.path.join(ep, 'ours', 'run_*', 'eye.jsonl'))
+    # the planner's RRT-Connect searches, from the run log of the same folder
+    # (None when there is no log to read: the RNG states are then judged)
+    log = None
+    if ledger:
+        log, _ = _newest(os.path.join(os.path.dirname(ledger), 'run_*.log'))
+    out['rrt'] = rrt_runs(log) if log else None
     if n > 1:
         out['notes'].append(f"{n} run folders under ep/ours: the newest is used")
     if not ledger:
@@ -429,11 +472,34 @@ def compare(A, B, drawing=None):
     body_keys = ('executing_bodies_at_install', 'executing_bodies_now')
     same('bodies', all(ia.get(k) == ib.get(k) for k in body_keys),
          ', '.join(f"{k} {ia.get(k)}/{ib.get(k)}" for k in body_keys))
-    fa = {k: v for k, v in A['final'].items() if k not in ('debug_calls', 'renders')}
-    fb = {k: v for k, v in B['final'].items() if k not in ('debug_calls', 'renders')}
+    skipped = ('debug_calls', 'renders') + RNG_KEYS
+    fa = {k: v for k, v in A['final'].items() if k not in skipped}
+    fb = {k: v for k, v in B['final'].items() if k not in skipped}
     same('final', fa == fb,
-         'RNG states, bodies and ids per client, exit code' if fa == fb else
+         'bodies and ids per client, exit code' if fa == fb else
          f"{json.dumps(fa, sort_keys=True)[:300]} <> {json.dumps(fb, sort_keys=True)[:300]}")
+    # rng: the global RNG states.  The planner's RRT-Connect searches draw from
+    # them, so they are judged only between runs whose planners searched alike.
+    rrt_a, rrt_b = A.get('rrt'), B.get('rrt')
+    rng_a = tuple(A['final'].get(k) for k in RNG_KEYS)
+    rng_b = tuple(B['final'].get(k) for k in RNG_KEYS)
+    searches = lambda rs: ('none' if not rs else
+                           '; '.join(f"{q} ({e})" for q, e in rs))
+    if rrt_a is None or rrt_b is None or rrt_a == rrt_b:
+        known = ('RRT-Connect searches, both runs: ' + searches(rrt_a)
+                 if rrt_a is not None and rrt_b is not None else
+                 "no run log in both runs: the planners' searches were not compared")
+        same('rng', rng_a == rng_b,
+             f"numpy and random states equal after the same planner searches ({known})"
+             if rng_a == rng_b else
+             f"{json.dumps(rng_a)[:200]} <> {json.dumps(rng_b)[:200]} ({known})")
+    elif rng_a == rng_b:
+        add('rng', 'SAME', 'numpy and random states equal although the planners '
+            f"searched differently (A: {searches(rrt_a)}; B: {searches(rrt_b)})")
+    else:
+        add('rng', 'info', "the states differ and so do the planners' RRT-Connect "
+            f"searches, which draw from them (A: {searches(rrt_a)}; B: "
+            f"{searches(rrt_b)}): the planner's own answer, not judged")
     # drew: a pair in which nothing was drawn must not pass as a pair
     dca, dcb = A['final'].get('debug_calls') or {}, B['final'].get('debug_calls') or {}
     if drawing in ('a', 'b'):
@@ -474,8 +540,10 @@ def main():
         pl = [r for r in R['ledger'] if r.get('kind') == 'plan']
         st = [r for r in R['ledger'] if r.get('kind') == 'step']
         out = R['episode'].get('outcome', {})
+        rrt = R.get('rrt')
         print(f"{label}: {len(pl)} plans, {len(st)} steps, {len(R['renders'])} renders, "
               f"outcome {out.get('status')}, rewards {len(R['episode'].get('rewards') or [])}, "
+              f"RRT-Connect searches {'n/a' if rrt is None else len(rrt)}, "
               f"debug calls {R['final'].get('debug_calls')}, "
               f"bodies {R['final'].get('clients')}"[:400])
     bad = [n for n, s, _ in rows if s in BAD]

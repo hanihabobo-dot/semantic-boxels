@@ -96,7 +96,7 @@ from robot_utils import (move_robot_smooth, hold_at_config,
                          robot_model, arm_joint_positions)
 from run_logger import (RunLogger, parse_pipeline_args, report_run_outcome,
                         dispatch_begin, dispatch_end, ledger_event,
-                        ledger_plan)
+                        ledger_plan, provenance)
 from visualization import BoxelVisualizer
 
 from belief import BeliefState
@@ -118,11 +118,17 @@ import pose_belief
 import world_counts       # TB-22: the run's drop and collision record
 import m8_domain
 import observe_views
+import look_domain
+import look_views
+from look_action import handle_look_action
+import arm_eye
+import streams
 from streams import HOME_PSEUDO_BOXEL
 import logging
 import math
 import robot_utils
 import slip_fixes
+import interior_regions   # BF#65 option 1 (D6, M2): the region under a cover
 
 # BF#59 carry_trapezoid (proposals/carry_motion.md 2.2, with loss_dynamics'
 # carry_accel_limit merged into it by both reviews; STATE.md candidate 5).
@@ -690,6 +696,33 @@ def build_tray_stack_goal(targets, tray_name, rng=None):
     return ('and',) + tuple([base_clause] + pairs)
 
 
+def partition_extent(objects, target_extent=None):
+    """Audit #66/#67, C-09: the largest object size that sets auto_cell.
+
+    Plane, table, robot, trays and bodies without a size are left out.
+    An occluder counts with its own size: the scene puts it in view.  A
+    target (any other body) counts with target_extent, its class's
+    declared size bound, when the scene declares one, so a hidden
+    target's true size never sets the partition.  Without a declared
+    bound a target counts with its own size: scenes without occluders
+    (every target in view), the bridge's env (its sizes are task_spec's
+    class sizes already) and custom SceneConfigs.
+    """
+    max_extent = 0.0
+    for name, info in objects.items():
+        if name in ("plane", "table", "robot"):
+            continue
+        if getattr(info, "is_tray", False):
+            continue
+        if info.size is None:
+            continue
+        if target_extent is not None and not info.is_occluder:
+            max_extent = max(max_extent, float(target_extent))
+            continue
+        max_extent = max(max_extent, float(np.max(info.size)))
+    return max_extent
+
+
 def main(gui=True, run_logger=None, scene_config=None,
          draw_boxel_overlays=True, show_free=False,
          goal_kind='holding', stack_height=2,
@@ -732,7 +765,9 @@ def main(gui=True, run_logger=None, scene_config=None,
       gui_hold_s        the GUI window hold after the episode.
     D7 (i) to (vii), all off by default:
       home_joints       the joints of the home configuration q_home
-                        (None: REST_POSES).
+                        (None: REST_POSES; with --eye arm, None: the start
+                        configuration, arm_eye.TAMPURA_HOME_JOINTS unless
+                        --eye-start-joints gives one).
       goal_at_home      the goal becomes (and (holding T) (at_config
                         q_home)): q_home gets its init facts, every move
                         to q_home is judged by TAMPURA's at-home test
@@ -776,7 +811,36 @@ def main(gui=True, run_logger=None, scene_config=None,
     robot_utils.GRIP_SQUEEZE = float(getattr(args, 'grip_squeeze_mm', '0.5')) / 1000.0
     # BF#50: the eye images are saved only when this run asks for them.
     world_eye.SAVE_IMAGES = getattr(args, 'save_screenshots', 'off') == 'on'
-    if domain_file is None and pose_belief.SWITCHES['M8']:
+    # Path 9: --look on loads the look domain (M8's plus the look delta) and
+    # needs M8's pose machinery; off, nothing below differs from the tag.
+    look_mode = look_domain.mode_of(getattr(args, 'look', 'off'))   # off, boxel, centred
+    look_on = look_mode != 'off'
+    if look_on and not pose_belief.SWITCHES['M8']:
+        raise ValueError(f"--look {look_mode} needs --m8 on")
+    # Path 9, the arm camera only (arm_eye): --eye arm needs a look, and its
+    # start configuration is q_home: --eye-start-joints, else the caller's
+    # home joints (find_dice: DEFAULT_ARM_POS), else TAMPURA's home joints
+    # (arm_eye.TAMPURA_HOME_JOINTS, Hani's Q2 answer).  q_home stays the
+    # place the arm starts from and returns to: the planner's first
+    # current_config is home_config, and with M8 q_home is a view config, so
+    # a move there gives back the run's first view.  With --eye fixed none
+    # of this runs and the tabletop's q_home stays REST_POSES.
+    eye = getattr(args, 'eye', 'fixed')
+    arm_eye.check_mode(eye, look_mode)
+    if eye == 'arm':
+        _start = arm_eye.parse_joints(getattr(args, 'eye_start_joints', ''))
+        if _start is not None and home_joints is not None and \
+                not np.allclose(_start, home_joints):
+            raise ValueError("--eye-start-joints differs from the caller's home "
+                             "joints: the start configuration is q_home")
+        if _start is not None:
+            home_joints = _start
+        elif home_joints is None:
+            home_joints = list(arm_eye.TAMPURA_HOME_JOINTS)
+        eye_start = list(home_joints)
+    if domain_file is None and look_on:
+        domain_file = look_domain.domain_file(look_mode, True)
+    elif domain_file is None and pose_belief.SWITCHES['M8']:
         domain_file = m8_domain.domain_file(True)
     # BF#52: the fold (pddlstream_planner.over_region_facts) is offered
     # unless --sense-over-region off (the A/B).  Not a pose_belief switch:
@@ -795,6 +859,14 @@ def main(gui=True, run_logger=None, scene_config=None,
     # so an unknown name is refused here, before anything runs.
     import slip_fixes
     slip_fixes.configure(getattr(args, 'slip_fixes', ''))
+    # BF#65 option 1 (D6, model tweak M2): the hiding region under a cover
+    # whose class declares a cavity (interior_regions.py), off unless the
+    # run says --interior-regions on.  Set every run; it also clears the
+    # previous run's "seen under a cover" records.
+    interior_regions.configure(getattr(args, 'interior_regions', 'off'))
+    # M7 (TB-46): a rediscovery keeps the still-hidden fragments; set every run.
+    import execution
+    execution.M7 = getattr(args, 'm7', 'on') == 'on'
     # The two known domains must match the switch (a caller may pass
     # another file deliberately; that one is not judged here).
     _dom = os.path.abspath(domain_file) if domain_file else m8_domain.LIVE_FILE
@@ -802,6 +874,11 @@ def main(gui=True, run_logger=None, scene_config=None,
             (_dom == m8_domain.GENERATED_FILE) != pose_belief.SWITCHES['M8']:
         raise ValueError(f"domain {os.path.basename(_dom)} does not match "
                          f"M8 {'on' if pose_belief.SWITCHES['M8'] else 'off'}")
+    _dom_look = {os.path.abspath(f): m
+                 for m, f in look_domain.GENERATED_FILES.items()}.get(_dom, 'off')
+    if _dom_look != look_mode:
+        raise ValueError(f"domain {os.path.basename(_dom)} does not match "
+                         f"--look {look_mode}")
     print(f"  model tweaks: {pose_belief.SWITCHES}; domain "
           f"{os.path.basename(domain_file or m8_domain.LIVE_FILE)}")
     # The curated console's header (a no-op without console_ui installed).
@@ -817,7 +894,8 @@ def main(gui=True, run_logger=None, scene_config=None,
         switches=(f"{_switch_text}, grip squeeze "
                   f"{robot_utils.GRIP_SQUEEZE * 1000:g} mm, planner "
                   f"{getattr(args, 'planner', '?')}"
-                  + (f", slip fixes {slip_fixes.spec()}" if slip_fixes.spec() else "")))
+                  + (f", slip fixes {slip_fixes.spec()}" if slip_fixes.spec() else "")
+                  + (", interior regions on" if interior_regions.ENABLED else "")))
 
     # =========================================================
     # PHASE 1: Setup Environment
@@ -855,15 +933,10 @@ def main(gui=True, run_logger=None, scene_config=None,
     # grounding cost (number of cells), not the underlying
     # discretization strategy.  We compute effective_cell
     # unconditionally and apply it to whichever baseline is active.
-    max_extent = 0.0
-    for name, info in env.objects.items():
-        if name in ("plane", "table", "robot"):
-            continue
-        if getattr(info, "is_tray", False):
-            continue
-        if info.size is None:
-            continue
-        max_extent = max(max_extent, float(np.max(info.size)))
+    # C-09: a target counts with the scene's declared size bound when it
+    # has one (SceneConfig.target_extent), not with a hidden body's own size.
+    max_extent = partition_extent(
+        env.objects, getattr(scene_config, 'target_extent', None))
     auto_cell = max_extent + 0.01
     # Audit #66/#67: a uniform cell smaller than the largest object makes
     # (boxel_fits ?occluder ?cell) ungroundable, so uniform is always
@@ -880,7 +953,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     else:
         effective_cell = min_boxel_size
     print(f"  [audit-66/67] Effective minimum boxel size: "
-          f"{effective_cell:.3f} m (largest object AABB "
+          f"{effective_cell:.3f} m (largest seen or declared object size "
           f"{max_extent:.3f} m + 0.01 m headroom).")
     if baseline != 'uniform' and min_boxel_size is not None:
         rel = "below" if min_boxel_size < auto_cell else "at/above"
@@ -906,11 +979,23 @@ def main(gui=True, run_logger=None, scene_config=None,
     if run_config is not None:
         run_config["effective_min_boxel_size"] = round(effective_cell, 4)
 
+    # Path 9, --eye arm: the arm stands at its start configuration before the
+    # settle (scene construction; an adopted world is not moved), and after it
+    # the overview camera is the arm camera: there for the first image, and
+    # where the arm stands for every later image and cast (follow_arm).
+    if eye == 'arm':
+        arm_eye.place_arm(env, eye_start)
     # Let settle: 50 steps at 240 Hz ≈ 0.2 s.  Enough for the loaded
     # Panda + cubes to reach static equilibrium after spawning.
     for _ in range(50):
         env.step_simulation()
     env.update_object_positions()
+    if eye == 'arm':
+        _cam = arm_eye.use_start_view(env)
+        eye_camera_pose = _cam['camera_pose']
+        print(f"  [eye] the overview camera is the arm camera at the start "
+              f"configuration: {np.round(_cam['camera_position'], 3).tolist()}")
+        arm_eye.follow_arm(env)
 
     # Audit #29: single-shot sanity log.  Placement in
     # ``_hidden_xy_positions`` already uses 8-corner raycasts against
@@ -963,6 +1048,18 @@ def main(gui=True, run_logger=None, scene_config=None,
     print("\n--- Phase 2: Calculating Boxels ---")
     obs = env.get_camera_observation()
     all_known = obs.boxels
+    if eye == 'arm':
+        # Path 9, --eye arm (PLAN 11.16): the part of the safe window the
+        # first image does not show joins the known boxels as hidden regions,
+        # as tall as the planner's prior for a hidden target, so free space at
+        # the table top is made only where the image showed the table.
+        _unseen = arm_eye.unseen_boxels(
+            eye_camera_pose, env._SAFE_TABLE_X_RANGE, env._SAFE_TABLE_Y_RANGE,
+            env.table_surface_height, float(streams.NOMINAL_HIDDEN_EXTENTS[2]),
+            known=all_known)
+        all_known = all_known + _unseen
+        print(f"  [eye] {len(_unseen)} unseen regions: the part of the table "
+              f"the first image does not show")
     free_boxels = env.generate_free_space(all_known, visualize=False)
     # audit #10 — uniform baseline produces a strict static lattice;
     # CellMerger would collapse adjacent uniform cubes back into
@@ -995,6 +1092,14 @@ def main(gui=True, run_logger=None, scene_config=None,
     # M8 A: the initial registrations' pose radius (no-op, no render,
     # while every switch is OFF).
     record_initial_detections(env, registry)
+    # BF#65 option 1 (D6, M2; no-op with the switch off): every registered
+    # object whose class declares a cavity that holds a target class gets
+    # its interior region, unknown, before the shadow list below is taken,
+    # so it is wired like any fragment (belief, census, facts).  BF#65 (d):
+    # a target the first render shows INSIDE a standing cover's box leaves
+    # the registry again and is recorded as seen under that cover.
+    if interior_regions.ENABLED:
+        interior_regions.cast_first_observation(env, registry, [target_name])
     registry.save_to_json("boxel_data.json")
     if run_logger:
         run_logger.save_artefact("boxel_data.json")
@@ -1212,21 +1317,27 @@ def main(gui=True, run_logger=None, scene_config=None,
     # (e.g. a second occluder drifts into the line of sight after spawning).
     # Raycasting from the camera through each shadow volume catches all
     # actual blockers, not just the geometrically-derived creator.
-    shadow_occluder_map = compute_shadow_blockers(
-        env.camera_position, registry, shadows, occluders, env
-    )
-    # compute_shadow_blockers applies the tolerance-aligned census plus
-    # the (adjacency-gated) parent-relationship fallback internally, so
-    # an EMPTY blocker list is now a legitimate state: nothing blocks
-    # more of the shadow's rays than the sense itself would tolerate,
-    # the planner derives view_clear, and a direct (move, sense) plan
-    # is schedulable — exactly what happens for marginal grazers and
-    # far-displaced carve fragments post-F5.  Log it as information,
-    # not as the broken-linkage warning it used to be.
-    for shadow_id in shadows:
-        if not shadow_occluder_map.get(shadow_id):
-            print(f"  Shadow {shadow_id}: no blocker above sense "
-                  f"tolerance — view-clear, directly sensable")
+    # Path 9, --eye arm: no census (ARM_ONLY_DESIGN, step 3, part 3).  A look
+    # mode reads none of the map for its facts (pddlstream_planner
+    # _build_init names what hides a view per configuration), and its render
+    # would be one more image with no reader.
+    shadow_occluder_map = {}
+    if eye != 'arm':
+        shadow_occluder_map = compute_shadow_blockers(
+            env.camera_position, registry, shadows, occluders, env
+        )
+        # compute_shadow_blockers applies the tolerance-aligned census plus
+        # the (adjacency-gated) parent-relationship fallback internally, so
+        # an EMPTY blocker list is now a legitimate state: nothing blocks
+        # more of the shadow's rays than the sense itself would tolerate,
+        # the planner derives view_clear, and a direct (move, sense) plan
+        # is schedulable — exactly what happens for marginal grazers and
+        # far-displaced carve fragments post-F5.  Log it as information,
+        # not as the broken-linkage warning it used to be.
+        for shadow_id in shadows:
+            if not shadow_occluder_map.get(shadow_id):
+                print(f"  Shadow {shadow_id}: no blocker above sense "
+                      f"tolerance — view-clear, directly sensable")
 
     # Bridge between the symbolic (PDDL) and physical (PyBullet) worlds.
     # The planner reasons about boxel IDs like "obj_000"; execution needs
@@ -1350,12 +1461,19 @@ def main(gui=True, run_logger=None, scene_config=None,
     belief = BeliefState(shadows, target_name)
     tray_name = next((name for name, info in env.objects.items()
                       if info.is_tray), None)
+    # Path 9, --eye arm: the planner gets no camera.  Its camera facts
+    # (placement_hides, the placement view blocks) keep a camera that stands
+    # still in view, and in this mode none does; the sense gate's hide test
+    # takes the box test (streams.test_target_can_hide_in_shadow).
+    planner_camera_pos = env.camera_position
+    if eye == 'arm':
+        planner_camera_pos = None
     planner = PDDLStreamPlanner(registry, robot_id=env.plan_robot_id,
                                 shadow_occluder_map=shadow_occluder_map,
                                 physics_client=env.plan_client_id,
                                 object_body_ids=object_body_ids,
                                 support_body_ids=planner_support_body_ids,
-                                camera_pos=env.camera_position,
+                                camera_pos=planner_camera_pos,
                                 tray_name=tray_name,
                                 domain_file=domain_file)
     planner.search_options = dict(search_options)          # BF#53
@@ -1368,9 +1486,11 @@ def main(gui=True, run_logger=None, scene_config=None,
                  stream_sha=m8_domain.sha(planner.stream_pddl),
                  switches=dict(pose_belief.SWITCHES,
                                sense_over_region=sense_over_region,
+                               interior_regions=interior_regions.ENABLED,     # BF#65
                                search_effort_weight=search_effort_weight,
                                search_initial_complexity=search_initial_complexity,
-                               slip_fixes=slip_fixes.spec()))                 # BF#59
+                               slip_fixes=slip_fixes.spec(),                  # BF#59
+                               **({'look': look_mode} if look_on else {})))   # path 9
     # #P4 B3(d): the scene's reach envelope (None: streams' constants),
     # and D7 (i) to (iii): the home joints, and with a declared goal
     # configuration its init facts and the goal conjunct.
@@ -1454,6 +1574,15 @@ def main(gui=True, run_logger=None, scene_config=None,
             env, planner.streams._robot_base_xy)
         # BF#52: the fold's switch (over_region_facts needs m8_views).
         planner.sense_over_region = sense_over_region
+        # Path 9: the look's viewpoints, from the same plan twin.  The boxel
+        # look chooses its own (look_views); the centred look takes the tag's
+        # observe rule from m8_views.
+        if look_on:
+            if look_mode == 'boxel':
+                planner.look_views = look_views.LookViews(
+                    planner.m8_views, reachable=planner.streams.ee_reachable)
+            planner.look_on = True
+            planner.look_mode = look_mode
 
     boxel_centers = {b.id: b.center for b in registry.boxels.values()}
 
@@ -1468,6 +1597,8 @@ def main(gui=True, run_logger=None, scene_config=None,
     observe_count = 0
     observe_strikes: Dict[str, tuple] = {}
     m8_per_plan: list = []
+    look_count = 0                   # path 9: executed looks, and the stats
+    look_per_plan: list = []         # of each plan call's look facts
     # Per-call planner.plan() durations.  Captured originally for
     # audit #30 baseline timing; now consumed by the eval runner
     # (audit #9) for scalability plots.
@@ -1708,6 +1839,14 @@ def main(gui=True, run_logger=None, scene_config=None,
     while not _loop_done():
         plan_count += 1
         disturbed_counts.clear()   # the #P2 disturbance cap is per plan
+        # M7 (Hani, 2026-11-20): a region suspended at the F9 give-up is
+        # offered again once its time is up (with --m7 off nothing is
+        # suspended).
+        with provenance('suspension_over'):
+            for _sid in belief.release_suspended(time.perf_counter()):
+                print(f"  [M7] {_sid} is back in the search: its "
+                      f"{execution.M7_SUSPEND_S:.0f} s suspension at the F9 "
+                      f"give-up is over")
         unknown_shadows = belief.get_unknown_shadows()
         # #P1 F15: parked-unresolved fragments are withheld from the
         # planner exactly like eliminated ones (or the episode loops on
@@ -1715,6 +1854,13 @@ def main(gui=True, run_logger=None, scene_config=None,
         # never observed empty, and the run outcome discloses them.
         known_empty = (belief.get_known_empty_shadows()
                        + belief.get_parked_shadows())
+        # BF#65 (d) (no-op with --interior-regions off): while the target is
+        # recorded as seen under a cover, the planner is offered that
+        # cover's interior region alone; the other unknown regions are
+        # withheld like the parked ones (the belief keeps them unknown).
+        _withheld = interior_regions.withheld(
+            registry, belief, planner_target_objects)
+        known_empty = known_empty + _withheld
 
         # Giveup parole (2026-08-21): see the pick_giveup_marked_at
         # comment above.  Runs before planner.plan() so the paroled
@@ -1748,6 +1894,8 @@ def main(gui=True, run_logger=None, scene_config=None,
                     planner.m8_views.parked.discard(_obj)
                     planner.m8_views.removed = {r for r in planner.m8_views.removed
                                                 if r[0] != _obj}
+                    if getattr(planner, 'look_views', None) is not None:
+                        planner.look_views.forget(_obj)
                     print(f"  [M8] observe strikes of {_obj} reset (re-registered "
                           f"or re-posed)")
 
@@ -1771,6 +1919,16 @@ def main(gui=True, run_logger=None, scene_config=None,
                       f"registered at [{_tc[0]:.3f},{_tc[1]:.3f},"
                       f"{_tc[2]:.3f}] (seen by an observation) — "
                       f"planning a direct pick (#P1 F20)")
+            elif not unknown_shadows and belief.get_suspended_shadows():
+                # M7 (Hani, 2026-11-20): nothing is left to search but
+                # regions suspended at the F9 give-up.  The episode fails
+                # here, without a planner call, and says why.
+                exit_reason = "rediscovery_giveup"
+                print(f"ERROR: No unknown shadows remain; "
+                      f"{sorted(belief.get_suspended_shadows())} suspended at "
+                      f"the F9 give-up (M7), not searched; the target may "
+                      f"be inside.")
+                break
             elif not unknown_shadows:
                 # Audit #21: 'all_searched' is the loop-termination tag,
                 # but with the still_blocked 3-strike give-up some of
@@ -1867,6 +2025,8 @@ def main(gui=True, run_logger=None, scene_config=None,
         plan_dt = time.perf_counter() - plan_t0
         if planner.last_m8_stats:
             m8_per_plan.append(dict(planner.last_m8_stats, plan=plan_count))
+        if planner.last_look_stats:
+            look_per_plan.append(dict(planner.last_look_stats, plan=plan_count))
         # #P4 B0: every plan() call and its result go to the run ledger
         # (gates G3, G10, G11).
         ledger_event('plan', plan_id=plan_count, call='mission', goal=goal,
@@ -1940,6 +2100,9 @@ def main(gui=True, run_logger=None, scene_config=None,
                 print(f"ERROR: no disposal plan for {held_obj_name} either — "
                       f"ending the episode honestly while holding (no blind "
                       f"drop; user directive 2026-08-21).")
+                # C-07: the round called the planner twice; count its time.
+                total_plan_time += plan_dt
+                plan_times.append(plan_dt)
                 break
         total_plan_time += plan_dt
         plan_times.append(plan_dt)
@@ -1948,6 +2111,15 @@ def main(gui=True, run_logger=None, scene_config=None,
 
         if gui:
             env.refresh_debug_camera_views()
+
+        # BF#65 (d) (never true with --interior-regions off, where nothing
+        # is withheld): no plan while the planner was offered only the
+        # region the target was seen in.  The record ends and the next
+        # plan is offered every unknown region; the episode does not end
+        # on a restriction the belief never held.
+        if plan is None and held_obj_name is None and _withheld:
+            interior_regions.release(planner_target_objects)
+            continue
 
         if plan is None:
             # #P1 F2: classify "pick_giveup" only when a GOAL-CRITICAL
@@ -2038,7 +2210,7 @@ def main(gui=True, run_logger=None, scene_config=None,
             # #P4 B3(d), D7 (vi): any action but a sense or an observe
             # (M8 C2: one render, no motion) may move the arm, so the
             # at-home state holds only until the next one.
-            if action_name not in ('sense', 'observe'):
+            if action_name not in ('sense', 'observe', 'look'):
                 at_home_ok = False
             # #P1 F17: segment the telemetry stream by dispatched action,
             # so every frame, event and summary is attributable to the
@@ -2336,6 +2508,116 @@ def main(gui=True, run_logger=None, scene_config=None,
                              lost=lost, config=look_q.name)
                 dispatch_end(status)
                 break
+
+            elif action_name == 'look':
+                # LOOK (path 9, --look on): one wrist render from a viewpoint
+                # boxel.  handle_look_action checks what the PDDL
+                # precondition names and writes what its effects name and
+                # nothing else (look_action.LOOK_SPEC); the strikes are this
+                # loop's rules.  The plan goes on when the unconditional
+                # effects hold in the belief, else the loop replans.
+                look_count += 1
+                obj_str = str(params[0])
+                look_q = params[2] if look_mode == 'centred' else params[3]
+                if look_mode == 'centred':
+                    _named = [str(params[1])]      # the plan names one hypothesis
+                else:
+                    _named = [str(f[2]) for f in planner.last_init
+                              if f[0] == 'reveals'
+                              and getattr(f[1], 'name', f[1]) == look_q.name]
+                look_result = handle_look_action(
+                    action_params=params, named=_named, env=env,
+                    registry=registry, belief=belief, viz=viz,
+                    robot_id=robot_id, held_body_id=held_body_id,
+                    support_body_ids=support_body_ids, shadows=shadows,
+                    occluders=occluders,
+                    shadow_occluder_map=shadow_occluder_map,
+                    blocked_counts=blocked_counts,
+                    blocked_giveup_shadows=blocked_giveup_shadows,
+                    boxel_centers=boxel_centers,
+                    boxel_to_pybullet=boxel_to_pybullet,
+                    object_body_ids=object_body_ids,
+                    pose_known=lambda bd: pose_belief.pose_known(
+                        bd, robot_model().finger_limits[0][1],
+                        planner.streams.GRASP_MAX_SPAN,
+                        planner.streams.GRASP_SQUARE_TOL),
+                    target_name=target_name, mode=look_mode)
+                ledger_event('look_reveals', config=look_q.name, named=_named)
+                ledger_event('look_result', reason=look_result.reason,
+                             continue_=look_result.continue_, obj=obj_str,
+                             region=str(params[1]), config=look_q.name,
+                             outcomes=look_result.outcomes,
+                             hidden=look_result.hidden,
+                             reposed=look_result.reposed,
+                             found_in=look_result.found_in,
+                             registered=look_result.registered,
+                             blocked=look_result.blocked,
+                             parked=look_result.parked)
+                if look_result.stale:
+                    dispatch_end('stale_precondition')
+                    break
+                if not look_result.continue_:
+                    _bd = registry.get_boxel(obj_str)
+                    if (look_result.reason == 'look_pose_incomplete'
+                            and _bd is not None):
+                        # The observe bound's rule: three looks that do not
+                        # give the pose park the object until its box moves.
+                        _n = observe_strikes.get(obj_str, (0,))[0] + 1
+                        observe_strikes[obj_str] = (
+                            _n, np.concatenate([_bd.min_corner, _bd.max_corner]), _bd)
+                        # The centred look's configurations are the tag's
+                        # observe ones: a look that did not give the pose
+                        # removes its own, as observe's strike did (the boxel
+                        # look's configurations have other names: no index).
+                        _k = observe_views.look_index(look_q.name, obj_str)
+                        if _k is not None:
+                            planner.m8_views.removed.add((obj_str, _k))
+                        elif (look_mode == 'boxel'
+                              and planner.look_views is not None):
+                            # The boxel look's counterpart (PLAN.md 11.13):
+                            # the view whose image did not give the pose no
+                            # longer counts as revealing this body.
+                            planner.look_views.refute(
+                                obj_str, look_q.joint_positions)
+                            print(f"    [look] the view from {look_q.name} is "
+                                  f"withdrawn for {obj_str}")
+                        _left = (len(observe_views.LOOK_STANDOFFS)
+                                 * len(observe_views.LOOK_WRIST_YAWS)
+                                 - sum(1 for r in planner.m8_views.removed
+                                       if r[0] == obj_str))
+                        _park = _n >= 3 or (_k is not None and _left <= 0)
+                        if _park:
+                            planner.m8_views.parked.add(obj_str)
+                        print(f"    [look] pose strike {_n}/3 for {obj_str}"
+                              f"{'; PARKED' if _park else ''}")
+                    elif (look_mode == 'centred'
+                          and look_result.reason == 'look_blocked'):
+                        # The render still hid part of ?h (the twin said all of
+                        # it was in view): that configuration leaves the facts,
+                        # the next plan looks from another one, as observe's
+                        # strike did.  Three blocked looks park the fragment
+                        # (the handler's strike rule).
+                        _k = observe_views.look_index(look_q.name, str(params[1]))
+                        if _k is not None:
+                            planner.m8_views.removed.add((str(params[1]), _k))
+                            print(f"    [look] centred view {look_q.name} left "
+                                  f"{params[1]} blocked: configuration removed")
+                    dispatch_end('look_outcome')
+                    break
+                observe_strikes.pop(obj_str, None)
+                # Q5 (Hani's decision, tracks/look/Q4_Q6_CHECK.md): a look
+                # whose image registered a body the belief did not hold (M-1)
+                # ends the plan for a replan, as _integrity_after does for
+                # the other actions (the hand is empty at a look: handempty is
+                # its precondition).  In every look mode and with either eye,
+                # the replan is the loop's rule, not the handler's.  A look
+                # that registered nothing goes on with the plan.
+                if look_result.registered:
+                    print(f"    [look] the image from {look_q.name} registered "
+                          f"{sorted(look_result.registered)}: the plan is made "
+                          f"again")
+                    dispatch_end('look_outcome')
+                    break
 
             elif action_name == 'pick':
                 # PICK: approach → open gripper → lower to contact →
@@ -2685,6 +2967,18 @@ def main(gui=True, run_logger=None, scene_config=None,
                         _det = _pdets.get(placed_name)
                         _prender = (env._depth_buffer_to_meters(_pbuf), _pseg,
                                     *env._view_and_projection_matrices())
+                        _frame_cut = False
+                        if (_det is not None and eye == 'arm'
+                                and not arm_eye.in_frame(
+                                    _prender[2], (_det.est_min, _det.est_max))):
+                            # Path 9, --eye arm: a detection the frame cuts
+                            # is a partial view; the placed body's box is
+                            # the commanded placement.
+                            print(f"    [eye] {placed_name} not wholly in the "
+                                  f"post-place image: its box is the commanded "
+                                  f"placement")
+                            _det = None
+                            _frame_cut = True
                         _commanded = _det is None
                         _prev_bd = registry.get_boxel(obj_str)
                         _prev_ext = (
@@ -2708,9 +3002,10 @@ def main(gui=True, run_logger=None, scene_config=None,
                                 _cc[1] - _prev_ext[1] / 2.0,
                                 env.table_surface_height])
                             aabb_max = aabb_min + _prev_ext
-                            print(f"    [perception] {placed_name} occluded "
-                                  f"in the post-place render — carving its "
-                                  f"known-size box at the destination cell")
+                            if not _frame_cut:      # a frame cut is not an occlusion
+                                print(f"    [perception] {placed_name} occluded "
+                                      f"in the post-place render — carving its "
+                                      f"known-size box at the destination cell")
                         else:
                             aabb_min = aabb_max = None
                             print(f"    WARNING: {placed_name} has neither "
@@ -2748,10 +3043,12 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # Rebuild shadow_occluder_map from current physics state so
                 # blocks_view_at facts reflect the relocated occluder's new
                 # position on the next replan (audit #73, #24 fixed).
-                shadow_occluder_map = compute_shadow_blockers(
-                    env.camera_position, registry, shadows, occluders, env
-                )
-                planner.shadow_occluder_map = shadow_occluder_map
+                # Path 9, --eye arm: no census (see Phase 3).
+                if eye != 'arm':
+                    shadow_occluder_map = compute_shadow_blockers(
+                        env.camera_position, registry, shadows, occluders, env
+                    )
+                    planner.shadow_occluder_map = shadow_occluder_map
 
                 # Record the relocation in belief state so the planner
                 # knows this occluder is no longer blocking its original
@@ -2940,6 +3237,17 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # pre-pick table spot and mislead the next replan.
                 if obj_str in env.objects:
                     _det = env.detect_objects()[0].get(obj_str)
+                    _frame_cut = False
+                    if (_det is not None and eye == 'arm'
+                            and not arm_eye.in_frame(
+                                env._view_and_projection_matrices()[0],
+                                (_det.est_min, _det.est_max))):
+                        # Path 9, --eye arm: a detection the frame cuts is a
+                        # partial view; the box goes on the support's top.
+                        print(f"    [eye] {obj_str} not wholly in the post-stack "
+                              f"image: its box goes on {on_obj_str}'s top")
+                        _det = None
+                        _frame_cut = True
                     bd = registry.get_boxel(obj_str)
                     if bd is not None:
                         _cur_ext = (np.asarray(bd.max_corner, dtype=float)
@@ -2965,9 +3273,10 @@ def main(gui=True, run_logger=None, scene_config=None,
                                               _sc[1] - _cur_ext[1] / 2.0,
                                               _sz])
                             a_max = a_min + _cur_ext
-                            print(f"    [perception] {obj_str} occluded in "
-                                  f"the post-stack render — re-posing its "
-                                  f"known-size box on {on_obj_str}'s top")
+                            if not _frame_cut:      # a frame cut is not an occlusion
+                                print(f"    [perception] {obj_str} occluded in "
+                                      f"the post-stack render — re-posing its "
+                                      f"known-size box on {on_obj_str}'s top")
                         # M8 A: the occluded re-pose is inferred (pose
                         # unknown); a seen stack is a commanded placement.
                         if _det is None:
@@ -3107,8 +3416,11 @@ def main(gui=True, run_logger=None, scene_config=None,
 
     # Review round 2 (2026-09-19): a goal object that was seen, then
     # observed gone from its believed region and never seen again ends
-    # as target_lost, not as an exhausted search.
-    if (not success and exit_reason == "all_searched" and target_lost_seen):
+    # as target_lost, not as an exhausted search.  M7's rediscovery_giveup
+    # is an exhausted search too (only suspended regions left), so it
+    # takes the same relabel; the FAILED line still names the suspensions.
+    if (not success and exit_reason in ("all_searched", "rediscovery_giveup")
+            and target_lost_seen):
         exit_reason = "target_lost"
     report_run_outcome(
         success=success,
@@ -3121,15 +3433,19 @@ def main(gui=True, run_logger=None, scene_config=None,
         target_name=target_name,
         on_relations=on_relations,
         belief=belief,
-        plan_count=plan_count,
+        plan_count=len(plan_times),  # C-07: the rounds that called plan()
         sense_count=sense_count,
         m8_stats=({"n_observe_actions": observe_count,
                    "parked": sorted(planner.m8_views.parked),
                    "view_kin_skips": planner.streams.view_kin_skips,
-                   "per_plan": m8_per_plan}
+                   "per_plan": m8_per_plan,
+                   **({"n_look_actions": look_count,
+                       "look_per_plan": look_per_plan} if look_on else {})}
                   if planner.m8_views is not None else None),
         shadows=shadows,
         blocked_giveup_shadows=blocked_giveup_shadows,
+        # M7: the F9 give-up's suspension length (None with --m7 off)
+        m7_suspend_s=(execution.M7_SUSPEND_S if execution.M7 else None),
         plan_times=plan_times,
         total_plan_time=total_plan_time,
         physical_failures=physical_failures,
@@ -3241,10 +3557,13 @@ if __name__ == "__main__":
         "sense_gate":   args.sense_gate,
         "corridor_test": args.corridor_test,
         "m8": args.m8, "m9": args.m9, "m10": args.m10,
+        **({"look": look_domain.mode_of(getattr(args, 'look', 'off'))}
+           if look_domain.mode_of(getattr(args, 'look', 'off')) != 'off' else {}),  # path 9
         "pick_aperture_from_pose": args.pick_aperture_from_pose,
         "grip_squeeze_mm": getattr(args, 'grip_squeeze_mm', '0.5'),
         "save_screenshots": getattr(args, 'save_screenshots', 'off'),   # BF#50
         "sense_over_region": getattr(args, 'sense_over_region', 'on'),  # BF#52
+        "m7": getattr(args, 'm7', 'on'),                                # M7, TB-46
         "search_effort_weight": getattr(args, 'search_effort_weight', '1'),          # BF#53
         "search_initial_complexity": getattr(args, 'search_initial_complexity', 3),  # BF#53
         "slip_fixes": slip_fixes.resolve(getattr(args, 'slip_fixes', '')),            # BF#59, BF#62
@@ -3259,6 +3578,8 @@ if __name__ == "__main__":
         "show_free":    args.show_free,
         "log_level":    args.log_level,
     }
+    if getattr(args, 'eye', 'fixed') == 'arm':     # path 9
+        run_config["eye"] = "arm"
 
     # RunLogger captures all artefacts (PDDL files, boxel data, logs)
     # regardless of console verbosity for post-mortem analysis.
@@ -3338,6 +3659,7 @@ if __name__ == "__main__":
 
     # Single real-pipeline run with the validated scene_cfg.
     logger = RunLogger(verbosity=args.log_level)
+    crash = None
     try:
         success = main(
             gui=not args.no_gui,
@@ -3356,12 +3678,25 @@ if __name__ == "__main__":
             telemetry_period=args.telemetry_period,
             telemetry_heartbeat=args.telemetry_heartbeat,
         )
+    except Exception:
+        # C-01: an exception out of main() is a crash, not a failed
+        # episode, so it ends with an exit code of its own (below).
+        # Ctrl-C and SystemExit are not caught: they end as before.
+        crash = sys.exc_info()
     finally:
         # #P1 F17: flush the final action summary before the log file
         # closes; a no-op when telemetry was never armed.
         telemetry.disable()
         world_eye.disable()
         logger.close()
+    if crash is not None:
+        # Shown as before, by the same hook and after the clean-up above:
+        # the console's "Crashed:" line and the traceback on stderr.
+        # Then exit 70, a code nothing else here uses (0 success, 1 a
+        # failed episode or a pre-flight rejection, 2 no numpy or a bad
+        # command line, 130 Ctrl-C); eval_runner files it as crash_exit70.
+        sys.excepthook(*crash)
+        console_ui.finish(70)
     # sys.exit, except that with the console installed the process ends
     # right after the flush: pybullet's GUI teardown segfaults at
     # interpreter exit (bash's 'Segmentation fault' line under the console).

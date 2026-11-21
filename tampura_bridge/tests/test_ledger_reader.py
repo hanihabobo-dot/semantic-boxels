@@ -117,6 +117,160 @@ def test_unrendered_rediscovery_depends_on_m7(tmp_path):
     assert run(tmp_path, rows, m7='off')['G5'] == 'PASS'
 
 
+# ----- TB-46, M7: the rediscovery's G5 checks ------------------------------
+
+def _rediscovery(*, removed=True, recast=('shadow_9',), adds=('shadow_9',),
+                 giveup=False, parked=False, row=True, suspended=False):
+    """clean() whose sense of shadow_3 found cup_a inside it again (plan 1
+    step 4): the sensed region's rows, the recast's add rows and the
+    sense_discovery row as M7 writes them; suspended adds the give-up's
+    m7_suspension start row after the park (Hani, 2026-11-20)."""
+    rows = clean()
+    k = next(i for i, r in enumerate(rows) if r['kind'] == 'sense_result')
+    rows[k]['reason'] = 'sense_contains_nontarget'
+    at = {'plan': 1, 'step': 4}
+    extra = []
+    if removed:
+        extra.append(dict(at, kind='belief', region='shadow_3', op='remove',
+                          status=None, channel='planned_sense_render'))
+    else:
+        rows = [r for r in rows if not (r['kind'] == 'belief'
+                                        and r['region'] == 'shadow_3')]
+        k = next(i for i, r in enumerate(rows) if r['kind'] == 'sense_result')
+    if parked:
+        extra.append(dict(at, kind='belief', region='shadow_3', op='status',
+                          status='unresolved', channel='strike_park'))
+    if suspended:
+        extra.append(dict(at, kind='m7_suspension', op='start', region='shadow_3',
+                          bodies={'cup_a': 3}, seconds=120.0))
+    for s in adds:
+        extra.append(dict(at, kind='belief', region=s, op='add',
+                          status='unknown', channel='planned_sense_render'))
+    if row:
+        extra.append(dict(at, kind='sense_discovery', body='cup_a',
+                          region='shadow_3', rediscovery=True,
+                          kept=['shadow_1'], recast=list(recast),
+                          giveup=giveup, parked=parked))
+    return rows[:k] + extra + rows[k:]
+
+
+def test_m7_rediscovery_with_a_recast_passes(tmp_path):
+    assert run(tmp_path, _rediscovery())['G5'] == 'PASS'
+
+
+@pytest.mark.parametrize('name,rows', [
+    ('no sense_discovery row', _rediscovery(row=False)),
+    ('removed, nothing recast', _rediscovery(recast=(), adds=())),
+    ('removed at a give-up', _rediscovery(recast=(), adds=(), giveup=True)),
+    ('recast without its add row', _rediscovery(adds=())),
+    ('kept, not parked', _rediscovery(removed=False, recast=(), adds=(),
+                                      giveup=True)),
+])
+def test_m7_rediscovery_tampering_fails(tmp_path, name, rows):
+    assert run(tmp_path, rows)['G5'] == 'FAIL', name
+
+
+@pytest.mark.parametrize('rediscovery,kind', [
+    (True, 'rediscovery of cup_a'), (False, 'first discovery of cup_a')])
+def test_m7_nothing_recast_names_the_body_and_its_kind(tmp_path, rediscovery, kind):
+    rows = _rediscovery(recast=(), adds=())
+    for r in rows:
+        if r['kind'] == 'sense_discovery':
+            r['rediscovery'] = rediscovery
+    run(tmp_path, rows)
+    rep = bg.Report()
+    bg.run_ledger(rep, str(tmp_path))
+    status, detail = {g: (s, d) for g, s, d in rep.rows}['G5']
+    assert status == 'FAIL'
+    assert (f'shadow_3 removed with nothing recast and nothing parked ({kind})'
+            in detail), detail
+
+
+def test_m7_give_up_kept_and_parked_passes(tmp_path):
+    rows = _rediscovery(removed=False, recast=(), adds=(), giveup=True, parked=True)
+    assert run(tmp_path, rows)['G5'] == 'PASS'
+
+
+def _suspension_over(region='shadow_3', status='unknown'):
+    """The end of an M7 suspension at the next plan's top (no step open)."""
+    return {'kind': 'belief', 'region': region, 'op': 'status',
+            'status': status, 'channel': 'suspension_over'}
+
+
+def _suspension_end(region='shadow_3', ended_by='released'):
+    """The m7_suspension end row release_suspended writes after the belief row."""
+    return {'kind': 'm7_suspension', 'op': 'end', 'region': region,
+            'ended_by': ended_by}
+
+
+def test_m7_suspension_over_after_its_park_passes(tmp_path):
+    # Hani, 2026-11-20: the F9 give-up's park ends after its time; the region
+    # goes back to unknown under its own channel, then the end row
+    rows = _rediscovery(removed=False, recast=(), adds=(), giveup=True,
+                        parked=True, suspended=True)
+    rows.insert(-1, _suspension_over())
+    rows.insert(-1, _suspension_end())
+    assert run(tmp_path, rows)['G5'] == 'PASS'
+
+
+def _end_closed(rows):
+    """The suspension's end row before the release row: nothing is open."""
+    rows.insert(-1, _suspension_end())
+    return rows
+
+
+@pytest.mark.parametrize('name,rows,row', [
+    ('another region', _rediscovery(removed=False, recast=(), adds=(), giveup=True,
+                                    parked=True, suspended=True),
+     _suspension_over(region='shadow_5')),
+    ('to another status', _rediscovery(removed=False, recast=(), adds=(), giveup=True,
+                                       parked=True, suspended=True),
+     _suspension_over(status='not_here')),
+    # the third review's point: a strike_park park without a suspension (a
+    # blocked view's, F15's) is not released by a suspension's end
+    ('a park that is no suspension', _rediscovery(removed=False, recast=(), adds=(),
+                                                  giveup=True, parked=True),
+     _suspension_over()),
+    ('after the suspension ended', _end_closed(_rediscovery(
+        removed=False, recast=(), adds=(), giveup=True, parked=True, suspended=True)),
+     _suspension_over()),
+])
+def test_m7_suspension_over_tampering_fails(tmp_path, name, rows, row):
+    rows.insert(-1, row)
+    run(tmp_path, rows)
+    rep = bg.Report()
+    bg.run_ledger(rep, str(tmp_path))
+    status, detail = {g: (s, d) for g, s, d in rep.rows}['G5']
+    assert status == 'FAIL', name
+    assert 'suspension_over without an open suspension' in detail, detail
+
+
+def test_m7_checks_are_tied_by_plan_and_step(tmp_path):
+    # the same discovery row written at another step backs nothing
+    rows = _rediscovery()
+    for r in rows:
+        if r['kind'] == 'sense_discovery':
+            r['step'] = 3
+    assert run(tmp_path, rows)['G5'] == 'FAIL'
+
+
+def test_m7_off_discloses_only(tmp_path):
+    # the gate's m7 off (never read from the episode): the sense_discovery
+    # check is skipped, so a contains_nontarget sense without its row passes
+    # (the unrendered drop's disclosure is test_unrendered_rediscovery_depends_on_m7)
+    rows = _rediscovery(row=False)
+    assert run(tmp_path, rows, m7='off')['G5'] == 'PASS'
+
+
+@pytest.mark.parametrize('m7', ['on', 'off'])
+def test_rediscovery_render_has_no_writer(tmp_path, m7):
+    rows = clean()
+    rows.insert(-1, {'kind': 'belief', 'plan': 1, 'step': 4,
+                     'region': 'shadow_5', 'op': 'remove', 'status': None,
+                     'channel': 'rediscovery_render'})
+    assert run(tmp_path, rows, m7=m7)['G5'] == 'FAIL'
+
+
 def _m8_rows(region='shadow_3'):
     """clean() with M8's three-argument sense and an observe that ends
     its plan (plan 2)."""

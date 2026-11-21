@@ -27,7 +27,7 @@ CITATIONS = (REPO / "archive" / "tampura_bridge_plan_2026-10-25" / "tracks" /
              "report" / "CITATIONS.md")
 APPENDIX = ROOT / "chapters" / "appendix-sources.tex"
 
-SOURCES = [ROOT / "main.tex"] + sorted((ROOT / "chapters").glob("*.tex")) + \
+SOURCES = [ROOT / "long.tex"] + sorted((ROOT / "chapters").glob("*.tex")) + \
     sorted((ROOT / "resources").glob("*.tex"))
 
 

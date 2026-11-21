@@ -6,8 +6,16 @@ g13_runtime.json; any failure stops the run (a per-run gate, P4.6):
     execute_fn is ours, and no class of ours sits in their env or planner
     registry; arm T registers tampura_policy_timed -> TampuraPolicyTimed and
     nothing else of ours, and no schema of ours exists;
-  - type(policy).rollout is their Policy.rollout;
-  - the policy class of ours defines __init__ and get_action and nothing else;
+  - arm O: type(policy).rollout is their Policy.rollout and the policy class
+    of ours defines __init__ and get_action and nothing else;
+  - arm T (amended for DV-1, Hani 2026-11-07): their Policy.rollout is
+    reached unchanged through TampuraPolicy (TampuraPolicy.rollout is
+    Policy.rollout), the policy class of ours defines __init__, get_action
+    and rollout and nothing else, and its rollout is compared as code (the
+    abstract syntax tree, comments and docstring aside) with
+    REVIEWED_ARM_T_ROLLOUT: their rollout through super(), then one read of
+    their final world (tampura_bridge/final_world.py), then the result
+    returned unchanged;
   - arm O: the env has no instance attribute 'step' (on arm T no code of ours
     ever holds the env);
   - no monkeypatch: every function in the __dict__ of their Policy,
@@ -21,12 +29,26 @@ g13_runtime.json; any failure stops the run (a per-run gate, P4.6):
 Their checkout root is found from the loaded tampura_environments package
 (their editable or PYTHONPATH checkout on both arms), or $TAMPURA_WORK.
 """
+import ast
+import inspect
 import json
 import os
 import sys
+import textwrap
 
 THEIR_ROOTS = ('tampura', 'tampura_environments')
 REPO = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+
+# The one body of rollout G13 accepts on arm T (DV-1's amendment): any other
+# code in that method, or a second method, fails the run.  Compared as code
+# by rollout_wrapper_failures; a change here and in timed_policy.py is a
+# change to the protocol (PAPER_AUDIT P4.6: any later change is a BF# entry).
+REVIEWED_ARM_T_ROLLOUT = '''
+def rollout(self, env, b, store):
+    out = super().rollout(env, b, store)
+    final_world.record_after_rollout(env, self.config['save_dir'])
+    return out
+'''
 
 
 def _ours(obj):
@@ -95,20 +117,67 @@ def _own_methods(cls):
                   if not (k.startswith('__') and k.endswith('__')) or k == '__init__')
 
 
-def _common(policy, extra_classes, record):
+def _normal_def(source):
+    """A method's code without its comments, docstring and layout: the tuple
+    of the dumps of its name, arguments, decorators, return annotation and
+    body statements."""
+    node = ast.parse(textwrap.dedent(source)).body[0]
+    body = list(node.body)
+    if (body and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)):
+        body = body[1:]
+    return (node.name, ast.dump(node.args),
+            [ast.dump(d) for d in node.decorator_list],
+            ast.dump(node.returns) if node.returns is not None else None,
+            [ast.dump(s) for s in body])
+
+
+def rollout_wrapper_failures(cls, their_policy, their_tampura_policy,
+                             reviewed=REVIEWED_ARM_T_ROLLOUT):
+    """Arm T's rollout (DV-1's amendment): their Policy.rollout reached
+    unchanged, and the one reviewed wrapper in the class of ours."""
+    fails = []
+    if their_tampura_policy.rollout is not their_policy.rollout:
+        fails.append('TampuraPolicy.rollout is not Policy.rollout')
+    own = vars(cls).get('rollout')
+    if own is None:
+        fails.append(f'{cls.__qualname__} has no rollout wrapper')
+        return fails
+    try:
+        source = inspect.getsource(own)
+    except (OSError, TypeError) as e:
+        return fails + [f'{cls.__qualname__}.rollout source unreadable: {e}']
+    if _normal_def(source) != _normal_def(reviewed):
+        fails.append(f'{cls.__qualname__}.rollout is not the reviewed wrapper')
+    return fails
+
+
+def _and(names):
+    names = list(names)
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
+
+
+def _common(policy, extra_classes, record, own_methods=('__init__', 'get_action'),
+            reviewed_rollout=None):
     from tampura.config import config as tconfig
     from tampura.policies.policy import Policy
     from tampura.policies.tampura_policy import TampuraPolicy
     tw = _tw()
     record['their_root'] = tw
     fails = record['failures']
-    if type(policy).rollout is not Policy.rollout:
-        fails.append(f'{type(policy).__qualname__}.rollout is not Policy.rollout')
+    if reviewed_rollout is None:
+        if type(policy).rollout is not Policy.rollout:
+            fails.append(f'{type(policy).__qualname__}.rollout is not Policy.rollout')
+    else:
+        record['rollout'] = 'their Policy.rollout, reached through the reviewed wrapper'
+        fails += rollout_wrapper_failures(type(policy), Policy, TampuraPolicy,
+                                          reviewed_rollout)
     methods = _own_methods(type(policy))
     record['policy_methods'] = methods
-    if methods != ['__init__', 'get_action']:
+    if methods != sorted(own_methods):
         fails.append(f'{type(policy).__qualname__} defines {methods}, '
-                     f'not only __init__ and get_action')
+                     f'not only {_and(sorted(own_methods))}')
     envs = list(tconfig.env_registry.items.values())
     planners = dict(tconfig.planner_registry.items)
     patched = _no_patch([Policy, TampuraPolicy, *envs, *extra_classes])
@@ -145,11 +214,14 @@ def check_arm_o(env, policy, b0, schema_name, execute_fn):
     return record
 
 
-def check_arm_t(policy, problem_spec, planner_name, planner_class):
+def check_arm_t(policy, problem_spec, planner_name, planner_class,
+                reviewed_rollout=REVIEWED_ARM_T_ROLLOUT):
     """Arm T, in TampuraPolicyTimed.__init__ (their driver copy stays as is)."""
     record = {'arm': 'T', 'failures': []}
     fails = record['failures']
-    envs, planners = _common(policy, [], record)
+    envs, planners = _common(policy, [], record,
+                             own_methods=('__init__', 'get_action', 'rollout'),
+                             reviewed_rollout=reviewed_rollout)
     foreign = [k for k, c in planners.items()
                if _ours(c) and not (k == planner_name and c is planner_class)]
     if planners.get(planner_name) is not planner_class:

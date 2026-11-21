@@ -32,6 +32,7 @@ from typing import Optional
 import numpy as np
 import pybullet as p
 
+import look_domain
 import m8_domain
 import robot_utils
 import slip_fixes
@@ -39,12 +40,12 @@ import telemetry
 import test_full_pipeline
 import world_eye
 from run_logger import RunLogger, ledger_event, parse_pipeline_args
-from tampura_bridge import gate_hooks, scoring, task_spec
+from tampura_bridge import camera_overlay, gate_hooks, scoring, task_spec
 from tampura_bridge.env_adapter import TampuraWorldEnv, symbol_names
 
 SCHEMA_NAME = 'boxel_episode'
 # BF#68: the values of run tampura -Draw (the driver's --draw).
-DRAW_KINDS = ('boxels',)
+DRAW_KINDS = ('boxels', 'cameras')
 
 
 @dataclass
@@ -65,8 +66,14 @@ class EpisodeConfig:
     # BF#68, run tampura -Draw: what the GUI shows besides the scene, a set
     # of DRAW_KINDS.  'boxels' draws the registry's boxels as debug lines and
     # labels (never as bodies); drawing only ever reads our own registry.
-    # Ignored without the GUI.
+    # 'cameras' shows what each of our cameras saw at every render: pictures
+    # written to camera_dir (an absolute path; tools/camera_view.ps1 shows
+    # them) and each camera's view volume as debug lines and a label.  It
+    # reads what a render returns and renders nothing itself, and no body, no
+    # random number and no result changes.  Ignored without the GUI (the
+    # driver drops it; this function does not look at cfg.vis).
     draw: frozenset = frozenset()
+    camera_dir: str = ''
 
 
 def d9_setup(world, model):
@@ -178,6 +185,7 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
         logger = RunLogger(verbosity=cfg.log_level, log_dir=cfg.log_dir)
         cfg.out['run_dir'] = str(logger.run_dir)
         observation = None
+        observer = None
         # GF8: main() writes boxel_data.json and pddlstream its temp/ and
         # statistics/ into the working directory; they go to work/ under our
         # run directory (main() copies boxel_data.json into the run
@@ -212,19 +220,46 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 fov=task_spec.EYE_FOV_DEG,
                 aspect=task_spec.EYE_WIDTH / task_spec.EYE_HEIGHT,
                 nearVal=task_spec.EYE_NEAR, farVal=task_spec.EYE_FAR)
+            camera_view = tuple(view)
+            camera_proj = tuple(proj)
+            if cfg.switches.get('eye', 'fixed') == 'arm':
+                # Path 9, --eye arm: no fixed eye.  Empty matrices match no
+                # render (gate_hooks._close compares lengths), so G20 lets
+                # through only the wrist cameras at their FK pose; None would
+                # leave every render unchecked (gate_hooks._make_camera).
+                camera_view = ()
+                camera_proj = ()
             # B4 / M8: the domain the planner loads (the generated one
             # with M8 on), the same path for main() and G10's runtime pin.
-            domain_file = m8_domain.domain_file(cfg.switches.get('m8', 'on') == 'on')
+            if look_domain.mode_of(cfg.switches.get('look', 'off')) != 'off':
+                domain_file = look_domain.domain_file(
+                    cfg.switches.get('look'),
+                    cfg.switches.get('m8', 'on') == 'on')         # path 9
+            else:
+                domain_file = m8_domain.domain_file(cfg.switches.get('m8', 'on') == 'on')
             gate_hooks.install(gate_hooks.GateConfig(
                 executing_client=c, robot_id=robot,
                 arm_joints=tuple(model.arm_joints),
                 task_body_ids=frozenset(world.objects),
                 has_object_boxel=has_object_boxel,
-                camera_view=tuple(view), camera_proj=tuple(proj),
+                camera_view=camera_view, camera_proj=camera_proj,
                 wrist_robots={c: robot},
                 mission_goal=('and', ('holding', target[0]),
                               ('at_config', 'q_home')),
                 target_symbol=target[0], domain_file=domain_file))
+            # BF#68, -Draw cameras: an observer on the render call, put on
+            # AFTER the gates so it sits on their G20 hook (a render the gate
+            # refuses is never shown) and taken off BEFORE theirs.  It reads
+            # what each render on the executing client returns, writes
+            # pictures to cfg.camera_dir and draws each camera's view volume
+            # as debug lines; it renders nothing, asks the simulator nothing
+            # and never alters a result.  install() cannot raise into the
+            # episode (a folder it cannot make leaves the run without it).
+            if 'cameras' in cfg.draw and cfg.camera_dir:
+                observer = camera_overlay.CameraObserver(
+                    cfg.camera_dir, c, view, proj,
+                    tol=gate_hooks.GateConfig.camera_tol)
+                observer.install()
             with gate_hooks.write_only('settle_disclosure'):
                 before = _poses(world)
             # BF#59 solver_iters: main() configures the slip fixes, but D9's
@@ -284,6 +319,8 @@ def make_execute_fn(their_env, cfg: EpisodeConfig):
                 cfg.out['gates'] = gate_hooks.gate_record()
         finally:
             os.chdir(cwd)
+            if observer is not None:
+                observer.uninstall()
             gate_hooks.uninstall()
             world_eye.disable()
             telemetry.disable()

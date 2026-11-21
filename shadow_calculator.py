@@ -51,7 +51,44 @@ class ShadowCalculator:
         
         self.table_x_min, self.table_x_max = table_x_range
         self.table_y_min, self.table_y_max = table_y_range
-    
+        # Path 9 (PLAN 11.12): the longest side in x and y a returned fragment
+        # may have.  None (the default): the fragments are returned as they
+        # are.  A look mode sets it to observe_views.look_cell_side(), because
+        # a look can only be planned for a region one arm-camera image holds.
+        self.max_fragment_side: Optional[float] = None
+
+    def _cap_fragments(self, fragments: List[BoxelData]) -> List[BoxelData]:
+        """Cut every fragment longer than max_fragment_side in x or y into
+        equal cells no longer than it (x outer, y inner, so the order and
+        with it the fragments' names replay); z, the type and the parent
+        stay.  With no cap the list itself is returned."""
+        cap = self.max_fragment_side
+        if cap is None:
+            return fragments
+        out: List[BoxelData] = []
+        for fr in fragments:
+            lo = np.asarray(fr.min_corner, dtype=float)
+            hi = np.asarray(fr.max_corner, dtype=float)
+            nx = max(1, int(np.ceil((hi[0] - lo[0]) / cap - 1e-9)))
+            ny = max(1, int(np.ceil((hi[1] - lo[1]) / cap - 1e-9)))
+            if nx == 1 and ny == 1:
+                out.append(fr)
+                continue
+            xs = np.linspace(lo[0], hi[0], nx + 1)
+            ys = np.linspace(lo[1], hi[1], ny + 1)
+            for i in range(nx):
+                for j in range(ny):
+                    out.append(BoxelData(
+                        boxel_type=fr.boxel_type,
+                        min_corner=np.array([xs[i], ys[j], lo[2]]),
+                        max_corner=np.array([xs[i + 1], ys[j + 1], hi[2]]),
+                        created_by_object=fr.created_by_object,
+                        created_by_boxel_id=fr.created_by_boxel_id,
+                        on_surface=fr.on_surface,
+                        surface_z=fr.surface_z,
+                    ))
+        return out
+
     def calculate_shadow_boxel(self, obj_boxel: BoxelData,
                                obstacles: List[BoxelData],
                                physics_client: Optional[int] = None) -> List[BoxelData]:
@@ -323,8 +360,8 @@ class ShadowCalculator:
                 else:
                     next_active.append(shadow)
             active_shadows = next_active
-            
-        return active_shadows
+
+        return self._cap_fragments(active_shadows)
 
     def _check_aabb_intersection(self, b1: BoxelData, b2: BoxelData) -> bool:
         """True only when the two boxels overlap by more than

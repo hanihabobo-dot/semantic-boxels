@@ -1,0 +1,186 @@
+#!/bin/bash
+#SBATCH --job-name=p4-cu
+#SBATCH --partition=rleap_cpu
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=24G
+#SBATCH --time=12:00:00
+#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Q42: TAMPURA (arm T) on its own task class_uncertain, seeds 0 to 19, for path 7's table.
+# PREPARED, NOT RUN: no job of this script may be submitted before Hani's yes to the cluster
+# question, asked alone by the coordinator (tracks/eval/RUN_SHEET.md).
+# One job per group of seeds, each pinned to a node of its own (-w), 8 CPUs and 24 GB as
+# find_dice's jobs (gen_eval.sbatch), so the node's load is the job's own.  Every episode is one
+# process: their run_planner.py through tools/cluster/cu_t.py (their file run as it is, one read
+# of their world after their rollout), started by tools/cu_eval.py in THEIR venv from a scratch
+# directory of its own on the node's disk.  Their tree on $W is read, never written: the files
+# an episode reads are hashed before the first and after the last episode, and a difference is
+# printed as TREE CHANGED.
+# P4_LOCAL=1 (as BF#63's second run): the job's folder is on the node's own disk (P4_LOCAL_DIR,
+# default /tmp) for the whole run and becomes one tarball, OUT.tar.gz, on $W at the end; the
+# I/O probe of gen_eval.sbatch runs in both modes (OUT/io_probe.tsv).
+# After arm T's episodes, on the same node: the other arms of path 7's table on the job's own
+# seeds, once each (worker S's sheet, tracks/modes/CLUSTER_SHEET_CU.md section 1): A1 (our
+# planner with value boxels on their perception and controllers, cu_boxels.py), A0 (path 2's
+# control, cu_a0.py) and R (their random policy in THEIR venv, cu_rand.py), through worker S's
+# own run_sb.sh and run_cr.sh of the snapshot, one process per episode, minutes in all; rows in
+# OUT/S/.  They need the seeds as one range A-B.  The snapshot must hold tasks_probe/
+# (track/tasks cfd03fa or later, merged before the freeze): arm T needs tasks_probe/cu_rand.py
+# for the world-state test and the job stops before the first episode without it.
+# Usage (from cn-04, after tools/cluster/push_snapshot.ps1 -CodeOnly):
+#   sbatch -w cn-1xx --export=ALL,P4_LOCAL=1 $W/sb_<sha>/tools/cluster/cu_eval.sbatch sb_<sha> 0-4 3 [OUT]
+#   arguments: snapshot, seeds, repetitions (default 3), OUT (optional: a results directory shared
+#   by the jobs; each job writes OUT/<job id>, or with P4_LOCAL=1 OUT/<job id>.tar.gz; count them
+#   together with tools/cu_eval.py --report <the job folders>).
+#   CU_CAP (s, default 3600): the wall cap of one arm T episode.  CU_HASHSEED (default episode:
+#   1000 * seed + repetition + 1 per arm T episode, recorded in its row; or a number for all, or
+#   unset).  CU_ARMS (default T,S; T or S alone for a final pass).  CU_DRY=1: print the episodes
+#   and their commands, run nothing.
+set -uo pipefail
+W=${P4_WORK:-/work/rleap1/hani.alassiri.alhabboub/p4}
+SB=$W/${1:?snapshot dir, e.g. sb_1234567}
+SEEDS=${2:?seeds, e.g. 0-4}
+REPS=${3:-3}
+JOB=${SLURM_JOB_ID:-local}
+OUTBASE=${4:--}
+[ "$OUTBASE" = - ] && OUTBASE=$W/results/cu_${SB##*/sb_}
+OUT=$OUTBASE/$JOB
+TW=$W/tampura-work
+VA=$W/armO-venvA/bin
+CAP=${CU_CAP:-3600}
+HASHSEED=${CU_HASHSEED:-episode}
+ARMS=${CU_ARMS:-T,S}
+case "$ARMS" in T,S|T|S) ;; *) echo "CU_ARMS must be T,S or T or S: nothing run"; exit 1 ;; esac
+P4_LOCAL=${P4_LOCAL:-0}
+LD=${P4_LOCAL_DIR:-/tmp}
+FINAL=$OUT
+if [ "${CU_DRY:-0}" = 1 ]; then
+  $VA/python -u $SB/tools/cu_eval.py --snapshot $SB --out $OUT --seeds $SEEDS --reps $REPS --cap $CAP \
+    --venv-t $TW/.venv --tampura-work $TW --scratch $LD --hashseed $HASHSEED --dry-run
+  DRC=$?
+  echo "arms $ARMS; worker S's arms after arm T: run_sb.sh a1 ep_run.py cu cu_boxels.py, run_sb.sh a0 ep_run.py cu cu_a0.py, run_cr.sh, each on seeds $SEEDS once, rows in OUT/S/"
+  exit $DRC
+fi
+if [ "$P4_LOCAL" = 1 ]; then
+  OUT=$LD/p4cu_$JOB
+  if [ -e $FINAL ] || [ -e $FINAL.tar.gz ] || [ -e $OUT ]; then
+    echo "P4_LOCAL: $FINAL, $FINAL.tar.gz or $OUT exists already: nothing run"; exit 1
+  fi
+  FREE=$(df -Pk $LD | awk 'NR == 2 {print $4}')
+  if [ "${FREE:-0}" -lt 1048576 ]; then
+    echo "P4_LOCAL: under 1 GiB free on $LD: nothing run"; df -h $LD; exit 1
+  fi
+fi
+mkdir -p $OUT || { echo "cannot make $OUT: nothing run"; exit 1; }
+# The probe: one row every 20 s while OUT/.probe_on exists, in seconds: to open a file on $W, to
+# write 4 kB with fsync there, and the same locally (gen_eval.sbatch's, unchanged).
+io_probe() {
+  local f=$W/inbox/.io_$JOB g=$LD/.io_$JOB t a b c d i
+  printf 'time\tw_open_s\tw_write_fsync_s\tlocal_write_fsync_s\n' > $OUT/io_probe.tsv
+  while [ -e $OUT/.probe_on ]; do
+    t=$(date '+%F %T'); a=$(date +%s.%N)
+    head -c 64 $SB/tools/cu_eval.py > /dev/null
+    b=$(date +%s.%N)
+    dd if=/dev/zero of=$f bs=4k count=1 conv=fsync status=none; rm -f $f
+    c=$(date +%s.%N)
+    dd if=/dev/zero of=$g bs=4k count=1 conv=fsync status=none; rm -f $g
+    d=$(date +%s.%N)
+    awk -v t="$t" -v a=$a -v b=$b -v c=$c -v d=$d \
+      'BEGIN { printf "%s\t%.3f\t%.3f\t%.3f\n", t, b - a, c - b, d - c }' >> $OUT/io_probe.tsv
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+      [ -e $OUT/.probe_on ] || break
+      sleep 1
+    done
+  done
+}
+PROBE=
+FINISHED=0
+# Once, on every way out: the probe ends its row and stops (ended only if stuck past 10 s); with
+# P4_LOCAL=1 the folder becomes OUT.tar.gz on $W.
+finish() {
+  [ $FINISHED = 1 ] && return
+  FINISHED=1
+  rm -f $OUT/.probe_on
+  if [ -n "$PROBE" ]; then
+    ( sleep 10; kill $PROBE 2>/dev/null ) &
+    local dog=$!
+    wait $PROBE 2>/dev/null
+    kill $dog 2>/dev/null
+    wait $dog 2>/dev/null
+  fi
+  rm -f $W/inbox/.io_$JOB $LD/.io_$JOB
+  if [ "$P4_LOCAL" = 1 ]; then
+    mkdir -p ${FINAL%/*}
+    if tar -czf $FINAL.tar.gz -C $OUT .; then
+      echo "results in $FINAL.tar.gz ($(du -h $FINAL.tar.gz | cut -f1)), $OUT removed"
+      rm -rf $OUT
+    else
+      echo "P4_LOCAL: writing $FINAL.tar.gz FAILED; the results stay in $OUT on $(hostname)"
+    fi
+  else
+    echo "results in $OUT"
+  fi
+}
+trap finish EXIT
+trap 'exit 143' TERM
+touch $OUT/.probe_on
+io_probe &
+PROBE=$!
+[ "$P4_LOCAL" = 1 ] && echo "P4_LOCAL: the job's folder is $OUT on $(hostname) ($(df -h $LD | awk 'NR == 2 {print $4}') free), then $FINAL.tar.gz"
+echo "host $(hostname)  job ${SLURM_JOB_ID:-none}  $(date -Is)  snapshot $SB  seeds $SEEDS  reps $REPS  cap $CAP s  hash seed $HASHSEED  out $OUT"
+grep -m1 'model name' /proc/cpuinfo
+# rule 16 (PLAN section 17): the memory at the start, the kind of file system under $LD (tmpfs is RAM) and the job's --mem
+echo "memory at the start: $(awk '/^(MemTotal|MemAvailable):/ {printf "%s %s kB  ", $1, $2}' /proc/meminfo)local fs $LD $(df -PT $LD | awk 'NR == 2 {print $2}') (tmpfs is RAM), Slurm --mem ${SLURM_MEM_PER_NODE:-?} MB" | tee -a $OUT/memory_lines.txt
+# Their tree, as the episodes read it: one hash over the files of their two packages, their
+# driver and their configs.  The same list after the last episode must give the same hash.
+tree_hash() {
+  ( cd $TW && find tampura/tampura tampura_environments/tampura_environments tampura_environments/env_configs \
+      tampura_environments/run_planner.py -type f \( -name '*.py' -o -name '*.yml' -o -name '*.json' -o -name '*.pddl' \) \
+      -print0 | sort -z | xargs -0 sha256sum ) > $OUT/$1
+  echo "$(sha256sum < $OUT/$1 | cut -d' ' -f1)  $(wc -l < $OUT/$1) files"
+}
+TREE_BEFORE=$(tree_hash tree_before.txt)
+echo "their tree before: $TREE_BEFORE"
+$TW/.venv/bin/python -m pip freeze > $OUT/pip_freeze_t.txt 2>&1 || echo "pip freeze of their venv failed (recorded, not a stop)"
+HRC=0
+if [ "$ARMS" != S ]; then
+  $VA/python -u $SB/tools/cu_eval.py --snapshot $SB --out $OUT --seeds $SEEDS --reps $REPS --cap $CAP \
+    --venv-t $TW/.venv --tampura-work $TW --scratch $LD --hashseed $HASHSEED
+  HRC=$?
+  echo "harness rc $HRC"
+fi
+# rule 16: exit code 4 is memwatch's stop (MemAvailable under 4 GB after an episode, STOPPED_LOW_MEMORY.txt in OUT)
+[ $HRC = 4 ] && echo "STOPPED_LOW_MEMORY: the harness stopped on MemAvailable under 4 GB (rc 4), see $OUT/STOPPED_LOW_MEMORY.txt"
+# Worker S's arms on the job's own seeds, same node, after arm T (CLUSTER_SHEET_CU.md section 1, its
+# lines unchanged; in a subshell, so that its settings reach nothing else).  Not after a memory stop.
+if [ "$ARMS" != T ] && [ $HRC != 4 ]; then
+  if ! echo "$SEEDS" | grep -Eq '^[0-9]+-[0-9]+$'; then
+    echo "worker S's arms need the seeds as one range A-B ($SEEDS is not): NOT RUN"
+  elif [ ! -f $SB/tasks_probe/run_sb.sh ] || [ ! -f $SB/tasks_probe/run_cr.sh ]; then
+    echo "the snapshot has no tasks_probe/run_sb.sh or run_cr.sh: worker S's arms NOT RUN"
+  else
+    (
+      S_FIRST=${SEEDS%-*}; S_LAST=${SEEDS#*-}; S_N=$((S_LAST - S_FIRST + 1))
+      export SB_LOCK_HELD=1 TAMPURA_WORK=$TW SB_PDDLSTREAM_LIB=$W/pddlstream_lib SB_VENV_O=$W/armO-venvA
+      export SB_SCRATCH=$LD/p4cu_s_$JOB PROBE_TIMEOUT=3600
+      mkdir -p $OUT/S
+      bash $SB/tasks_probe/run_sb.sh a1 ep_run.py cu cu_boxels.py $S_FIRST $S_N $OUT/S/a1.jsonl; echo "A1 rc $?"
+      bash $SB/tasks_probe/run_sb.sh a0 ep_run.py cu cu_a0.py $S_FIRST $S_N $OUT/S/a0.jsonl; echo "A0 rc $?"
+      bash $SB/tasks_probe/run_cr.sh $S_FIRST $S_N $OUT/S/rand.jsonl; echo "R rc $?"
+      rm -rf $LD/p4cu_s_$JOB
+    )
+  fi
+fi
+TREE_AFTER=$(tree_hash tree_after.txt)
+if [ "$TREE_AFTER" = "$TREE_BEFORE" ]; then
+  echo "their tree after: unchanged ($TREE_AFTER)"
+else
+  echo "TREE CHANGED: before $TREE_BEFORE, after $TREE_AFTER (diff $OUT/tree_before.txt $OUT/tree_after.txt)"
+fi
+# rule 16: after the job nothing of ours alive and nothing in /dev/shm (counted here; a stray is reported, never
+# ended by name)
+echo "memory after the job: $(ps -u "$(id -un)" -o pid,args | grep -E 'cu_t\.py|run_planner|symk|downward' | grep -vc grep) planner processes of ours alive, $(ls /dev/shm | wc -l) names in /dev/shm, MemAvailable $(awk '/^MemAvailable:/ {print $2}' /proc/meminfo) kB" | tee -a $OUT/memory_lines.txt
+finish
+# BF#49: the cluster's data hygiene after every run.
+bash $SB/tools/cluster/prune_work.sh --apply || echo "prune_work rc $?"
+echo CU_DONE

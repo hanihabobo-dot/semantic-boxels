@@ -1,4 +1,4 @@
-% !TEX root = ../main.tex
+% !TEX root = ../long.tex
 
 \chapter{The Comparison with TAMPURA}
 \label{ch:comparison}
@@ -69,11 +69,13 @@ TAMPURA on the same seeds, three repetitions each. With the four chosen switches
 our pipeline held the die in 60 of 60 carries and solved 60 of 60 episodes, and a
 second job replicated this; the same pipeline without the switches solved 168 of
 240, and TAMPURA 40 of 60 (13, 14 and 13 per repetition; one crash, which the entry
-calls censored but which sits inside the 60) (\BF{59}). The entry says that these seeds load only three scenes, that TAMPURA runs
+calls censored but which sits inside the 60 and counts as a failure) (\BF{59}). The entry says that these seeds load only three scenes, that TAMPURA runs
 PyBullet's 50 solver iterations against our 200, and that the comparison is
-planner against planner, each in its own simulation (\BF{59}). Later entries pair
-the 59 valid TAMPURA episodes with ours: both succeed in 40, only ours in 19, only
-TAMPURA in none (\BF{63}). These results hold for the three shipped layouts only.
+planner against planner, each in its own simulation (\BF{59}). Paired with ours,
+TAMPURA's 60 episodes give: both succeed in 40, only ours in 20, only TAMPURA in none,
+the crash counted as a failure (\BF{63}, \ID{review}{code review}). These results hold
+for the three shipped layouts only. \validitynote{failures (1 of 60)}
+% (unchanged by the 14 November rule: 40 of 60 counts the crash as a failure)
 
 \section{Forty Generated Scenes}
 \label{sec:generated}
@@ -90,15 +92,16 @@ approved each cluster run on its own (\BF{63}). \Cref{tab:bf63} gives the result
 \begin{table}[tbp]
 \centering
 \small
-\begin{tabularx}{\textwidth}{@{}lYYYl@{}}
+\begin{tabularx}{\textwidth}{@{}P{2.6cm}YYYP{1.9cm}@{}}
 \toprule
  & ours & TAMPURA & pairs: both, only ours, only TAMPURA, neither & exact McNemar $p$ \\
 \midrule
-run 1 & 57 of 80 (0.71; 0.61 to 0.80) & 36 of 78 (0.46; 0.36 to 0.57) & 30, 25, 6, 17 & 0.00088 \\
-run 2 & 57 of 80 (0.71; 0.61 to 0.80) & 46 of 76 (0.61; 0.49 to 0.71) & 37, 18, 9, 12 & 0.12 \\
-run 2, repetition 0 only & & & 18, 9, 5, 6 & 0.42 \\
-run 2, repetition 1 only & & & 19, 9, 4, 6 & 0.27 \\
-run 2, TAMPURA's 20-step budget applied to ours & & & only ours 17, only TAMPURA 10 & 0.248 \\
+% RUN1: first attempts only, a crash is a failure, a rerun never counts (Hani, 14 Nov about 08:22)
+run 1 & 56 of 80 (0.70; 0.59 to 0.79); 1 hung & 31 of 80 (0.39; 0.29 to 0.50); 7 crashed & 25, 31, 6, 18 & 0.00004 \\
+run 2 & 57 of 80 (0.71; 0.61 to 0.80) & 46 of 80 (0.58; 0.47 to 0.68); 4 crashed & 37, 20, 9, 14 & 0.061 \\
+run 2, repetition 0 only & & & 18, 10, 5, 7 & 0.30 \\
+run 2, repetition 1 only & & & 19, 10, 4, 7 & 0.18 \\
+run 2, TAMPURA's 20-step budget applied to ours & & & 36, 19, 10, 15 & 0.136 \\
 \bottomrule
 \end{tabularx}
 \caption[Ours against TAMPURA on 40 generated \fdice\ scenes: successes, Wilson
@@ -106,32 +109,45 @@ intervals and exact McNemar tests.]{Ours against TAMPURA on 40 generated \fdice\
 scenes, with the Wilson
 interval of a success rate in brackets. Run 1 includes a one-hour slowdown of the
 cluster that hit TAMPURA's timeouts (\Cref{sec:generated}); run 2 was declared as
-the deciding run before it ran (\BF{63}, \BF{68}). Four TAMPURA runs of run 2
-crashed in TAMPURA's own code on two scenes and are left out of the pairs, which
-is why TAMPURA has 76 counted episodes (\BF{63}).}
+the deciding run before it ran (\BF{63}, \BF{68}). Every row counts the first attempt
+of each of the 80 episodes, as Hani decided on 14 November: a crash is a failure and a
+rerun never counts. In run 1 seven TAMPURA episodes crashed in TAMPURA's own code and
+one of ours hung at its start; in run 2 four TAMPURA episodes crashed, on two scenes.
+The run's declared rule had left crashed episodes out; the numbers here are recounted
+from the run's records (\BF{63}, \ID{recount}{recount of 14 November}). \validitynote{failures (7 of
+80 in run 1, 4 of 80 in run 2)}}
 \label{tab:bf63}
 \end{table}
 
-\paragraph{Run 1 and the slow hour.} In run 1 ours won 25 pairs to 6 and the test
-gave $p = 0.00088$. The entry first read the slowdown of TAMPURA as busy nodes, and
+% RUN1: first attempts only, a crash is a failure, a rerun never counts (Hani, 14 Nov about 08:22)
+\paragraph{Run 1 and the slow hour.} In run 1, counting the first attempt of every
+episode, ours won 31 pairs to 6 and the test gave $p = 0.00004$; seven TAMPURA
+episodes crashed and one of ours hung at its start, each counted as a failure. The
+entry first read the slowdown of TAMPURA as busy nodes, and
 corrected this on 4 November: it was one hour, from about 21:00 to 22:00, on every
 node at once. Our planning calls ran 15 to 24 times slower while execution steps
 kept their speed, because planning writes its files on a network volume; all 14 of
 TAMPURA's timeouts began between 21:00 and 21:44. Split after the fact by that hour,
-the 45 pairs outside it read 31 of 45 for ours against 25 of 45 for TAMPURA with
-$p = 0.21$, and the 33 pairs inside it 24 of 33 against 11 of 33 with $p = 0.00098$
-(\BF{63}). The entry's rule: run 1 is cited with its slow hour or not at all.
+on the first attempts: outside the slow hour, 47 pairs, ours 33 of 47, TAMPURA 21 of 47
+(6 crashed), 16 to 4, $p = 0.012$; inside it, 33 pairs, ours 23 of 33 (1 hung), TAMPURA
+10 of 33 (1 crashed), 15 to 2, $p = 0.0023$. Ours leads in and out of the slow hour
+(\BF{63}, \ID{recount}{recount of 14 November}). The entry's earlier reading, $p = 0.21$
+outside the hour, counted the reruns of four crashed TAMPURA first attempts there as
+successes and left out the two pairs of scene 138, on which TAMPURA crashed twice. The
+entry's rule: run 1 is cited with its slow hour or not at all.
 
 \paragraph{Run 2 decides.} Run 2 repeated the 40 scenes with the changes declared
 in advance (each job's files on the node's own disk, and a probe that logs the
-volume's latency). Ours solved 57 of 80 again, TAMPURA 46 of 76, the pairs split 18
-to 9 and the exact test gave $p = 0.12$; each repetition alone gave 0.42 and 0.27
-(\BF{63}). The entry notes that in run 2 the two repetitions of a scene are close
-to one draw (TAMPURA's outcome was the same in both repetitions on 38 of 38 scenes),
-so the 76 pairs carry about the information of 38 and the per-repetition values are
-the fairer reading (\BF{63}). Counting our episodes under TAMPURA's 20-step budget,
-which our arm did not have, moves the pairs to 17 against 10 with $p = 0.248$
-(\BF{68}). Ours is ahead; the lead is not significant.
+volume's latency). Ours solved 57 of 80 again and TAMPURA 46 of 80, four of its
+episodes crashed; the pairs split 20 to 9 and the exact test gave $p = 0.061$; each
+repetition alone gave 0.30 and 0.18 (\BF{63}, \ID{recount}{recount of 14 November}).
+The entry notes that in run 2 the two repetitions of a scene are close to one draw
+(TAMPURA's outcome was the same in both repetitions on every scene), so the 80 pairs
+carry about the information of 40 and the per-repetition values are the fairer reading
+(\BF{63}). Counting our episodes under TAMPURA's 20-step budget, which our arm did not
+have, moves the pairs to 19 against 10 with $p = 0.136$ (\BF{68}, \ID{recount}{recount
+of 14 November}). Ours is ahead; the lead is not significant. \validitynote{failures (4
+of 80)}
 
 \paragraph{By number of cups.} \Cref{fig:cups} shows that the lead lies in the
 scenes with four and five cups (23 of 32 against 14 of 32, described and not
@@ -146,25 +162,24 @@ level (\BF{63}).
   width=0.95\textwidth, height=6.4cm,
   ymin=0, ymax=125,
   ytick={0,25,50,75,100},
-  ylabel={successes of counted episodes (\%)},
+  ylabel={successes (\%)},
   xlabel={cups in the scene},
   symbolic x coords={1,2,3,4,5},
   xtick=data,
   enlarge x limits=0.14,
   legend style={at={(0.5,1.03)}, anchor=south, legend columns=2, font=\small, draw=none},
-  nodes near coords, point meta=explicit symbolic,
-  nodes near coords style={font=\scriptsize, rotate=90, anchor=west},
   ymajorgrids, grid style={black!15},
 ]
-\addplot[fill=blue!55!black, draw=none] coordinates {(1,100) [14/14] (2,55.6) [10/18] (3,62.5) [10/16] (4,75) [12/16] (5,68.8) [11/16]};
-\addplot[fill=orange!85!black, draw=none] coordinates {(1,100) [12/12] (2,62.5) [10/16] (3,62.5) [10/16] (4,37.5) [6/16] (5,50) [8/16]};
+\addplot[fill=blue!55!black, draw=none] coordinates {(1,100) (2,55.6) (3,62.5) (4,75) (5,68.8)};
+\addplot[fill=orange!85!black, draw=none] coordinates {(1,85.7) (2,55.6) (3,62.5) (4,37.5) (5,50)};
 \legend{ours, TAMPURA}
 \end{axis}
 \end{tikzpicture}
 \caption[Run 2 of the generated-scene comparison by number of cups.]{Run 2 of the
 generated-scene comparison by number of cups (7, 9, 8, 8
-and 8 scenes; two repetitions each): successes of counted episodes for ours and
-for TAMPURA, with the counts above the bars (\BF{63}).}
+and 8 scenes; two repetitions each): successes of all 80 episodes for ours and for
+TAMPURA, the first attempt of each (\BF{63},
+\ID{recount}{recount of 14 November}). \validitynote{failures (4 of 80)}}
 \label{fig:cups}
 \end{figure}
 
@@ -184,8 +199,8 @@ success rate of at least $r$, which is how the thesis reads 0.63.
 \toprule
 quantity & published \cite{curtis2024partially} & our run & check \\
 \midrule
-TAMPURA, discounted return ($\gamma = 0.98$) & 0.63 $\pm$ 0.07 (Table I, task C, $N = 20$) & 0.530 over the 76 counted TAMPURA episodes of run 2 (\ID{bf63step}{step-count file}) & 0.10 below; 1.4 standard errors of the published value. Reproduced within error; scenes differ (generated, 1 to 5 cups, against the paper's unpublished set) \\
-TAMPURA, success rate & at least 63\,\% implied & 11 of 20 (thesis laptop run); 13 of 20 (cluster, \BF{9}); 40 of 60 (\BF{59}); 46 of 76, 0.61 (\BF{63}) & 0.63 lies inside the Wilson interval of each run \\
+TAMPURA, discounted return ($\gamma = 0.98$) & 0.63 $\pm$ 0.07 (Table I, task C, $N = 20$) & 0.504 over all 80 TAMPURA episodes of run 2, the four crashed ones as failures (\ID{bf63step}{step-count file}, \ID{recount}{recount of 14 November}) & 0.13 below, 1.8 standard errors of the published value. Reproduced within error; scenes differ (generated, 1 to 5 cups, against the paper's unpublished set) \\
+TAMPURA, success rate & at least 63\,\% implied & 11 of 20 (thesis laptop run); 13 of 20, 1 crashed (cluster, \BF{9}); 40 of 60, 1 crashed (\BF{59}); 46 of 80, 0.58, 4 crashed (\BF{63}) & 0.63 lies inside the Wilson interval of each run \\
 TAMPURA, actions to the first reward of 1 & 5.40 $\pm$ 2.33 executed steps (Table III) & mean 6.61, median 5, 46 successes (\ID{bf63step}{step-count file}) & 1.2 above the published mean, about half of the $\pm$ the paper prints for it (it does not say what that $\pm$ is) \\
 TAMPURA, time & 57 $\pm$ 38 s per step (Table II, task C), run on an Intel Xeon Gold 6248; the product with 5.40 steps is about 308 s per episode (our arithmetic) & loop time of a successful episode: median 98.9\,s (\BF{63}, cluster); mean 115.4\,s over 13 successes (\BF{9}); 166 $\pm$ 85\,s (thesis laptop, \PW{4}) & TAMPURA's time in our runs is shorter than the product; machines, scenes and the paper's step definition differ; no cause established \\
 \bottomrule
@@ -200,11 +215,12 @@ own pipeline the paper publishes no number; it was not part of the paper.}
 \end{table}
 
 The check has three results. First, our runs of TAMPURA reproduce its published
-reliability: the success rates of 0.55 to 0.67 across four independent runs
-(the thesis run, the cluster run, the die-slip campaign and run 2 of the generated
-scenes; run 1 of the generated scenes, 0.46, is left out because of its slow hour)
-bracket the 0.63 that the return implies, and the return of 0.530 on generated
-scenes is within 1.4 standard errors of the published 0.63. Second, the number of
+reliability: the success rates of 0.55 to 0.67 across four independent runs, with
+crashed episodes as failures (the thesis run, the cluster run, the die-slip campaign
+and run 2 of the generated scenes; run 1 of the generated scenes, 0.39 over the first
+attempts, is left out because of its slow hour) bracket the 0.63 that the return
+implies, and the return of 0.504 on generated scenes is within 1.8 standard errors of
+the published 0.63. Second, the number of
 actions to success is somewhat higher in our runs. Third, TAMPURA's time per
 episode in our runs is lower than the product of the published per-step time and
 step count, which the thesis had also found for its per-step figure; hardware
@@ -219,8 +235,8 @@ pre-registered number (\ID{bf63step}{step-count file}).
 \label{sec:why-fail}
 
 Our failures on the generated scenes are one mode. The pipeline fails on 23
-counted episodes in both runs, in the same 12 scenes and with no lost die; in run
-1, 17 end with ``all shadows searched, target not found'' while the die lay under
+episodes in each run, in the same 12 scenes and with no lost die (run 1 also on a hang
+at the start of scene 136, which counts as a failure); in run 1, 17 end with ``all shadows searched, target not found'' while the die lay under
 a cup that held no registered shadow (\BF{63}). The reason is a property of the
 representation. Our hiding regions are the space behind an object as the camera
 sees it, never the space under it, because every shadow starts at its caster's back
@@ -238,7 +254,7 @@ runs that ended with all shadows searched, the shadow behind the cup was clipped
 window in which the pipeline plans free space; the fix for this (\BF{64}) is
 checked on path 3's fixes branch and waits for Go's merge (\TK{3}), and the numbers of
 the evaluation stand for the code they measured. In local reruns with that fix, 6 of the
-12 scenes succeed and 6 still fail: one because the shadow was a 2.3\,cm sliver
+12 scenes succeed and 6 still fail (one of them, scene 124, at the 900\,s cap): one because the shadow was a 2.3\,cm sliver
 seen empty, two because the reach gate refuses a shadow centre 0.826\,m and 0.845
 to 0.853\,m from the base while the dice lie at 0.761\,m and 0.774\,m, one because
 the die lay tilted 71 degrees inside a cup and only 6 pixels were visible, and two
@@ -256,9 +272,10 @@ unchanged into the scenes that our system builds, with glue code only, a timer
 the only change to TAMPURA, and our fixed camera as its eye (\TK{5}). Both arms are
 scored by whether the target is held at the end in the arm's own executing world;
 TAMPURA's execution there is kinematic and noise-free, ours physical. On the ten
-seeds that build, ours solved 10 of 10 (Wilson interval 0.72 to 1.00) and
-TAMPURA 6 of 10 (0.31 to 0.83); the pairs split 4 to 0 and the exact test gave
-$p = 0.125$ (\TK{5}). TAMPURA's four failures: one place ended in a collision and
+seeds that build, ours solved 9 of 10 (Wilson interval 0.60 to 0.98), 1 crashed:
+the first start of seed 0 crashed on a bug of the harness and counts as a failure,
+although its rerun succeeded; TAMPURA solved 6 of 10 (0.31 to 0.83); the pairs split
+4 to 1 and the exact test gave $p = 0.375$ (\TK{5}, \ID{review}{code review}). TAMPURA's four failures: one place ended in a collision and
 left it holding an object, and three were look loops, in which it repeated one look
 17 to 20 times until its 20 steps were used, because our fixed camera gives its look
 action no new viewpoint (\TK{5}). The median wall time was 16.4\,s for ours against
@@ -273,7 +290,7 @@ making the version with the hand camera for every image, the first as well (opti
 C), the deliverable. Its batch started at 13:18 and ended at 13:48 under the stop
 order for WSL with two seeds done, seed 0 a success and seed 2 a failure; the other
 eight seeds wait for Hani's approval under rule 15, after the watch runs of
-\Cref{sec:visual-check} (\TK{5}).
+\Cref{sec:visual-check} (\TK{5}). \validitynote{failures (none crashed)}
 
 \section{What the Paper May and May Not Claim}
 \label{sec:claims}
@@ -281,10 +298,10 @@ eight seeds wait for Hani's approval under rule 15, after the watch runs of
 The audit file states the claim effect of each result, and the report repeats them
 as a short list.
 \begin{itemize}
-  \item On generated scenes ours is ahead of TAMPURA (57 of 80 against 46 of 76)
-  and the lead is not significant ($p = 0.12$); the paper reports the numbers with
-  the test and does not call ours better there (\BF{63}). Run 1 is cited with its
-  slow hour or not at all.
+  \item On generated scenes ours is ahead of TAMPURA (57 of 80 against 46 of 80, four
+  of TAMPURA's runs crashed, $p = 0.061$) and the lead is not significant; the paper
+  reports the numbers with the test and does not call ours better there (\BF{63}). Run 1
+  is cited with its slow hour or not at all. \validitynote{failures (4 of 80)}
   \item The shipped-scene result stands, scoped to the three shipped layouts
   (\BF{63}, \BF{59}).
   \item The paper must not credit the occlusion model with modelling where the die

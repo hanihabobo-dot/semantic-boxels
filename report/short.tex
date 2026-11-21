@@ -3,7 +3,7 @@
 
 % The 8-page version of the internal report (Hani's request of 2026-11-11; the request
 % and the plan: archive/tampura_bridge_plan_2026-10-25/tracks/report/short/REQUEST.md).
-% The full report stays in main.tex, untouched. This file shares resources/preamble.tex
+% The full report stays in long.tex, untouched. This file shares resources/preamble.tex
 % and overrides only the layout, here, so that the preamble itself is not edited.
 %
 % Second issue, 2026-11-13 (Hani: "or just update the thing", "make sure that the report
@@ -15,6 +15,13 @@
 % (part 1) and from PAPER_AUDIT.txt BF#71; the curves of run 3 are computed from
 % archive/tampura_bridge_plan_2026-10-25/bf/BF63_gen_scenes/eval3/52488*/results.jsonl
 % (the final row of each arm, scene and repetition, as bf63_run3.py picks them).
+%
+% Third issue, 2026-11-14 (Hani, "1-9: use r recommendation", points 1 and 2 of the code
+% review's section 8): the fixed validity note (\validitynote, resources/macros.tex) at every
+% place that sets our arm against TAMPURA; every number that compares arms counts both over
+% the same episodes, the first attempt of each, a crash as a failure, the number of crashed
+% runs named (Hani, 14 Nov about 08:22 and 08:51). The places: archive/tampura_bridge_plan_2026-10-25/tracks/report/
+% NOTES_PLACES.md. The second issue's PDF is versions/short_issue2_7p_2026-11-13.pdf.
 
 \input{resources/preamble}
 
@@ -113,9 +120,9 @@
 \begin{document}
 
 {\footnotesize\bfseries\color{darkgray}Internal Report\quad\textbullet\quad State of 13 November 2026\quad\textbullet\quad
-Short version; second issue (the first issue held the state of 8 November, Checkpoint 1)}\par
+Short version; third issue, 14 November: validity notes; crashes counted as failures}\par
 \vspace{1pt}
-{\LARGE\bfseries Semantic Boxels Since the Thesis: The State in Seven Pages}\par
+{\LARGE\bfseries Semantic Boxels Since the Thesis: The State in Eight Pages}\par
 \vspace{2pt}
 {\small State of 13 November 2026, 13:50\quad\textbullet\quad Hani Alassiri Alhabboub}\par
 \vspace{3pt}\hrule\vspace{4pt}
@@ -127,16 +134,17 @@ Six results carry the state of the work. Each is given with its limit, and \Cref
 what stands. The runs since Checkpoint 1 (8 November) were read from their result files; they have not yet been
 through the audit that the older runs went through.
 
-\paragraph{On TAMPURA's own task ours is ahead: 69 of 80 against 46 of 76.}
+\paragraph{On TAMPURA's own task ours is ahead: 69 of 80 against 46 of 80.}
 The 40 scenes from TAMPURA's generator ran a third time on the cluster on 12 November, with the fix for the
 clipped shadow in our arm and everything else as in run 2 (\BF{71}). Ours solved 69 of 80 episodes (run 2: 57),
-TAMPURA 46 of 76, and every one of its 76 episodes ended as in run 2. Of the 76 pairs 25 went to ours alone and 6
-to TAMPURA alone (exact McNemar $p = 0.0009$; each repetition alone $p = 0.021$ and $0.035$; with a scene as the
-unit 13 to 3, $p = 0.021$). Ours lost no die in 69 carries, as far as the pipeline notices a loss, and its median
-episode took 31\,s against 143\,s (\Cref{fig:run3}, \Cref{fig:run3b}, \Cref{fig:grid}).
-\emph{Limit:} the run checks one fix on the scenes on which its bug was found. Each arm is scored by its own end
-test, and drops are not counted. The paper's comparison is the run on 200 fresh scenes, planned for 21 to 24
-November.
+TAMPURA 46 of 80; four of its episodes crashed (scenes 127 and 138), and every one of its other 76 ended as in run
+2. Each episode counts once, its first attempt. Of the 80 pairs 29 went to ours alone and 6 to TAMPURA alone (exact
+McNemar $p = 0.00012$; each repetition alone $p = 0.0075$ and $0.013$; with a scene as the unit 15 to 3,
+$p = 0.0075$). Ours lost no die in 69 carries, as far as the pipeline notices a loss, and its median episode took
+31\,s against 151\,s (\Cref{fig:run3}, \Cref{fig:run3b}, \Cref{fig:grid}).
+\emph{Limit:} the run checks one fix on the scenes on which its bug was found, and drops are not counted. The
+paper's comparison is the run on 200 fresh scenes, planned for 21 to 24 November.
+\validitynote{failures (4 of 80)}
 
 \begin{figure}[H]
 \centering
@@ -147,18 +155,17 @@ November.
   ylabel={successes (\%)}, xlabel={cups in the scene},
   symbolic x coords={1,2,3,4,5}, xtick=data, enlarge x limits=0.14,
   legend style={at={(0.5,1.02)}, anchor=south, legend columns=3},
-  nodes near coords, point meta=explicit symbolic,
-  nodes near coords style={font=\scriptsize, rotate=90, anchor=west},
   ymajorgrids,
 ]
-\addplot[fill=cours!32, draw=none] coordinates {(1,100) [] (2,55.6) [] (3,62.5) [] (4,75) [] (5,68.8) []};
-\addplot[fill=cours, draw=none] coordinates {(1,100) [14/14] (2,88.9) [16/18] (3,75) [12/16] (4,100) [16/16] (5,68.8) [11/16]};
-\addplot[fill=ctamp, draw=none] coordinates {(1,100) [12/12] (2,62.5) [10/16] (3,62.5) [10/16] (4,37.5) [6/16] (5,50) [8/16]};
+\addplot[fill=cours!32, draw=none] coordinates {(1,100) (2,55.6) (3,62.5) (4,75) (5,68.8)};
+\addplot[fill=cours, draw=none] coordinates {(1,100) (2,88.9) (3,75) (4,100) (5,68.8)};
+\addplot[fill=ctamp, draw=none] coordinates {(1,85.7) (2,55.6) (3,62.5) (4,37.5) (5,50)};
 \legend{{ours, run 2},{ours, run 3},{TAMPURA}}
 \end{axis}
 \end{tikzpicture}
 \caption{Success by the number of cups (the thesis's plot of success against occluders, on TAMPURA's task). Pale: ours
-before the shadow fix.}
+before the shadow fix. TAMPURA's generator draws the number of cups at random: 7, 9, 8, 8 and 8 of the 40
+scenes, two repetitions each.}
 \end{subfigure}\hfill
 \begin{subfigure}[t]{0.33\linewidth}\centering
 \begin{tikzpicture}
@@ -170,11 +177,11 @@ before the shadow fix.}
   ymajorgrids, xmajorgrids,
 ]
 \addplot[cours, very thick, const plot] coordinates {(10,0) (15.6,1.2) (16.5,2.5) (16.6,3.8) (17.3,5.0) (17.5,6.2) (17.7,7.5) (17.7,8.8) (17.8,10.0) (17.9,11.2) (18.3,12.5) (18.4,13.8) (18.4,15.0) (18.5,16.2) (18.7,17.5) (18.7,18.8) (19.0,20.0) (19.3,21.2) (19.3,22.5) (19.4,23.8) (19.8,25.0) (20.4,26.2) (20.5,27.5) (20.8,28.8) (21.1,30.0) (23.5,31.2) (24.8,32.5) (24.8,33.8) (25.0,35.0) (25.4,36.2) (26.6,37.5) (27.0,38.8) (27.8,40.0) (29.2,41.2) (29.5,42.5) (30.2,43.8) (31.3,45.0) (31.4,46.2) (31.5,47.5) (31.9,48.8) (32.3,50.0) (32.8,51.2) (33.0,52.5) (33.3,53.8) (33.7,55.0) (33.8,56.2) (34.9,57.5) (35.9,58.8) (36.2,60.0) (36.2,61.2) (36.9,62.5) (38.5,63.8) (41.1,65.0) (43.1,66.2) (43.7,67.5) (46.6,68.8) (46.9,70.0) (47.0,71.2) (52.4,72.5) (52.5,73.8) (52.8,75.0) (53.1,76.2) (53.4,77.5) (56.2,78.8) (57.6,80.0) (65.1,81.2) (70.0,82.5) (104.1,83.8) (104.2,85.0) (436.3,86.2) (900,86.2)};
-\addplot[ctamp, very thick, const plot] coordinates {(10,0) (50.5,1.3) (51.8,2.6) (62.2,3.9) (62.6,5.3) (62.8,6.6) (64.4,7.9) (74.5,9.2) (74.6,10.5) (76.8,11.8) (80.8,13.2) (80.9,14.5) (81.4,15.8) (87.3,17.1) (87.7,18.4) (88.6,19.7) (90.1,21.1) (91.0,22.4) (93.7,23.7) (101.7,25.0) (101.9,26.3) (102.4,27.6) (103.0,28.9) (103.0,30.3) (103.7,31.6) (104.0,32.9) (105.6,34.2) (129.8,35.5) (129.9,36.8) (133.6,38.2) (136.7,39.5) (138.9,40.8) (139.5,42.1) (142.6,43.4) (145.1,44.7) (165.1,46.1) (167.3,47.4) (200.8,48.7) (201.0,50.0) (217.0,51.3) (222.0,52.6) (243.3,53.9) (245.0,55.3) (261.9,56.6) (270.9,57.9) (436.7,59.2) (447.7,60.5) (900,60.5)};
+\addplot[ctamp, very thick, const plot] coordinates {(10,0) (50.5,1.2) (51.8,2.5) (62.2,3.8) (62.6,5.0) (62.8,6.2) (64.4,7.5) (74.5,8.8) (74.6,10.0) (76.8,11.2) (80.8,12.5) (80.9,13.8) (81.4,15.0) (87.3,16.2) (87.7,17.5) (88.6,18.8) (90.1,20.0) (91.0,21.2) (93.7,22.5) (101.7,23.8) (101.9,25.0) (102.4,26.2) (103.0,27.5) (103.0,28.7) (103.7,30.0) (104.0,31.2) (105.6,32.5) (129.8,33.8) (129.9,35.0) (133.6,36.2) (136.7,37.5) (138.9,38.8) (139.5,40.0) (142.6,41.2) (145.1,42.5) (165.1,43.8) (167.3,45.0) (200.8,46.2) (201.0,47.5) (217.0,48.8) (222.0,50.0) (243.3,51.2) (245.0,52.5) (261.9,53.8) (270.9,55.0) (436.7,56.2) (447.7,57.5) (900,57.5)};
 \legend{ours, TAMPURA}
 \end{axis}
 \end{tikzpicture}
-\caption{Solved over time in run 3 (the thesis's plot of episodes solved against time): the share of counted
+\caption{Solved over time in run 3 (the thesis's plot of episodes solved against time): the share of all 80
 episodes solved within a wall time. The cap is 900\,s.}
 \end{subfigure}\hfill
 \begin{subfigure}[t]{0.30\linewidth}\centering
@@ -186,15 +193,15 @@ episodes solved within a wall time. The cap is 900\,s.}
   ymajorgrids,
 ]
 \addplot[cours, thick, mark=*, mark size=1.6pt] coordinates {(1,18.4) (2,20.1) (3,32.5) (4,36.0) (5,56.9)};
-\addplot[ctamp, thick, mark=square*, mark size=1.6pt] coordinates {(1,69.5) (2,129.8) (3,171.8) (4,162.8) (5,348.5)};
+\addplot[ctamp, thick, mark=square*, mark size=1.6pt] coordinates {(1,75.7) (2,130.5) (3,171.8) (4,162.8) (5,348.5)};
 \legend{ours, TAMPURA}
 \end{axis}
 \end{tikzpicture}
-\caption{Wall time of an episode by the number of cups, run 3, all counted episodes (the thesis's plot of time
-against occluders). Both arms ran on the same nodes.}
+\caption{Wall time of an episode by the number of cups, run 3, all 80 episodes, a crashed one with its time to the
+crash (the thesis's plot of time against occluders). Both arms ran on the same nodes.}
 \end{subfigure}
-\caption{Run 3 on the 40 generated \fdice\ scenes, two repetitions, on the cluster (\BF{71}). Success is each
-arm's own end test.}
+\caption{Run 3 on the 40 generated \fdice\ scenes, two repetitions, on the cluster (\BF{71}).
+\validitynote{failures (4 of 80)}}
 \label{fig:run3}
 \end{figure}
 
@@ -208,15 +215,15 @@ arm's own end test.}
   legend style={at={(0.5,1.04)}, anchor=south, legend columns=2},
   nodes near coords, nodes near coords style={font=\scriptsize},
 ]
-\addplot[fill=black!60, draw=none, every node near coord/.append style={text=white}] coordinates {(40,1) (37,2) (30,3)};
-\addplot[fill=cours, draw=none, every node near coord/.append style={text=white}] coordinates {(25,1) (18,2) (25,3)};
+\addplot[fill=black!60, draw=none, every node near coord/.append style={text=white}] coordinates {(40,1) (37,2) (25,3)};
+\addplot[fill=cours, draw=none, every node near coord/.append style={text=white}] coordinates {(29,1) (20,2) (31,3)};
 \addplot[fill=ctamp, draw=none, every node near coord/.append style={text=white}] coordinates {(6,1) (9,2) (6,3)};
-\addplot[fill=black!18, draw=none] coordinates {(5,1) (12,2) (17,3)};
+\addplot[fill=black!18, draw=none] coordinates {(5,1) (14,2) (18,3)};
 \legend{both, only ours, only TAMPURA, neither}
 \end{axis}
 \end{tikzpicture}
-\caption{The pairs of the three runs. Run 3: 25 to 6, $p = 0.0009$. Run 2: 18 to 9, $p = 0.12$. Run 1 holds a slow
-hour of the cluster and is no evidence.}
+\caption{The pairs of the three runs, first attempts, a crash a failure. Run 3: 29 to 6, $p = 0.00012$. Run 2: 20
+to 9, $p = 0.061$. Run 1: 31 to 6; it holds a slow hour of the cluster.}
 \end{subfigure}\hfill
 \begin{subfigure}[t]{0.33\linewidth}\centering
 \begin{tikzpicture}
@@ -254,7 +261,8 @@ every shadow searched; what is left are six scenes.}
 \caption{Where our arm's time goes in its 69 successes of run 3: the medians of planning and of execution. Over
 all 69: 3 planner calls and 14 steps.}
 \end{subfigure}
-\caption{The pairs, the failures of ours, and the time of ours on \fdice.}
+\caption{The pairs, the failures of ours, and the time of ours on \fdice. \validitynote{failures (7, 4 and 4 of 80
+in runs 1, 2 and 3)}}
 \label{fig:run3b}
 \end{figure}
 
@@ -284,24 +292,25 @@ all 69: 3 planner calls and 14 steps.}
 }
 \end{tikzpicture}
 \caption{Every one of the 40 scenes, by its number of cups; below each column the scene's number. A full cell: solved
-in both repetitions; pale: in one; crossed: in neither; c: crashed inside TAMPURA's code and not counted. TAMPURA's
-row is the same in run 2 and in run 3. Its 30 failed episodes end in a look repeated to the step limit (26), a
-repeated pick (2) or no action (2). The two systems fail on different scenes: only on 100 and 104 do both fail
-in both repetitions.}
+in both repetitions; pale: in one; crossed: in neither; c: crashed inside TAMPURA's code in both repetitions, a
+failure. TAMPURA's row is the same in run 2 and in run 3: 46 of 80. Of its 34 failed episodes 4 crashed, and the
+others end in a look repeated to the step limit (26), a repeated pick (2) or no action (2). The two systems fail
+on different scenes: only on 100 and 104 do both fail in both repetitions. \validitynote{failures (4 of 80, c)}}
 \label{fig:grid}
 \end{figure}
 
 \paragraph{On our own table the default slip fixes caused the dropped boxes.}
 The four slip fixes that keep the die in the hand on \fdice\ are on by default since 2 November. On our own
-scenes with tall boxes they do harm (TB-23). In 144 episodes on 16 seeds the box was lost on the way in 21 of 48
+scenes with tall boxes they do harm (TB-23). In 144 episodes on 16 seeds (of seeds 0 to 19, the scene generator
+builds none for 1, 8, 12 and 14) the box was lost on the way in 21 of 48
 episodes with today's defaults, in 3 of 48 without any slip fix and in 2 of 48 with the trapezoid speed profile
 added; paired by seed, defaults against none, 8 to 0 ($p = 0.008$). A test on 16 scenes that nobody had looked at,
-declared before its first run, gave the same: the defaults lose the box on 6 scenes and every other set on none
-($p = 0.031$ each). Over all 32 scenes the defaults lose it on 15, every other set on 1 at most ($p = 0.0001$),
-and their clean successes fall to 14 of 32 (\Cref{fig:drops}). The evidence points at one of the four, the force
-hold. With the trapezoid and the six carry switches of path 14, no box was dropped in 89 carries and no carried
-box touched the table or another body.
-\emph{Limit:} the laptop, our own table, one run per scene for most cells. None of these sets has run on \fdice,
+declared before its first run (4 more seeds build no scene), gave the same: the defaults lose the box on 6 scenes
+and every other set on none ($p = 0.031$ each). Over all 32 scenes the defaults lose it on 15, every other set on
+1 at most ($p = 0.0001$), and their clean successes fall to 14 of 32 (\Cref{fig:drops}). The evidence points at one
+of the four, the force hold. With the trapezoid and the six carry switches of path 14, no box was dropped in 89
+carries and no carried box touched the table or another body.
+\emph{Limit:} the laptop, our own table, the first run per scene. None of these sets has run on \fdice,
 where the defaults come from, so no default is changed yet.
 
 \paragraph{Without drops a dead end of the planner shows.}
@@ -309,8 +318,9 @@ Once no box is dropped, about one episode in ten ends with no plan while a regio
 on the new scenes, in every set of switches). The first plan sets the wrong occluder down in front of the other
 hidden region; the look behind it is empty, and too few free cells are left to clear the last region (TB-25).
 A planner flag that already exists removed it in two small paired sets on seeds where it had been seen: 30 of 31
-against 26 of 31, and 12 of 12 against 7 of 12 ($p = 0.06$), at no cost in planning time. On 14 new scenes, run
-on 13 November in 25 pairs, the flag changed no outcome: 23 of 25 succeed with it and 23 of 25 without. The dead
+against 26 of 31 ($p = 0.22$), and 12 of 12 against 7 of 12 ($p = 0.06$), at no cost in planning time. On 14 new
+scenes with two draws each, run on 13 November, the flag changed no outcome: 23 of 28 succeed with it and 23 of 28
+without (in each, 3 second draws did not run, stopped by the declared clock rule; 6 more seeds build no scene). The dead
 end showed on one scene without the flag, in both repetitions, and never with it; with the flag that scene
 still fails, after the arm strikes a box.
 \emph{Limit:} all three sets are small and none reaches 5\,\%; the flag was not tried on \fdice.
@@ -333,7 +343,7 @@ still fails, after the arm strikes a box.
 \addplot[fill=vrerun, draw=none] coordinates {(4.2,dtrap) [2/48] (6.3,none) [3/48] (43.8,dset) [21/48]};
 \end{axis}
 \end{tikzpicture}
-\caption{The A/B of TB-23: 16 seeds, three repetitions, 48 episodes per set.}
+\caption{The A/B of TB-23: 16 seeds, three repetitions, 48 episodes per set; 4 seeds build no scene.}
 \end{subfigure}\hfill
 \begin{subfigure}[t]{0.40\linewidth}\centering
 \begin{tikzpicture}
@@ -353,48 +363,53 @@ still fails, after the arm strikes a box.
 \legend{box lost, clean success, success}
 \end{axis}
 \end{tikzpicture}
-\caption{Four sets on 32 scenes, 16 of them new, one run per scene. A clean success has no drop and no collision in
-its record.}
+\caption{Four sets on 32 scenes, 16 of them new, the first run per scene; 8 of seeds 0 to 39 build no scene. A
+clean success has no drop and no collision in its record.}
 \end{subfigure}\hfill
 \begin{subfigure}[t]{0.26\linewidth}\centering
 \begin{tikzpicture}
 \begin{axis}[sb, ybar, bar width=7pt, width=\linewidth, height=4.6cm,
   ymin=0, ymax=135, ytick={0,25,50,75,100}, ylabel={successes (\%)},
   symbolic x coords={a,b,c}, xtick=data,
-  xticklabels={{31 pairs},{12 pairs},{25 new}},
+  xticklabels={{31 pairs},{12 pairs},{28 new}},
   enlarge x limits=0.28,
   legend style={at={(0.5,1.03)}, anchor=south, legend columns=1},
   nodes near coords, point meta=explicit symbolic,
   nodes near coords style={font=\scriptsize, rotate=90, anchor=west},
   ymajorgrids,
 ]
-\addplot[fill=cours, draw=none] coordinates {(a,96.8) [30/31] (b,100) [12/12] (c,92) [23/25]};
-\addplot[fill=cours!32, draw=none] coordinates {(a,83.9) [26/31] (b,58.3) [7/12] (c,92) [23/25]};
+\addplot[fill=cours, draw=none] coordinates {(a,96.8) [30/31] (b,100) [12/12] (c,82.1) [23/28]};
+\addplot[fill=cours!32, draw=none] coordinates {(a,83.9) [26/31] (b,58.3) [7/12] (c,82.1) [23/28]};
 \legend{{with the planner flag},{as it is}}
 \end{axis}
 \end{tikzpicture}
 \caption{The planner flag against the dead end (TB-25): the freeze candidate on 31 pairs, the four seeds on which
-the dead end was seen, and 25 pairs on 14 new scenes.}
+the dead end was seen, and 28 pairs on 14 new scenes, 3 of them not run.}
 \end{subfigure}
 \caption{Our own table, on the laptop: the dropped box and the planner's dead end. Ours against ours.}
 \label{fig:drops}
 \end{figure}
 
-\paragraph{TAMPURA's planner on our scenes: 10 of 10 against 6 and 4 of 10, and not yet a search test.}
+\paragraph{TAMPURA's planner on our scenes: 9 of 10 against 6 and 4 of 10, and not yet a search test.}
 The mirror ran again with TAMPURA's own hand camera for every image: TAMPURA solves 4 of 10 seeds, with our
-fixed camera 6 of 10, ours 10 of 10. The camera is not what stops it. From its hand camera TAMPURA sees the
+fixed camera 6 of 10, ours 9 of 10 (1 crashed: the first start of seed 0, on a bug of the harness). The camera
+is not what stops it. From its hand camera TAMPURA sees the
 target in the first image on 9 of 10 seeds, and its six failures are one pattern: a block beside the target
 blocks all four grasps that our glue gave it, all from above, and its planner repeats the same pick 20 times.
-Two changes are built and wait for Hani's decisions. Scenes that hide the target from the arm camera only build
-on 26 of 40 seeds; TAMPURA's first image shows the target on none of the 26, our fixed camera on 25. And with 24
-tilted grasps added to the four, a grasp passes on all 6 scenes that TAMPURA failed (\Cref{fig:mirror}).
-\emph{Limit:} TAMPURA's execution is kinematic, and our 10 of 10 ran before drops were counted. The mirror
-enters the paper only if it is fair by 20 November.
+Two changes are built and wait for Hani's decisions. Scenes that hide the target from the arm camera build on 26
+of 40 seeds (14 build no scene); a probe of the first image, no episode, finds the target in TAMPURA's hand camera
+on none of the 26 and in our fixed camera on 25. On today's 10 seeds it is the other way round, 9 of 10 against 0
+of 10. And with 24 tilted grasps added to the four, a grasp probe on 9 of today's scenes finds a passing grasp on 9
+of 9 against 3 of 9; as TAMPURA draws five grasps at random, that is worth about two scenes of nine
+(\Cref{fig:mirror}).
+\emph{Limit:} TAMPURA's execution is kinematic, and our 9 of 10 ran before drops were counted. The mirror
+enters the paper only if it is fair by 20 November. \validitynote{failures (none crashed)}
 
 \paragraph{The die under the cup has a fix behind a switch.}
 All remaining failures of ours on \fdice\ have the die under a cup, where no hiding region of ours reaches
 (\BF{65}). A hiding region under an open cup is built and off by default. On 8 scenes chosen for their failures,
-in two rounds, ours solved 7 of 16 before, 7 with the better reach aim alone and 14 of 16 with the region.
+one run each, ours solved 4 of 8 before, 3 with the better reach aim alone and 7 of 8 with the region (pairs 3 to
+0 against before, $p = 0.25$). A second round, a rerun at a newer commit planned after the first, does not count.
 \emph{Limit:} a local check on chosen scenes, so no rate; it needs Hani's word on how the system knows that a
 cup is open underneath.
 
@@ -412,7 +427,7 @@ cup is open underneath.
   nodes near coords style={font=\scriptsize},
   ymajorgrids,
 ]
-\addplot[fill=cours, draw=none, bar shift=0pt] coordinates {(a,100) [10/10]};
+\addplot[fill=cours, draw=none, bar shift=0pt] coordinates {(a,90) [9/10]};
 \addplot[fill=ctamp, draw=none, bar shift=0pt] coordinates {(b,60) [6/10] (c,40) [4/10]};
 \end{axis}
 \end{tikzpicture}
@@ -422,19 +437,20 @@ cup is open underneath.
 \begin{tikzpicture}
 \begin{axis}[sb, ybar, bar width=11pt, width=\linewidth, height=3.9cm,
   ymin=0, ymax=128, ytick={0,50,100}, ylabel={target in the first image (\%)},
-  symbolic x coords={a,b,c}, xtick={a,b,c},
-  xticklabels={{T, today's seeds},{T, new scenes},{ours, new scenes}},
+  symbolic x coords={a,a2,b,c}, xtick={a,a2,b,c},
+  xticklabels={{T, today's},{ours, today's},{T, new},{ours, new}},
   x tick label style={font=\scriptsize, rotate=20, anchor=north east},
-  enlarge x limits=0.25,
+  enlarge x limits=0.2,
   nodes near coords, point meta=explicit symbolic,
   nodes near coords style={font=\scriptsize},
   ymajorgrids,
 ]
 \addplot[fill=ctamp, draw=none, bar shift=0pt] coordinates {(a,90) [9/10] (b,0) [0/26]};
-\addplot[fill=cours, draw=none, bar shift=0pt] coordinates {(c,96.2) [25/26]};
+\addplot[fill=cours, draw=none, bar shift=0pt] coordinates {(a2,0) [0/10] (c,96.2) [25/26]};
 \end{axis}
 \end{tikzpicture}
-\caption{Does the first image show the target? T through its hand camera, ours through the fixed camera.}
+\caption{A probe, no episode: does the first image show the target? T through its hand camera, ours through the
+fixed camera; today's 10 seeds and the new scenes (14 of 40 seeds build none).}
 \end{subfigure}\hfill
 \begin{subfigure}[t]{0.22\linewidth}\centering
 \begin{tikzpicture}
@@ -448,11 +464,11 @@ cup is open underneath.
   nodes near coords style={font=\scriptsize},
   ymajorgrids,
 ]
-\addplot[fill=cours!32, draw=none, bar shift=0pt] coordinates {(a,43.8) [7/16] (b,43.8) [7/16]};
-\addplot[fill=cours, draw=none, bar shift=0pt] coordinates {(c,87.5) [14/16]};
+\addplot[fill=cours!32, draw=none, bar shift=0pt] coordinates {(a,50) [4/8] (b,37.5) [3/8]};
+\addplot[fill=cours, draw=none, bar shift=0pt] coordinates {(c,87.5) [7/8]};
 \end{axis}
 \end{tikzpicture}
-\caption{The die under the cup (\BF{65}): 8 chosen \fdice\ scenes, two rounds.}
+\caption{The die under the cup (\BF{65}): 8 chosen \fdice\ scenes, one run each.}
 \end{subfigure}\hfill
 \begin{subfigure}[t]{0.115\linewidth}\centering
   \includegraphics[width=\linewidth]{\arch/tracks/reverse/batch_hand_c/first_views/probe_s9_first_view_fixed.png}
@@ -467,17 +483,18 @@ laptop.}
 \label{fig:mirror}
 \end{figure}
 
-\paragraph{In the Wumpus world our setup is at the level of luck as it is, and solves every state with percept rules.}
+\paragraph{In the Wumpus world our setup is at the level of luck as it is, and wins 100 of 100 with percept rules up to 10x10.}
 On the 100 hidden states of LW1's test at 5x5, our setup as it is today wins 41 and dies on 59: it has no rule
 that links a breeze or a stench to the neighbour cells. With those rules written into the domain as derived
 predicates it wins 100 of 100, with no death and no move into a cell that it had not cleared. A cautious control
 that never risks a move is stuck on all 100. All three outcomes were predicted in writing on 7 November (35 to
 40, 100, stuck). At 7x7, 10x10 and 15x15 our setup as it is wins 22, 21 and 12 of 100; with the rules 100 of 100
-at 7x7 and at 10x10, and 6 of 6 at 15x15, again with no death and no risky move. With the robot arm in the
-loop: 30 of 31 with the rules, the one miss stuck and not dead. LW1's own planner solves 100 of 100 states at
-10x10 in our world (\Cref{fig:other}a).
-\emph{Limit:} run before Hani's look, on the laptop; the sets are the grid world without physics; at 15x15 only
-6 states are run with the rules, because one episode there takes 3 to 5 minutes.
+at 7x7 and at 10x10, again with no death and no risky move, and 6 of 100 at 15x15 (93 not run, 1 cut at 300\,s).
+With the robot arm in the loop, on 31 of these states and random worlds: 30 of 31 with the rules, the same as the
+grid on those 31; the one miss is stuck, not dead. LW1's own planner, alone in its own simulator, solves 100 of
+100 states at 10x10 (\Cref{fig:other}a).
+\emph{Limit:} run before Hani's look, on the laptop; the sets are the grid world without physics; at 15x15 the
+rules ran on 6 of the 100 states, because one episode there takes 3 to 5 minutes.
 
 \begin{figure}[H]
 \centering
@@ -490,7 +507,7 @@ loop: 30 of 31 with the rules, the one miss stuck and not dead. LW1's own planne
   legend style={at={(0.5,1.03)}, anchor=south, legend columns=3},
   ymajorgrids,
 ]
-\addplot[cours, very thick, mark=*, mark size=1.8pt] coordinates {(5,100) (7,100) (10,100) (15,100)};
+\addplot[cours, very thick, mark=*, mark size=1.8pt] coordinates {(5,100) (7,100) (10,100) (15,6)};
 \addplot[cours, thick, dashed, mark=o, mark size=2.2pt] coordinates {(5,41) (7,22) (10,21) (15,12)};
 \addplot[black!55, thick, mark=x, mark size=2.2pt] coordinates {(5,0) (7,0) (10,0) (15,0)};
 \addplot[black!75, only marks, mark=square*, mark size=1.7pt] coordinates {(5,100) (10,100)};
@@ -500,7 +517,8 @@ loop: 30 of 31 with the rules, the one miss stuck and not dead. LW1's own planne
 \end{axis}
 \end{tikzpicture}
 \caption{The Wumpus world (paths 4 and 10). Ours as it is lies on the luck floor of the two walkers that do not
-reason. With the rules: 100 states at 5x5, at 7x7 and at 10x10, and 6 states at 15x15.}
+reason. With the rules: 100 of 100 at 5x5, at 7x7 and at 10x10; 6 of 100 at 15x15 (93 not run, 1 cut at 300\,s).
+The random walk is the mean over 100 walks per state.}
 \end{subfigure}\hfill
 \begin{subfigure}[t]{0.46\linewidth}\centering
 \begin{tikzpicture}
@@ -533,10 +551,12 @@ holds by friction, detection reads rendered images, and failures of the physics 
 (\PW{1}, \PW{2}). The comparison with TAMPURA was rebuilt on an honesty contract after the first bridge was
 thrown away on 20 August; four adversarial reviewers found no cheat (\BF{14} to \BF{25}). The die no longer slips
 out of the hand: the chosen four fixes gave 120 of 120 episodes on the three scenes that TAMPURA ships, against
-209 of 300 without them and 40 of 60 for TAMPURA (\BF{59}, \BF{62}). Of four time cuts only the planner's search
-settings helped: the median wall time fell from 34.6 to 23.2\,s (\BF{53}, \BF{57}). Our runs of TAMPURA land near
-its paper: a return of 0.530 against the published 0.63 $\pm$ 0.07 (\BF{63}). And a correction of the thesis: 25
-of the 29 ``timeouts'' on stack ended after 8 to 21\,s, rejected by the end-of-run physics check (\BF{68}).
+209 of 300 without them and 40 of 60 for TAMPURA, one of them crashed (\BF{59}, \BF{62}). Of
+four time cuts only the planner's search settings helped: the median wall time over all 24 seeds fell from 40.1
+to 31.8\,s (\BF{53}, \BF{57}). Our runs of TAMPURA land near its paper: a return of 0.504 over 80 episodes, four of them
+crashed, against the published 0.63 $\pm$ 0.07 (\BF{63}). And a correction of the
+thesis: 25 of the 29 ``timeouts'' on stack ended after 8 to 21\,s, rejected by the end-of-run physics check
+(\BF{68}). \validitynote{failures}
 
 \begin{figure}[H]
 \centering
@@ -544,7 +564,7 @@ of the 29 ``timeouts'' on stack ended after 8 to 21\,s, rejected by the end-of-r
 \begin{tikzpicture}
 \begin{axis}[sb, xbar, bar width=4.8pt, width=0.66\linewidth, height=4.4cm,
   xmin=0, xmax=128, xtick={0,25,50,75,100},
-  xlabel={successes of counted episodes (\%)},
+  xlabel={successes (\%)},
   symbolic y coords={tampura,base,iters,pose,check,poseyaw,itersforce,accel,chosen},
   ytick={tampura,base,iters,pose,check,poseyaw,itersforce,accel,chosen},
   yticklabels={{TAMPURA},{our base, four jobs},{more solver iterations},{pose uncertainty kept},{hold check},{pose kept, yaw near home},{iterations, force hold},{pose, yaw, limited accel.},{\textbf{the chosen set of four}}},
@@ -564,7 +584,7 @@ job repeated the chosen set: 60 of 60 again, no die lost in 120 carries.}
 \begin{tikzpicture}
 \begin{axis}[sb, width=\linewidth, height=4.4cm,
   xmin=0.4, xmax=5.6, xtick={1,2,3,4,5},
-  xticklabels={{11/20},{13/20},{40/60},{46/76},{46/76}},
+  xticklabels={{11/20},{13/20},{40/60},{46/80},{46/80}},
   x tick label style={font=\scriptsize, rotate=45, anchor=north east},
   ymin=0, ymax=1, ytick={0,0.25,0.5,0.75,1}, ylabel={success rate of TAMPURA},
   ymajorgrids,
@@ -572,18 +592,19 @@ job repeated the chosen set: 60 of 60 again, no die lost in 120 carries.}
 \addplot[ctamp, only marks, mark=*, mark size=1.8pt,
   error bars/.cd, y dir=both, y explicit, error bar style={ctamp, line width=0.7pt}]
   coordinates {(1,0.55) += (0,0.19) -= (0,0.21) (2,0.65) += (0,0.17) -= (0,0.22)
-               (3,0.667) += (0,0.106) -= (0,0.126) (4,0.605) += (0,0.102) -= (0,0.113)
-               (5,0.605) += (0,0.102) -= (0,0.113)};
+               (3,0.667) += (0,0.106) -= (0,0.126) (4,0.575) += (0,0.102) -= (0,0.109)
+               (5,0.575) += (0,0.102) -= (0,0.109)};
 \draw[black!70, dashed] (axis cs:0.4,0.63) -- (axis cs:5.6,0.63);
 \end{axis}
 \end{tikzpicture}
 \caption{TAMPURA in our five runs of it (thesis laptop, cluster as shipped, die-slip campaign, run 2, run 3), with
-95\,\% Wilson intervals. Dashed: the 0.63 that its paper's return implies as a lower bound.}
+95\,\% Wilson intervals. Dashed: the 0.63 that its paper's return implies as a lower bound. Crashed episodes count
+as failures: 1, 1, 4 and 4 crashed in the last four runs.}
 \end{subfigure}\hfill
 \begin{subfigure}[t]{0.30\linewidth}\centering
 \begin{tikzpicture}
 \begin{axis}[sb, xbar, bar width=4.6pt, width=0.74\linewidth, height=4.4cm,
-  xmin=0, xmax=78, xtick={0,20,40,60},
+  xmin=0, xmax=84, xtick={0,20,40,60},
   xlabel={median wall time of an episode (s)},
   symbolic y coords={all,search,three,cont,foldcache,cache,fold,none},
   ytick={all,search,three,cont,foldcache,cache,fold,none},
@@ -593,14 +614,14 @@ job repeated the chosen set: 60 of 60 again, no die lost in 120 carries.}
   nodes near coords style={font=\scriptsize, anchor=west},
   xmajorgrids,
 ]
-\addplot[fill=black!50, draw=none] coordinates {(26.6,all) [14/24] (23.2,search) [19/24] (53.6,three) [21/24] (38.5,cont) [16/24] (52.3,foldcache) [15/24] (40.2,cache) [17/24] (51.6,fold) [18/24] (34.6,none) [18/24]};
+\addplot[fill=black!50, draw=none] coordinates {(28.5,all) [14/24] (31.8,search) [19/24] (57.7,three) [21/24] (41.5,cont) [16/24] (60.5,foldcache) [15/24] (41.5,cache) [17/24] (57.6,fold) [18/24] (40.1,none) [18/24]};
 \end{axis}
 \end{tikzpicture}
-\caption{The four time cuts (\BF{53}), with successes of 24 seeds. One shared node: only the comparison between
-arms holds.}
+\caption{The four time cuts (\BF{53}), with successes of 24 seeds; medians over all 24, a run stopped at the
+600\,s cap (1 to 3 per arm) counted at 600\,s. One shared node: only the comparison between arms holds.}
 \end{subfigure}
 \caption{Results from before Checkpoint 1 that still stand: holding the die, TAMPURA's own reliability, and the
-time cuts. All on the cluster.}
+time cuts. All on the cluster. \validitynote{failures}}
 \label{fig:fd}
 \end{figure}
 
@@ -637,10 +658,11 @@ time cuts. All on the cluster.}
 \begin{tabularx}{\linewidth}{@{}P{0.20\linewidth}Y@{}}
 \textbf{What was achieved?} &
 An honest system (no weld, perception from rendered images); a die that stays in the hand (120 of 120 episodes);
-on fresh \fdice\ scenes ours ahead of TAMPURA, 69 of 80 against 46 of 76 ($p = 0.0009$), as a check of one fix;
+on fresh \fdice\ scenes ours ahead of TAMPURA, 69 of 80 against 46 of 80, four of TAMPURA's runs crashed
+($p = 0.00012$), as a check of one fix;
 the cause of the dropped boxes on our own table; drop and collision counts in every record, at 0.2 to 0.4\,\% of
 the run time; the mirror with TAMPURA's own camera; our own setup in the Wumpus world; a board of 27 bugs
-(\Cref{sec:results}). \\
+(\Cref{sec:results}). \validitynote{failures (4 of 80)} \\
 \textbf{What was changed?} &
 The numbers up to 4 November measured the tag \texttt{stable-2026-11-06}; run 3 measured the tag with the launcher
 fix and the shadow fix. On 13 November the freeze candidate, which collects the fixes and the counts, was merged
@@ -746,25 +768,25 @@ the result files, not audited. \Cref{fig:timeline} shows when and where the runs
    \textbf{after Checkpoint 1, to 13 Nov} \\
 \midrule
 cluster &
-\sq{vok}TAMPURA as shipped: 13 of 20\par \sq{vnarrow}our pipeline twice: 31 and 30 of 40 &
-\sq{vnot}first two campaigns against TAMPURA: our arm void\par \sq{vnarrow}time cuts: 34.6 to 23.2\,s\par
-\sq{vnarrow}die-slip campaign: 120 of 120 against 40 of 60 &
-\sq{vnarrow}run 1: a slow hour\par \sq{vnarrow}run 2: 57 of 80 against 46 of 76, $p = 0.12$ &
+\sq{vok}TAMPURA as shipped: 13 of 20, 1 crashed\par \sq{vnarrow}our pipeline twice: 31 and 30 of 35 &
+\sq{vnot}first two campaigns against TAMPURA: our arm void\par \sq{vnarrow}time cuts: 40.1 to 31.8\,s\par
+\sq{vnarrow}die-slip campaign: 120 of 120 against 40 of 60, 1 crashed &
+\sq{vnarrow}run 1: a slow hour\par \sq{vnarrow}run 2: 57 of 80 against 46 of 80, 4 crashed, $p = 0.061$ &
 \emph{Nothing ran on the cluster.} &
-\sq{vnew}run 3 with the shadow fix: 69 of 80 against 46 of 76, $p = 0.0009$ \\
+\sq{vnew}run 3 with the shadow fix: 69 of 80 against 46 of 80, 4 crashed, $p = 0.00012$ \\
 \midrule
 laptop &
-\sq{vnarrow}A/B of two perception fixes (18 Sept, the thesis's harness): 27 of 40 for both &
+\sq{vnarrow}A/B of two perception fixes (18 Sept, the thesis's harness): 27 of 35 for both &
 \sq{vnarrow}squeeze probe: 0.5\,mm holds the die in 93 of 96 trials &
 \sq{vnarrow}shadow fix on scene 118: solved &
 \sq{vok}check of the tag; walkers: the luck floor; merge checks of the Wumpus branch\par
-\sq{vnarrow}the mirror: 10 of 10 against 6 of 10\par \sq{vnarrow}LW1 drives our robot: 18 of 18\par
-\sq{vnarrow}planning layer alone: 18 of 20 and 17 of 25\par \sq{vnarrow}probes of the dropped box\par
+\sq{vnarrow}the mirror: 9 of 10, 1 crashed, against 6 of 10\par \sq{vnarrow}LW1 drives our robot: 18 of 18\par
+\sq{vnarrow}planning layer alone: 18 of 20, 1 crashed, and 17 of 25\par \sq{vnarrow}probes of the dropped box\par
 \sq{vrerun}path 7, first arm &
-\sq{vnew}the slip sets on our table: box lost on 15 of 32 scenes with the defaults\par
+\sq{vnew}the slip sets on our table: box lost on 15 of 32 scenes with the defaults (8 seeds build none)\par
 \sq{vnew}the planner flag: 30 of 31 against 26 of 31\par
 \sq{vnew}the mirror with TAMPURA's hand camera: 4 of 10\par
-\sq{vnew}the die under the cup: 14 of 16 against 7\par
+\sq{vnew}the die under the cup: 7 of 8 against 4\par
 \sq{vnew}ours in the Wumpus world: 41 and 100 of 100\par
 \sq{vnew}LW1 at 10x10: 100 of 100 \\
 \midrule
@@ -780,7 +802,8 @@ trunk.} \\
 \bottomrule
 \end{tabularx}}
 \caption{What ran when and where. \sq{vok}stands as reported;\quad \sq{vnarrow}stands for a narrower claim;\quad
-\sq{vrerun}has to be run again;\quad \sq{vnot}void;\quad \sq{vnew}new since Checkpoint 1, not audited yet.}
+\sq{vrerun}has to be run again;\quad \sq{vnot}void;\quad \sq{vnew}new since Checkpoint 1, not audited yet.
+\validitynote{failures, with the number of crashed runs named}}
 \label{fig:timeline}
 \end{figure}
 
@@ -791,47 +814,50 @@ trunk.} \\
 run since Checkpoint 1 & where & result & limit \\
 \midrule
 The 40 generated scenes with the shadow fix, run 3 (12 Nov, \BF{71}) & C &
-ours 69 of 80, TAMPURA 46 of 76; pairs 25 to 6; $p = 0.0009$ &
+ours 69 of 80, TAMPURA 46 of 80, 4 crashed; pairs 29 to 6; $p = 0.00012$ &
 A check of the fix on the scenes its bug was found on. Two end tests; drops not counted. Scenes 127 and 138
-crashed inside TAMPURA's code and are left out, as declared before the run. \\
+crashed inside TAMPURA's code and count as failures. \\
 The slip sets on our table (TB-23), 144 episodes & L &
 box lost in 21, 3 and 2 of 48 episodes (defaults, none, defaults with the trapezoid) &
-16 seeds, three repetitions. Our own table only. \\
+16 seeds, three repetitions; 4 of seeds 0 to 19 build no scene. Our own table only. \\
 The slip sets on 32 scenes, 16 of them new & L &
 scenes that lose the box: defaults 15, every other set at most 1; clean successes 14 against 24 to 27 &
-One run per scene for most cells. Not run on \fdice, where the defaults come from. \\
+The first run per scene; 8 of seeds 0 to 39 build no scene. Not run on \fdice, where the defaults come from. \\
 The carry switches of path 14 with the trapezoid, 64 episodes & L &
 no box dropped in 89 carries; no carried box touched the table &
 In one episode the empty arm knocked two boxes on its way to a look. \\
 The planner flag against the dead end (TB-25), three paired sets & L &
-30 of 31 against 26 of 31; 12 of 12 against 7 of 12; on 14 new scenes 23 of 25 against 23 of 25 &
+30 of 31 against 26 of 31; 12 of 12 against 7 of 12; on 14 new scenes 23 of 28 against 23 of 28, 3 not run in each &
 Small sets; none reaches 5\,\%. On the new scenes the dead end showed on one scene without the flag, and the
 flag changed no outcome. \\
 The mirror with TAMPURA's hand camera for every image, ten seeds & L &
-TAMPURA 4 of 10 (fixed camera 6, ours 10) &
+TAMPURA 4 of 10 (fixed camera 6, ours 9, 1 crashed) &
 Not a search test: the target is in its first image on 9 of 10 seeds, and its failures are blocked grasps. \\
-The die under the cup (\BF{65}), 8 scenes, two rounds & L &
-7, 7 and 14 of 16 &
-Scenes chosen for their failures. Behind a switch that is off. \\
+The die under the cup (\BF{65}), 8 scenes, one run each & L &
+4, 3 and 7 of 8 (before, reach aim, region) &
+Scenes chosen for their failures. Behind a switch that is off. A second round at a newer commit does not count. \\
 LW1 alone on all 100 states at 10x10 & L &
 100 of 100; 42 calls and 49 actions &
-Its paper's table gives 54 and 60; the code is the 2018 version. \\
+Its paper's table gives 54 and 60; the code is the 2018 version. A first run on the build before the parser fix
+failed the three 10x10 states. \\
 Our setup in the Wumpus world, LW1's states & L &
-as it is 41, 22, 21 and 12 of 100 (5x5 to 15x15); with rules 100 of 100 at 5x5, 7x7 and 10x10, 6 of 6 at 15x15; with the robot 30 of 31 &
+as it is 41, 22, 21 and 12 of 100 (5x5 to 15x15); with rules 100 of 100 at 5x5, 7x7 and 10x10, 6 of 100 at 15x15 (93 not run, 1 cut at 300\,s); with the robot, on 31 of these states and random worlds, 30 of 31 &
 Before Hani's look. The sets are the grid world without physics. \\
 The shared success test on TAMPURA's final world (\BF{70}) & L &
-about 2\,ms an episode; 24 of TAMPURA's 43 die grasps fail its 2\,mm pad bound &
-The die is attached in those 24; the bound is Hani's decision. \\
+about 2\,ms an episode; on scene 113, 24 of TAMPURA's 43 saved die grasps fail a 2\,mm pad bound and pass at 5\,mm; a number beside TAMPURA's reward, not its success count &
+The die is attached in those 24. The recorded episodes of TAMPURA's arm hold one grasp on scene 113, recorded six times, so they test the bound once. \\
 The look action, 9 development scenes & L &
-today's flow 7 of 9, each look mode 4 of 9 &
-Development runs, no evidence. After a look the pick lands a finger on the taller block beside the target. \\
+today's flow 7 of 9, centred look 3 of 9, boxel look 2 of 9 (first attempt; 0 crashed; seed 101 builds no scene in any arm) &
+Development runs on the seeds the look was fixed on; both looks keep the fixed camera; today's flow lost its two
+scenes in the carry. After a look the pick lands a finger on the taller block beside the target. \\
 The grip probe on \cuncert & L &
-the lemon and the strawberry slip out, 3 of 3 tries each &
+the lemon and the strawberry slip out at the lift: one run each, all 3 picks lost &
 15 of the 20 seeds hold one of the two; the physical route is stopped. \\
 \bottomrule
 \end{tabularx}
 \caption{The runs since Checkpoint 1. C: the chair's cluster; L: the laptop, in WSL under the pipeline lock.
-Numbers as read from the result files by the coordinating session.}
+Numbers as read from the result files by the coordinating session. \validitynote{failures, with the number of
+crashed runs named}}
 \label{tab:new}
 \end{table}
 
@@ -839,13 +865,29 @@ Numbers as read from the result files by the coordinating session.}
 \emph{No old record can be re-scored for drops.} Telemetry was off in every evaluation up to 8 November. Since
 then every record of ours carries drops, collisions and clean success (TB-22); TAMPURA's executor has no
 physics, so nothing can be counted on its side.
-\emph{Every number of ours against TAMPURA still rests on two end tests.} The shared test is built and reads
-TAMPURA's final world (\BF{70}); its pad bound waits for Hani, and no comparison has been scored with it.
+\emph{Every number of ours against TAMPURA rests on two end tests, and ours is the stricter.} TAMPURA counts by
+its own reward, read from its belief after a kinematic carry; ours counts the die physically held between both pads
+(Hani, 15 November). The shared test reads TAMPURA's final world (\BF{70}) with a pad bound of 5\,mm (of 43 sampled
+TAMPURA die grasps on scene 113, 24 lie between 2 and 5\,mm; the recorded episodes hold one grasp, on that scene); it is
+a second number beside TAMPURA's own, never its success count, and no comparison has been scored with it.
+\emph{Every counted run of ours saw through the fixed camera, the user's view.} The first image, the detection and
+every shadow cast came from one fixed camera (on \fdice\ placed where TAMPURA's hand camera is at home, not moving with
+the arm); only path 9's step 3 feeds the robot's camera alone, and no counted run used it. Under Hani's rule of 15
+November the comparisons with TAMPURA, \BF{65}, \BF{64}, the look, hide, the perception fixes and the thesis sweep are
+redone on the robot's camera; the slip, carry, time-cut and grip evaluations stand (unrelated to the view, the same
+camera on every arm). The full list is in the long report, findings chapter, ``Which camera fed each evaluation''.
 \emph{An episode's first plan is not reproducible from run to run} (TB-24). So every comparison is paired by
 scene, and repetitions are declared as draws.
 \emph{The machines.} On the cluster the arms of a scene ran one after the other on one node. On the laptop the
 workers share one simulation slot behind a gate that refuses a start above a commit charge of 85\,\%; in the
 night of 12 November the highest reading was 80.9\,\%.
+\emph{Seeds that never became an episode.} Two kinds of rejection drop a planned scene before any run, both made by
+our own code, never by TAMPURA's generator: our scene builder cannot place the hidden targets behind the occluders
+(for example seeds 4, 6, 12, 106 and 115 of the holding scene), and our pre-flight finds no split into hidden
+targets and a visible tray (15 scenes of the cluster sweep CB\#113). Such a scene is the same for every arm, so it
+stays out of the rates and is named beside them. A re-rolled replacement scene (the thesis sweep) never counts; a
+crash, a hang, a run cut by our own side or a run holding another run's record is a failure. The long report
+lists every kind with its criterion, seeds and counts (its \emph{Seeds and Scenes That Never Became an Episode}).
 
 \paragraph{Numbers that must not stand side by side.} The laptop medians of the mirror and any cluster time;
 the absolute times of the time cuts and anything else (their ratios can be quoted); walls of run 2 and of run 3
@@ -860,35 +902,42 @@ list the scene files in another order.
 \toprule
 evaluation up to 8 November & result as reported & verdict & what stands, and why not more \\
 \midrule
-TAMPURA as shipped, seeds 0 to 19 (27 Oct) & 13 of 20 & \vOK &
+TAMPURA as shipped, seeds 0 to 19 (27 Oct) & 13 of 20, 1 crashed & \vOK &
 One system alone on an exclusive node. \\
-Four time cuts, 8 arms on 24 seeds (31 Oct) & search settings: median wall 34.6 to 23.2\,s & \vNA &
+Four time cuts, 8 arms on 24 seeds (31 Oct) & search settings: median wall 40.1 to 31.8\,s over all 24 & \vNA &
 A node shared with other users. Only the ratio between arms holds (0.89 of the base per seed). \\
 The die-slip campaign, three shipped scenes (31 Oct to 2 Nov) & chosen set 120 of 120; base 209 of 300; TAMPURA
-40 of 60 & \vNA &
+40 of 60, 1 crashed & \vNA &
 Stands for the three shipped layouts, each arm by its own end test, at a cap of 600\,s. ``No die lost'' is what
 the pipeline noticed, not a ground truth. \\
-40 generated scenes, run 1 (3 Nov) & 57 of 80 against 36 of 78, $p = 0.00088$ & \vNA &
-One slow hour of the cluster caused TAMPURA's timeouts; outside it $p = 0.21$. No evidence of a lead. \\
-40 generated scenes, run 2 (4 Nov) & 57 of 80 against 46 of 76; pairs 18 to 9; $p = 0.12$ & \vNA &
+% RUN1: first attempts only, a crash is a failure, a rerun never counts (Hani, 14 Nov about 08:22)
+40 generated scenes, run 1 (3 Nov) & 56 of 80 against 31 of 80, $p = 0.00004$; first attempts, ours 1 hung,
+TAMPURA 7 crashed & \vNA &
+One slow hour of the cluster caused TAMPURA's timeouts. Outside it, 47 pairs: 16 to 4, $p = 0.012$; inside it, 15
+to 2, $p = 0.0023$: ours leads in and out of it. The earlier $p = 0.21$ counted reruns of crashed first attempts
+and left out scene 138. \\
+40 generated scenes, run 2 (4 Nov) & 57 of 80 against 46 of 80, 4 crashed; pairs 20 to 9; $p = 0.061$ & \vNA &
 A design declared in advance, on the tag's code. Limits: two end tests, no record of drops, 76 pairs that carry
 about 38 draws, the clipped-shadow bug in our arm. \\
-The mirror, fixed camera, ten seeds (path 5) & ours 10 of 10, TAMPURA 6 of 10 & \vNA &
-TAMPURA's execution is kinematic. Ours' 10 of 10 very likely holds drops: the same setting lost the box in 3 of 3
+The mirror, fixed camera, ten seeds (path 5) & ours 9 of 10, 1 crashed, TAMPURA 6 of 10 & \vNA &
+TAMPURA's execution is kinematic. Ours' 9 of 10 very likely holds drops: the same setting lost the box in 3 of 3
 and 2 of 2 probe carries on seeds 3 and 4. \\
-Our planning layer on \cuncert\ and on \slamcol\ (path 2) & their reward 18 of 20 and 17 of 25 & \vNA &
+Our planning layer on \cuncert\ and on \slamcol\ (path 2) & their reward 18 of 20, 1 crashed, and 17 of 25 & \vNA &
 The decision layer only, on TAMPURA's execution functions. No TAMPURA arm ran beside it; on \slamcol\ a scripted
 rule reaches the same 17 of 25. \\
-\cuncert\ with boxels, first arm (path 7) & the same numbers as path 2 & \vRE &
-It ran before Hani had approved its deviations; the rows are held back. \\
+\cuncert\ with boxels, first arm (path 7) & the same numbers as path 2; with the inspect guard, world test 18 of 20 against 17 of 20 with 1 crash (seed 5) without it & \vRE &
+It ran before Hani had approved its deviations; the rows are held back. Disclosed: the guard keeps our arm in
+place when TAMPURA's inspect motion plan fails and still returns the class; TAMPURA's own runs keep that line
+unguarded, never hit the failure in our records, and have no recorded run of seed 5. Only seed 5 differs. \\
 LW1 drives our robot, 18 episodes (path 4) & 18 of 18; 0 of 369 percepts wrong & \vNA &
-10, 5 and 3 states at 5x5, 7x7 and 10x10; the base is placed kinematically. \\
+10, 5 and 3 states at 5x5, 7x7 and 10x10; the base is placed kinematically. A first run on the build before
+the parser fix failed the three 10x10 states. \\
 Walkers on LW1's states (path 10) & the luck floor of the test & \vOK &
-At 5x5 the floor is 34 to 39.5\,\%. \\
+At 5x5 the floor is 34 to 39.5 states of 100 (the random walk a mean over 100 walks per state). \\
 \bottomrule
 \end{tabularx}
 \caption{The audited runs that carry a number of this report. The full list of 48 with its verdicts is in the
-first issue.}
+first issue. \validitynote{failures, with the number of crashed runs named}}
 \label{tab:cluster}
 \end{table}
 
@@ -926,7 +975,8 @@ November, then the cluster evaluation, and the numbers go to the supervisors on 
 \paragraph{What is still missing.}
 \begin{itemize}
 \item \textbf{The paper's comparison:} ours with the frozen code, the thesis code and TAMPURA on 200 fresh
-\fdice\ scenes and on the tabletop, with the shared success test, TAMPURA's 20-action cap on ours and the drop
+\fdice\ scenes and on the tabletop, TAMPURA by its own reward and ours by the stricter physical test (the shared
+test beside TAMPURA's number), TAMPURA's 20-action cap on ours and the drop
 counts (path 6; about 49 node-hours, after Hani's yes to that question alone).
 \item \textbf{A frozen code version.} The freeze candidate is in the trunk; the slip defaults, the planner flag
 and the die under the cup are still open.
@@ -944,8 +994,9 @@ to 5 minutes there).
 20 seeds hold one of them.
 \emph{Ours with the arm camera only}: it does not exist yet; first episodes about 21 November.
 \emph{The look action against today's flow} (path 9), planned as a paired result for 17 November: on 9
-development scenes today's flow succeeds on 7 and each look mode on 4. Once a look has found the target beside a
-taller block, the pick lands a finger on that block (17 of 17 such picks); today's flow moves the block away
+development scenes, first attempts, today's flow succeeds on 7, the centred look on 3 and the boxel look on 2
+(flow against boxel look 5 to 0, $p = 0.0625$; seed 101 builds no scene in any arm). Once a look has found the
+target beside a taller block, the pick lands a finger on that block (14 of 14 such picks); today's flow moves the block away
 first and never meets this.
 
 \begin{table}[H]
@@ -965,7 +1016,7 @@ The slip-fix defaults (TB-23) &
 The force hold leaves the defaults or runs only with the trapezoid; which set, after a check on \fdice &
 the freeze \\
 The planner flag against the dead end (TB-25) &
-No change yet: on 14 new scenes it changed no outcome; first the same check on \fdice &
+No change yet: on 14 new scenes (6 more seeds build none) it changed no outcome; first the same check on \fdice &
 the freeze \\
 The check on \fdice\ that both need: full (560 episodes, 7 to 12 job-hours on the cluster), the slip defaults
 alone, a reduced check on the laptop, or none &
@@ -975,7 +1026,7 @@ The die under the cup (\BF{65}): how the system knows that a cup is open underne
 Declared per class with a measured cavity; then a look at scenes 104 and 135 &
 the switch, and what the paper may claim for the occlusion model \\
 TAMPURA's clean success in the tables; the pad bound of the shared test (\BF{70}) &
-``Not measured''; 5\,mm per pad for TAMPURA's arm, ours keeps its physical test &
+``Not measured''; decided 15 November: TAMPURA counts by its own reward, ours by the stricter physical test, the shared test (5\,mm per pad) a number beside TAMPURA's &
 how every table is scored \\
 \cuncert: the hold on a round fruit &
 About 10 short probe runs for the smallest change that holds the lemon and the strawberry &

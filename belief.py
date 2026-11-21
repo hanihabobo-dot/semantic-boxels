@@ -11,7 +11,7 @@ a no-op when no run ledger is open.
 
 from typing import Dict, List, Optional
 
-from run_logger import ledger_belief
+from run_logger import ledger_belief, ledger_event
 
 
 class BeliefState:
@@ -35,6 +35,9 @@ class BeliefState:
                               Marking such a fragment 'not_here' was the
                               F15 belief lie: it retired the fragment the
                               target was physically sitting in.)
+      unresolved ─── time up ───► unknown   (M7's F9 give-up only: that
+                              park is a suspension, suspend() and
+                              release_suspended(); the others stay.)
 
     ``occluders_moved`` records physical relocations so the planner can
     emit correct ``obj_at_boxel`` facts for objects that are no longer at
@@ -50,6 +53,13 @@ class BeliefState:
         # observation (register_new_detections).  Their FIRST discovery
         # inside a fragment is a discovery, not an F9 "rediscovery".
         self.redetected: set = set()
+        # M7's F9 give-up as Hani set it on 2026-11-20 (a timer, 1 to 3
+        # minutes): a region parked there is suspended for a while, not for
+        # good.  suspended: region -> its open suspension; suspensions: every
+        # suspension of the episode in order.  Times are time.perf_counter()
+        # values, the clock of the ledger's 't'.
+        self.suspended: Dict[str, dict] = {}
+        self.suspensions: List[dict] = []
 
     def add_shadow(self, shadow_id: str) -> None:
         """Register a shadow fragment created AFTER construction as unknown.
@@ -106,6 +116,57 @@ class BeliefState:
         """Shadows parked unresolved — not eliminated, just not plannable."""
         return [s for s, status in self.shadow_status.items()
                 if status == 'unresolved']
+
+    def suspend(self, shadow_id: str, *, bodies: Dict[str, int], now: float,
+                seconds: float) -> None:
+        """M7's F9 give-up: park the shadow unresolved (the caller names the
+        channel) until ``now + seconds``.  ``bodies`` maps each body that
+        reached the give-up to its rediscovery count.  A shadow already
+        found is left alone, as mark_unresolved leaves it.  A shadow still
+        suspended (no path is known to reach this) has its open suspension
+        ended as 'resuspended' and a new one started, so no row stays open."""
+        self.mark_unresolved(shadow_id)
+        if self.shadow_status.get(shadow_id) != 'unresolved':
+            return
+        old = self.suspended.pop(shadow_id, None)
+        if old is not None:
+            old['end'], old['ended_by'] = now, 'resuspended'
+            ledger_event('m7_suspension', op='end', region=shadow_id,
+                         ended_by='resuspended')
+        row = {'region': shadow_id, 'bodies': dict(bodies), 'start': now,
+               'until': now + seconds, 'end': None, 'ended_by': None}
+        self.suspended[shadow_id] = row
+        self.suspensions.append(row)
+        ledger_event('m7_suspension', op='start', region=shadow_id,
+                     bodies=dict(bodies), seconds=seconds)
+
+    def release_suspended(self, now: float) -> List[str]:
+        """End the suspensions whose time is up: each region goes back to
+        unknown (it was never observed empty) and is offered to the planner
+        again; the caller names the channel.  A suspension whose region
+        changed meanwhile (a sweep saw it empty, it left the belief) ends
+        without a release.  Returns the released regions."""
+        released = []
+        for sid, row in list(self.suspended.items()):
+            status = self.shadow_status.get(sid)
+            if status != 'unresolved':
+                row['end'], row['ended_by'] = now, status or 'forgotten'
+            elif now >= row['until']:
+                ledger_belief(sid, 'status', 'unknown')
+                self.shadow_status[sid] = 'unknown'
+                row['end'], row['ended_by'] = now, 'released'
+                released.append(sid)
+            else:
+                continue
+            del self.suspended[sid]
+            ledger_event('m7_suspension', op='end', region=sid,
+                         ended_by=row['ended_by'])
+        return released
+
+    def get_suspended_shadows(self) -> List[str]:
+        """Shadows suspended at M7's F9 give-up and not yet released."""
+        return [s for s in self.suspended
+                if self.shadow_status.get(s) == 'unresolved']
 
     def mark_occluder_moved(self, occluder_id: str, destination: str) -> None:
         """

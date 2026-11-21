@@ -148,7 +148,13 @@ class TampuraWorldEnv(BoxelTestEnv):
                 object_id=body, name=name, position=None, orientation=None,
                 size=np.array(task_spec.CLASS_EXTENTS[cat]),
                 is_visible=False,
-                is_occluder=cat != task_spec.TARGET_CATEGORY)
+                is_occluder=cat != task_spec.TARGET_CATEGORY,
+                # BF#65 option 1 (D6, M2): the class's declared cavity
+                # (task_spec.HOLLOW_CAVITY, measured from their collision
+                # mesh, BF#4 (b)); class knowledge like size, no pose.  Used
+                # only with --interior-regions on (interior_regions.py).
+                cavity=(np.array(task_spec.HOLLOW_CAVITY[cat])
+                        if cat in task_spec.HOLLOW_CAVITY else None))
             self.categories[name] = cat
             self._plan_register_twin(
                 body, create_ycb(cat, use_concave=True, client=self._plan_bc))

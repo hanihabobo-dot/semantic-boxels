@@ -239,6 +239,7 @@ _ledger_file = None
 _ledger_write_errors = 0
 _dispatch = None
 _provenance = []
+_ledger_t0 = None     # time.perf_counter() at ledger_open (M7's suspension times)
 
 # The ways a dispatched step may end.  'ok' is the only one that lets the
 # dispatcher go on to the next step of the same plan; every other value is
@@ -246,22 +247,27 @@ _provenance = []
 # dispatcher left a step without saying why, and fails G3.
 # 'home_not_reached' is D7 (vi)'s bound (#P4 B3(d)): the second
 # consecutive planned move to q_home that fails the at-home test.
+# 'action_failed' and 'dead' are the Wumpus world's (wumpus/narrate.py,
+# 2026-11-06): an action that returned not ok, and a move into a pit or the
+# wumpus's cell.  tools/bridge_gates.py keeps its own G3 list: a bridge run
+# never writes them.
 STEP_END_STATUSES = (
     'ok', 'sense_outcome', 'integrity_replan', 'motion_resolve_failed',
     'pick_failure', 'place_failure', 'stack_failure', 'empty_hand',
     'stale_precondition', 'home_not_reached', 'observe_ok',
-    'observe_incomplete', 'unlabelled',
+    'observe_incomplete', 'look_outcome', 'unlabelled', 'action_failed', 'dead',
 )
 
 
 def ledger_open(run_dir) -> None:
     """Start <run_dir>/ledger.jsonl.  Called by RunLogger."""
-    global _ledger_file, _ledger_write_errors, _dispatch
+    global _ledger_file, _ledger_write_errors, _dispatch, _ledger_t0
     ledger_close()
     _ledger_write_errors = 0
     _dispatch = None
     _provenance.clear()
     _ledger_file = open(Path(run_dir) / 'ledger.jsonl', 'w', encoding='utf-8')
+    _ledger_t0 = time.perf_counter()
     ledger_event('ledger_open', pid=os.getpid())
 
 
@@ -390,6 +396,34 @@ def ledger_belief(region: str, op: str, status=None) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _suspended_text(belief) -> str:
+    """M7: the F9 give-up suspensions still open, for a FAILED line, e.g.
+    "shadow_026 (e_cups_ud rediscovered 3 times)"; '' when there are none."""
+    get = getattr(belief, 'get_suspended_shadows', None)
+    if get is None:
+        return ''
+    return '; '.join(
+        f"{sid} (" + ', '.join(f"{b} rediscovered {n} times"
+                               for b, n in belief.suspended[sid]['bodies'].items())
+        + ")" for sid in sorted(get()))
+
+
+def suspension_rows(belief) -> list:
+    """M7: every F9 give-up suspension of the episode, its start, planned
+    end and end in seconds from the ledger's opening (the clock of the
+    ledger's 't'), and how it ended: released, the region's later status,
+    or open_at_end."""
+    t0 = _ledger_t0 or 0.0
+
+    def rel(t):
+        return None if t is None else round(t - t0, 3)
+
+    return [{'region': r['region'], 'bodies': dict(r['bodies']),
+             'start_s': rel(r['start']), 'until_s': rel(r['until']),
+             'end_s': rel(r['end']), 'ended_by': r['ended_by'] or 'open_at_end'}
+            for r in (getattr(belief, 'suspensions', None) or [])]
+
+
 def report_run_outcome(
     *,
     success: bool,
@@ -404,6 +438,7 @@ def report_run_outcome(
     m8_stats: Optional[dict] = None,  # M8: observes and view-fact metrics
     shadows: list,
     blocked_giveup_shadows: set,
+    m7_suspend_s: Optional[float] = None,       # M7: the F9 give-up's suspension (None: M7 off)
     pick_giveup_objects: Optional[set] = None,  # #P1 F2 pick 3-strike giveup
     integrity_events: Optional[list] = None,    # #P2 (a) monitor verdicts
     stack_fail_counts: Optional[dict] = None,   # #P2 F28 strikes
@@ -506,9 +541,22 @@ def report_run_outcome(
                   f"held object — episode ended while holding (audit-#58 "
                   f"drop retired; {len(remaining)} unsearched shadows "
                   f"remaining)")
+        elif exit_reason == "rediscovery_giveup":
+            # M7 (Hani, 2026-11-20): the loop stopped because the only
+            # regions left were suspended at the F9 give-up.
+            print(f"FAILED: the only shadows left to search are suspended "
+                  f"at the F9 give-up (M7): {_suspended_text(belief)}; the "
+                  f"target may be inside"
+                  + (f"; {len(blocked_giveup_shadows)} more given up after "
+                     f"repeated still_blocked outcomes (audit #21), not "
+                     f"observed empty: {sorted(blocked_giveup_shadows)}"
+                     if blocked_giveup_shadows else ""))
         elif exit_reason == "planner_failed":
+            _susp = _suspended_text(belief)
             print(f"FAILED: Planner returned no plan "
-                  f"({len(remaining)} unsearched shadows remaining)")
+                  f"({len(remaining)} unsearched shadows remaining"
+                  + (f"; suspended at the F9 give-up (M7): {_susp}" if _susp
+                     else "") + ")")
         elif exit_reason == "no_plan_binding_death":
             # #P1 F7 (2026-08-22): FastDownward found action skeletons
             # but stream binding never delivered values (sample_time
@@ -539,9 +587,12 @@ def report_run_outcome(
             # came up empty.
             _lost = sorted({e.get("object") for e in (integrity_events or [])
                             if e.get("kind") == "lost"})
+            _susp = _suspended_text(belief)
             print(f"FAILED: the target was seen, then lost from view "
                   f"({_lost}) and never re-detected (#P2 monitor; "
-                  f"{len(remaining)} unsearched shadows remaining)")
+                  f"{len(remaining)} unsearched shadows remaining"
+                  + (f"; suspended at the F9 give-up (M7): {_susp}" if _susp
+                     else "") + ")")
         elif exit_reason == "stack_giveup":
             _worst = sorted((stack_fail_counts or {}).items(),
                             key=lambda kv: -kv[1])[:3]
@@ -655,6 +706,11 @@ def report_run_outcome(
                 "stack_fail_counts": {f"{o} on {s}": n for (o, s), n
                                       in (stack_fail_counts or {}).items()},
                 "blocked_giveup_shadows": sorted(blocked_giveup_shadows or []),
+                # M7 (Hani, 2026-11-20): the F9 give-up's suspension length
+                # and every suspension's start and end (absent with M7 off).
+                **({"m7_suspend_s": m7_suspend_s,
+                    "m7_suspensions": suspension_rows(belief)}
+                   if m7_suspend_s is not None else {}),
                 "pick_giveup_objects": sorted(pick_giveup_objects or []),
                 # Audit #73 step 2(d) plot 11: per-replan boxel count
                 # snapshots (one dict per planner.plan() iteration) for the
@@ -867,6 +923,50 @@ def parse_pipeline_args(argv=None):
              "region when the arm there does not block the eye's view, then "
              'pick from there (on), or return to a static view spot before '
              'every sense as before (off).')
+    # Path 9 (BF#68, tracks/look): one look action replaces sense and
+    # observe (look_domain.py, look_action.py); off keeps both, as before.
+    # boxel: the look from a free-space boxel (look_views.py); centred: the
+    # reference look that uses no boxel model (the camera straight over the
+    # object the look is about, the tag's observe rule).  `on` means boxel.
+    parser.add_argument(
+        '--look', choices=['off', 'on', 'boxel', 'centred'], default='off',
+        help="Path 9: replace the sense and observe actions by one look "
+             "action: boxel (a free-space boxel, the generated domain "
+             "pddl/domain_pddlstream_look.pddl; `on` is the same) or centred "
+             "(the object-centred look, pddl/domain_pddlstream_look_centred."
+             "pddl); needs --m8 on.")
+    # Path 9, the arm camera only (tracks/look/ARM_ONLY_DESIGN.md): every
+    # image comes from the arm camera, the first one at the start
+    # configuration, which is q_home.  fixed keeps the overview camera.
+    parser.add_argument(
+        '--eye', choices=['fixed', 'arm'], default='fixed',
+        help="Path 9: arm: the overview camera is the arm camera at the start "
+             "configuration (needs --look boxel or --look centred); fixed: "
+             "the fixed overview camera, as before.")
+    parser.add_argument(
+        '--eye-start-joints', default='',
+        help="Path 9, --eye arm: the start configuration, one angle per arm "
+             "joint in radians, comma separated; it becomes q_home.  Empty: "
+             "the caller's home joints (find_dice: TAMPURA's DEFAULT_ARM_POS), "
+             "else TAMPURA's home joints (arm_eye.TAMPURA_HOME_JOINTS).")
+    # BF#65 option 1 (2026-11-12; the audit's D6, model tweak M2): a hiding
+    # region under an object whose class declares a cavity that holds the
+    # target class (interior_regions.py), unknown until the object is moved
+    # away and the space looked at.  Off by default: no scene of our own
+    # declares a cavity, and on find_dice it is a model addition that Hani
+    # switches on.
+    parser.add_argument(
+        '--interior-regions', choices=['off', 'on'], default='off',
+        help="BF#65 option 1 (D6, M2): the space under an object whose "
+             "class declares a cavity is a hiding region, searched by "
+             "moving the object away (on), or no such region (off, the "
+             "default).")
+    # M7 (PAPER_AUDIT M7, BF#15, TB-46): on, the default by BF#15.
+    parser.add_argument(
+        '--m7', choices=['off', 'on'], default='on',
+        help="M7: a sense that finds a registered body again keeps its "
+             "still-hidden fragments and carves the new ones against every "
+             "fragment (on, the default), or drops them unrendered (off).")
     # BF#53 (2026-10-30), the optimistic search's settings.  pddlstream
     # weighs a stream result's effort into the search's costs only with
     # effort_weight set; without it every attempt of the adaptive loop may

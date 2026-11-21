@@ -32,14 +32,21 @@
 #   arguments: snapshot, scene seeds, repetitions, OUT (optional: a results
 #   directory shared by the jobs; each job writes OUT/<job id>, or with
 #   P4_LOCAL=1 OUT/<job id>.tar.gz; read them together with
-#   tools/gen_scene_eval.py --report <the job folders>).
+#   tools/gen_scene_eval.py --report <the job folders>), and a second
+#   snapshot (optional, path 6's arm O2: arm O's snapshot plus TB-1 only; the
+#   job then runs T, O and O2 back to back on each scene, runs the gates on
+#   that tree too, and the harness stops unless the two snapshots hold the same
+#   scene files).  Pass OUT as '-' to keep its default when giving the fifth.
 set -uo pipefail
 W=${P4_WORK:-/work/rleap1/hani.alassiri.alhabboub/p4}
 SB=$W/${1:?snapshot dir, e.g. sb_1234567}
 SEEDS=${2:?scene seeds, e.g. 100-103}
 REPS=${3:-2}
 JOB=${SLURM_JOB_ID:-local}
-OUT=${4:-$W/results/gen_${SB##*/sb_}}/$JOB
+OUTBASE=${4:--}
+[ "$OUTBASE" = - ] && OUTBASE=$W/results/gen_${SB##*/sb_}
+OUT=$OUTBASE/$JOB
+SB2=${5:+$W/$5}
 TW=$W/tampura-work
 VA=$W/armO-venvA/bin
 P4_LOCAL=${P4_LOCAL:-0}
@@ -116,6 +123,8 @@ export BRIDGE_SCENE_MANIFEST=$SB/tampura_bridge/gen_scenes/find_dice/manifest.js
 export PYTHONPATH=$SB:$W/pddlstream_lib:$TW/tampura:$TW/tampura_environments
 echo "host $(hostname)  job ${SLURM_JOB_ID:-none}  $(date -Is)  snapshot $SB  scenes $SEEDS  reps $REPS  out $OUT"
 grep -m1 'model name' /proc/cpuinfo
+# rule 16 (PLAN section 17): the memory at the start, the kind of file system under $LD (tmpfs is RAM) and the job's --mem
+echo "memory at the start: $(awk '/^(MemTotal|MemAvailable):/ {printf "%s %s kB  ", $1, $2}' /proc/meminfo)local fs $LD $(df -PT $LD | awk 'NR == 2 {print $2}') (tmpfs is RAM), Slurm --mem ${SLURM_MEM_PER_NODE:-?} MB" | tee -a $OUT/memory_lines.txt
 # The gates run without arm O's PYTHONPATH, as in slip_t.sbatch: with
 # $TW/tampura on it, G13's import check finds the checkout instead of arm
 # T's install and fails (it failed jobs 5061712 to 5061721), and pip freeze
@@ -128,13 +137,42 @@ if [ $GRC -ne 0 ]; then
   echo "per-run gates FAILED before the eval: nothing run"
   exit 1
 fi
+ARMS_ARGS=
+if [ -n "$SB2" ]; then
+  [ -d $SB2 ] || { echo "no second snapshot $SB2: nothing run"; exit 1; }
+  (cd $SB2 && env -u PYTHONPATH $VA/python tools/bridge_gates.py all --save $OUT/g13_o2_before.json) > $OUT/gates_o2_before.txt 2>&1
+  GRC2=$?
+  cat $OUT/gates_o2_before.txt
+  if [ $GRC2 -ne 0 ]; then
+    echo "per-run gates FAILED on the second snapshot before the eval: nothing run"
+    exit 1
+  fi
+  ARMS_ARGS="--arms T,O,O2 --snapshot-o2 $SB2"
+  echo "arms T, O ($SB) and O2 ($SB2)"
+fi
+# paper_jobs 2026-11-19: P4_ARMS (e.g. O) picks the arms without a second snapshot; P4_O_ARGS
+# passes pipeline flags to arm O (the camera: '--interior-regions on --look boxel --eye arm');
+# P4_SHOTS (default failures; evals use none, Hani's minimal-debug rule)
+[ -n "${P4_ARMS:-}" ] && [ -z "$SB2" ] && ARMS_ARGS="--arms $P4_ARMS"
+echo "arms ${P4_ARMS:-default}  o-args '${P4_O_ARGS:-}'  shots ${P4_SHOTS:-failures}"
 # The cap is B8's pre-registered 900 s (D10), the same for both arms: on
 # the new scenes (up to five cups) TAMPURA's loop may run past BF#59's 600 s.
 $VA/python -u $SB/tools/gen_scene_eval.py --snapshot $SB --out $OUT --seeds $SEEDS \
-  --reps $REPS --cap 900 --python-o $VA/python --venv-t $TW/.venv --tampura-work $TW
-echo "harness rc $?"
+  --reps $REPS --cap 900 --python-o $VA/python --venv-t $TW/.venv --tampura-work $TW $ARMS_ARGS \
+  --o-args "${P4_O_ARGS:-}" --shots ${P4_SHOTS:-failures}
+HRC=$?
+echo "harness rc $HRC"
+# rule 16: exit code 4 is memwatch's stop (MemAvailable under 4 GB after an episode, STOPPED_LOW_MEMORY.txt in OUT)
+[ $HRC = 4 ] && echo "STOPPED_LOW_MEMORY: the harness stopped on MemAvailable under 4 GB (rc 4), see $OUT/STOPPED_LOW_MEMORY.txt"
 (cd $SB && env -u PYTHONPATH $VA/python tools/bridge_gates.py tree --compare $OUT/g13_before.json) > $OUT/gates_after.txt 2>&1
 cat $OUT/gates_after.txt
+if [ -n "$SB2" ]; then
+  (cd $SB2 && env -u PYTHONPATH $VA/python tools/bridge_gates.py tree --compare $OUT/g13_o2_before.json) > $OUT/gates_o2_after.txt 2>&1
+  cat $OUT/gates_o2_after.txt
+fi
+# rule 16: after the job nothing of ours alive and nothing in /dev/shm (counted here; a stray is reported, never
+# ended by name)
+echo "memory after the job: $(ps -u "$(id -un)" -o pid,args | grep -E 'downward|translate|test_full_pipeline|run_tampura_timed' | grep -vc grep) pipeline processes of ours alive, $(ls /dev/shm | wc -l) names in /dev/shm, MemAvailable $(awk '/^MemAvailable:/ {print $2}' /proc/meminfo) kB" | tee -a $OUT/memory_lines.txt
 finish
 # BF#49: the cluster's data hygiene after every run.
 bash $SB/tools/cluster/prune_work.sh --apply || echo "prune_work rc $?"

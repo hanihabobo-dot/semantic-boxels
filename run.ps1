@@ -14,13 +14,21 @@
 #   run boxels -Seed 3 -Headless
 #   run boxels -Scene stack -Goal stack -Occluders 0
 #   run tampura -Off           without M8-M10 (the old pipeline);  -Squeeze 1   a pick squeeze in mm
+#   run boxels -Look boxel     one look action from a free-space boxel instead of sense and observe (path 9)
+#   run boxels -Look centred   the object-centred look instead (no boxel model in the look; path 9's reference)
+#   run boxels -Look boxel -Eye arm   every image from the arm camera (path 9; run tampura takes it too)
 #   run tampura -Screenshots   also save the eye PNGs at every snapshot (debugging only; off since BF#50)
 #   run tampura -Draw boxels   the GUI also draws the boxels (lines and labels, changing as the registry
 #                              changes); adds nothing to the world and nothing to a camera image; with
 #                              -Headless it is ignored (nothing is drawn); run boxels draws them as is
+#   run tampura -Draw cameras  its own window (flush right; move it) with what each of our cameras (eye,
+#                              wrist) saw at its latest render (image, depth, segmentation); the GUI also
+#                              draws each view volume; the world is not touched; -Draw boxels,cameras: both
 #   run tampura -Music         8-bit music and effects that follow the run (Windows plays them);
 #                              -Sfx   the effects only;  -Voice   Windows' voice reads the narration too
 #   run boxels -Args '--n-extra-distractors 1'   more pipeline flags, one quoted string, as is
+#   run wumpus -Seed 3         the 3-D Wumpus world (path 4), explore test controller, GUI;  -Size 10 (default 5),
+#                              -Headless;  [3, 4] runs a list as above
 #   run ps                     the pipeline processes alive in WSL;  run kill   ends the ones run started
 #   run help                   this text;  -DryRun prints the command instead of running it
 # Every run takes the pipeline lock (rule 7: one episode at a time, pddlstream temp/ race): it
@@ -36,11 +44,14 @@ param(
     [Parameter(Position = 0)][string]$What = 'tampura',
     [string[]]$Seed = '0',
     [switch]$Headless,
+    [int]$Size = 5,
     [switch]$Gen,
     [string]$Scene = 'random-pairs',
     [string]$Goal = 'holding',
     [int]$Occluders = 2,
     [switch]$Off,
+    [ValidateSet('', 'boxel', 'centred', 'on')][string]$Look = '',
+    [ValidateSet('', 'fixed', 'arm')][string]$Eye = '',
     [double]$Squeeze = 0,
     [switch]$Screenshots,
     [string[]]$Draw = @(),
@@ -62,7 +73,7 @@ $PY = '/root/armO-venvA/bin/python'
 $PROCS = "tr -d '\r' < $S/tools/run_procs.sh | bash -s --"
 
 if ($What -in 'help', '-h', '--help', '/?', '?') {
-    Get-Content $PSCommandPath | Select-Object -First 25 | ForEach-Object { $_ -replace '^# ?', '' }
+    Get-Content $PSCommandPath | Select-Object -First 33 | ForEach-Object { $_ -replace '^# ?', '' }
     return
 }
 if ($What -in 'ps', 'status') {
@@ -76,8 +87,8 @@ if ($What -eq 'kill') {
     if ($gone) { $gone } else { Write-Host 'run: nothing to kill, no pipeline process is alive in WSL' -ForegroundColor DarkGray }
     exit $rc
 }
-if ($What -notin 'tampura', 'boxels') {
-    Write-Host "run: unknown target '$What' (tampura or boxels; run help)" -ForegroundColor Yellow
+if ($What -notin 'tampura', 'boxels', 'wumpus') {
+    Write-Host "run: unknown target '$What' (tampura, boxels or wumpus; run help)" -ForegroundColor Yellow
     exit 2
 }
 
@@ -87,6 +98,15 @@ if ($What -notin 'tampura', 'boxels') {
 # flag (a flag's value never comes first) and join the list from there.
 while ($Rest.Count -gt 0 -and "$($Rest[0])" -match '^[\[\]\d,\s]+$') {
     $Seed += $Rest[0]
+    $Rest = @($Rest | Select-Object -Skip 1)
+}
+# -Draw (BF#68) takes the same: kinds with only spaces between them
+# (-Draw boxels cameras) land in $Rest and join from there, when they are
+# known kinds.  tests/test_run_draw_launcher.py pins this list to policy.py's.
+$drawKinds = 'boxels', 'cameras'
+$kindWords = '^(' + ($drawKinds -join '|') + ')([\s,]+(' + ($drawKinds -join '|') + '))*$'
+while ($Draw.Count -gt 0 -and $Rest.Count -gt 0 -and "$($Rest[0])" -match $kindWords) {
+    $Draw += $Rest[0]
     $Rest = @($Rest | Select-Object -Skip 1)
 }
 $seeds = @(($Seed -join ',') -split '[\s,\[\]]+' | Where-Object { $_ })
@@ -106,22 +126,34 @@ if ($What -eq 'tampura' -and $Gen) {
 }
 
 $sw = if ($Off) { ' --m8 off --m9 off --m10 off --pick-aperture-from-pose off' } else { '' }
+if ($Look) { $sw += " --look $Look" }
+# -Eye arm (path 9): every image from the arm camera.  It needs a look (sense is
+# the fixed camera's action); run boxels passes it to the pipeline, run tampura
+# to the bridge's driver.
+if ($Eye -eq 'arm') {
+    if (-not $Look) {
+        Write-Host "run: -Eye arm needs -Look boxel or -Look centred (sense is the fixed camera's action)" -ForegroundColor Yellow
+        exit 2
+    }
+    $sw += ' --eye arm'
+}
 if ($Squeeze -gt 0) {
     $sw += ' --grip-squeeze-mm ' + $Squeeze.ToString([cultureinfo]::InvariantCulture)
 }
 if ($Screenshots) { $sw += ' --save-screenshots on' }
 # -Draw (BF#68): what the GUI draws besides the scene, one word or a comma
-# list, any case; boxels today.  The bridge driver takes it as --draw; it
-# draws nothing without the GUI and run boxels has its own overlay.
+# list, any case (kinds: $drawKinds above).  The bridge driver takes it as --draw;
+# it draws nothing without the GUI and run boxels has its own display.
 $draws = @($Draw | ForEach-Object { $_ -split '[\s,]+' } | Where-Object { $_ } |
            ForEach-Object { $_.ToLowerInvariant() } | Select-Object -Unique)
-$badDraw = @($draws | Where-Object { $_ -notin 'boxels' })
+$badDraw = @($draws | Where-Object { $_ -notin $drawKinds })
 if ($badDraw.Count -gt 0) {
-    Write-Host "run: -Draw takes boxels (several: a comma list), not '$($badDraw -join ' ')'" -ForegroundColor Yellow
+    Write-Host "run: -Draw takes $($drawKinds -join ', ') (several: a comma list), not '$($badDraw -join ' ')'" -ForegroundColor Yellow
     exit 2
 }
 if ($draws.Count -gt 0 -and $What -ne 'tampura') {
-    Write-Host "run: -Draw is for run tampura; run boxels draws its boxels in the GUI as it is" -ForegroundColor Yellow
+    $own = if ($What -eq 'wumpus') { 'run wumpus paints what the robot knows' } else { 'run boxels has its own display' }
+    Write-Host "run: -Draw ($($drawKinds -join ', ')) is for run tampura; $own and ignores it" -ForegroundColor Yellow
     $draws = @()
 } elseif ($draws.Count -gt 0 -and $Headless) {
     Write-Host "run: -Draw is ignored with -Headless (there is no GUI), nothing is drawn" -ForegroundColor Yellow
@@ -138,6 +170,7 @@ $audio = if ($Music) { 'on' } elseif ($Sfx) { 'sfx' } else { '' }
 # names ignore case, and $S is the checkout.)
 function New-Run([int]$seedNo) {
     $record = $null
+    $cameras = $null
     if ($What -eq 'tampura') {
         $stamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
         $vis = if ($Headless) { 0 } else { 1 }
@@ -146,6 +179,10 @@ function New-Run([int]$seedNo) {
         $mine = "${kind}_s${seedNo}_$stamp"
         $save = "$S/archive/tampura_bridge_plan_2026-10-25/bf/gui_runs/$mine"
         $record = Join-Path $PSScriptRoot "archive/tampura_bridge_plan_2026-10-25/bf/gui_runs/$mine/bridge_episode.json"
+        # -Draw cameras: the folder the run's pictures go to, which the camera window reads.
+        if ('cameras' -in $draws) {
+            $cameras = Join-Path $PSScriptRoot "archive/tampura_bridge_plan_2026-10-25/bf/gui_runs/$mine/cameras"
+        }
         $run = "PYTHONPATH=$S`:$S/pddlstream_lib`:`$TW/tampura`:`$TW/tampura_environments " +
                "PYTHONHASHSEED=0 $PY $S/tampura_bridge/run_bridge_on_finddice.py " +
                "--global-seed $seedNo --vis $vis --save-dir $save$g19$sw$extra"
@@ -165,6 +202,14 @@ function New-Run([int]$seedNo) {
         } else {
             $cmd = "TW=/root/tampura-work; cd `$TW/tampura_environments && $run"
         }
+    } elseif ($What -eq 'wumpus') {
+        $stamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
+        $vis = if ($Headless) { 0 } else { 1 }
+        $kind = if ($Headless) { 'headless' } else { 'watch' }
+        $mine = "wumpus_${kind}_n${Size}_s${seedNo}_$stamp"
+        $save = "$S/archive/tampura_bridge_plan_2026-10-25/tracks/wumpus/runs/$mine"
+        $record = Join-Path $PSScriptRoot "archive/tampura_bridge_plan_2026-10-25/tracks/wumpus/runs/$mine/episode.json"
+        $cmd = "cd $S && PYTHONHASHSEED=0 $PY $S/wumpus/run_wumpus.py --size $Size --seed $seedNo --vis $vis --save-dir $save$extra"
     } else {
         $nogui = if ($Headless) { ' --no-gui' } else { '' }
         $mine = "test_full_pipeline.py$nogui --scene $Scene --seed $seedNo --goal $Goal --n-occluders $Occluders"
@@ -187,7 +232,7 @@ function New-Run([int]$seedNo) {
     # TB-17: the run and its children carry SB_RUN, so run kill ends what
     # run started and leaves a track's episode, probe or planner alone.
     $cmd = 'export SB_RUN=1; ' + $cmd
-    [pscustomobject]@{ Seed = $seedNo; Cmd = $cmd; Mine = $mine; Record = $record }
+    [pscustomobject]@{ Seed = $seedNo; Cmd = $cmd; Mine = $mine; Record = $record; Cameras = $cameras }
 }
 
 if ($DryRun) {
@@ -207,6 +252,7 @@ if ($DryRun) {
 $many = $seeds.Count -gt 1
 $done = @()
 $code = 0
+$viewer = $null     # -Draw cameras: the camera window of the seed before
 for ($i = 0; $i -lt $seeds.Count; $i++) {
     # TB-17 (Go, 2026-11-08): only a run that run started refuses a new one;
     # a track's episode does not (the pipeline lock keeps the two apart, and
@@ -228,9 +274,37 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
     $p = [System.Diagnostics.Process]::Start($psi)
     $seen = $false
     $ended = ''
+    $viewerAt = $null
     try {
+        if ($r.Cameras) {
+            # -Draw cameras: the window of what our cameras see (tools/camera_view.ps1).  It only
+            # reads the run's cameras folder (at low priority), closes 20 s after this run's process
+            # has ended, and a failure to start it never touches the run.  In a seed list the window
+            # of the seed before goes first: its run is over.  Start-Process does not quote its
+            # arguments.  It starts inside this try, so that a stopped launcher ends the run too.
+            if ($viewer -and -not $viewer.HasExited) { Stop-Process -Id $viewer.Id -ErrorAction SilentlyContinue }
+            $viewer = $null
+            try {
+                $viewerArgs = @('-NoProfile', '-File', ('"' + (Join-Path $PSScriptRoot 'tools/camera_view.ps1') + '"'),
+                                '-Dir', ('"' + $r.Cameras + '"'), '-WatchPid', $p.Id)
+                $viewer = Start-Process -FilePath (Join-Path $PSHOME 'pwsh.exe') -ArgumentList $viewerArgs `
+                              -WindowStyle Hidden -PassThru
+                $null = $viewer.Handle      # keeps the handle: HasExited and ExitCode stay readable
+                $viewerAt = Get-Date
+            } catch {
+                Write-Host "run: the camera window did not start ($($_.Exception.Message)); the run goes on without it" -ForegroundColor Yellow
+            }
+        }
         while (-not $p.HasExited) {
             Start-Sleep -Milliseconds 700
+            if ($viewerAt -and ((Get-Date) - $viewerAt).TotalSeconds -ge 6) {
+                # a window that died after it started would otherwise be missing without a word
+                $viewerAt = $null
+                if ($viewer.HasExited) {
+                    Write-Host ("run: the camera window ended at once (exit code $($viewer.ExitCode)); to see why, run: " +
+                                "pwsh -NoProfile -File tools/camera_view.ps1 -Dir '$($r.Cameras)'") -ForegroundColor Yellow
+                }
+            }
             if ($Headless -or $ended) { continue }
             $open = @(Get-Process -Name msrdc -ErrorAction SilentlyContinue |
                       Where-Object { $_.MainWindowTitle -like '*Bullet Physics*' }).Count
@@ -278,7 +352,7 @@ if ($many) {
         if ($x.Record) {
             $folder = Split-Path (Split-Path $x.Record -Parent) -Leaf
             if (-not $x.Ended -and $x.Code -ne 130 -and (Test-Path -LiteralPath $x.Record)) {
-                try { $status = (Get-Content -Raw -LiteralPath $x.Record | ConvertFrom-Json).outcome.status } catch { }
+                try { $o = (Get-Content -Raw -LiteralPath $x.Record | ConvertFrom-Json).outcome; $status = if ($o.status) { $o.status } else { $o.outcome } } catch { }
             }
         }
         $color = if ($status -eq 'success') { 'Green' } else { 'Yellow' }
