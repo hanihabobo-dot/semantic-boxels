@@ -3058,7 +3058,9 @@ def p44_loggers_globals(out):
 # at all) a trace function sees every call of console_ui.install_early, its caller's module, its
 # module_name argument and what it returned (a call after pybullet's import cannot change the
 # answer, and tracing the rest of an import doubles the pin's time).  They import nothing and
-# change none of the facts the pin stores.
+# change none of the facts the pin stores.  importlib.import_module, by which _FRESH imports the
+# module under test, raises no "import" event for that module itself (only the import statements
+# inside it do), so _FRESH hands its start to the hook (fix round 1 of WP-A, CHECK_A_1 note 3).
 _EARLY_HOOKS = r'''
 early = []
 _early_seen = set()
@@ -3091,6 +3093,7 @@ _FRESH = r'''
 import importlib, json, logging, os, sys
 repo, name = sys.argv[1], sys.argv[2]
 ''' + _EARLY_HOOKS + r'''
+_early_audit('import', (name,))
 err = None
 try:
     importlib.import_module(name)
@@ -3190,7 +3193,9 @@ def p45_fresh_imports(out):
              'whose __file__ lies in the repo')
     out.note('entry_help: python test_full_pipeline.py --no-gui --help (the --help path installs no console)')
     out.note('fresh_install_early.json (REVIEW_PHASE0 item 12): in the same fresh interpreters an audit hook '
-             'records the start of the first import of console_ui and of pybullet, and a trace function, on '
+             'records the start of the first import of console_ui and of pybullet (the import of the module '
+             'under test, which importlib.import_module does not announce, is handed to the hook by the '
+             'script), and a trace function, on '
              "from the start of console_ui's import until pybullet's import starts (to the end when pybullet "
              'came first or not at all), every call of console_ui.install_early (caller module, module_name, '
              'returned), in order; '
