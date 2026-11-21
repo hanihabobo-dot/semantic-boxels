@@ -2176,18 +2176,19 @@ def p39_printed_text(out):
 
 # ----- pin 40: ledger schema -----------------------------------------------
 
-@pin('low', 'p40_ledger_schema', 'P40: per ledger_event call site the kind and keyword names (AST)')
-def p40_ledger_schema(out):
-    from collections import Counter
+def _call_sites(callee, files=None):
+    """Every call of the function named callee (a bare name, an attribute, or an import alias of
+    it) in the AST pins' scope: file, function, line, callee text, kind (the first argument if a
+    str constant, else <dynamic: ...> or <no kind>), keyword names, positional count."""
     sites = []
-    for path in repo_py_files():
+    for path in (repo_py_files() if files is None else files):
         r = rel(path)
         tree = _parse(path)
-        aliases = {'ledger_event'}
+        aliases = {callee}
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 for a in node.names:
-                    if a.name == 'ledger_event' and a.asname:
+                    if a.name == callee and a.asname:
                         aliases.add(a.asname)
 
         def on(node, qual):
@@ -2207,9 +2208,27 @@ def p40_ledger_schema(out):
             sites.append({'file': r, 'function': qual, 'line': node.lineno, 'callee': ast.unparse(fn),
                           'kind': kind, 'keywords': kws, 'n_positional': len(node.args)})
         _walk_scoped(tree, on)
+    return sites
+
+
+def ledger_kinds():
+    """The row kinds of every ledger_event call in the AST pins' scope, sorted: pin 40's
+    kinds.json, read from the code (PLAN rule 3).  A call whose kind is not a str constant shows
+    as <dynamic: ...>.  The console's made-tape test reads the kinds here (SPEC D14 (d))."""
+    return sorted({s['kind'] for s in _call_sites('ledger_event')})
+
+
+M7_ROW_KINDS = ('sense_discovery', 'm7_suspension')     # U3: the two kinds M7 added
+
+
+@pin('low', 'p40_ledger_schema', 'P40: per ledger_event call site the kind and keyword names (AST)')
+def p40_ledger_schema(out):
+    from collections import Counter
+    sites = _call_sites('ledger_event')
     multi = Counter((s['kind'], tuple(s['keywords']), s['n_positional']) for s in sites)
     out.json('schema.json', [[k, list(kw), npos, multi[(k, kw, npos)]] for (k, kw, npos) in sorted(multi)])
-    out.json('kinds.json', sorted({s['kind'] for s in sites}))
+    kinds = sorted({s['kind'] for s in sites})
+    out.json('kinds.json', kinds)
     rl_tree = _parse(REPO / 'run_logger.py')
     statuses = None
     for node in rl_tree.body:
@@ -2221,6 +2240,40 @@ def p40_ledger_schema(out):
     out.note('schema.json: [kind, keyword names in source order, positional count, number of sites], sorted '
              '(a multiset); kinds.json a sorted set; STEP_END_STATUSES in source order (a tuple); '
              'INFO_sites.json (file, function, line per site) is information only and not compared')
+    # Gate 7 (INDEX_PINS P3, PLAN rule 3, trap 7, U3): the counts, bridge_gates' own list, the
+    # statuses dispatch_end is called with, the two M7 kinds.
+    g3 = list(_module_literal('tools/bridge_gates.py', 'G3_STATUSES'))
+    out.json('bridge_gates_statuses.json', g3)
+    ends = _call_sites('dispatch_end')
+    end_count = Counter(s['kind'] for s in ends)
+    out.json('dispatch_end_statuses.json', [[k, end_count[k], k in statuses] for k in sorted(end_count)])
+    out.json('INFO_dispatch_end_sites.json', sorted(ends, key=lambda s: (s['file'], s['line'])))
+    out.json('counts.json', {
+        'ledger_event_sites': len(sites),
+        'row_kinds': len(kinds),
+        'row_kinds_not_a_constant': [k for k in kinds if k.startswith('<')],
+        'step_end_statuses': len(statuses),
+        'bridge_gates_G3_STATUSES': len(g3),
+        'step_end_statuses_not_in_G3_STATUSES': [s for s in statuses if s not in g3],
+        'G3_STATUSES_not_in_step_end_statuses': [s for s in g3 if s not in statuses],
+        'dispatch_end_sites': len(ends),
+        'dispatch_end_not_a_constant': sorted(k for k in end_count if k.startswith('<')),
+        'dispatch_end_constants_not_in_step_end_statuses': sorted(k for k in end_count
+                                                                  if not k.startswith('<') and k not in statuses)})
+    out.json('m7_kinds.json', {k: [[list(kw), npos, multi[(kk, kw, npos)]] for (kk, kw, npos) in sorted(multi)
+                                   if kk == k] for k in M7_ROW_KINDS})
+    out.note('counts.json (gate 7, INDEX_PINS P3; PLAN rule 3: counted here, never typed): the ledger_event sites, '
+             'the row kinds of kinds.json (and those that are not a str constant), the statuses of '
+             'run_logger.STEP_END_STATUSES and of tools/bridge_gates.py\'s G3_STATUSES (bridge_gates_statuses.json, '
+             'source order; trap 7: the two lists differ by design) with what each holds that the other lacks, the '
+             'dispatch_end call sites, those whose status is not a str constant (their values are not read here), '
+             'and any constant status STEP_END_STATUSES lacks (dispatch_end turns such a value into unlabelled)')
+    out.note('dispatch_end_statuses.json: [status (the first argument, or <dynamic: ...>), number of call sites, '
+             'in STEP_END_STATUSES], sorted, over the same scope as schema.json; INFO_dispatch_end_sites.json '
+             '(file, function, line) is information only')
+    out.note('m7_kinds.json (U3): for each of the kinds ' + ', '.join(M7_ROW_KINDS) + ' its rows of '
+             'schema.json ([keyword names, positional count, number of sites]); an empty list would say the kind '
+             'is gone')
 
 
 # ----- pin 41: RNG sites ---------------------------------------------------
