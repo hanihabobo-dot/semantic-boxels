@@ -16,6 +16,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import types
@@ -1116,8 +1117,8 @@ def test_twin_rule_of_d3():
 def _fake_recorder(monkeypatch, ledgers, status=None, sets_seen=None):
     """run_episode replaced by one that writes, as the real one does, the
     normalised ledger it is given, RESULT.json with the folder's paths and
-    a tape META.json for a set; the names asked for in calls, the sets in
-    sets_seen."""
+    a tape META.json for a set, into its folder made new; the names asked
+    for in calls, the sets in sets_seen."""
     calls = []
 
     def fake(name, mode, run_dir, log=print, sets=None, **k):
@@ -1126,6 +1127,8 @@ def _fake_recorder(monkeypatch, ledgers, status=None, sets_seen=None):
         if sets_seen is not None:
             sets_seen.append(sets)
         run_dir = Path(run_dir).resolve()
+        if run_dir.exists():                 # a folder of that name is replaced, as run_episode does
+            shutil.rmtree(run_dir)
         (run_dir / 'norm').mkdir(parents=True)
         (run_dir / 'tape').mkdir()
         (run_dir / 'norm' / 'ledger.json').write_text(json.dumps(ledgers.get(name, [])), encoding='utf-8')
@@ -1164,6 +1167,29 @@ def test_record_set_stores_the_counts_and_records_the_twin_right_after(tmp_path,
     assert rec.record_set(tmp_path / 'a', ['f141'], log=lambda s: None) == 0    # one set, two calls
     assert list(json.loads((tmp_path / 'a' / 'STORE.json').read_text(encoding='utf-8'))) == [
         'f204', 'f204_m7off', 'f140', 'f141']
+
+
+def test_a_twin_the_set_holds_from_an_earlier_call_is_not_recorded_again(tmp_path, monkeypatch):
+    """A set recorded one episode per call (a hold of the lock each): the
+    twin recorded in an earlier call is not recorded again when D3 asks for
+    it after its on recording in a later call, and the log says so; named
+    in a call, it is recorded again.  Catches a twin recorded a second time
+    into the same set, its first recording replaced."""
+    rows = _ROWS[:5]          # a contains_nontarget sense and a discovery, no m7_suspension row (no D4)
+    calls = _fake_recorder(monkeypatch, {'f204': rows, 'f204_m7off': []})
+    logs = []
+    assert rec.record_set(tmp_path, ['f204_m7off'], log=logs.append) == 0
+    assert calls == ['f204_m7off']
+    calls.clear()
+    assert rec.record_set(tmp_path, ['f204'], log=logs.append) == 0
+    assert calls == ['f204']
+    assert [s for s in logs if 'D3 asks for the twin f204_m7off; the set holds its recording from an earlier '
+            'call (f204_m7off/STORED.json, status ended): not recorded again' in s]
+    assert json.loads((tmp_path / 'f204' / 'STORED.json').read_text(encoding='utf-8'))['twin']['name'] == 'f204_m7off'
+    assert list(json.loads((tmp_path / 'STORE.json').read_text(encoding='utf-8'))) == ['f204_m7off', 'f204']
+    calls.clear()
+    assert rec.record_set(tmp_path, ['f204', 'f204_m7off'], log=logs.append) == 0
+    assert calls == ['f204', 'f204_m7off']
 
 
 # ---------------------------------------------------------------------------

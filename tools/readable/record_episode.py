@@ -23,7 +23,9 @@ arguments.
 (STORED.json beside each tape, STORE.json over the set), records a run
 that holds m7_suspension rows again at once with execution.M7_SUSPEND_S =
 1e9 (D4; the first recording kept as <name>.as_recorded, the value in the
-tape's META.json), and records the --m7 off twin D3 asks for right after.
+tape's META.json), and records the --m7 off twin D3 asks for right after,
+unless the call names it or the set holds it from an earlier call (so a
+twin can have a call, and a hold of the lock, of its own).
 
 The tool never takes the pipeline lock itself: its caller runs it under
 ``flock /root/sb_pipeline.lock`` (a nested flock on the same file from a
@@ -2194,7 +2196,10 @@ def record_set(out_dir, episodes, log=print):
     At storing, the counts and the rules of D3 and D4 go beside the tape
     (STORED.json) and into out_dir/STORE.json; a recording D4 asks for is
     made again at once with D4_SET (the first kept as <name>.as_recorded);
-    a twin D3 asks for is recorded right after, unless the set names it."""
+    a twin D3 asks for is recorded right after, unless this call names it
+    or the set holds its recording from an earlier call (its STORED.json):
+    a set may be recorded one episode per call, a twin in a call of its
+    own.  A name the call gives is always recorded (its folder replaced)."""
     for name in episodes:                # every name resolves before the first recording
         entry(name)
     worst = 0
@@ -2218,8 +2223,15 @@ def record_set(out_dir, episodes, log=print):
         store[name] = stored
         twin = stored['twin']['name']
         if twin and twin not in episodes and twin not in store and twin not in queue:
-            log(f'[record_episode] {name}: D3 asks for the twin {twin} ({"; ".join(stored["twin"]["reasons"])})')
-            queue.insert(0, twin)
+            held = Path(out_dir) / twin / 'STORED.json'
+            if held.exists():
+                status = json.loads(held.read_text(encoding='utf-8')).get('status')
+                log(f'[record_episode] {name}: D3 asks for the twin {twin}; the set holds its recording from '
+                    f'an earlier call ({twin}/STORED.json, status {status}): not recorded again')
+            else:
+                log(f'[record_episode] {name}: D3 asks for the twin {twin} '
+                    f'({"; ".join(stored["twin"]["reasons"])})')
+                queue.insert(0, twin)
     path = Path(out_dir) / 'STORE.json'          # a set recorded in several calls keeps every entry
     earlier = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
     write_json(path, dict(earlier, **store))
