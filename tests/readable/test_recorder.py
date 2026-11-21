@@ -1162,3 +1162,142 @@ def test_order_notes_name_each_list_and_the_sets_it_comes_from():
                  "R's rule 4"):
         assert word in first, word
     assert rec.plain_form({'b', 'a'}) == {'set': ['a', 'b']}        # "written sorted by the recorder"
+
+
+# ---------------------------------------------------------------------------
+# Item 10, D5: --set NAME=VALUE in the child
+# ---------------------------------------------------------------------------
+
+def test_set_takes_a_name_of_the_closed_list_and_a_value_float_reads():
+    """SPEC D5: NAME from SET_NAMES only, VALUE through float() and nothing
+    else.  Catches an open list and a value read another way."""
+    name = rec.SET_NAMES[0]
+    assert rec.parse_set(f'{name}=1e9') == (name, 1e9) and rec.parse_set(f'{name}=120') == (name, 120.0)
+    for bad in ('execution.M7=0', name, f'{name}=2*60', f'{name}=', f'{name}_X=1', f'x{name}=1'):
+        with pytest.raises(rec.SetError):
+            rec.parse_set(bad)
+
+
+def _fake_popen(monkeypatch):
+    """The recorder's subprocess.Popen replaced: each child's command is
+    kept and nothing starts."""
+    cmds = []
+
+    class Proc:
+        def __init__(self, cmd, **kw):
+            cmds.append(cmd)
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            pass
+    monkeypatch.setattr(rec.subprocess, 'Popen', Proc)
+    return cmds
+
+
+def _sets_in(cmd):
+    return [cmd[i + 1] for i, x in enumerate(cmd) if x == '--set']
+
+
+def test_parent_refuses_an_unlisted_set_and_starts_nothing(tmp_path, monkeypatch, capsys):
+    cmds = _fake_popen(monkeypatch)
+    with pytest.raises(SystemExit) as ex:
+        rec.main(['--episode', 'rp0', '--mode', 'record', '--run-dir', str(tmp_path / 'r'),
+                  '--set', 'execution.M7=0'])
+    assert ex.value.code == 2 and cmds == [] and not (tmp_path / 'r').exists()
+    assert 'execution.M7=0' in capsys.readouterr().err
+
+
+def test_recording_puts_the_set_in_the_tape_meta_and_the_replay_takes_it(tmp_path, monkeypatch):
+    """A recording with a set writes it to tape/META.json and hands it to the
+    child; a replay of that tape hands the child the meta's value unasked;
+    a --set that differs from the meta, also on a tape without one, is
+    refused before anything starts.  Catches a replay without the recorded
+    value, a differing set taken, and no meta."""
+    cmds = _fake_popen(monkeypatch)
+    name, quiet = rec.SET_NAMES[0], (lambda s: None)
+    res = rec.run_episode('rp0', 'record', tmp_path / 'live', sets={name: '1e9'}, log=quiet)
+    assert rec.tape_meta(tmp_path / 'live' / 'tape') == {'set': {name: 1e9}} and res['set'] == {name: 1e9}
+    assert [rec.parse_set(s) for s in _sets_in(cmds[-1])] == [(name, 1e9)]
+    res = rec.run_episode('rp0', 'replay', tmp_path / 'rep', tape=tmp_path / 'live' / 'tape', log=quiet)
+    assert [rec.parse_set(s) for s in _sets_in(cmds[-1])] == [(name, 1e9)] and res['set'] == {name: 1e9}
+    started = len(cmds)
+    with pytest.raises(rec.SetError):
+        rec.run_episode('rp0', 'replay', tmp_path / 'rep2', tape=tmp_path / 'live' / 'tape',
+                        sets={name: 120.0}, log=quiet)
+    rec.run_episode('rp0', 'record', tmp_path / 'plain', log=quiet)
+    assert _sets_in(cmds[-1]) == [] and rec.tape_meta(tmp_path / 'plain' / 'tape') == {}
+    with pytest.raises(rec.SetError):
+        rec.run_episode('rp0', 'replay', tmp_path / 'rep3', tape=tmp_path / 'plain' / 'tape',
+                        sets={name: 1e9}, log=quiet)
+    assert len(cmds) == started + 1 and not (tmp_path / 'rep2').exists() and not (tmp_path / 'rep3').exists()
+
+
+_STAND_IN = 'M7_SUSPEND_S = 120.0\n\n\ndef suspend_length():\n    return M7_SUSPEND_S\n'
+
+
+def _import_stand_in(tmp_path, monkeypatch, module, source):
+    """Import a stand-in module from tmp_path through the hooks the test
+    set; sys.meta_path and sys.modules as they were afterwards."""
+    monkeypatch.syspath_prepend(str(tmp_path))
+    (tmp_path / f'{module}.py').write_text(source, encoding='utf-8')
+    try:
+        return importlib.import_module(module)
+    finally:
+        sys.modules.pop(module, None)
+
+
+def test_set_applied_right_after_its_module_is_executed_beside_a_stub(tmp_path, monkeypatch):
+    """The child's --set: the value is on the module right after the module
+    is executed, before anything reads it, and the applied pair is in
+    rec/SET.json; a stub of the same module (the executor stubs take the
+    same path) still fires, after it.  Catches a second finder for one
+    module (one of the two would never fire) and a set not written."""
+    monkeypatch.setattr(sys, 'meta_path', list(sys.meta_path))
+    (tmp_path / 'rec').mkdir()
+    seen = []
+    rec._install_sets({'wpb_set_target.M7_SUSPEND_S': 1e9}, tmp_path / 'rec')
+    rec.patch_on_load('wpb_set_target', lambda mod: seen.append(mod.suspend_length()))
+    mod = _import_stand_in(tmp_path, monkeypatch, 'wpb_set_target', _STAND_IN)
+    assert mod.M7_SUSPEND_S == 1e9 and mod.suspend_length() == 1e9 and seen == [1e9]
+    assert json.loads((tmp_path / 'rec' / 'SET.json').read_text(encoding='utf-8')) == {
+        'wpb_set_target.M7_SUSPEND_S': 1e9}
+    assert [f for f in sys.meta_path if isinstance(f, rec._PatchOnLoad)] == []
+
+
+def test_set_of_an_attribute_the_module_lacks_fails_at_its_import(tmp_path, monkeypatch):
+    """A name the module does not hold would set nothing: the import fails."""
+    monkeypatch.setattr(sys, 'meta_path', list(sys.meta_path))
+    (tmp_path / 'rec').mkdir()
+    rec._install_sets({'wpb_set_bare.M7_SUSPEND_S': 1.0}, tmp_path / 'rec')
+    with pytest.raises(rec.SetError):
+        _import_stand_in(tmp_path, monkeypatch, 'wpb_set_bare', 'OTHER = 1\n')
+    assert not (tmp_path / 'rec' / 'SET.json').exists()
+
+
+def test_result_json_and_the_notes_carry_the_value_the_child_set(tmp_path):
+    """The compared result.json holds what the child set (rec/SET.json),
+    and the pin's NOTES say it, for a replay with where it came from;
+    nothing when nothing was set.  The episode pins hand their run folder
+    to the notes."""
+    run = _run_folder(tmp_path)
+    name = rec.SET_NAMES[0]
+    assert 'set' not in rec.normalise(run)['result.json'] and rec.run_notes(run) == []
+    rec.write_json(run / 'rec' / 'SET.json', {name: 1e9})
+    assert rec.normalise(run)['result.json']['set'] == {name: 1e9}
+    (line,) = rec.run_notes(run)
+    assert name in line and repr(1e9) in line and 'SPEC D5' in line and 'META.json' not in line
+    tape = tmp_path / 'tape'
+    tape.mkdir()
+    rec.write_json(tape / 'META.json', {'set': {name: 1e9}, 'd4': 'SPEC D4: the reason'})
+    res = json.loads((run / 'RESULT.json').read_text(encoding='utf-8'))
+    rec.write_json(run / 'RESULT.json', dict(res, mode='replay', tape=str(tape)))
+    (line,) = rec.run_notes(run)
+    assert 'META.json' in line and 'SPEC D4: the reason' in line and rec.run_notes(None) == []
+    tree = ast.parse((REPO / 'tools' / 'readable' / 'pin_outputs.py').read_text(encoding='utf-8'))
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and getattr(n.func, 'id', None) == '_episode_notes']
+    assert len(calls) == 4 and all(len(c.args) == 4 for c in calls)
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_episode_notes')
+    assert 'run_notes' in [n.func.attr for n in ast.walk(fn) if isinstance(n, ast.Call)
+                           and isinstance(n.func, ast.Attribute)]

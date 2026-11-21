@@ -5,6 +5,7 @@ recorded or replayed (Phase 0 of the readable migration, PLAN 5.2 pin 47 and
     python tools/readable/record_episode.py --episode rp0 --mode record --run-dir DIR
     python tools/readable/record_episode.py --episode rp0 --mode replay --run-dir DIR --tape DIR/tape
     python tools/readable/record_episode.py --episode br0 --mode first-plan --run-dir DIR
+    python tools/readable/record_episode.py --episode f293 --mode record --run-dir DIR --set execution.M7_SUSPEND_S=1e9
     python tools/readable/record_episode.py --record-set SET --episodes rp0,rp1,stack0,br0,br5
     python tools/readable/record_episode.py --episode f140 --print-argv   # what it starts; starts nothing
     python tools/readable/record_episode.py --renorm DIR          # normalise a run folder again
@@ -64,7 +65,12 @@ Scripted tapes (tools/readable/scripted_tapes.py) replay like live ones;
 ``--stubs JSON`` sets the test-level executor stubs of
 tests/readable/executor_stubs.py in the child, and ``--tfp-copy`` (or
 READABLE_TFP_COPY) runs a planted copy of test_full_pipeline.py for the
-planted-change checks of PLAN 24.3 (e) only.
+planted-change checks of PLAN 24.3 (e) only.  ``--set NAME=VALUE`` (SPEC
+D5, NAME from the closed list SET_NAMES, VALUE read by float()) sets a
+module value in the child right after the module is executed; the applied
+pair goes to rec/SET.json, to a recording's tape/META.json and to
+result.json, and a replay takes it from the tape's META.json (a --set that
+differs is refused).
 
 After the child the parent writes RESULT.json and the normalised outputs
 (``norm/``): times and wall clocks masked to ``<s>`` with their keys kept
@@ -650,11 +656,12 @@ class StopAtPlan(BaseException):
 
 
 class _PatchOnLoad(importlib.abc.MetaPathFinder):
-    """Call fn(module) right after `name` has been executed by its normal
-    import, wherever and whenever the pipeline imports it."""
+    """Call each fn(module), in the order given, right after `name` has been
+    executed by its normal import, wherever and whenever the pipeline
+    imports it."""
 
     def __init__(self, name, fn):
-        self.name, self.fn = name, fn
+        self.name, self.fns = name, [fn]
 
     def find_spec(self, fullname, path=None, target=None):
         if fullname != self.name:
@@ -663,14 +670,83 @@ class _PatchOnLoad(importlib.abc.MetaPathFinder):
         spec = importlib.machinery.PathFinder.find_spec(fullname, path)
         if spec is None or spec.loader is None:
             return spec
-        loader, fn = spec.loader, self.fn
+        loader, fns = spec.loader, list(self.fns)
         orig_exec = loader.exec_module
 
         def exec_module(module):
             orig_exec(module)
-            fn(module)
+            for fn in fns:
+                fn(module)
         loader.exec_module = exec_module
         return spec
+
+
+def patch_on_load(name, fn):
+    """Register fn for module `name` (_PatchOnLoad).  A second fn for a name
+    joins the finder already waiting for it: a second finder would never
+    see the import, since the first one answers it."""
+    for finder in sys.meta_path:
+        if isinstance(finder, _PatchOnLoad) and finder.name == name:
+            finder.fns.append(fn)
+            return
+    sys.meta_path.insert(0, _PatchOnLoad(name, fn))
+
+
+# SPEC D5: what a pin may set in the child, `--set NAME=VALUE` with NAME
+# `module.ATTRIBUTE` from this closed list and VALUE read by float() and
+# nothing else.  Applied right after the module is executed; the applied
+# pairs go to rec/SET.json and, for a recording, to the tape's META.json,
+# from which a replay takes them.
+SET_NAMES = ('execution.M7_SUSPEND_S',)
+
+
+class SetError(ValueError):
+    """A --set the recorder refuses (SPEC D5)."""
+
+
+def parse_set(text):
+    """'NAME=VALUE' -> (NAME, float(VALUE))."""
+    name, sep, value = str(text).partition('=')
+    if not sep or name not in SET_NAMES:
+        raise SetError(f'--set {text!r}: NAME=VALUE with NAME one of {", ".join(SET_NAMES)}')
+    try:
+        return name, float(value)
+    except ValueError:
+        raise SetError(f'--set {text!r}: the value is read by float(), which refuses {value!r}') from None
+
+
+def _set_arg(text):
+    try:
+        return parse_set(text)
+    except SetError as ex:
+        raise argparse.ArgumentTypeError(str(ex)) from None
+
+
+def _install_sets(sets, rec_dir):
+    """In the child: each NAME=VALUE set on its module right after the
+    module is executed, the applied pairs written to rec/SET.json.  A name
+    the module does not hold is an error (a set that sets nothing)."""
+    applied = {}
+    by_module = {}
+    for name, value in sets.items():
+        module, attr = name.rsplit('.', 1)
+        by_module.setdefault(module, []).append((name, attr, value))
+
+    def apply(mod, items):
+        for name, attr, value in items:
+            if not hasattr(mod, attr):
+                raise SetError(f'--set {name}: module {mod.__name__} has no attribute {attr}')
+            setattr(mod, attr, value)
+            applied[name] = getattr(mod, attr)
+        write_json(Path(rec_dir) / 'SET.json', applied)
+    for module, items in by_module.items():
+        patch_on_load(module, lambda mod, items=items: apply(mod, items))
+
+
+def tape_meta(tape_dir):
+    """The tape's META.json ({"set": {...}, ...}), {} for a tape without one."""
+    p = Path(tape_dir) / 'META.json'
+    return json.loads(p.read_text(encoding='utf-8')) if p.exists() else {}
 
 
 class _RedirectModule(importlib.abc.MetaPathFinder):
@@ -1064,10 +1140,11 @@ def child_main(a):
     trace = None
     is_tfp = os.path.realpath(script) == os.path.realpath(TFP)
     if is_tfp:
-        sys.meta_path.insert(0, _PatchOnLoad('run_logger', _absolute_log_dir))
+        patch_on_load('run_logger', _absolute_log_dir)
+    if a.set:
+        _install_sets(dict(a.set), rec)          # SPEC D5, before the stubs of the same module
     if a.stubs:
-        _load_exec_stubs().install(
-            a.stubs, rec, lambda name, fn: sys.meta_path.insert(0, _PatchOnLoad(name, fn)))
+        _load_exec_stubs().install(a.stubs, rec, patch_on_load)
     if a.tfp_copy:
         # Planted-change checks (PLAN 24.3 (e)) only: the copy is run as the
         # entry (boxels) or imported as test_full_pipeline (bridge), with
@@ -1088,14 +1165,14 @@ def child_main(a):
 
             def patch(mod):
                 stub.install(mod, a.tape, rec, rng=a.rng)
-        sys.meta_path.insert(0, _PatchOnLoad('pddlstream_planner', patch))
+        patch_on_load('pddlstream_planner', patch)
     elif a.mode == 'first-plan':
         main_file = os.path.abspath(a.tfp_copy) if a.tfp_copy else TFP
 
         def patch(mod):
             mod.PDDLStreamPlanner.plan = make_first_plan_recorder(mod.PDDLStreamPlanner.plan, rec,
                                                                   main_file=main_file)
-        sys.meta_path.insert(0, _PatchOnLoad('pddlstream_planner', patch))
+        patch_on_load('pddlstream_planner', patch)
         _install_main_params_hook(rec, TFP)
     else:
         raise SystemExit(f'unknown mode {a.mode}')
@@ -1180,7 +1257,7 @@ def pipeline_run_dir(run_dir, spec):
 
 
 def run_episode(name, mode, run_dir, tape=None, rng='restore', trace_main=False,
-                timeout=EPISODE_TIMEOUT_S, log=print, stubs=None, tfp_copy=None):
+                timeout=EPISODE_TIMEOUT_S, log=print, stubs=None, tfp_copy=None, sets=None):
     """Run episode `name` in a child process; returns the RESULT dict.
 
     stubs: executor stubs (tests/readable/executor_stubs.py config, a dict
@@ -1188,8 +1265,16 @@ def run_episode(name, mode, run_dir, tape=None, rng='restore', trace_main=False,
     READABLE_TFP_COPY): a planted copy of test_full_pipeline.py run instead
     of the checkout's, for the planted-change checks of PLAN 24.3 (e) only;
     the copy is named in RESULT.json and INFO files only, never in a
-    compared output."""
+    compared output.  sets: {NAME: VALUE} of SPEC D5, set in the child; a
+    recording writes them to its tape's META.json, a replay takes them from
+    there and refuses a sets that differs."""
     entry(name)                          # an unknown name fails before run_dir is touched
+    sets = dict(parse_set(f'{k}={v}') for k, v in (sets or {}).items())
+    if mode == 'replay' and tape is not None:
+        meta_sets = tape_meta(tape).get('set') or {}
+        if sets and sets != meta_sets:
+            raise SetError(f'{name} replay: --set {sets} differs from the tape\'s META.json {meta_sets}')
+        sets = meta_sets
     if tfp_copy is None:
         tfp_copy = os.environ.get(TFP_COPY_VAR) or None
     if isinstance(stubs, dict):
@@ -1204,12 +1289,16 @@ def run_episode(name, mode, run_dir, tape=None, rng='restore', trace_main=False,
         tape = run_dir / 'tape'
         tape.mkdir()
         (tape / 'calls.jsonl').touch()       # a run that never plans has an empty tape
+        if sets:
+            write_json(tape / 'META.json', {'set': sets})
     cmd = [sys.executable, str(HERE), '--child', '--mode', mode, '--rec', str(rec),
            '--script', str(script), '--rng', rng]
     if tape is not None:
         cmd += ['--tape', str(Path(tape).resolve())]
     if trace_main:
         cmd += ['--trace-main']
+    for k, v in sets.items():
+        cmd += ['--set', f'{k}={v}']
     if stubs:
         cmd += ['--stubs', stubs]
     if tfp_copy:
@@ -1237,6 +1326,7 @@ def run_episode(name, mode, run_dir, tape=None, rng='restore', trace_main=False,
               'pipeline_run_dir': str(pr) if pr else None, 'seconds': round(seconds, 1),
               'tape': str(tape) if tape is not None else None,
               'stubs': json.loads(stubs) if stubs else None,
+              'set': sets or None,
               'tfp_copy': str(tfp_copy) if tfp_copy else None}
     write_json(run_dir / 'RESULT.json', result)
     write_norm(run_dir)
@@ -1584,7 +1674,30 @@ def normalise(run_dir):
         'tape_calls': (len(tape_calls(res['tape'])) if res.get('tape') and res['mode'] == 'replay'
                        else None),
         'outcome': (out.get('bridge_episode.json') or {}).get('outcome')}
+    applied = run_dir / 'rec' / 'SET.json'
+    if applied.exists():                 # SPEC D4, D5: what the child set, as it set it
+        out['result.json']['set'] = json.loads(applied.read_text(encoding='utf-8'))
     return out
+
+
+def run_notes(run_dir):
+    """The NOTES lines of one run: a value set in the child (SPEC D5), and
+    for a replay where it came from (the tape's META.json, with D4's reason
+    when the recorder wrote one)."""
+    if run_dir is None:
+        return []
+    run_dir = Path(run_dir)
+    applied = run_dir / 'rec' / 'SET.json'
+    if not applied.exists():
+        return []
+    res = json.loads((run_dir / 'RESULT.json').read_text(encoding='utf-8'))
+    sets = json.loads(applied.read_text(encoding='utf-8'))
+    line = ('set in the child (SPEC D5, --set): ' + ', '.join(f'{k} = {v!r}' for k, v in sets.items())
+            + ', right after the module was executed (rec/SET.json; result.json set)')
+    if res.get('mode') == 'replay' and res.get('tape'):
+        meta = tape_meta(res['tape'])
+        line += '; taken from the tape\'s META.json' + (f' ({meta["d4"]})' if meta.get('d4') else '')
+    return [line]
 
 
 def write_norm(run_dir):
@@ -2037,6 +2150,9 @@ def main(argv=None):
     ap.add_argument('--child', action='store_true', help=argparse.SUPPRESS)
     ap.add_argument('--rec', help=argparse.SUPPRESS)
     ap.add_argument('--script', help=argparse.SUPPRESS)
+    ap.add_argument('--set', action='append', default=[], type=_set_arg, metavar='NAME=VALUE',
+                    help=f'SPEC D5: set NAME ({", ".join(SET_NAMES)}) to float(VALUE) in the child right '
+                         f'after its module is executed; with --episode (a replay takes it from the tape)')
     ap.add_argument('--stubs', help='JSON of tests/readable/executor_stubs.py (scripted tapes)')
     ap.add_argument('--tfp-copy', help='planted-change checks only: run this copy of '
                                        'test_full_pipeline.py instead of the checkout\'s')
@@ -2071,14 +2187,19 @@ def main(argv=None):
         print(json.dumps(out if a.baseline else out['table'], indent=1))
         return 0
     if a.record_set:
+        if a.set:
+            ap.error('--set goes with --episode; --record-set sets what SPEC D4 asks for itself')
         return record_set(a.record_set, [e for e in a.episodes.split(',') if e])
     if not (a.episode and a.mode and a.run_dir):
         ap.error('--episode, --mode and --run-dir are needed (or --record-set, --renorm, --coverage)')
     if a.mode == 'replay' and not a.tape:
         ap.error('--mode replay needs --tape')
-    res = run_episode(a.episode, a.mode, a.run_dir, tape=a.tape, rng=a.rng,
-                      trace_main=a.trace_main, timeout=a.timeout, stubs=a.stubs,
-                      tfp_copy=a.tfp_copy)
+    try:
+        res = run_episode(a.episode, a.mode, a.run_dir, tape=a.tape, rng=a.rng,
+                          trace_main=a.trace_main, timeout=a.timeout, stubs=a.stubs,
+                          tfp_copy=a.tfp_copy, sets=dict(a.set))
+    except SetError as ex:
+        ap.error(str(ex))
     return 0 if res['status'] == 'ended' and res['child_exit'].get('code') is not None else 1
 
 

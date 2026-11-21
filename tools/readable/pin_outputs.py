@@ -4839,8 +4839,10 @@ def _write_norm_files(out, run_dir, skip=()):
             out.text(f.name, f.read_text(encoding='utf-8'))
 
 
-def _episode_notes(out, tool, name):
-    for line in tool.entry_notes(name) + tool.episode_notes():   # the entry's, then the recorder's
+def _episode_notes(out, tool, name, run_dir=None):
+    # The entry's lines, the recorder's, then the run's own (a value set in
+    # the child, SPEC D4 and D5).
+    for line in tool.entry_notes(name) + tool.episode_notes() + tool.run_notes(run_dir):
         out.note(line)
 
 
@@ -4850,7 +4852,7 @@ def _synthetic_noplan(out, chunks, label):
     tape = work / 'tape'
     tool.write_synthetic_tape(tape, [((None, float('inf'), None), chunks)])
     res = tool.run_episode('rp0', 'replay', work / 'run', tape=tape, log=lambda s: None)
-    _episode_notes(out, tool, 'rp0')
+    _episode_notes(out, tool, 'rp0', work / 'run')
     out.note(f'pin 30 real run: rp0 with a synthetic one-call tape ({label}); the solver answer is '
              'replaced (plan() itself runs, builds the init and reads the text), PLAN 5.2 row 30')
     _write_norm_files(out, work / 'run')
@@ -4873,7 +4875,7 @@ def _first_plan(out, name):
     tool = _episode_tool()
     work = Path.cwd()
     res = tool.run_episode(name, 'first-plan', work / 'run', log=lambda s: None)
-    _episode_notes(out, tool, name)
+    _episode_notes(out, tool, name, work / 'run')
     out.note('first-plan mode: PDDLStreamPlanner.plan replaced (in the child only) by a recorder that writes '
              'its bound arguments, the stage B module switches, the RNG digest and the gate counts, then '
              'raises StopAtPlan; main\'s parameters from a sys.setprofile hook at its first call')
@@ -4934,7 +4936,7 @@ def _p47(name):
         work = Path.cwd()
         res = tool.run_episode(name, 'replay', work / 'run', tape=live / 'tape', rng='restore',
                                trace_main=True, log=lambda s: None)
-        _episode_notes(out, tool, name)
+        _episode_notes(out, tool, name, work / 'run')
         out.note('replay: pddlstream_planner.solve replaced by tests/readable/replay_stub.py before the '
                  'gate hooks wrap it; call k returns tape solution k, prints its text into the tee and '
                  'restores the live RNG states after the call (rng restore)')
@@ -4986,7 +4988,7 @@ def _p47s(scenario):
         stubs = info['stubs'] if info['stubs'].get('stubs') else None
         res = tool.run_episode(name, 'replay', work / 'run', tape=work / 'tape', rng='restore',
                                trace_main=True, log=lambda s: None, stubs=stubs)
-        _episode_notes(out, tool, name)
+        _episode_notes(out, tool, name, work / 'run')
         out.note(f'scripted tape {scenario}: {st.SCENARIOS[scenario]}; made by '
                  'tools/readable/scripted_tapes.py from READABLE_TAPES/' + name + '; live calls copied, '
                  'scripted calls cut from live plans (replay_stub.scripted_solution), no action invented')
