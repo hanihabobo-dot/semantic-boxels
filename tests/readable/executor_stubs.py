@@ -29,6 +29,16 @@ time, so the branch's statements are run and their outputs pinned:
                       (nothing held, nothing touched) for the object named
                       in the config, at every call (the strike counter and
                       the give-up).
+  place_fail          execution.execute_place returns None for the object
+                      named in the config, at every call (the place
+                      branch's failure path, test_full_pipeline.py:2884-2926
+                      on the tag, SPEC D16).  "fingers": "closed" touches
+                      nothing, so the fingers stay on the object (arm (a),
+                      "IK failure during place"); "open" first opens the
+                      gripper with the executor's own open_gripper, as the
+                      release of a place does (placing=True), so the
+                      dispatcher's finger probe finds them open (arm (b),
+                      "drop-verify failed").
   sense_outcome       execution.sense_shadow_from_render runs for real; at
                       its first call the outcome is replaced by the one in
                       the config and the detected bodies by the pybullet id
@@ -46,7 +56,8 @@ import sys
 from pathlib import Path
 
 NAMES = ('place_empty_hand', 'stack_empty_hand', 'carry_loss', 'integrity_event',
-         'pick_fail', 'sense_outcome', 'home_offset')
+         'pick_fail', 'place_fail', 'sense_outcome', 'home_offset')
+PLACE_FAIL_FINGERS = ('closed', 'open')
 
 
 def _log(rec, row):
@@ -131,6 +142,22 @@ def _patch_execution(mod, stubs, rec):
                     return mod.PickResult(None, None, frozenset())
                 return _orig(robot_id, env, name_, *a, **k)
             mod.execute_pick = stub
+        elif name == 'place_fail':
+            import inspect
+            orig = mod.execute_place
+            sig = inspect.signature(orig)
+
+            def stub(robot_id, env, name_, *a, _orig=orig, _sig=sig, _obj=s['object'],
+                     _fingers=s['fingers'], **k):
+                if name_ != _obj:
+                    return _orig(robot_id, env, name_, *a, **k)
+                if _fingers == 'open':
+                    gui = _sig.bind(robot_id, env, name_, *a, **k).arguments.get('gui', False)
+                    mod.open_gripper(robot_id, gui, placing=True)
+                _log(rec, {'stub': 'execute_place', 'obj': name_, 'fingers': _fingers, 'result': None})
+                print(f"    place of {name_}: failed, fingers {_fingers} (executor stub)")
+                return None
+            mod.execute_place = stub
         elif name == 'sense_outcome':
             orig = mod.sense_shadow_from_render
             state = {'done': False}
@@ -204,6 +231,8 @@ def install(config, rec, patch_on_load):
     for s in stubs:
         if s.get('name') not in NAMES:
             raise ValueError(f'unknown executor stub {s.get("name")!r}; known: {NAMES}')
+        if s['name'] == 'place_fail' and (not s.get('object') or s.get('fingers') not in PLACE_FAIL_FINGERS):
+            raise ValueError(f'place_fail needs "object" and "fingers" (one of {PLACE_FAIL_FINGERS}): {s}')
     Path(rec).mkdir(parents=True, exist_ok=True)
     (Path(rec) / 'stubs.json').write_text(json.dumps(config, indent=1, sort_keys=True) + '\n',
                                           encoding='utf-8', newline='\n')

@@ -38,6 +38,7 @@ def _load(name, path):
 
 
 rec = _load('readable_record_episode', REPO / 'tools' / 'readable' / 'record_episode.py')
+stubs = _load('readable_executor_stubs', HERE / 'executor_stubs.py')
 
 
 # ---------------------------------------------------------------------------
@@ -767,3 +768,103 @@ def test_coverage_command_prints_the_table_and_the_comparison(tmp_path, capsys, 
     assert rec.main(['--coverage', str(trace), '--baseline', str(base), '--old-tfp', str(rec.TFP)]) == 3
     out = capsys.readouterr()
     assert 'ambiguous anchors' in out.err and out.out == ''
+
+
+# ---------------------------------------------------------------------------
+# D16: the executor stub place_fail
+# ---------------------------------------------------------------------------
+
+def _execution_stand_in(calls):
+    """execution's two names the stub uses, with the tag's signatures."""
+    mod = types.ModuleType('execution')
+
+    def execute_place(robot_id, env, obj_name, place_pos, grasp, config, held_body_id, gui, held_aabb=None):
+        calls.append(('execute_place', obj_name))
+        return 'placed'
+
+    def open_gripper(robot_id, gui=False, placing=False):
+        calls.append(('open_gripper', robot_id, gui, placing))
+    mod.execute_place, mod.open_gripper = execute_place, open_gripper
+    return mod
+
+
+def _place_fail(tmp_path, fingers):
+    calls = []
+    mod = _execution_stand_in(calls)
+    hooks = {}
+    stubs.install({'stubs': [{'name': 'place_fail', 'object': 'orange', 'fingers': fingers}]}, tmp_path,
+                  lambda name, fn: hooks.setdefault(name, fn))
+    assert sorted(hooks) == ['execution']
+    hooks['execution'](mod)
+    return mod, calls
+
+
+def _stub_rows(tmp_path):
+    return [json.loads(x) for x in (tmp_path / 'stubs.jsonl').read_text(encoding='utf-8').splitlines()]
+
+
+def test_place_fail_closed_returns_none_for_the_named_object_and_touches_nothing(tmp_path, capsys):
+    """Arm (a): None for the named object at every call, the gripper left
+    as it is; any other object placed for real.  Catches the stub firing
+    for another object or only once, and a closed arm that moves the
+    fingers."""
+    mod, calls = _place_fail(tmp_path, 'closed')
+    assert mod.execute_place(0, None, 'orange', [0, 0, 0], 'g', 'q', 7, True, held_aabb=None) is None
+    assert mod.execute_place(0, None, 'orange', [0, 0, 0], 'g', 'q', 7, True) is None
+    assert mod.execute_place(0, None, 'red', [0, 0, 0], 'g', 'q', 8, False) == 'placed'
+    assert calls == [('execute_place', 'red')]
+    assert _stub_rows(tmp_path) == [{'fingers': 'closed', 'obj': 'orange', 'result': None,
+                                     'stub': 'execute_place'}] * 2
+    assert capsys.readouterr().out.count('place of orange: failed, fingers closed (executor stub)') == 2
+
+
+def test_place_fail_open_opens_with_the_executor_s_own_function_then_returns_none(tmp_path, capsys):
+    """Arm (b): the executor's own open_gripper with the call's gui and
+    placing=True (a place's release, which the drop count does not count),
+    then None.  Catches the open left out, another gui, placing left out."""
+    mod, calls = _place_fail(tmp_path, 'open')
+    assert mod.execute_place(3, None, 'orange', [0, 0, 0], 'g', 'q', 7, True) is None
+    assert mod.execute_place(3, None, 'orange', [0, 0, 0], 'g', 'q', 7, gui=False, held_aabb=(0, 1)) is None
+    assert calls == [('open_gripper', 3, True, True), ('open_gripper', 3, False, True)]
+    assert [r['fingers'] for r in _stub_rows(tmp_path)] == ['open', 'open']
+    capsys.readouterr()
+
+
+def test_place_fail_needs_its_object_and_an_arm(tmp_path):
+    """The name list stays closed and a place_fail says which object and
+    which arm, or nothing is installed or written."""
+    assert 'place_fail' in stubs.NAMES
+    for bad in ({'name': 'place_fail', 'object': 'orange'}, {'name': 'place_fail', 'fingers': 'open'},
+                {'name': 'place_fail', 'object': 'orange', 'fingers': 'half'}):
+        with pytest.raises(ValueError, match='place_fail needs'):
+            stubs.install({'stubs': [bad]}, tmp_path / 'rec', lambda n, f: None)
+    assert not (tmp_path / 'rec').exists()
+
+
+def test_place_fail_reaches_both_arms_of_the_tag_s_place_branch():
+    """What the stub rests on, read from the tag's code: the dispatcher
+    takes `place_result is None` with the fingers' probe (a finger at or
+    over a threshold means open); execution's open_gripper is
+    robot_utils.open_gripper, which drives both fingers to a target at or
+    over that threshold; execute_place takes gui.  So arm (b) finds the
+    fingers open, arm (a) leaves them on the object."""
+    tfp = ast.parse((REPO / 'test_full_pipeline.py').read_text(encoding='utf-8'))
+    branch = [n for n in ast.walk(tfp) if isinstance(n, ast.If) and ast.unparse(n.test) == 'place_result is None']
+    assert len(branch) == 1
+    probes = [n for n in branch[0].body if isinstance(n, ast.Assign)
+              and [getattr(t, 'id', None) for t in n.targets] == ['fingers_open']]
+    assert len(probes) == 1
+    cmp = next(n for n in ast.walk(probes[0].value) if isinstance(n, ast.Compare))
+    assert isinstance(cmp.ops[0], ast.GtE)
+    threshold = ast.literal_eval(cmp.comparators[0])
+    ru = ast.parse((REPO / 'robot_utils.py').read_text(encoding='utf-8'))
+    og = next(n for n in ru.body if isinstance(n, ast.FunctionDef) and n.name == 'open_gripper')
+    targets = [ast.literal_eval(k.value) for n in ast.walk(og) if isinstance(n, ast.Call)
+               for k in n.keywords if k.arg == 'targetPosition']
+    assert len(targets) == 2 and min(targets) >= threshold
+    ex = ast.parse((REPO / 'execution.py').read_text(encoding='utf-8'))
+    assert any(isinstance(n, ast.ImportFrom) and n.module == 'robot_utils'
+               and 'open_gripper' in [a.name for a in n.names] for n in ex.body)
+    ep = next(n for n in ex.body if isinstance(n, ast.FunctionDef) and n.name == 'execute_place')
+    assert [a.arg for a in ep.args.args][:3] == ['robot_id', 'env', 'obj_name'] and 'gui' in [
+        a.arg for a in ep.args.args]
