@@ -890,6 +890,7 @@ def _made_bridge():
     r.line('', '  Executing: move')
     r.step(1, 1, 'move', 'cfg:q0', 'cfg:look', 'view__look_cup_0', 'Trajectory@1')
     r.end('ok')
+    _made_bridge_tag2(r)
     r.line('', BANNER, 'FAILED', BANNER)
     r.c('summary', success=False, exit_reason='physics_mismatch', plan_count=1, plan_times=[1.25],
         total_plan_time=1.25, log_path='<LOG>')
@@ -903,6 +904,82 @@ def _made_bridge():
                      '/tmp/made/bridge_7'])
     r.c('finish', 1)
     return r.tape()
+
+
+def _made_bridge_tag2(r):
+    """Gate 7 (SPEC D14, R's ruling of 21 Nov 10:08): what the console gained since checkpoint 1,
+    in the bridge tape after plan 1.  (a) A sample line for each new rule: the interior_of_ names
+    (in the plan's actions and the rows' regions), the M7 suspension and its end; every line is
+    copied from its print site (file:line on the tag, beside it) with sample values.  (b) The end
+    statuses look_outcome, action_failed and dead.  (c) A row of each ledger kind new since the
+    checkpoint, with its call site's keyword names (pin 40's schema.json): interior_region (both
+    sites), look_reveals, look_result, seen_under, seen_under_released, sense_discovery and
+    m7_suspension (start and end)."""
+    goal = ['and', ['holding', 'dice'], ['at_config', 'q_home']]
+    r.line('    [interior] interior_of_cup: the space under cup (6.0 x 6.0 x 9.5 cm) is a hiding region, '
+           'unknown; searched by moving cup away')                            # interior_regions.py:259-261
+    r.row('interior_region', obj='cup', cast=True, region='interior_of_cup', min_corner=[0.47, -0.03, 0.625],
+          max_corner=[0.53, 0.03, 0.72], first_observation=False)             # interior_regions.py:262-264
+    r.line('    [interior] ball: the space it now covers lay in free space, observed empty before it came '
+           'to stand there; no region under it (D6 status rule)')             # interior_regions.py:223-225
+    r.row('interior_region', obj='ball', cast=False, reason='observed_before_placement')  # interior_regions.py:226-227
+    r.line("    [interior] dice is in view (85 px) inside cup's box: it lies under that cover, where no look "
+           "and no grasp reaches it.  Not registered as an object; interior_of_cup is where to look once cup "
+           "is moved (BF#65 (d))")                                           # interior_regions.py:389-394
+    r.row('seen_under', target='dice', cover='cup', region='interior_of_cup', pixels=85)  # interior_regions.py:395-396
+    # plan 2: a look that leaves cup's pose open (look_outcome), a sense whose body reaches M7's
+    # F9 give-up (the region suspended, not marked empty)
+    r.line('', '=== PLAN #2 ===', 'Unknown shadows remaining: 2')
+    r.plan(2, [['look', 'cup', 'shadow_of_cup__01', 'view__look_cup_1', 'cfg:look_cup_1'],
+               ['sense', 'dice', 'shadow_of_cup__02'], ['sense', 'dice', 'interior_of_cup']], goal=goal)
+    r.line('', '  Executing: look')                                            # test_full_pipeline.py:2200
+    r.step(2, 1, 'look', 'cup', 'shadow_of_cup__01', 'view__look_cup_1', 'cfg:look_cup_1')
+    r.line('    look shadow_of_cup__01: still_blocked (40% hidden)',           # look_action.py:437-438
+           '    look: shadow_of_cup__01 blocked [strike 1/3]',                 # look_action.py:485
+           "    look cup from look_cup_1: look_pose_incomplete; named regions ['shadow_of_cup__01'], "
+           "objects ['cup'], re-posed [], registered []")                     # look_action.py:505-507
+    r.row('look_reveals', config='look_cup_1', named=['shadow_of_cup__01'])    # test_full_pipeline.py:2545
+    r.row('look_result', reason='look_pose_incomplete', continue_=False, obj='cup', region='shadow_of_cup__01',
+          config='look_cup_1', outcomes={'shadow_of_cup__01': 'still_blocked'},
+          hidden={'shadow_of_cup__01': 0.4}, reposed=[], found_in=None, registered=[],
+          blocked=['shadow_of_cup__01'], parked=[])                           # test_full_pipeline.py:2546-2555
+    r.line('    [look] pose strike 1/3 for cup')                               # test_full_pipeline.py:2591-2592
+    r.end('look_outcome')                                                      # test_full_pipeline.py:2605
+    r.line('', '  Executing: sense')                                           # test_full_pipeline.py:2200
+    r.step(2, 2, 'sense', 'dice', 'shadow_of_cup__02')
+    r.line('    Sensing shadow_of_cup__02 (fixed camera)...')                  # execution.py:3027
+    r.row('sense_result', reason='sense_contains_nontarget', region='shadow_of_cup__02')
+    r.row('sense_discovery', body='ball', region='shadow_of_cup__02', rediscovery=True, kept=['shadow_of_ball'],
+          recast=[], giveup=True, parked=True)                                # execution.py:3689-3694
+    r.line('    shadow_of_cup__02: a body found in it reaches the F9 give-up, so nothing re-covers what it '
+           'hides; suspending shadow_of_cup__02 for 120 s instead of marking it empty (M7): ball '
+           'rediscovered 3 times')                                            # execution.py:3395-3400
+    r.row('belief', region='shadow_of_cup__02', op='status', status='unresolved',
+          channel='strike_park')                                              # belief.py:112 (execution.py:3401-3403)
+    r.row('m7_suspension', op='start', region='shadow_of_cup__02', bodies={'ball': 3},
+          seconds=120.0)                                                      # belief.py:140-141
+    r.end('sense_outcome')
+    # the loop head of plan 3: the suspension's time is over (test_full_pipeline.py:1845-1849)
+    r.row('belief', region='shadow_of_cup__02', op='status', status='unknown',
+          channel='suspension_over')                                          # belief.py:155
+    r.row('m7_suspension', op='end', region='shadow_of_cup__02', ended_by='released')  # belief.py:162-163
+    r.line('  [M7] shadow_of_cup__02 is back in the search: its 120 s suspension at the F9 give-up is '
+           'over')                                                            # test_full_pipeline.py:1847-1849
+    # plan 3: no plan through the region dice was seen under
+    r.line('', '=== PLAN #3 ===', 'Unknown shadows remaining: 2')
+    r.plan(3, None, dt=1.5, goal=goal)
+    r.line("  [interior] no plan through interior_of_cup alone: the record 'dice seen under a cover' ends; "
+           "every unknown region is on offer again (BF#65 (d))")              # interior_regions.py:415-417
+    r.row('seen_under_released', target='dice', region='interior_of_cup', reason='no_plan')  # interior_regions.py:418-419
+    # plan 4: the Wumpus world's two statuses (wumpus/narrate.py:128, an action that returned not
+    # ok and a move into a pit or the wumpus's cell); a bridge run never writes them, the console
+    # reads every status of run_logger.STEP_END_STATUSES
+    r.line('', '=== PLAN #4 ===')
+    r.plan(4, [['move', 'p1-2'], ['move', 'p2-2']], dt=0.25, goal=['holding', 'gold'])
+    r.step(4, 1, 'move', 'p1-2')
+    r.end('action_failed')
+    r.step(4, 2, 'move', 'p2-2')
+    r.end('dead')
 
 
 def _made_g19_stop():

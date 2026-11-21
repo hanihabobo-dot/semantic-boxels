@@ -302,15 +302,12 @@ def test_made_tapes_reach_every_rule_kind_and_status():
     assert not unreached, f'rules no made tape reaches: {unreached}'
     assert cov['statuses_not_reached'] == []
     assert cov['sense_texts_not_reached'] == []
-    # the 24 ledger kinds of pin 40 (p40_ledger_schema kinds.json at the checkpoint)
-    missing = sorted(set(LEDGER_KINDS) - set(cov['ledger_kinds']))
+    # every ledger kind of pin 40 (p40_ledger_schema kinds.json), read from the code as pin 40
+    # reads it (SPEC D14 (d), PLAN rule 3: counted from the code, never typed)
+    kinds = po.ledger_kinds()
+    assert kinds, "no ledger_event call found in the AST pins' scope"
+    missing = sorted(set(kinds) - set(cov['ledger_kinds']))
     assert not missing, f'ledger kinds no made tape feeds: {missing}'
-
-
-LEDGER_KINDS = ('after_settle', 'at_home_test', 'belief', 'bridge_timing', 'domain', 'driver_clock',
-                'episode', 'gate_info', 'gate_phase', 'gate_record', 'gate_violation', 'ledger_close',
-                'ledger_open', 'main_return_readback', 'move_resolve', 'observe_result', 'place_target',
-                'plan', 'plan_call', 'readback_check', 'render', 'sense_result', 'step', 'step_end')
 
 
 @in_wsl
