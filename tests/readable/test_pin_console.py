@@ -45,7 +45,7 @@ cr = _load('readable_console_replay', REPO / 'tools' / 'readable' / 'console_rep
 sys.path.insert(0, str(REPO / 'tools' / 'readable'))
 import pin_outputs as po  # noqa: E402
 
-GOLDEN = os.environ.get('READABLE_GOLDEN')
+GOLDEN = po.readable_path(po.GOLDEN_VAR)   # absolute, or None when unset (SPEC D11)
 TAPES = os.environ.get('READABLE_TAPES')
 PINS = [p for p in po.GROUPS['console'] if TAPES or not p.startswith('p27_tape_')]
 MADE_PINS = [p for p in PINS if p.startswith('p27_made_')]

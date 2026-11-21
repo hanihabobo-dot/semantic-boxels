@@ -37,7 +37,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / 'tools' / 'readable'))
 import pin_outputs as po  # noqa: E402
 
-GOLDEN = os.environ.get('READABLE_GOLDEN')
+GOLDEN = po.readable_path(po.GOLDEN_VAR)   # absolute, or None when unset (SPEC D11)
 ONLY = [s for s in os.environ.get('READABLE_WORLD_ONLY', '').split(',') if s]
 PINS = [p for p in po.GROUPS['world'] if not ONLY or p in ONLY]
 BRIDGE_PINS = ('p01b_find_dice_scenes', 'p35b_bridge_table')

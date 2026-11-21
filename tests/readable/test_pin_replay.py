@@ -63,7 +63,7 @@ stub = _load('readable_replay_stub', HERE / 'replay_stub.py')
 sys.path.insert(0, str(REPO / 'tools' / 'readable'))
 import pin_outputs as po  # noqa: E402
 
-GOLDEN = os.environ.get('READABLE_GOLDEN')
+GOLDEN = po.readable_path(po.GOLDEN_VAR)   # absolute, or None when unset (SPEC D11)
 TAPES = os.environ.get('READABLE_TAPES')
 ONLY = [s for s in os.environ.get('READABLE_EPISODE_ONLY', '').split(',') if s]
 PINS = [p for p in po.GROUPS['episode'] if not ONLY or p in ONLY]
