@@ -630,6 +630,69 @@ def p08_domain(out):
     out.json('g10.json', {'pddl_sha': {n: bg._pddl_sha(n) for n in
                                        ('domain_pddlstream.pddl', 'domain_pddlstream_m8.pddl', 'stream.pddl')},
                           'run_domain_rows': report.rows, **r})
+    _p08_look(out, m, live)
+
+
+def _p08_look(out, m, live):
+    """Gate 7 (INDEX_PINS P2): the two generated look domain files, as pin 8 keeps the M8 file."""
+    import look_domain as look
+    shas = {}
+    for mode in look.MODES:
+        path = look.GENERATED_FILES[mode]
+        generated = look.generate(live, mode)
+        raw = Path(path).read_bytes()
+        shas[mode] = {'file': rel(path), 'generated_equals_file': generated == look.read(path),
+                      'sha_generate_live': look.sha(generated), 'sha_read': look.sha(look.read(path)),
+                      'raw_bytes': {'sha256': hashlib.sha256(raw).hexdigest(), 'has_crlf': b'\r\n' in raw,
+                                    'sha256_crlf_to_lf': hashlib.sha256(raw.replace(b'\r\n', b'\n')).hexdigest()}}
+        out.text(f'generated_look_{mode}.pddl', generated)
+    out.json('look_shas.json', shas)
+    values = _flag_specs(('--look',))['--look']['choices'] + ['nowhere']
+    files = {'mode_of': [{'look': v, **outcome(look.mode_of, v)} for v in values + [True, False, None]],
+             'domain_file': []}
+    for v in values:
+        for m8_on in (True, False):
+            r = outcome(look.domain_file, v, m8_on)
+            if 'value' in r:
+                r['value'] = rel(r['value'])
+            files['domain_file'].append({'look': v, 'm8_on': m8_on, **r})
+    out.json('look_files.json', files)
+    # The anchors of the look delta: the constants generate() passes to _once, in source order.
+    tree = ast.parse((REPO / 'look_domain.py').read_text(encoding='utf-8'))
+    gen = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'generate')
+    calls = sorted((n for n in ast.walk(gen) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                    and n.func.id == '_once'), key=lambda n: (n.lineno, n.col_offset))
+    anchors = [(c.args[1].id, c.args[2].value) for c in calls]
+    m8_text = m.generate(live)
+    real = look.m8_domain.generate
+    neg = []
+    for mode in look.MODES:
+        for name, what in anchors:
+            anchor = getattr(look, name)
+            for case, text in (('removed', m8_text.replace(anchor, '', 1)),
+                               ('twice', m8_text.replace(anchor, anchor + anchor, 1))):
+                look.m8_domain.generate = lambda _live, t=text: t
+                try:
+                    r = outcome(look.generate, live, mode)
+                finally:
+                    look.m8_domain.generate = real
+                if 'value' in r:
+                    r = {'sha': look.sha(r.pop('value')), **r}
+                neg.append({'mode': mode, 'anchor': name, 'what': what, 'case': case, **r})
+    out.json('negative_look.json', neg)
+    out.note('look_shas.json (gate 7, INDEX_PINS P2): for each mode of look_domain.MODES its file of '
+             'look_domain.GENERATED_FILES: generate(live, mode) against the file as read (look_domain.read, '
+             'universal newlines), the sha of both, the raw bytes as for the three files above (the two look files '
+             'are CRLF in a Windows working tree and LF in the index, SPEC section 3: has_crlf says which); '
+             'generated_look_<mode>.pddl: the generated text')
+    out.note('look_files.json: look_domain.mode_of for each --look choice (read from run_logger.py\'s syntax tree), '
+             'a value outside them, True, False and None; look_domain.domain_file for each of those strings with '
+             'm8_on True and False (paths relative to the checkout)')
+    out.note('negative_look.json: the anchors of the look delta are the module constants look_domain.generate '
+             'passes to _once (read from its syntax tree, in source order); for each mode and anchor, '
+             'm8_domain.generate is replaced for one call by a stand-in that returns its text of the live file with '
+             'the anchor removed once or written twice, and look_domain.generate\'s answer is kept (a text as its '
+             'sha)')
 
 
 # ----- pin 11: sense ray slices --------------------------------------------
