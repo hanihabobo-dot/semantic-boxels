@@ -1504,6 +1504,42 @@ def test_recording_puts_the_set_in_the_tape_meta_and_the_replay_takes_it(tmp_pat
     assert len(cmds) == started + 1 and not (tmp_path / 'rep2').exists() and not (tmp_path / 'rep3').exists()
 
 
+def test_planted_copy_is_read_where_run_episode_runs_and_refused_when_not_there(tmp_path, monkeypatch, capsys):
+    """READABLE_TFP_COPY (or tfp_copy) is read against the working directory
+    of the process that calls run_episode, which under pin_outputs.py is the
+    pin child's work folder: the child and RESULT.json get the resolved
+    path, and a copy that is not there is refused before the run folder is
+    touched and before any child starts; the parent turns the refusal into
+    a usage error.  Catches a relative value passed on as it is (an episode
+    run without the plant, or the plant's path wrong in RESULT.json) and a
+    missing copy that starts a child."""
+    cmds = _fake_popen(monkeypatch)
+    quiet = lambda s: None
+    copy = tmp_path / 'plants' / 'test_full_pipeline.py'
+    copy.parent.mkdir()
+    copy.write_text('# a planted copy\n', encoding='utf-8')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(rec.TFP_COPY_VAR, 'plants/test_full_pipeline.py')
+    res = rec.run_episode('rp0', 'record', tmp_path / 'run', log=quiet)
+    assert cmds[0][cmds[0].index('--tfp-copy') + 1] == str(copy.resolve()) == res['tfp_copy']
+    assert json.loads((tmp_path / 'run' / 'RESULT.json').read_text(encoding='utf-8'))['tfp_copy'] == str(copy.resolve())
+    work = tmp_path / 'work'                 # a pin child's working directory
+    work.mkdir()
+    monkeypatch.chdir(work)
+    (tmp_path / 'run2').mkdir()
+    (tmp_path / 'run2' / 'kept.txt').write_text('x', encoding='utf-8')
+    with pytest.raises(rec.TfpCopyError, match='is not a file here') as ex:
+        rec.run_episode('rp0', 'record', tmp_path / 'run2', log=quiet)
+    assert str(work / 'plants' / 'test_full_pipeline.py') in str(ex.value)
+    assert len(cmds) == 1 and (tmp_path / 'run2' / 'kept.txt').exists()
+    with pytest.raises(SystemExit) as ex:
+        rec.main(['--episode', 'rp0', '--mode', 'record', '--run-dir', str(tmp_path / 'run3')])
+    assert ex.value.code == 2 and len(cmds) == 1 and not (tmp_path / 'run3').exists()
+    assert 'is not a file here' in capsys.readouterr().err
+    monkeypatch.setenv(rec.TFP_COPY_VAR, str(copy))
+    assert rec.run_episode('rp0', 'record', tmp_path / 'run4', log=quiet)['tfp_copy'] == str(copy.resolve())
+
+
 _STAND_IN = 'M7_SUSPEND_S = 120.0\n\n\ndef suspend_length():\n    return M7_SUSPEND_S\n'
 
 

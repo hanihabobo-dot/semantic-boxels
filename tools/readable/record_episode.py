@@ -70,7 +70,10 @@ Scripted tapes (tools/readable/scripted_tapes.py) replay like live ones;
 ``--stubs JSON`` sets the test-level executor stubs of
 tests/readable/executor_stubs.py in the child, and ``--tfp-copy`` (or
 READABLE_TFP_COPY) runs a planted copy of test_full_pipeline.py for the
-planted-change checks of PLAN 24.3 (e) only.  ``--set NAME=VALUE`` (SPEC
+planted-change checks of PLAN 24.3 (e) only (a relative value is read
+against the working directory of the process that calls run_episode, which
+under pin_outputs.py is the pin's work folder, so give it absolute; a copy
+that is not there is refused).  ``--set NAME=VALUE`` (SPEC
 D5, NAME from the closed list SET_NAMES, VALUE read by float()) sets a
 module value in the child right after the module is executed; the applied
 pair goes to rec/SET.json, to a recording's tape/META.json and to
@@ -1278,6 +1281,11 @@ def pipeline_run_dir(run_dir, spec):
     return runs[-1] if runs else None
 
 
+class TfpCopyError(ValueError):
+    """A planted copy (READABLE_TFP_COPY or --tfp-copy) that is not a file
+    where run_episode reads it."""
+
+
 def run_episode(name, mode, run_dir, tape=None, rng='restore', trace_main=False,
                 timeout=EPISODE_TIMEOUT_S, log=print, stubs=None, tfp_copy=None, sets=None):
     """Run episode `name` in a child process; returns the RESULT dict.
@@ -1286,8 +1294,10 @@ def run_episode(name, mode, run_dir, tape=None, rng='restore', trace_main=False,
     or JSON text) for a scripted tape.  tfp_copy (default: the variable
     READABLE_TFP_COPY): a planted copy of test_full_pipeline.py run instead
     of the checkout's, for the planted-change checks of PLAN 24.3 (e) only;
-    the copy is named in RESULT.json and INFO files only, never in a
-    compared output.  sets: {NAME: VALUE} of SPEC D5, set in the child; a
+    a relative value is read against this process's working directory, and
+    a copy that is not there is refused (TfpCopyError); the resolved copy
+    is named in RESULT.json and INFO files only, never in a compared
+    output.  sets: {NAME: VALUE} of SPEC D5, set in the child; a
     recording writes them to its tape's META.json, a replay takes them from
     there and refuses a sets that differs."""
     entry(name)                          # an unknown name fails before run_dir is touched
@@ -1299,6 +1309,15 @@ def run_episode(name, mode, run_dir, tape=None, rng='restore', trace_main=False,
         sets = meta_sets
     if tfp_copy is None:
         tfp_copy = os.environ.get(TFP_COPY_VAR) or None
+    if tfp_copy:
+        # Read against the working directory of the process that calls this
+        # (under pin_outputs.py the pin child's, its work folder): the child
+        # and RESULT.json get the resolved path, and a planted copy that is
+        # not there is refused before the run folder is touched.
+        given, tfp_copy = tfp_copy, Path(tfp_copy).resolve()
+        if not tfp_copy.is_file():
+            raise TfpCopyError(f'{name}: the planted copy {str(given)!r} ({TFP_COPY_VAR} or --tfp-copy) is not '
+                               f'a file here: {tfp_copy} (a relative value is read against {Path.cwd()})')
     if isinstance(stubs, dict):
         stubs = json.dumps(stubs, sort_keys=True)
     run_dir = Path(run_dir).resolve()
@@ -1324,7 +1343,7 @@ def run_episode(name, mode, run_dir, tape=None, rng='restore', trace_main=False,
     if stubs:
         cmd += ['--stubs', stubs]
     if tfp_copy:
-        cmd += ['--tfp-copy', str(Path(tfp_copy).resolve())]
+        cmd += ['--tfp-copy', str(tfp_copy)]
     cmd += ['--'] + argv
     t0 = time.monotonic()
     status = 'ended'
@@ -2313,7 +2332,7 @@ def main(argv=None):
         res = run_episode(a.episode, a.mode, a.run_dir, tape=a.tape, rng=a.rng,
                           trace_main=a.trace_main, timeout=a.timeout, stubs=a.stubs,
                           tfp_copy=a.tfp_copy, sets=dict(a.set))
-    except SetError as ex:
+    except (SetError, TfpCopyError) as ex:
         ap.error(str(ex))
     return 0 if res['status'] == 'ended' and res['child_exit'].get('code') is not None else 1
 
