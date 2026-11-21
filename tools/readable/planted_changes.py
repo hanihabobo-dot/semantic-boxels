@@ -23,9 +23,11 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 TFP = REPO / 'test_full_pipeline.py'
 
-_HOME_OLD = ("            if action_name not in ('sense', 'observe'):\n"
+# test_full_pipeline.py 2213 to 2214 on the tag (SPEC D8: the look joined
+# the actions that keep the at-home state; read again, not guessed).
+_HOME_OLD = ("            if action_name not in ('sense', 'observe', 'look'):\n"
              "                at_home_ok = False\n")
-_HOME_NEW = ("            if action_name not in ('sense', 'observe'):\n"
+_HOME_NEW = ("            if action_name not in ('sense', 'observe', 'look'):\n"
              "                pass\n")
 
 _EH_HEAD = ('                    print(f"    empty hand at place entry for {obj_str}; "\n'
