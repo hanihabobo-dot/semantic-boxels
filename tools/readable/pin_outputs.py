@@ -2880,6 +2880,71 @@ def p48_twin_constants(out):
              'scope as pin 39; 5 mm only in execution.py and streams.py (all sites, look-alikes too); '
              'line numbers only in INFO_lines.json; sbatch_caps.json: lines with 900 or 1800 in root and '
              'tools/cluster *.sbatch files')
+    _p48_tag2(out)
+
+
+# Gate 7 (INDEX_PINS P5, PLAN 4.4 trap 8, R_PHASE0 3.3, U3): the twins the look and M7 code
+# wrote, by name, and the strike caps behind "of 3".
+TRAP8_NAMES = ('LOOK_BOXEL_TOL_M', 'FRAME_MARGIN_PX', 'LOOK_IMAGE_MARGIN_PX', '_FOV_V_HALF_TAN', 'STRIKE_PARK')
+STRIKE_CAP_FILES = ('test_full_pipeline.py', 'execution.py', 'look_action.py')
+
+
+def _p48_tag2(out):
+    """twins_tag2.json: every binding and import of a name of TRAP8_NAMES; every division
+    240 / 525 (the wrist camera's vertical half tangent, robot_utils' and look_views'); in
+    STRIKE_CAP_FILES every comparison '>= 3' or '>= STRIKE_PARK' and every text template that
+    holds '/3', 'of 3' or '/{STRIKE_PARK}' (the print sites the console's "of 3" patterns read)."""
+    from collections import Counter
+    sites, info = [], []
+    for path in repo_py_files():
+        r = rel(path)
+        src = path.read_text(encoding='utf-8')
+        src_lines = src.splitlines()
+        tree = ast.parse(src)
+        inner = {id(v) for n in ast.walk(tree) if isinstance(n, ast.JoinedStr) for v in n.values}
+        inner |= {id(n.body[0].value) for n in ast.walk(tree)          # docstrings are no templates
+                  if isinstance(n, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                  and n.body and isinstance(n.body[0], ast.Expr) and isinstance(n.body[0].value, ast.Constant)}
+
+        def add(name, node, qual, value, r=r, src_lines=src_lines):
+            sites.append([name, r, qual, src_lines[node.lineno - 1].strip(), value])
+            info.append([name, r, qual, node.lineno])
+
+        def on(node, qual, r=r, inner=inner):
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                for t in (node.targets if isinstance(node, ast.Assign) else [node.target]):
+                    if isinstance(t, ast.Name) and t.id in TRAP8_NAMES and node.value is not None:
+                        add(f'{t.id} (trap 8)', node, qual, ast.unparse(node.value))
+            if isinstance(node, ast.ImportFrom):
+                for a in node.names:
+                    if a.name in TRAP8_NAMES:
+                        add(f'{a.name} (trap 8)', node, qual, f'from {node.module} import {a.name}'
+                            + (f' as {a.asname}' if a.asname else ''))
+            if (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div)
+                    and isinstance(node.left, ast.Constant) and isinstance(node.right, ast.Constant)
+                    and node.left.value in (240, 240.0) and node.right.value in (525, 525.0)):
+                add('wrist camera 240 / 525 (trap 8)', node, qual, ast.unparse(node))
+            if r not in STRIKE_CAP_FILES:
+                return
+            if isinstance(node, ast.Compare):
+                for op, right in zip(node.ops, node.comparators):
+                    if isinstance(op, ast.GtE) and (
+                            (isinstance(right, ast.Constant) and right.value == 3)
+                            or (isinstance(right, ast.Name) and right.id == 'STRIKE_PARK')):
+                        add('strike cap >= 3', node, qual, ast.unparse(node))
+            if isinstance(node, (ast.Constant, ast.JoinedStr)) and id(node) not in inner:
+                t = _template(node)
+                if t and ('/3' in t or 'of 3' in t or '/{STRIKE_PARK}' in t):
+                    add('"of 3" print template', node, qual, t)
+        _walk_scoped(tree, on)
+    multi = Counter((s[0], s[1], s[2], s[3], json.dumps(s[4])) for s in sites)
+    out.json('twins_tag2.json', [[k[0], k[1], k[2], k[3], json.loads(k[4]), multi[k]] for k in sorted(multi)])
+    out.json('INFO_lines_tag2.json', info)
+    out.note('twins_tag2.json (gate 7, INDEX_PINS P5): rows as twins.json, over the same scope; the names of PLAN '
+             '4.4 trap 8 (' + ', '.join(TRAP8_NAMES) + ') at every binding and import; every division 240 / 525; '
+             'in ' + ', '.join(STRIKE_CAP_FILES) + ' every comparison ">= 3" or ">= STRIKE_PARK" (look-alikes such as '
+             'len(seq) >= 3 too) and every text template holding "/3", "of 3" or "/{STRIKE_PARK}" (an f-string once, '
+             'its parts not again; docstrings not); line numbers only in INFO_lines_tag2.json')
 
 #@@LOW_PINS@@
 
