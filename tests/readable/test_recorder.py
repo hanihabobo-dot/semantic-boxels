@@ -562,3 +562,208 @@ def test_episode_notes_name_the_crash_record_and_the_pins_write_them():
     fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_episode_notes')
     calls = [n.func.attr for n in ast.walk(fn) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)]
     assert 'episode_notes' in calls and 'entry_notes' in calls
+
+
+# ---------------------------------------------------------------------------
+# D12: the coverage table and the map of sites between two files
+# ---------------------------------------------------------------------------
+
+# A main of the pipeline's shape, an older and a newer version: the newer
+# one has a new exit reason with its break before the loop, a new look
+# branch between pick and place, and its lines moved.
+_OLD_MAIN = '''\
+def main():
+    while True:
+        if done:
+            exit_reason = 'planner_failed'
+            break
+        for action_name in plan:
+            if action_name == 'pick':
+                if a:
+                    dispatch_end('stale_precondition')
+                    break
+                if b:
+                    dispatch_end('stale_precondition')
+                    print('b')
+                    break
+                dispatch_end('ok')
+            elif action_name in ('place', 'place_hiding'):
+                if c:
+                    dispatch_end('place_failure')
+                    break
+                dispatch_end('ok')
+            if stop:
+                break
+'''
+_NEW_MAIN = '''\
+def main():
+    while True:
+        if gave_up:
+            exit_reason = 'rediscovery_giveup'
+            break
+        if done:
+            exit_reason = 'planner_failed'
+            break
+        for action_name in plan:
+            if action_name == 'pick':
+                if a:
+                    dispatch_end('stale_precondition')
+                    break
+                if b:
+                    dispatch_end('stale_precondition')
+                    print('b')
+                    break
+                dispatch_end('ok')
+            elif action_name == 'look':
+                if d:
+                    dispatch_end('stale_precondition')
+                    break
+                dispatch_end('look_outcome')
+            elif action_name in ('place', 'place_hiding'):
+                if c:
+                    dispatch_end('place_failure')
+                    break
+                dispatch_end('ok')
+            if stop:
+                break
+'''
+
+
+def _src(tmp_path, name, text):
+    p = tmp_path / name
+    p.write_text(text, encoding='utf-8')
+    return p
+
+
+def _anchor(s):
+    return (s['kind'], s['value'], s['branch'], s['ordinal'])
+
+
+def test_anchors_hold_kind_value_branch_and_ordinal(tmp_path):
+    """SPEC D12's anchor: the kind, the value (a break's: the site it
+    closes, or none), the dispatcher branch whose body holds the site (an
+    elif is its own branch, not the body of the one before) and the
+    ordinal among the sites with that kind, value and branch.  Catches a
+    branch left out of the anchor, an elif taken as the body before it, and
+    a break without the site it closes."""
+    sites = rec.anchored_sites(_src(tmp_path, 'old.py', _OLD_MAIN))
+    got = [(s['line'],) + _anchor(s) for s in sites]
+    assert got == [
+        (4, 'exit_reason', 'planner_failed', None, 0),
+        (5, 'break', 'exit_reason:planner_failed', None, 0),
+        (7, 'branch', ['pick'], None, 0),
+        (9, 'dispatch_end', 'stale_precondition', ['pick', 0], 0),
+        (10, 'break', 'dispatch_end:stale_precondition', ['pick', 0], 0),
+        (12, 'dispatch_end', 'stale_precondition', ['pick', 0], 1),
+        (14, 'break', 'dispatch_end:stale_precondition', ['pick', 0], 1),
+        (15, 'dispatch_end', 'ok', ['pick', 0], 0),
+        (16, 'branch', ['place', 'place_hiding'], None, 0),
+        (18, 'dispatch_end', 'place_failure', ['place', 'place_hiding', 0], 0),
+        (19, 'break', 'dispatch_end:place_failure', ['place', 'place_hiding', 0], 0),
+        (20, 'dispatch_end', 'ok', ['place', 'place_hiding', 0], 0),
+        (22, 'break', None, None, 0)]
+    mine = {(s['kind'], s['line']) for s in sites}
+    assert mine == {(k, r['line']) for k, rows in rec.main_sites(tmp_path / 'old.py').items() for r in rows}
+
+
+def test_anchors_of_the_tag_are_its_main_sites_each_once():
+    """On the tag's test_full_pipeline.py: the anchored sites are exactly
+    main_sites' (kind and line), and no two share an anchor."""
+    sites = rec.anchored_sites()
+    assert {(s['kind'], s['line']) for s in sites} == {
+        (k, r['line']) for k, rows in rec.main_sites().items() for r in rows}
+    anchors = [json.dumps(_anchor(s)) for s in sites]
+    assert len(anchors) == len(set(anchors))
+
+
+def test_site_map_pairs_by_anchor_names_new_and_gone(tmp_path):
+    """One to one and total: every old site paired or gone, every new one
+    paired or new; lines play no part.  Catches pairing by line or by
+    order of appearance (the look's stale_precondition would take the
+    place of the pick's)."""
+    old, new = _src(tmp_path, 'old.py', _OLD_MAIN), _src(tmp_path, 'new.py', _NEW_MAIN)
+    m = rec.site_map(old, new)
+    assert [(o['line'], n['line']) for o, n in m['pairs']] == [
+        (4, 7), (5, 8), (7, 10), (9, 12), (10, 13), (12, 15), (14, 17), (15, 18), (16, 24), (18, 26),
+        (19, 27), (20, 28), (22, 30)]
+    added = [(4, 'exit_reason'), (5, 'break'), (19, 'branch'), (21, 'dispatch_end'), (22, 'break'),
+             (23, 'dispatch_end')]
+    assert [(n['line'], n['kind']) for n in m['new']] == added and m['gone'] == []
+    back = rec.site_map(new, old)                    # the other way round: the same sites are gone
+    assert [(s['line'], s['kind']) for s in back['gone']] == added and back['new'] == []
+
+
+def test_site_map_fails_on_an_ambiguous_anchor(tmp_path):
+    """A group the two files hold in different numbers cannot be paired
+    without picking: the tool fails and names the lines."""
+    third = _OLD_MAIN.replace("                dispatch_end('ok')\n            elif",
+                              "                if e:\n                    dispatch_end('stale_precondition')\n"
+                              "                    break\n                dispatch_end('ok')\n            elif", 1)
+    assert third != _OLD_MAIN
+    with pytest.raises(rec.SiteMapError, match=r"stale_precondition.*\[9, 12\] in the old file, \[9, 12, 16\]"):
+        rec.site_map(_src(tmp_path, 'old.py', _OLD_MAIN), _src(tmp_path, 'third.py', third))
+
+
+def _baseline(folder, path, reached):
+    """A coverage file of `path` as phase0/G1's: its sites, reached when
+    (kind, line) is in `reached`."""
+    sites = [dict(r, kind=k, reached=(k, r['line']) in reached)
+             for k, rows in rec.main_sites(path).items() for r in rows]
+    folder.mkdir(parents=True, exist_ok=True)
+    p = folder / 'baseline.json'
+    p.write_text(json.dumps({'sites': sites}), encoding='utf-8')
+    return p
+
+
+def _trace(tmp_path, lines):
+    p = tmp_path / 'main_lines.json'
+    p.write_text(json.dumps({'main:1': sorted(lines)}), encoding='utf-8')
+    return p
+
+
+def test_coverage_compare_names_a_pair_reached_before_and_not_now(tmp_path):
+    """The old pins reached the place branch, place_failure and its break
+    (old 16, 18, 19), the new ones do not (new 24, 26, 27): named lost.
+    A branch counts as reached by the first line of its body, not by its
+    if line (evaluated for every action).  A baseline of another file is
+    refused.  Catches a lost pair not named, reach read at the old lines,
+    a branch's if line taken as its reach, and a baseline not checked."""
+    old, new = _src(tmp_path, 'old.py', _OLD_MAIN), _src(tmp_path, 'new.py', _NEW_MAIN)
+    base = _baseline(tmp_path / 'b', old, {('branch', 7), ('dispatch_end', 9), ('break', 10),
+                                           ('branch', 16), ('dispatch_end', 18), ('break', 19)})
+    trace = _trace(tmp_path, {11, 12, 13, 24})        # the pick's first guard; the place's if line only
+    c = rec.coverage_compare([trace], base, old, new)
+    assert [(r['kind'], r['old_line'], r['new_line']) for r in c['lost']] == [
+        ('branch', 16, 24), ('dispatch_end', 18, 26), ('break', 19, 27)]
+    assert c['summary']['dispatch_end'] == {'old': 5, 'new': 7, 'paired': 5, 'new_sites': 2, 'gone': 0,
+                                            'old_reached': 2, 'new_reached': 1}
+    assert c['summary']['branch']['new_reached'] == 1     # the pick (body line 11), not the place
+    with pytest.raises(rec.SiteMapError, match='is not of'):
+        rec.coverage_compare([trace], _baseline(tmp_path / 'x', new, set()), old, new)
+
+
+def test_coverage_command_prints_the_table_and_the_comparison(tmp_path, capsys, monkeypatch):
+    """One call: --coverage TRACES prints the table of main_sites; with
+    --baseline and --old-tfp also the comparison.  Here the tag's file
+    against itself, the baseline reaching the first site of each kind and
+    the trace nothing: every site paired, none new or gone, those lost."""
+    sites = rec.main_sites()
+    reached = {(k, rows[0]['line']) for k, rows in sites.items()}
+    base = _baseline(tmp_path / 'b', rec.TFP, reached)
+    trace = _trace(tmp_path, set())
+    assert rec.main(['--coverage', str(trace), '--baseline', str(base), '--old-tfp', str(rec.TFP)]) == 0
+    d = json.loads(capsys.readouterr().out)
+    assert set(d) == {'table', 'compare'} and d['table'] == rec.coverage_table([trace])
+    assert d['compare']['new'] == [] and d['compare']['gone'] == []
+    assert {(r['kind'], r['old_line']) for r in d['compare']['lost']} == reached
+    assert all(r['old_line'] == r['new_line'] for r in d['compare']['map'])
+    with pytest.raises(SystemExit):
+        rec.main(['--coverage', str(trace), '--baseline', str(base)])
+
+    def ambiguous(*a, **k):
+        raise rec.SiteMapError('ambiguous anchors, not paired: x')
+    monkeypatch.setattr(rec, 'coverage_compare', ambiguous)
+    capsys.readouterr()
+    assert rec.main(['--coverage', str(trace), '--baseline', str(base), '--old-tfp', str(rec.TFP)]) == 3
+    out = capsys.readouterr()
+    assert 'ambiguous anchors' in out.err and out.out == ''

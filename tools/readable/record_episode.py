@@ -8,7 +8,8 @@ recorded or replayed (Phase 0 of the readable migration, PLAN 5.2 pin 47 and
     python tools/readable/record_episode.py --record-set SET --episodes rp0,rp1,stack0,br0,br5
     python tools/readable/record_episode.py --episode f140 --print-argv   # what it starts; starts nothing
     python tools/readable/record_episode.py --renorm DIR          # normalise a run folder again
-    python tools/readable/record_episode.py --coverage DIR [DIR ...]
+    python tools/readable/record_episode.py --coverage TRACE [TRACE ...]
+    python tools/readable/record_episode.py --coverage TRACE ... --baseline OLD.json --old-tfp OLD.py
 
 Episodes: the table EPISODES (configuration D), f<seed> and r<seed> (the
 paper's arms F and R on a generated find_dice scene: the harness's command
@@ -1667,6 +1668,190 @@ def coverage_table(trace_files, path=TFP):
     return table
 
 
+# The map of sites between two versions of test_full_pipeline.py (SPEC D12):
+# a line number names a site in one file only, kind and value alone do not
+# name it (stale_precondition is passed at eight sites), so a site's anchor
+# is its kind, its value, the dispatcher branch it is in and its ordinal
+# among the sites with that kind, value and branch.  A break's value is the
+# nearest site statement before it in its own block (the dispatch_end or
+# exit_reason it closes), or none.
+
+class SiteMapError(RuntimeError):
+    """The two files' sites cannot be matched without picking."""
+
+
+def _dispatcher_actions(node):
+    """The actions of a dispatcher branch (main_sites' rule), else None."""
+    if not isinstance(node, ast.If):
+        return None
+    t = node.test
+    if (isinstance(t, ast.Compare) and getattr(t.left, 'id', None) == 'action_name'
+            and all(isinstance(op, (ast.Eq, ast.In)) for op in t.ops)):
+        return tuple(c.value for c in ast.walk(t) if isinstance(c, ast.Constant))
+    return None
+
+
+def _dispatch_status(call):
+    return (_str_arg(call) or ast.unparse(call.args[0])) if call.args else None
+
+
+def _statement_site(stmt):
+    """'dispatch_end:<status>' or 'exit_reason:<value>' for a statement that
+    is such a site, else None (a break's value)."""
+    if (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call)
+            and getattr(stmt.value.func, 'id', None) == 'dispatch_end'):
+        return f'dispatch_end:{_dispatch_status(stmt.value)}'
+    if (isinstance(stmt, ast.Assign) and any(getattr(t, 'id', None) == 'exit_reason' for t in stmt.targets)
+            and isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str)):
+        return f'exit_reason:{stmt.value.value}'
+    return None
+
+
+def anchored_sites(path=TFP):
+    """Every site of main_sites(path), with its anchor: [{kind, line, value,
+    branch, ordinal}] in source order; branch is [actions..., ordinal] of
+    the innermost dispatcher branch whose body holds the site (an elif or
+    else part is not its branch's body), or None."""
+    tree = ast.parse(Path(path).read_text(encoding='utf-8'))
+    main = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main')
+    found = []
+
+    def site(node, siblings, index):
+        if isinstance(node, ast.Break):
+            before = [_statement_site(s) for s in (siblings or [])[:index]]
+            return 'break', next((v for v in reversed(before) if v), None)
+        if isinstance(node, ast.Call) and getattr(node.func, 'id', None) == 'dispatch_end':
+            return 'dispatch_end', _dispatch_status(node)
+        if isinstance(node, ast.Assign) and any(getattr(t, 'id', None) == 'exit_reason' for t in node.targets):
+            if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                return 'exit_reason', node.value.value
+        actions = _dispatcher_actions(node)
+        if actions is not None:
+            return 'branch', list(actions)
+        return None
+
+    def visit(node, branch, siblings=None, index=None):
+        s = site(node, siblings, index)
+        if s is not None:
+            found.append({'kind': s[0], 'line': node.lineno, 'col': node.col_offset, 'value': s[1],
+                          'branch_node': branch, 'node': node})
+        inner = node if _dispatcher_actions(node) is not None else None
+        for field, value in ast.iter_fields(node):
+            here = inner if (inner is not None and field == 'body') else branch
+            if isinstance(value, list):
+                for i, child in enumerate(value):
+                    if isinstance(child, ast.AST):
+                        visit(child, here, value, i)
+            elif isinstance(value, ast.AST):
+                visit(value, here)
+
+    for i, stmt in enumerate(main.body):
+        visit(stmt, None, main.body, i)
+    found.sort(key=lambda d: (d['line'], d['col']))
+    branch_anchor, seen = {}, {}
+    for d in found:
+        if d['kind'] == 'branch':
+            key = tuple(d['value'])
+            branch_anchor[id(d['node'])] = list(key) + [seen.get(key, 0)]
+            seen[key] = seen.get(key, 0) + 1
+    out, ordinals = [], {}
+    for d in found:
+        b = None if d['branch_node'] is None else branch_anchor[id(d['branch_node'])]
+        key = (d['kind'], json.dumps(d['value']), json.dumps(b))
+        out.append({'kind': d['kind'], 'line': d['line'], 'value': d['value'], 'branch': b,
+                    'ordinal': ordinals.get(key, 0)})
+        ordinals[key] = ordinals.get(key, 0) + 1
+    return out
+
+
+def _group_key(s):
+    return (s['kind'], json.dumps(s['value']), json.dumps(s['branch']))
+
+
+def site_map(old_path, new_path):
+    """One to one and total: {"pairs": [(old, new)], "gone": [old], "new":
+    [new]}.  Sites with the same kind, value and branch pair up by ordinal
+    when both files hold as many of them; a group held by one file only is
+    gone or new; a group whose counts differ cannot be paired without
+    picking, and the tool fails (SiteMapError)."""
+    old, new = anchored_sites(old_path), anchored_sites(new_path)
+    groups = {}
+    for side, sites in (('old', old), ('new', new)):
+        for s in sites:
+            groups.setdefault(_group_key(s), {'old': [], 'new': []})[side].append(s)
+    pairs, gone, added, bad = [], [], [], []
+    for key, g in groups.items():
+        if g['old'] and g['new']:
+            if len(g['old']) != len(g['new']):
+                bad.append(f'{key[0]} value {key[1]} in branch {key[2]}: lines {[s["line"] for s in g["old"]]} '
+                           f'in the old file, {[s["line"] for s in g["new"]]} in the new one')
+                continue
+            pairs += list(zip(g['old'], g['new']))
+        elif g['old']:
+            gone += g['old']
+        else:
+            added += g['new']
+    if bad:
+        raise SiteMapError('ambiguous anchors, not paired: ' + '; '.join(bad))
+    by_line = lambda s: s['line']
+    return {'pairs': sorted(pairs, key=lambda p: p[1]['line']), 'gone': sorted(gone, key=by_line),
+            'new': sorted(added, key=by_line)}
+
+
+def _trace_lines(trace_files):
+    reached = set()
+    for tf in trace_files:
+        for lines in json.loads(Path(tf).read_text(encoding='utf-8')).values():
+            reached.update(lines)
+    return reached
+
+
+def coverage_compare(trace_files, baseline, old_path, new_path=TFP):
+    """The tag's coverage against checkpoint 1's baseline through the map:
+    the baseline's sites must be the old file's main_sites (kind and line),
+    each pair says whether the old pins and the new ones reach it, and a
+    pair reached on the old file and not on the new one is named lost."""
+    base = json.loads(Path(baseline).read_text(encoding='utf-8'))
+    base_reached = {(s['kind'], s['line']): bool(s['reached']) for s in base['sites']}
+    old_rows = main_sites(old_path)
+    old_keys = {(k, r['line']) for k, rows in old_rows.items() for r in rows}
+    if old_keys != set(base_reached):
+        raise SiteMapError(f'the baseline {rel(Path(baseline))} is not of {old_path}: its sites differ '
+                           f'from main_sites ({len(old_keys ^ set(base_reached))} sites)')
+    reached = _trace_lines(trace_files)
+    body = {r['line']: r['body_line'] for r in main_sites(new_path)['branch']}
+    m = site_map(old_path, new_path)
+
+    def new_reached(s):
+        return body.get(s['line'], s['line']) in reached
+
+    def anchor(s):
+        return {'value': s['value'], 'branch': s['branch'], 'ordinal': s['ordinal']}
+    rows = [{'kind': o['kind'], 'old_line': o['line'], 'new_line': n['line'], 'anchor': anchor(n),
+             'old_reached': base_reached[(o['kind'], o['line'])], 'new_reached': new_reached(n)}
+            for o, n in m['pairs']]
+    new_rows = [{'kind': n['kind'], 'new_line': n['line'], 'anchor': anchor(n), 'new_reached': new_reached(n)}
+                for n in m['new']]
+    gone_rows = [{'kind': o['kind'], 'old_line': o['line'], 'anchor': anchor(o),
+                  'old_reached': base_reached[(o['kind'], o['line'])]} for o in m['gone']]
+    summary = {}
+    for kind in ('break', 'dispatch_end', 'exit_reason', 'branch'):
+        mine = [r for r in rows if r['kind'] == kind]
+        summary[kind] = {
+            'old': sum(1 for k, _ in base_reached if k == kind),
+            'new': len(mine) + sum(1 for r in new_rows if r['kind'] == kind),
+            'paired': len(mine), 'new_sites': sum(1 for r in new_rows if r['kind'] == kind),
+            'gone': sum(1 for r in gone_rows if r['kind'] == kind),
+            'old_reached': sum(1 for (k, _), v in base_reached.items() if k == kind and v),
+            'new_reached': (sum(1 for r in mine if r['new_reached'])
+                            + sum(1 for r in new_rows if r['kind'] == kind and r['new_reached']))}
+    return {'old_file': {'path': str(old_path), 'git_blob_sha1': git_blob_sha1(Path(old_path).read_bytes())},
+            'new_file': {'path': rel(Path(new_path)), 'git_blob_sha1': git_blob_sha1(Path(new_path).read_bytes())},
+            'baseline': rel(Path(baseline)), 'trace_files': len(trace_files), 'summary': summary,
+            'lost': [r for r in rows if r['old_reached'] and not r['new_reached']],
+            'map': rows, 'new': new_rows, 'gone': gone_rows}
+
+
 # ---------------------------------------------------------------------------
 # Command line
 # ---------------------------------------------------------------------------
@@ -1700,7 +1885,13 @@ def main(argv=None):
     ap.add_argument('--record-set')
     ap.add_argument('--episodes', default=','.join(PIN47_EPISODES))
     ap.add_argument('--renorm')
-    ap.add_argument('--coverage', nargs='+')
+    ap.add_argument('--coverage', nargs='+', metavar='TRACE',
+                    help='trace files (rec/main_lines.json, a pin\'s INFO_main_lines.json): the table of '
+                         'main_sites with what they reach')
+    ap.add_argument('--baseline', help='with --coverage: an older coverage file (phase0/G1/coverage_41893d5.json) '
+                                       'to compare with through the map of sites')
+    ap.add_argument('--old-tfp', help='with --baseline: the test_full_pipeline.py the baseline is of '
+                                      '(the file at that commit, written out by the caller)')
     ap.add_argument('--child', action='store_true', help=argparse.SUPPRESS)
     ap.add_argument('--rec', help=argparse.SUPPRESS)
     ap.add_argument('--script', help=argparse.SUPPRESS)
@@ -1724,8 +1915,18 @@ def main(argv=None):
     if a.renorm:
         write_norm(a.renorm)
         return 0
+    if a.baseline or a.old_tfp:
+        if not (a.coverage and a.baseline and a.old_tfp):
+            ap.error('--baseline and --old-tfp go together, with --coverage')
     if a.coverage:
-        print(json.dumps(coverage_table(a.coverage), indent=1))
+        out = {'table': coverage_table(a.coverage)}
+        if a.baseline:
+            try:
+                out['compare'] = coverage_compare(a.coverage, a.baseline, a.old_tfp)
+            except SiteMapError as ex:
+                print(f'[record_episode] {ex}', file=sys.stderr)
+                return 3
+        print(json.dumps(out if a.baseline else out['table'], indent=1))
         return 0
     if a.record_set:
         return record_set(a.record_set, [e for e in a.episodes.split(',') if e])
