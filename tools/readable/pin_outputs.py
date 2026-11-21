@@ -1778,6 +1778,197 @@ def p30_report(out):
         r['timing_summary_json'] = summary.read_text() if summary.exists() else None
         res.append({'case': name, **r})
     out.json('report.json', res)
+    done_tag2 = _p30_tag2(out, rl, base, events)
+    _p30_exit_reasons(out, [('report.json', [(name, kw, r) for (name, kw), r in zip(cases, res)]),
+                            ('report_tag2.json', done_tag2)])
+
+
+# Pin 30's additions at the tag (INDEX_PINS P7, SPEC D15): the M7 lines over a real
+# belief.BeliefState, home_not_reached, and the exit reasons by AST.  New files, so report.json
+# stays as it was.
+P30_SHADOWS_TAG2 = ('shadow_001', 'shadow_002', 'shadow_003', 'shadow_004')
+
+
+def _p30_tag2(out, rl, base, events):
+    """report_tag2.json: report_run_outcome over a belief.BeliefState that suspend(),
+    release_suspended(), mark_sensed(), mark_unresolved() and remove_shadow() brought to each
+    case's state at fixed times.  Returns [(case, arguments, outcome)]."""
+    import types
+    from belief import BeliefState
+
+    def S(sid, bodies, now):
+        return ('suspend', (sid,), {'bodies': bodies, 'now': now, 'seconds': 120.0})
+
+    def E(sid):
+        return ('mark_sensed', (sid, False), {})
+
+    def U(sid):
+        return ('mark_unresolved', (sid,), {})
+
+    def R(now):
+        return ('release_suspended', (now,), {})
+
+    m7 = {'m7_suspend_s': 120.0}
+    one = [S('shadow_002', {'cup_1': 3}, 10.0)]
+    several = [S('shadow_003', {'cup_2': 3, 'cube_b': 4}, 12.5), S('shadow_002', {'cup_1': 3}, 20.0)]
+    cases = [
+        ('rediscovery_giveup_one', one + [E('shadow_001'), E('shadow_003'), E('shadow_004')], None,
+         dict(success=False, exit_reason='rediscovery_giveup', **m7)),
+        ('rediscovery_giveup_several', several + [E('shadow_001'), E('shadow_004')], None,
+         dict(success=False, exit_reason='rediscovery_giveup', **m7)),
+        ('rediscovery_giveup_one_blocked', one + [U('shadow_001'), E('shadow_003'), U('shadow_004')], None,
+         dict(success=False, exit_reason='rediscovery_giveup',
+              blocked_giveup_shadows={'shadow_004', 'shadow_001'}, **m7)),
+        ('rediscovery_giveup_several_blocked', several + [E('shadow_001'), U('shadow_004')], None,
+         dict(success=False, exit_reason='rediscovery_giveup', blocked_giveup_shadows={'shadow_004'}, **m7)),
+        ('planner_failed_suspended', one + [E('shadow_001')], None,
+         dict(success=False, exit_reason='planner_failed', **m7)),
+        ('planner_failed_released', one + [E('shadow_001'), R(130.0)], None,
+         dict(success=False, exit_reason='planner_failed', **m7)),
+        ('planner_failed_m7_off', [E('shadow_001')], None,
+         dict(success=False, exit_reason='planner_failed')),
+        ('target_lost_suspended', one + [S('shadow_004', {'cube_b': 5}, 40.0), E('shadow_001')], None,
+         dict(success=False, exit_reason='target_lost', integrity_events=events, **m7)),
+        ('target_lost_no_suspension', [E('shadow_001')], None,
+         dict(success=False, exit_reason='target_lost', integrity_events=events, **m7)),
+        ('target_lost_m7_off', [E('shadow_001')], None,
+         dict(success=False, exit_reason='target_lost', integrity_events=events)),
+        ('suspensions_ended', [S('shadow_001', {'cup_1': 3}, 5.0), E('shadow_001'), R(30.0),
+                               S('shadow_002', {'cup_2': 3}, 10.0), S('shadow_002', {'cup_2': 4}, 50.0),
+                               S('shadow_003', {'cube_b': 3}, 60.0), S('shadow_004', {'cup_1': 3}, 70.0),
+                               ('remove_shadow', ('shadow_004',), {}), R(175.0)], None,
+         dict(success=False, exit_reason='planner_failed', **m7)),
+        ('ledger_t0_1000', [S('shadow_002', {'cup_1': 3}, 1010.0), E('shadow_001'), E('shadow_003'),
+                            E('shadow_004')], 1000.0,
+         dict(success=False, exit_reason='rediscovery_giveup', **m7)),
+        ('success_m7', one + [R(130.0), ('mark_sensed', ('shadow_002', True), {})], None,
+         dict(success=True, exit_reason=None, **m7)),
+        ('home_not_reached', [E('shadow_001')], None,
+         dict(success=False, exit_reason='home_not_reached', **m7)),
+        ('home_not_reached_stack', [], None,
+         dict(success=False, exit_reason='home_not_reached', goal_kind='stack',
+              goal=('on', 'cube_a', 'cube_b'), on_relations={'cube_a': 'table'}, **m7)),
+    ]
+    out.note('report_tag2.json (INDEX_PINS P7, SPEC D15): belief is a real belief.BeliefState over '
+             'shadow_001 to shadow_004 with target dice, brought to each case by its steps at fixed times '
+             '(suspend seconds 120.0), its state stored before the call; no ledger is open, so '
+             'run_logger._ledger_t0 is None except in case ledger_t0_1000, which sets it to 1000.0 for the '
+             'call and puts the old value back; the other arguments as in report.json, with a run folder '
+             'per case under runs_tag2')
+    rows, done = [], []
+    for name, steps, t0, kw in cases:
+        b = BeliefState(list(P30_SHADOWS_TAG2), 'dice')
+        for meth, a, k in steps:
+            getattr(b, meth)(*a, **k)
+        state = {'shadow_status': dict(b.shadow_status), 'target_found_in': b.target_found_in,
+                 'suspended': {s: dict(r) for s, r in b.suspended.items()},
+                 'suspensions': [dict(r) for r in b.suspensions],
+                 'get_suspended_shadows': b.get_suspended_shadows()}
+        run_dir = Path('runs_tag2') / name
+        run_dir.mkdir(parents=True)
+        args = dict(base, shadows=list(P30_SHADOWS_TAG2), belief=b,
+                    run_logger=types.SimpleNamespace(run_dir=run_dir, log_path=None))
+        args.update(kw)
+        old_t0 = rl._ledger_t0
+        rl._ledger_t0 = t0
+        try:
+            r = outcome(rl.report_run_outcome, **args)
+        finally:
+            rl._ledger_t0 = old_t0
+        summary = run_dir / 'timing_summary.json'
+        r['timing_summary_json'] = summary.read_text() if summary.exists() else None
+        rows.append({'case': name, 'steps': [[m, list(a), k] for m, a, k in steps], 'ledger_t0': t0,
+                     'belief': state, **r})
+        done.append((name, kw, r))
+    out.json('report_tag2.json', rows)
+    return done
+
+
+def _p30_exit_reasons(out, results):
+    """exit_reasons.json: the values main() of test_full_pipeline.py assigns to exit_reason (its
+    nested functions included) and the ones run_logger.report_run_outcome compares it with or
+    assigns, by AST (PLAN rule 3), and the failed cases of results per exit reason as their
+    timing_summary.json writes it (the case's argument when no summary is written).  results is
+    [(file, [(case, arguments, outcome)])].  The lines go to INFO_exit_reason_lines.json."""
+    def top_def(path, name):
+        tree = ast.parse((REPO / path).read_text(encoding='utf-8'))
+        found = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name]
+        if len(found) != 1:
+            raise LookupError(f'{path} defines {name} {len(found)} times at module level, not once')
+        return found[0]
+
+    def binds(t):
+        if isinstance(t, ast.Name):
+            return t.id == 'exit_reason'
+        if isinstance(t, (ast.Tuple, ast.List)):
+            return any(binds(e) for e in t.elts)
+        return isinstance(t, ast.Starred) and binds(t.value)
+
+    def sites(fn):
+        assigns, other, compares = {}, [], {}
+        for n in ast.walk(fn):
+            if isinstance(n, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+                targets = n.targets if isinstance(n, ast.Assign) else [n.target]
+                if not any(binds(t) for t in targets):
+                    continue
+                v = n.value
+                if (isinstance(n, ast.Assign) and len(targets) == 1 and isinstance(targets[0], ast.Name)
+                        and isinstance(v, ast.Constant) and isinstance(v.value, str)):
+                    assigns.setdefault(v.value, []).append(n.lineno)
+                else:
+                    other.append({'line': n.lineno, 'code': ast.unparse(n)})
+            elif isinstance(n, ast.Compare) and isinstance(n.left, ast.Name) and n.left.id == 'exit_reason':
+                for c in n.comparators:
+                    for e in (c.elts if isinstance(c, (ast.Tuple, ast.List, ast.Set)) else [c]):
+                        if isinstance(e, ast.Constant) and isinstance(e.value, str):
+                            compares.setdefault(e.value, []).append(n.lineno)
+        return assigns, other, compares
+
+    m_as, m_other, m_cmp = sites(top_def('test_full_pipeline.py', 'main'))
+    r_as, r_other, r_cmp = sites(top_def('run_logger.py', 'report_run_outcome'))
+    by_reason, success_cases = {}, []
+    for file, items in results:
+        for name, kw, r in items:
+            s = r.get('timing_summary_json')
+            summ = json.loads(s) if s else None
+            ok = summ['success'] if summ else kw['success']
+            reason = summ['exit_reason'] if summ else kw.get('exit_reason')
+            label = f'{file}:{name}'
+            if ok:
+                success_cases.append(label)
+            else:
+                by_reason.setdefault(str(reason), []).append(label)
+    named = sorted(set(m_as) | set(r_cmp) | set(r_as))
+    out.json('exit_reasons.json', {
+        'main_assigns': sorted(m_as),
+        'main_other_assignments': [o['code'] for o in m_other],
+        'main_compares': sorted(m_cmp),
+        'report_compares': sorted(r_cmp),
+        'report_assigns': sorted(r_as),
+        'report_other_assignments': [o['code'] for o in r_other],
+        'main_assigns_without_a_report_branch': sorted(set(m_as) - set(r_cmp)),
+        'report_branches_main_never_assigns': sorted(set(r_cmp) - set(m_as)),
+        'failed_cases_by_exit_reason': {k: by_reason[k] for k in sorted(by_reason)},
+        'success_cases': success_cases,
+        'named_values_without_a_case': [v for v in named if v not in by_reason],
+        'case_values_the_code_does_not_name': sorted(set(by_reason) - set(named)),
+    })
+    def lines(d):
+        return {k: sorted(d[k]) for k in sorted(d)}
+    out.json('INFO_exit_reason_lines.json', {
+        'test_full_pipeline.py main assigns': lines(m_as),
+        'test_full_pipeline.py main other assignments': sorted(m_other, key=lambda o: o['line']),
+        'test_full_pipeline.py main compares': lines(m_cmp),
+        'run_logger.py report_run_outcome compares': lines(r_cmp),
+        'run_logger.py report_run_outcome assigns': lines(r_as),
+        'run_logger.py report_run_outcome other assignments': sorted(r_other, key=lambda o: o['line'])})
+    out.note('exit_reasons.json: the exit_reason values main() of test_full_pipeline.py assigns (nested '
+             'functions included), compares, and the ones report_run_outcome compares or assigns, by AST and '
+             'sorted; the failed cases of report.json and report_tag2.json by the exit_reason their '
+             'timing_summary.json writes (the argument when none is written); lines in '
+             'INFO_exit_reason_lines.json')
+    out.note('not reached here: the relabel in main() of all_searched and rediscovery_giveup to target_lost '
+             'when target_lost_seen; it is code of main(), which only an episode runs (group episode)')
 
 
 # ----- pin 31: eval matrix -------------------------------------------------
