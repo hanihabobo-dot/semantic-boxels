@@ -4840,7 +4840,8 @@ def _write_norm_files(out, run_dir, skip=()):
 
 
 def _episode_notes(out, tool, name):
-    out.note(f'episode {name}: {tool.EPISODES[name]["kind"]}, argv {tool.EPISODES[name]["argv"]}')
+    for line in tool.entry_notes(name):      # a D entry: the one line of before gate 7
+        out.note(line)
     out.note('normalised by record_episode.normalise: ledger t, wall, ledger_open.pid, plan.plan_time_s, '
              'bridge_timing *_s and driver_clock times removed; plan_obj and Type@id mapped to their order '
              'of first use keyed by plan id; eye t_wall and extra.plan_time_s removed; timing_summary and '

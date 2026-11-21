@@ -6,8 +6,16 @@ recorded or replayed (Phase 0 of the readable migration, PLAN 5.2 pin 47 and
     python tools/readable/record_episode.py --episode rp0 --mode replay --run-dir DIR --tape DIR/tape
     python tools/readable/record_episode.py --episode br0 --mode first-plan --run-dir DIR
     python tools/readable/record_episode.py --record-set SET --episodes rp0,rp1,stack0,br0,br5
+    python tools/readable/record_episode.py --episode f140 --print-argv   # what it starts; starts nothing
     python tools/readable/record_episode.py --renorm DIR          # normalise a run folder again
     python tools/readable/record_episode.py --coverage DIR [DIR ...]
+
+Episodes: the table EPISODES (configuration D), f<seed> and r<seed> (the
+paper's arms F and R on a generated find_dice scene: the harness's command
+for arm O, then the declared string, see "Entries beyond the table"), a
+boxels entry with _look (the tabletop start `run boxels -Look boxel -Eye
+arm`), and any of these with _m7off (its --m7 off twin).  The parent takes
+an episode's argv from its entry only; it refuses positional arguments.
 
 The tool never takes the pipeline lock itself: its caller runs it under
 ``flock /root/sb_pipeline.lock`` (a nested flock on the same file from a
@@ -68,6 +76,7 @@ import json
 import os
 import pickle
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -116,6 +125,323 @@ EPISODES['stack0'] = {'kind': 'boxels', 'argv': ['--no-gui', '--scene', 'stack',
                                                  '--no-telemetry']}
 EPISODES.update({'br0': _br(0), 'br1': _br(1), 'br5': _br(5), 'br100': _br(100, gen=True)})
 PIN47_EPISODES = ('rp0', 'rp1', 'rp1o3', 'stack0', 'br0', 'br5')
+
+
+# ---------------------------------------------------------------------------
+# Entries beyond the table: F and R, the tabletop look start, the --m7 off twins
+# ---------------------------------------------------------------------------
+# EPISODES above is configuration D (PLAN 5.8: the launcher's defaults).  The
+# paper's two arms of ours run on TAMPURA's generated find_dice scenes:
+#
+#   f<seed>, r<seed>  the harness's command for arm O, copied from the
+#                     module that builds it (tools/slip_eval.py run_episode,
+#                     with tools/gen_scene_eval.py's ARM_O: the flags as its
+#                     `cmd` list spells them, the --slip-fixes value and
+#                     arm_args computed by its own functions, nothing typed
+#                     here), then the string wave 2's declaration states for
+#                     the arm (its P4_O_ARGS, read by text), then
+#                     --log-level normal, the one departure (R_PHASE0 3.3:
+#                     the recorder needs the entry's plain exit).  SPEC D2.
+#   <rp entry>_look   a tabletop D entry (kind boxels) as `run boxels -Look
+#                     boxel -Eye arm` starts it (PLAN 5.8's tabletop start in
+#                     R; run.ps1:129 and 138 add ` --look boxel` and
+#                     ` --eye arm` after the launcher's command): those four
+#                     words before the recorder's own additions.  run.ps1 has
+#                     no switch for --interior-regions, so this start has none.
+#   <entry>_m7off     the entry's --m7 off twin (SPEC D3): `--m7 off` after
+#                     the command the entry reproduces (for F and R after
+#                     the declared string, as tracks/evalfinal/m7/checks/
+#                     episodes.sh spells it), before the recorder's own
+#                     --log-level normal (and --no-telemetry).  An entry
+#                     without the suffix passes no --m7: the trunk's default.
+#
+# The seed rule (which seeds are recorded) is SPEC D1's, not this tool's: an
+# f or r entry exists for every seed whose generated scene is in GEN_DIR.
+
+SLIP_EVAL = REPO / 'tools' / 'slip_eval.py'
+GEN_SCENE_EVAL = REPO / 'tools' / 'gen_scene_eval.py'
+DECLARATION = (REPO / 'archive' / 'tampura_bridge_plan_2026-10-25' / 'tracks' / 'evalfinal' / 'wave2'
+               / 'DECLARATION.md')
+CONFIG_ARMS = {'f': 'F', 'r': 'R'}          # entry prefix: the arm's letter in the declaration
+TWIN_SUFFIX = '_m7off'
+LOOK_SUFFIX = '_look'
+LOOK_ARGV = ['--look', 'boxel', '--eye', 'arm']    # run.ps1:129 ($Look boxel) and :138 (-Eye arm)
+_CONFIG_ENTRY = re.compile(r'(?P<cfg>[fr])(?P<seed>[1-9][0-9]*)$')
+# The recorder's own additions at the end of every entry's argv (the
+# departures from the command an entry reproduces); a twin's --m7 off goes
+# before them.
+DEPARTURE_FLAG = '--log-level'
+
+
+class EntryError(ValueError):
+    """An episode name the tool cannot resolve, or a source it cannot read
+    exactly as this tool reads it (the tool fails, it never picks)."""
+
+
+def rel(path):
+    """`path` relative to the checkout, with forward slashes (a path outside
+    the checkout as it is)."""
+    try:
+        return Path(path).resolve().relative_to(REPO).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def git_blob_sha1(data):
+    """The git blob hash of a text file's bytes as git stores them: CRLF
+    read as LF (the checkout's core.autocrlf turns LF into CRLF in the
+    working tree), so it equals `git rev-parse <commit>:<path>`."""
+    data = bytes(data).replace(b'\r\n', b'\n')
+    return hashlib.sha1(b'blob %d\0' % len(data) + data).hexdigest()
+
+
+def declared_string(arm, path=DECLARATION):
+    """The flag string the declaration states for `arm` (F or R): the value
+    inside P4_O_ARGS='...' on the one line that starts the arm ("- F, ..."),
+    which must also run the harness's arm O (P4_ARMS=O).  Exactly one such
+    line and exactly one value on it, or EntryError.  Returns the value with
+    the file, its git blob hash, the line number and the line."""
+    path = Path(path)
+    raw = path.read_bytes()
+    lines = raw.decode('utf-8').replace('\r\n', '\n').split('\n')
+    starts = [(i + 1, ln) for i, ln in enumerate(lines) if ln.startswith(f'- {arm}, ')]
+    if len(starts) != 1:
+        raise EntryError(f'{path}: {len(starts)} lines start the {arm} arm ("- {arm}, "), not one')
+    lineno, line = starts[0]
+    values = re.findall(r"P4_O_ARGS='([^']*)'", line)
+    if len(values) != 1:
+        raise EntryError(f"{path}:{lineno}: {len(values)} values P4_O_ARGS='...' on the {arm} arm's "
+                         f"line, not one")
+    arms = re.findall(r'P4_ARMS=(\w+)', line)
+    if arms != ['O']:
+        raise EntryError(f'{path}:{lineno}: the {arm} arm runs P4_ARMS={arms}, not the harness\'s arm O')
+    return {'arm': arm, 'value': values[0], 'file': rel(path), 'git_blob_sha1': git_blob_sha1(raw),
+            'line': lineno, 'text': line}
+
+
+def _module_defs(path, names):
+    """The named top-level functions and assignments of a module's source,
+    executed in a namespace of their own (the module is not imported, so its
+    imports and its sys.path edits do not run here).  EntryError when a
+    name is not defined there at top level."""
+    path = Path(path)
+    tree = ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
+    body, found = [], set()
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name in names:
+            body.append(node)
+            found.add(node.name)
+        elif isinstance(node, ast.Assign) and any(getattr(t, 'id', None) in names for t in node.targets):
+            body.append(node)
+            found.update(t.id for t in node.targets if getattr(t, 'id', None) in names)
+    missing = sorted(set(names) - found)
+    if missing:
+        raise EntryError(f'{path}: no top-level {missing}')
+    ns = {}
+    exec(compile(ast.Module(body=body, type_ignores=[]), str(path), 'exec'), ns)
+    return ns, tree
+
+
+def _harness_template(tree, path):
+    """The driver's argv of tools/slip_eval.py run_episode: the `cmd = [...]`
+    list after the interpreter and the driver's path, with str(seed),
+    save_dir and arm_fixes(arm) as <SEED>, <SAVE> and <FIXES>, followed by
+    `cmd += arm_args(arm) + list(extra_args)`.  Any other shape: EntryError
+    (the harness changed; read it again)."""
+    fn = next((n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'run_episode'), None)
+    if fn is None:
+        raise EntryError(f'{path}: no run_episode')
+    stmts = list(fn.body)
+    cmd_i = next((i for i, s in enumerate(stmts) if isinstance(s, ast.Assign)
+                  and [getattr(t, 'id', None) for t in s.targets] == ['cmd']), None)
+    if cmd_i is None or not isinstance(stmts[cmd_i].value, ast.List):
+        raise EntryError(f'{path}: run_episode has no `cmd = [...]`')
+    elts = stmts[cmd_i].value.elts
+    driver = elts[1] if len(elts) > 1 else None
+    parts = ([a.value for a in driver.args if isinstance(a, ast.Constant)]
+             if isinstance(driver, ast.Call) else [])
+    if not (isinstance(elts[0], ast.Attribute) and parts == [DRIVER.parent.name, DRIVER.name]):
+        raise EntryError(f'{path}:{stmts[cmd_i].lineno}: the command does not start the bridge driver '
+                         f'{rel(DRIVER)} as this tool reads it')
+    out = []
+    for e in elts[2:]:
+        if isinstance(e, ast.Constant) and isinstance(e.value, str):
+            out.append(e.value)
+        elif (isinstance(e, ast.Call) and getattr(e.func, 'id', None) == 'str' and len(e.args) == 1
+              and getattr(e.args[0], 'id', None) == 'seed'):
+            out.append('<SEED>')
+        elif isinstance(e, ast.Name) and e.id == 'save_dir':
+            out.append('<SAVE>')
+        elif (isinstance(e, ast.Call) and getattr(e.func, 'id', None) == 'arm_fixes' and len(e.args) == 1
+              and getattr(e.args[0], 'id', None) == 'arm'):
+            out.append('<FIXES>')
+        else:
+            raise EntryError(f'{path}:{e.lineno}: an element of the harness\'s command this tool does not '
+                             f'read: {ast.unparse(e)}')
+    nxt = stmts[cmd_i + 1] if cmd_i + 1 < len(stmts) else None
+    if not (isinstance(nxt, ast.AugAssign) and getattr(nxt.target, 'id', None) == 'cmd'
+            and ast.unparse(nxt.value) == 'arm_args(arm) + list(extra_args)'):
+        raise EntryError(f'{path}: run_episode does not continue with `cmd += arm_args(arm) + '
+                         f'list(extra_args)`')
+    if [x for x in ('<SEED>', '<SAVE>', '<FIXES>') if out.count(x) != 1]:
+        raise EntryError(f'{path}: the harness\'s command holds the seed, the save folder or the fixes '
+                         f'other than once: {out}')
+    return out, stmts[cmd_i].lineno
+
+
+def harness_arm_o(slip_eval=SLIP_EVAL, gen_scene_eval=GEN_SCENE_EVAL):
+    """The harness's command for arm O as its modules build it: ARM_O of
+    tools/gen_scene_eval.py, its --slip-fixes value and arm_args computed by
+    tools/slip_eval.py's own functions, and run_episode's argv template."""
+    ns_gen, _ = _module_defs(gen_scene_eval, ('ARM_O',))
+    ns_se, tree = _module_defs(slip_eval, ('ARM_FLAGS', 'split_arm', 'arm_fixes', 'arm_args'))
+    arm = ns_gen['ARM_O']
+    template, line = _harness_template(tree, slip_eval)
+    return {'arm_o': arm, 'slip_fixes': ns_se['arm_fixes'](arm), 'arm_args': list(ns_se['arm_args'](arm)),
+            'template': template, 'command_line': line,
+            'files': {'harness': rel(slip_eval), 'arm_o': rel(gen_scene_eval)}}
+
+
+def _config_entry(cfg, seed):
+    scene = GEN_DIR / f'find_dice_gen_s{seed}.json'
+    if not scene.exists():
+        raise EntryError(f'{cfg}{seed}: no generated scene {rel(scene)}')
+    h = harness_arm_o()
+    d = declared_string(CONFIG_ARMS[cfg])
+    sub = {'<SEED>': str(seed), '<FIXES>': h['slip_fixes']}
+    argv = ([sub.get(x, x) for x in h['template']] + h['arm_args'] + shlex.split(d['value'])
+            + [DEPARTURE_FLAG, 'normal'])
+    return {'kind': 'bridge', 'gen': True, 'config': CONFIG_ARMS[cfg], 'seed': seed, 'argv': argv,
+            'harness': h, 'declared': d}
+
+
+def entry(name):
+    """The spec of episode `name`: a D entry of EPISODES, f<seed> or
+    r<seed> (configurations F and R on a generated scene), or any of these
+    with TWIN_SUFFIX (its --m7 off twin).  A fresh dict on every call, with
+    'kind', 'gen', 'config', 'argv', 'm7' ('default' or 'off') and, for a
+    twin, 'twin_of'.  EntryError for any other name."""
+    if not isinstance(name, str) or not name:
+        raise EntryError(f'no episode {name!r}')
+    twin = name.endswith(TWIN_SUFFIX)
+    base = name[:-len(TWIN_SUFFIX)] if twin else name
+    tabletop = base[:-len(LOOK_SUFFIX)] if base.endswith(LOOK_SUFFIX) else None
+    if base in EPISODES:
+        spec = dict(EPISODES[base], argv=list(EPISODES[base]['argv']), config='D')
+    elif tabletop in EPISODES and EPISODES[tabletop]['kind'] == 'boxels':
+        argv = list(EPISODES[tabletop]['argv'])
+        i = argv.index(DEPARTURE_FLAG)
+        spec = dict(EPISODES[tabletop], argv=argv[:i] + LOOK_ARGV + argv[i:], config='R',
+                    tabletop_of=tabletop)
+    else:
+        m = _CONFIG_ENTRY.match(base)
+        if m is None:
+            raise EntryError(f'no episode {name!r}: the names are those of EPISODES ({", ".join(sorted(EPISODES))}), '
+                             f'f<seed> and r<seed> for a generated scene, a boxels entry with {LOOK_SUFFIX}, '
+                             f'each also with {TWIN_SUFFIX}')
+        spec = _config_entry(m['cfg'], int(m['seed']))
+    spec['m7'] = 'default'
+    if twin:
+        argv = spec['argv']
+        if '--m7' in argv:
+            raise EntryError(f'{base} passes --m7 already; it has no twin')
+        i = argv.index(DEPARTURE_FLAG)
+        spec['argv'] = argv[:i] + ['--m7', 'off'] + argv[i:]
+        spec['m7'] = 'off'
+        spec['twin_of'] = base
+    spec['name'] = name
+    return spec
+
+
+def entry_name(name):
+    """argparse type of --episode: a name entry() resolves."""
+    try:
+        entry(name)
+    except EntryError as ex:
+        raise argparse.ArgumentTypeError(str(ex)) from None
+    return name
+
+
+def _env_changes(spec):
+    """(variables episode_env sets, variables it removes) for an entry."""
+    unset = ['FORCE_COLOR', 'NO_COLOR', 'SB_CONSOLE_ASCII', 'SB_AUDIO', 'SB_VOICE', 'PYTHONSTARTUP',
+             'PYTHONINSPECT', 'BOXEL_EYE_IMAGES', 'BRIDGE_SCENE_MANIFEST', 'PYTHONPATH']
+    env = {'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1', 'COLUMNS': '80', 'LINES': '24',
+           'LC_ALL': 'C.UTF-8', 'LANG': 'C.UTF-8', 'TERM': 'dumb', 'MPLBACKEND': 'Agg',
+           'PYTHONIOENCODING': 'utf-8'}
+    if spec['kind'] == 'bridge':
+        # run.ps1:149, the pddlstream_lib entry included as it builds it.
+        env['PYTHONPATH'] = f'{REPO}:{REPO}/pddlstream_lib:{TW}/tampura:{TW_ENVS}'
+        if spec.get('gen'):
+            env['BRIDGE_SCENE_MANIFEST'] = str(GEN_DIR / 'manifest.json')
+    return env, unset
+
+
+def describe_entry(name):
+    """What the recorder starts for `name`, without starting it (SPEC D2:
+    printed into RUNS.md before the first recording counts)."""
+    spec = entry(name)
+    env, unset = _env_changes(spec)
+    boxels = spec['kind'] == 'boxels'
+    seed = None if boxels else spec['argv'][spec['argv'].index('--global-seed') + 1]
+    d = {'episode': name, 'configuration': spec['config'], 'kind': spec['kind'],
+         'command': ['<python>', rel(TFP if boxels else DRIVER)] + spec['argv'],
+         'cwd': ('<RUN>/work' if boxels else
+                 '<RUN>/gen: tampura_environments/find_dice/problems/ holding only the scene '
+                 f'{rel(GEN_DIR)}/find_dice_gen_s{seed}.json, env_configs linked to {TW_ENVS}/env_configs'
+                 if spec.get('gen') else TW_ENVS),
+         'save_dir': None if boxels else '<SAVE> is <RUN>/save',
+         'environment': {'set': env, 'removed': unset},
+         'm7': ('--m7 off (the twin of ' + spec['twin_of'] + ')' if spec['m7'] == 'off'
+                else 'no --m7: the trunk\'s default (on)'),
+         'departures': [x for x in spec['argv'][spec['argv'].index(DEPARTURE_FLAG):]],
+         'child': ['<python>', rel(HERE), '--child', '--mode', '<mode>', '--rec', '<RUN>/rec', '--script',
+                   rel(TFP if boxels else DRIVER), '--rng', '<rng>', '--', '<argv>']}
+    if 'harness' in spec:
+        h, dec = spec['harness'], spec['declared']
+        d['sources'] = {
+            'harness': f"{h['files']['harness']} run_episode (its cmd list at line {h['command_line']}): "
+                       f"{h['template']} + arm_args",
+            'arm_o': f"{h['files']['arm_o']} ARM_O = {h['arm_o']!r}: --slip-fixes {h['slip_fixes']}, "
+                     f"arm_args {h['arm_args']}",
+            'declared': {k: dec[k] for k in ('file', 'git_blob_sha1', 'line', 'text', 'value')}}
+    d['notes'] = entry_notes(name)[1:]
+    return d
+
+
+def entry_notes(name):
+    """The NOTES lines that say what entry `name` runs.  The first line of a
+    D entry is the one the episode pins wrote before gate 7."""
+    spec = entry(name)
+    if spec['config'] == 'D':
+        lines = [f'episode {name}: {spec["kind"]}, argv {spec["argv"]}']
+    elif 'tabletop_of' in spec:
+        lines = [f'episode {name}: configuration R on the tabletop, {spec["kind"]}, argv {spec["argv"]}',
+                 f'the tabletop start of PLAN 5.8: {spec["tabletop_of"]} as run boxels -Look boxel -Eye arm '
+                 f'starts it (run.ps1 adds --look boxel and --eye arm after the launcher\'s command); no '
+                 f'--interior-regions (run.ps1 has no switch for it)']
+    else:
+        h, dec = spec['harness'], spec['declared']
+        lines = [f'episode {name}: configuration {spec["config"]}, bridge on the generated scene of seed '
+                 f'{spec["seed"]}, argv {spec["argv"]}',
+                 f'argv built by the tool, nothing typed (SPEC D2): the harness\'s command for arm O '
+                 f'({h["files"]["harness"]} run_episode; ARM_O {h["arm_o"]!r} from {h["files"]["arm_o"]}: '
+                 f'--slip-fixes {h["slip_fixes"]}, arm_args {h["arm_args"]}), then the string the declaration '
+                 f'states for arm {spec["config"]} unchanged ({dec["value"]!r}: {dec["file"]} line '
+                 f'{dec["line"]}, git blob {dec["git_blob_sha1"]}), then --log-level normal, the one '
+                 f'departure (R_PHASE0 3.3)',
+                 'the harness sets BOXEL_EYE_IMAGES=0, the recorder leaves it unset (no effect while '
+                 'world_eye.SAVE_IMAGES is False); wave 2 ran with P4_SHOTS=none, so neither side passes '
+                 '--save-screenshots']
+    if spec['m7'] == 'off':
+        lines.append(f'm7: the --m7 off twin of {spec["twin_of"]} (SPEC D3), --m7 off after the command it '
+                     f'reproduces'
+                     + (': the path of the paper\'s kept F rows (wave 2 ran before M7 existed)'
+                        if spec['config'] == 'F' else ''))
+    elif spec['config'] != 'D':
+        lines.append('m7: no --m7, the trunk\'s default (on); its twin with --m7 off is '
+                     f'{name}{TWIN_SUFFIX} (SPEC D3)')
+    return lines
 
 
 # ---------------------------------------------------------------------------
@@ -632,25 +958,17 @@ def child_main(a):
 
 def episode_env(spec, extra=None):
     env = dict(os.environ)
-    for k in ('FORCE_COLOR', 'NO_COLOR', 'SB_CONSOLE_ASCII', 'SB_AUDIO', 'SB_VOICE',
-              'PYTHONSTARTUP', 'PYTHONINSPECT', 'BOXEL_EYE_IMAGES', 'BRIDGE_SCENE_MANIFEST',
-              'PYTHONPATH'):
+    fixed, unset = _env_changes(spec)
+    for k in unset:
         env.pop(k, None)
-    env.update({'PYTHONHASHSEED': '0', 'PYTHONDONTWRITEBYTECODE': '1', 'COLUMNS': '80',
-                'LINES': '24', 'LC_ALL': 'C.UTF-8', 'LANG': 'C.UTF-8', 'TERM': 'dumb',
-                'MPLBACKEND': 'Agg', 'PYTHONIOENCODING': 'utf-8'})
-    if spec['kind'] == 'bridge':
-        # run.ps1:149, the pddlstream_lib entry included as it builds it.
-        env['PYTHONPATH'] = f'{REPO}:{REPO}/pddlstream_lib:{TW}/tampura:{TW_ENVS}'
-        if spec.get('gen'):
-            env['BRIDGE_SCENE_MANIFEST'] = str(GEN_DIR / 'manifest.json')
+    env.update(fixed)
     env.update(extra or {})
     return env
 
 
 def prepare(name, run_dir):
-    """(script, argv, cwd) of episode `name` in run_dir (made fresh)."""
-    spec = EPISODES[name]
+    """(spec, script, argv, cwd) of episode `name` in run_dir (made fresh)."""
+    spec = entry(name)
     run_dir = Path(run_dir)
     if spec['kind'] == 'boxels':
         work = run_dir / 'work'
@@ -689,6 +1007,7 @@ def run_episode(name, mode, run_dir, tape=None, rng='restore', trace_main=False,
     of the checkout's, for the planted-change checks of PLAN 24.3 (e) only;
     the copy is named in RESULT.json and INFO files only, never in a
     compared output."""
+    entry(name)                          # an unknown name fails before run_dir is touched
     if tfp_copy is None:
         tfp_copy = os.environ.get(TFP_COPY_VAR) or None
     if isinstance(stubs, dict):
@@ -731,7 +1050,8 @@ def run_episode(name, mode, run_dir, tape=None, rng='restore', trace_main=False,
     if (rec / 'EXIT.json').exists():
         exit_info = json.loads((rec / 'EXIT.json').read_text(encoding='utf-8'))
     result = {'episode': name, 'mode': mode, 'rng': rng, 'status': status, 'rc': rc,
-              'child_exit': exit_info, 'argv': argv, 'script': str(script), 'cwd': str(cwd),
+              'child_exit': exit_info, 'configuration': spec['config'], 'm7': spec['m7'],
+              'argv': argv, 'script': str(script), 'cwd': str(cwd),
               'pipeline_run_dir': str(pr) if pr else None, 'seconds': round(seconds, 1),
               'tape': str(tape) if tape is not None else None,
               'stubs': json.loads(stubs) if stubs else None,
@@ -1113,6 +1433,8 @@ def coverage_table(trace_files, path=TFP):
 
 def record_set(out_dir, episodes, log=print):
     """Record each live episode into out_dir/<name>/ (tape/, norm/, raw)."""
+    for name in episodes:                # every name resolves before the first recording
+        entry(name)
     worst = 0
     for name in episodes:
         res = run_episode(name, 'record', Path(out_dir) / name, log=log)
@@ -1123,7 +1445,12 @@ def record_set(out_dir, episodes, log=print):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument('--episode', choices=sorted(EPISODES))
+    ap.add_argument('--episode', type=entry_name,
+                    help=f'{", ".join(sorted(EPISODES))} (configuration D), f<seed> or r<seed> '
+                         f'(F or R on a generated scene), a boxels entry with {LOOK_SUFFIX} (run boxels '
+                         f'-Look boxel -Eye arm), each also with {TWIN_SUFFIX} (its --m7 off twin)')
+    ap.add_argument('--print-argv', action='store_true',
+                    help='print what --episode starts (command, cwd, environment, sources) and start nothing')
     ap.add_argument('--mode', choices=('record', 'replay', 'first-plan'))
     ap.add_argument('--run-dir')
     ap.add_argument('--tape')
@@ -1140,10 +1467,20 @@ def main(argv=None):
     ap.add_argument('--stubs', help='JSON of tests/readable/executor_stubs.py (scripted tapes)')
     ap.add_argument('--tfp-copy', help='planted-change checks only: run this copy of '
                                        'test_full_pipeline.py instead of the checkout\'s')
-    ap.add_argument('argv', nargs='*')
+    ap.add_argument('argv', nargs='*', help='the entry\'s argv: given to the child (--child) only')
     a = ap.parse_args(argv)
     if a.child:
         return child_main(a)
+    if a.argv:
+        # The parent takes its argv from the entry (EPISODES, f/r<seed>,
+        # _m7off); positional arguments would be dropped, so they are refused.
+        ap.error(f'positional arguments {a.argv} are not passed to the episode by the parent; an episode\'s '
+                 f'argv is its entry\'s (--episode NAME --print-argv shows it)')
+    if a.print_argv:
+        if not a.episode:
+            ap.error('--print-argv needs --episode')
+        print(json.dumps(describe_entry(a.episode), indent=1, ensure_ascii=False))
+        return 0
     if a.renorm:
         write_norm(a.renorm)
         return 0
