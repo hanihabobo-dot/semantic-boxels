@@ -17,6 +17,9 @@ for arm O, then the declared string, see "Entries beyond the table"), a
 boxels entry with _look (the tabletop start `run boxels -Look boxel -Eye
 arm`), and any of these with _m7off (its --m7 off twin).  The parent takes
 an episode's argv from its entry only; it refuses positional arguments.
+--record-set counts, at storing, the ledger rows SPEC D3 and D4 decide on
+(STORED.json beside each tape, STORE.json over the set) and records the
+--m7 off twin D3 asks for right after its on recording.
 
 The tool never takes the pipeline lock itself: its caller runs it under
 ``flock /root/sb_pipeline.lock`` (a nested flock on the same file from a
@@ -1856,15 +1859,88 @@ def coverage_compare(trace_files, baseline, old_path, new_path=TFP):
 # Command line
 # ---------------------------------------------------------------------------
 
+# At storing (SPEC D3, D4): the rows the two rules decide on, counted in the
+# recording's ledger.  A sense whose outcome is contains_nontarget and that
+# reaches M7's code ends with this reason (execution.py:3743,
+# reason=f"sense_{sense_outcome}"; M7's code starts at 3386); the
+# unlocalizable case returns before it (3372-3373) and does not count.
+NONTARGET_REASON = 'sense_contains_nontarget'
+
+
+def ledger_counts(rows):
+    """{m7_suspension_start, m7_suspension_end, sense_discovery,
+    sense_result_contains_nontarget} of a ledger's rows."""
+    c = {'m7_suspension_start': 0, 'm7_suspension_end': 0, 'sense_discovery': 0,
+         'sense_result_contains_nontarget': 0}
+    for r in rows or []:
+        kind = r.get('kind')
+        if kind == 'm7_suspension':
+            c['m7_suspension_end' if r.get('op') == 'end' else 'm7_suspension_start'] += 1
+        elif kind == 'sense_discovery':
+            c['sense_discovery'] += 1
+        elif kind == 'sense_result' and r.get('reason') == NONTARGET_REASON:
+            c['sense_result_contains_nontarget'] += 1
+    return c
+
+
+def twin_rule(name, counts):
+    """SPEC D3: a tape whose ledger holds a sense_discovery row (M7 on writes
+    it, execution.py:3686-3694) or a sense that reaches contains_nontarget
+    gets an --m7 off twin, its own live recording.  {"name": the twin or
+    None, "reasons": [...], "none_because": why there is none}."""
+    reasons = []
+    if counts['sense_discovery']:
+        reasons.append(f"{counts['sense_discovery']} sense_discovery row(s)")
+    if counts['sense_result_contains_nontarget']:
+        reasons.append(f"{counts['sense_result_contains_nontarget']} sense_result row(s) with reason "
+                       f"{NONTARGET_REASON}")
+    spec = entry(name)
+    if spec['m7'] == 'off' or '--m7' in spec['argv']:
+        return {'name': None, 'reasons': reasons, 'none_because': 'the entry sets --m7 itself'}
+    if not reasons:
+        return {'name': None, 'reasons': [], 'none_because': 'no such row'}
+    return {'name': name + TWIN_SUFFIX, 'reasons': reasons, 'none_because': None}
+
+
+def store_record(run_dir, name, result):
+    """What the recorder writes beside a tape when it stores it
+    (STORED.json): the counts, D3's twin and the rows D4 acts on."""
+    run_dir = Path(run_dir)
+    norm = run_dir / 'norm' / 'ledger.json'
+    rows = json.loads(norm.read_text(encoding='utf-8')) if norm.exists() else None
+    counts = ledger_counts(rows)
+    twin = (twin_rule(name, counts) if result['status'] == 'ended'
+            else {'name': None, 'reasons': [], 'none_because': f'the recording ended as {result["status"]}'})
+    suspensions = counts['m7_suspension_start'] + counts['m7_suspension_end']
+    stored = {'episode': name, 'status': result['status'], 'ledger_rows': None if rows is None else len(rows),
+              'counts': counts, 'twin': twin,
+              'd4': {'m7_suspension_rows': suspensions,
+                     'rule': ('D4: the live run holds m7_suspension rows; recorded again with '
+                              'execution.M7_SUSPEND_S set long' if suspensions else None)}}
+    write_json(run_dir / 'STORED.json', stored)
+    return stored
+
+
 def record_set(out_dir, episodes, log=print):
-    """Record each live episode into out_dir/<name>/ (tape/, norm/, raw)."""
+    """Record each live episode into out_dir/<name>/ (tape/, norm/, raw).
+    At storing, the counts and the rules of D3 and D4 go beside the tape
+    (STORED.json) and into out_dir/STORE.json; a twin D3 asks for is
+    recorded right after its on recording, unless the set names it."""
     for name in episodes:                # every name resolves before the first recording
         entry(name)
     worst = 0
-    for name in episodes:
+    queue, store = list(episodes), {}
+    while queue:
+        name = queue.pop(0)
         res = run_episode(name, 'record', Path(out_dir) / name, log=log)
         if res['status'] != 'ended':
             worst = 1
+        store[name] = stored = store_record(Path(out_dir) / name, name, res)
+        twin = stored['twin']['name']
+        if twin and twin not in episodes and twin not in store and twin not in queue:
+            log(f'[record_episode] {name}: D3 asks for the twin {twin} ({"; ".join(stored["twin"]["reasons"])})')
+            queue.insert(0, twin)
+    write_json(Path(out_dir) / 'STORE.json', store)
     return worst
 
 

@@ -868,3 +868,77 @@ def test_place_fail_reaches_both_arms_of_the_tag_s_place_branch():
     ep = next(n for n in ex.body if isinstance(n, ast.FunctionDef) and n.name == 'execute_place')
     assert [a.arg for a in ep.args.args][:3] == ['robot_id', 'env', 'obj_name'] and 'gui' in [
         a.arg for a in ep.args.args]
+
+
+# ---------------------------------------------------------------------------
+# Item 7: the counts at storing, D3's twins
+# ---------------------------------------------------------------------------
+
+_ROWS = [
+    {'kind': 'step', 'plan': 1, 'step': 1},
+    {'kind': 'sense_result', 'reason': 'sense_found_target', 'continue_': True},
+    {'kind': 'sense_result', 'reason': 'sense_contains_unlocalizable', 'continue_': False},
+    {'kind': 'sense_result', 'reason': 'sense_contains_nontarget', 'continue_': False},
+    {'kind': 'sense_discovery', 'body': 'cup', 'region': 'shadow_1'},
+    {'kind': 'sense_discovery', 'body': 'ball', 'region': 'shadow_1'},
+    {'kind': 'm7_suspension', 'op': 'start', 'region': 'shadow_1', 'seconds': 120.0},
+    {'kind': 'm7_suspension', 'op': 'end', 'region': 'shadow_1', 'ended_by': 'released'},
+]
+
+
+def test_ledger_counts_count_the_rows_d3_and_d4_decide_on():
+    """The unlocalizable sense returns before M7's code and does not count;
+    a suspension's start and end are counted apart."""
+    assert rec.ledger_counts(_ROWS) == {'m7_suspension_start': 1, 'm7_suspension_end': 1,
+                                        'sense_discovery': 2, 'sense_result_contains_nontarget': 1}
+    assert rec.ledger_counts(None) == rec.ledger_counts([])
+
+
+def test_twin_rule_of_d3():
+    """A sense_discovery row or a contains_nontarget sense: a twin, also for
+    a D entry; none for an entry that sets --m7 itself, none without such
+    a row (an unlocalizable sense alone included)."""
+    c = rec.ledger_counts
+    assert rec.twin_rule('f204', c(_ROWS))['name'] == 'f204_m7off'
+    assert rec.twin_rule('f140', c(_ROWS[:3])) == {'name': None, 'reasons': [], 'none_because': 'no such row'}
+    assert rec.twin_rule('rp0', c(_ROWS[3:4]))['name'] == 'rp0_m7off'
+    assert rec.twin_rule('br0', c(_ROWS[4:5]))['reasons'] == ['1 sense_discovery row(s)']
+    off = rec.twin_rule('f204_m7off', c(_ROWS))
+    assert off['name'] is None and off['none_because'] == 'the entry sets --m7 itself'
+
+
+def _fake_recorder(monkeypatch, ledgers, status=None):
+    calls = []
+
+    def fake(name, mode, run_dir, log=print, **k):
+        assert mode == 'record'
+        calls.append(name)
+        norm = Path(run_dir) / 'norm'
+        norm.mkdir(parents=True)
+        (norm / 'ledger.json').write_text(json.dumps(ledgers.get(name, [])), encoding='utf-8')
+        return {'status': (status or {}).get(name, 'ended')}
+    monkeypatch.setattr(rec, 'run_episode', fake)
+    return calls
+
+
+def test_record_set_stores_the_counts_and_records_the_twin_right_after(tmp_path, monkeypatch):
+    """At storing: STORED.json beside each tape and STORE.json over the set,
+    the twin recorded right after its on recording, once, and none after a
+    recording the time limit ended.  Catches a twin not recorded, recorded
+    twice, recorded after a timeout, and the counts not written."""
+    calls = _fake_recorder(monkeypatch, {'f204': _ROWS, 'f293': _ROWS}, {'f293': 'timeout'})
+    assert rec.record_set(tmp_path / 'a', ['f204', 'f140'], log=lambda s: None) == 0
+    assert calls == ['f204', 'f204_m7off', 'f140']
+    stored = json.loads((tmp_path / 'a' / 'f204' / 'STORED.json').read_text(encoding='utf-8'))
+    assert stored['counts'] == rec.ledger_counts(_ROWS) and stored['ledger_rows'] == len(_ROWS)
+    assert stored['twin']['name'] == 'f204_m7off' and stored['d4']['m7_suspension_rows'] == 2
+    store = json.loads((tmp_path / 'a' / 'STORE.json').read_text(encoding='utf-8'))
+    assert list(store) == ['f204', 'f204_m7off', 'f140'] and store['f140']['twin']['name'] is None
+    calls.clear()
+    assert rec.record_set(tmp_path / 'b', ['f204', 'f204_m7off'], log=lambda s: None) == 0
+    assert calls == ['f204', 'f204_m7off']
+    calls.clear()
+    assert rec.record_set(tmp_path / 'c', ['f293'], log=lambda s: None) == 1
+    assert calls == ['f293']
+    assert json.loads((tmp_path / 'c' / 'f293' / 'STORED.json').read_text(encoding='utf-8'))['twin'] == {
+        'name': None, 'reasons': [], 'none_because': 'the recording ended as timeout'}
