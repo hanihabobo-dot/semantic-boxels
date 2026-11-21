@@ -942,3 +942,6 @@ def test_record_set_stores_the_counts_and_records_the_twin_right_after(tmp_path,
     assert calls == ['f293']
     assert json.loads((tmp_path / 'c' / 'f293' / 'STORED.json').read_text(encoding='utf-8'))['twin'] == {
         'name': None, 'reasons': [], 'none_because': 'the recording ended as timeout'}
+    assert rec.record_set(tmp_path / 'a', ['f141'], log=lambda s: None) == 0    # one set, two calls
+    assert list(json.loads((tmp_path / 'a' / 'STORE.json').read_text(encoding='utf-8'))) == [
+        'f204', 'f204_m7off', 'f140', 'f141']

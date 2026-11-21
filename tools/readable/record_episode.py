@@ -1940,7 +1940,9 @@ def record_set(out_dir, episodes, log=print):
         if twin and twin not in episodes and twin not in store and twin not in queue:
             log(f'[record_episode] {name}: D3 asks for the twin {twin} ({"; ".join(stored["twin"]["reasons"])})')
             queue.insert(0, twin)
-    write_json(Path(out_dir) / 'STORE.json', store)
+    path = Path(out_dir) / 'STORE.json'          # a set recorded in several calls keeps every entry
+    earlier = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
+    write_json(path, dict(earlier, **store))
     return worst
 
 
