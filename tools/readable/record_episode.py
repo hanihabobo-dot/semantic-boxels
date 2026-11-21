@@ -19,8 +19,10 @@ boxels entry with _look (the tabletop start `run boxels -Look boxel -Eye
 arm`), and any of these with _m7off (its --m7 off twin).  The parent takes
 an episode's argv from its entry only; it refuses positional arguments.
 --record-set counts, at storing, the ledger rows SPEC D3 and D4 decide on
-(STORED.json beside each tape, STORE.json over the set) and records the
---m7 off twin D3 asks for right after its on recording.
+(STORED.json beside each tape, STORE.json over the set), records a run
+that holds m7_suspension rows again at once with execution.M7_SUSPEND_S =
+1e9 (D4; the first recording kept as <name>.as_recorded, the value in the
+tape's META.json), and records the --m7 off twin D3 asks for right after.
 
 The tool never takes the pipeline lock itself: its caller runs it under
 ``flock /root/sb_pipeline.lock`` (a nested flock on the same file from a
@@ -2079,9 +2081,19 @@ def twin_rule(name, counts):
     return {'name': name + TWIN_SUFFIX, 'reasons': reasons, 'none_because': None}
 
 
-def store_record(run_dir, name, result):
+# SPEC D4 (U1): a live run that holds m7_suspension rows is recorded again
+# with the suspended region never coming back (D5's --set in the child);
+# the first recording stays beside it as <name>.as_recorded, for U1's test.
+D4_SET = {'execution.M7_SUSPEND_S': 1e9}
+AS_RECORDED_SUFFIX = '.as_recorded'
+D4_REASON = ('SPEC D4: the live run held m7_suspension rows, so the tape was recorded again with '
+             'execution.M7_SUSPEND_S = 1e9 (the region never comes back)')
+
+
+def store_record(run_dir, name, result, as_recorded=None):
     """What the recorder writes beside a tape when it stores it
-    (STORED.json): the counts, D3's twin and the rows D4 acts on."""
+    (STORED.json): the counts, D3's twin and the rows D4 acts on;
+    as_recorded, for D4's second recording, names the first one."""
     run_dir = Path(run_dir)
     norm = run_dir / 'norm' / 'ledger.json'
     rows = json.loads(norm.read_text(encoding='utf-8')) if norm.exists() else None
@@ -2089,30 +2101,73 @@ def store_record(run_dir, name, result):
     twin = (twin_rule(name, counts) if result['status'] == 'ended'
             else {'name': None, 'reasons': [], 'none_because': f'the recording ended as {result["status"]}'})
     suspensions = counts['m7_suspension_start'] + counts['m7_suspension_end']
+    if as_recorded is not None:
+        rule = f'{D4_REASON}; the first recording is {as_recorded["folder"]}'
+    elif suspensions and result['status'] == 'ended':
+        rule = 'D4: the live run holds m7_suspension rows; recorded again with execution.M7_SUSPEND_S set long'
+    elif suspensions:
+        rule = (f'D4: the live run holds m7_suspension rows; not recorded again, the recording ended as '
+                f'{result["status"]}')
+    else:
+        rule = None
+    d4 = {'m7_suspension_rows': suspensions, 'set': result.get('set') or None, 'rule': rule}
+    if as_recorded is not None:
+        d4['as_recorded'] = as_recorded
     stored = {'episode': name, 'status': result['status'], 'ledger_rows': None if rows is None else len(rows),
-              'counts': counts, 'twin': twin,
-              'd4': {'m7_suspension_rows': suspensions,
-                     'rule': ('D4: the live run holds m7_suspension rows; recorded again with '
-                              'execution.M7_SUSPEND_S set long' if suspensions else None)}}
+              'counts': counts, 'twin': twin, 'd4': d4}
     write_json(run_dir / 'STORED.json', stored)
     return stored
+
+
+def move_run(run_dir, to):
+    """Move a run folder to `to` (replaced if there); the paths RESULT.json
+    holds into the folder follow it.  Its norm/ is the one written at the
+    run, before the move."""
+    run_dir, to = Path(run_dir).resolve(), Path(to).resolve()
+    if to.exists():
+        shutil.rmtree(to)
+    run_dir.rename(to)
+    res_path = to / 'RESULT.json'
+    if res_path.exists():
+        res = json.loads(res_path.read_text(encoding='utf-8'))
+        old = str(run_dir)
+
+        def moved(v):
+            return str(to) + v[len(old):] if isinstance(v, str) and (v == old or v.startswith(old + '/')) else v
+        for k in ('pipeline_run_dir', 'tape', 'cwd'):
+            res[k] = moved(res.get(k))
+        res['argv'] = [moved(x) for x in res.get('argv') or []]
+        write_json(res_path, res)
+    return to
 
 
 def record_set(out_dir, episodes, log=print):
     """Record each live episode into out_dir/<name>/ (tape/, norm/, raw).
     At storing, the counts and the rules of D3 and D4 go beside the tape
-    (STORED.json) and into out_dir/STORE.json; a twin D3 asks for is
-    recorded right after its on recording, unless the set names it."""
+    (STORED.json) and into out_dir/STORE.json; a recording D4 asks for is
+    made again at once with D4_SET (the first kept as <name>.as_recorded);
+    a twin D3 asks for is recorded right after, unless the set names it."""
     for name in episodes:                # every name resolves before the first recording
         entry(name)
     worst = 0
     queue, store = list(episodes), {}
     while queue:
         name = queue.pop(0)
-        res = run_episode(name, 'record', Path(out_dir) / name, log=log)
+        folder = Path(out_dir) / name
+        res = run_episode(name, 'record', folder, log=log)
+        stored = store_record(folder, name, res)
+        if stored['d4']['m7_suspension_rows'] and res['status'] == 'ended':
+            kept = move_run(folder, Path(out_dir) / (name + AS_RECORDED_SUFFIX))
+            log(f'[record_episode] {name}: D4, {stored["d4"]["m7_suspension_rows"]} m7_suspension row(s): '
+                f'recorded again with {D4_SET}; the first recording is {kept.name}')
+            res = run_episode(name, 'record', folder, log=log, sets=D4_SET)
+            write_json(folder / 'tape' / 'META.json', dict(tape_meta(folder / 'tape'), d4=D4_REASON))
+            stored = store_record(folder, name, res, as_recorded={
+                'folder': kept.name, 'status': stored['status'],
+                'm7_suspension_rows': stored['d4']['m7_suspension_rows']})
         if res['status'] != 'ended':
             worst = 1
-        store[name] = stored = store_record(Path(out_dir) / name, name, res)
+        store[name] = stored
         twin = stored['twin']['name']
         if twin and twin not in episodes and twin not in store and twin not in queue:
             log(f'[record_episode] {name}: D3 asks for the twin {twin} ({"; ".join(stored["twin"]["reasons"])})')

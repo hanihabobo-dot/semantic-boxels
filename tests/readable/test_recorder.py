@@ -921,16 +921,29 @@ def test_twin_rule_of_d3():
     assert off['name'] is None and off['none_because'] == 'the entry sets --m7 itself'
 
 
-def _fake_recorder(monkeypatch, ledgers, status=None):
+def _fake_recorder(monkeypatch, ledgers, status=None, sets_seen=None):
+    """run_episode replaced by one that writes, as the real one does, the
+    normalised ledger it is given, RESULT.json with the folder's paths and
+    a tape META.json for a set; the names asked for in calls, the sets in
+    sets_seen."""
     calls = []
 
-    def fake(name, mode, run_dir, log=print, **k):
+    def fake(name, mode, run_dir, log=print, sets=None, **k):
         assert mode == 'record'
         calls.append(name)
-        norm = Path(run_dir) / 'norm'
-        norm.mkdir(parents=True)
-        (norm / 'ledger.json').write_text(json.dumps(ledgers.get(name, [])), encoding='utf-8')
-        return {'status': (status or {}).get(name, 'ended')}
+        if sets_seen is not None:
+            sets_seen.append(sets)
+        run_dir = Path(run_dir).resolve()
+        (run_dir / 'norm').mkdir(parents=True)
+        (run_dir / 'tape').mkdir()
+        (run_dir / 'norm' / 'ledger.json').write_text(json.dumps(ledgers.get(name, [])), encoding='utf-8')
+        if sets:
+            rec.write_json(run_dir / 'tape' / 'META.json', {'set': sets})
+        result = {'status': (status or {}).get(name, 'ended'), 'set': sets or None, 'tape': str(run_dir / 'tape'),
+                  'pipeline_run_dir': str(run_dir / 'save' / 'ours' / 'run_x'), 'cwd': str(run_dir / 'gen'),
+                  'argv': ['--save-dir', str(run_dir / 'save'), '--vis', '0']}
+        rec.write_json(run_dir / 'RESULT.json', result)
+        return result
     monkeypatch.setattr(rec, 'run_episode', fake)
     return calls
 
@@ -942,7 +955,7 @@ def test_record_set_stores_the_counts_and_records_the_twin_right_after(tmp_path,
     twice, recorded after a timeout, and the counts not written."""
     calls = _fake_recorder(monkeypatch, {'f204': _ROWS, 'f293': _ROWS}, {'f293': 'timeout'})
     assert rec.record_set(tmp_path / 'a', ['f204', 'f140'], log=lambda s: None) == 0
-    assert calls == ['f204', 'f204_m7off', 'f140']
+    assert calls == ['f204', 'f204', 'f204_m7off', 'f140']      # D4 (item 10): _ROWS hold m7_suspension rows
     stored = json.loads((tmp_path / 'a' / 'f204' / 'STORED.json').read_text(encoding='utf-8'))
     assert stored['counts'] == rec.ledger_counts(_ROWS) and stored['ledger_rows'] == len(_ROWS)
     assert stored['twin']['name'] == 'f204_m7off' and stored['d4']['m7_suspension_rows'] == 2
@@ -950,7 +963,7 @@ def test_record_set_stores_the_counts_and_records_the_twin_right_after(tmp_path,
     assert list(store) == ['f204', 'f204_m7off', 'f140'] and store['f140']['twin']['name'] is None
     calls.clear()
     assert rec.record_set(tmp_path / 'b', ['f204', 'f204_m7off'], log=lambda s: None) == 0
-    assert calls == ['f204', 'f204_m7off']
+    assert calls == ['f204', 'f204', 'f204_m7off']
     calls.clear()
     assert rec.record_set(tmp_path / 'c', ['f293'], log=lambda s: None) == 1
     assert calls == ['f293']
@@ -1301,3 +1314,67 @@ def test_result_json_and_the_notes_carry_the_value_the_child_set(tmp_path):
     fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == '_episode_notes')
     assert 'run_notes' in [n.func.attr for n in ast.walk(fn) if isinstance(n, ast.Call)
                            and isinstance(n.func, ast.Attribute)]
+
+
+# ---------------------------------------------------------------------------
+# Item 10, D4: a tape with m7_suspension rows recorded again
+# ---------------------------------------------------------------------------
+
+def test_d4_records_again_with_the_region_never_coming_back_and_keeps_the_first(tmp_path, monkeypatch):
+    """SPEC D4: a recording whose live run holds m7_suspension rows is made
+    again at once with D4_SET in the child; the tape's META.json holds the
+    value and D4's reason; the first recording stays beside it as
+    <name>.as_recorded with the paths of its RESULT.json moved along;
+    STORED.json names both.  A recording without such rows is stored as
+    recorded, and so is one the time limit ended, its STORED.json saying
+    why.  Catches no second recording, one without the value, the first
+    one lost, its paths left on the new folder, no reason in the meta, the
+    first one unnamed, and a timeout said to be recorded again."""
+    seen = []
+    calls = _fake_recorder(monkeypatch, {'f293': _ROWS, 'f140': _ROWS[:3]}, sets_seen=seen)
+    assert rec.record_set(tmp_path, ['f293', 'f140'], log=lambda s: None) == 0
+    assert calls == ['f293', 'f293', 'f293_m7off', 'f140'] and seen == [None, rec.D4_SET, None, None]
+    meta = rec.tape_meta(tmp_path / 'f293' / 'tape')
+    assert meta == {'set': rec.D4_SET, 'd4': rec.D4_REASON}
+    kept = (tmp_path / ('f293' + rec.AS_RECORDED_SUFFIX)).resolve()
+    first = json.loads((kept / 'RESULT.json').read_text(encoding='utf-8'))
+    assert (first['tape'], first['pipeline_run_dir'], first['cwd']) == (
+        str(kept / 'tape'), str(kept / 'save' / 'ours' / 'run_x'), str(kept / 'gen'))
+    assert first['argv'] == ['--save-dir', str(kept / 'save'), '--vis', '0'] and first['set'] is None
+    assert rec.tape_meta(kept / 'tape') == {}
+    stored = json.loads((tmp_path / 'f293' / 'STORED.json').read_text(encoding='utf-8'))
+    assert stored['d4']['set'] == rec.D4_SET and stored['d4']['as_recorded'] == {
+        'folder': kept.name, 'status': 'ended', 'm7_suspension_rows': 2}
+    assert rec.D4_REASON in stored['d4']['rule'] and kept.name in stored['d4']['rule']
+    assert json.loads((kept / 'STORED.json').read_text(encoding='utf-8'))['d4']['set'] is None
+    assert list(json.loads((tmp_path / 'STORE.json').read_text(encoding='utf-8'))) == ['f293', 'f293_m7off', 'f140']
+    assert not (tmp_path / ('f140' + rec.AS_RECORDED_SUFFIX)).exists()
+    assert rec.D4_SET == dict([rec.parse_set(f'{k}={v}') for k, v in rec.D4_SET.items()])
+    calls = _fake_recorder(monkeypatch, {'f293': _ROWS}, {'f293': 'timeout'})
+    assert rec.record_set(tmp_path / 't', ['f293'], log=lambda s: None) == 1 and calls == ['f293']
+    d4 = json.loads((tmp_path / 't' / 'f293' / 'STORED.json').read_text(encoding='utf-8'))['d4']
+    assert d4['set'] is None and 'as_recorded' not in d4 and d4['rule'].endswith(
+        'not recorded again, the recording ended as timeout')
+
+
+def test_move_run_replaces_the_target_and_moves_only_the_paths_inside_the_folder(tmp_path):
+    """move_run, by which D4 keeps the first recording: an older folder of
+    the target's name is replaced; the folder itself and a path inside it
+    follow the move; a path that only starts with the folder's name, a
+    path elsewhere and a null stay; a run without RESULT.json moves as it
+    is.  Catches the older folder left in the way and a bare prefix moved."""
+    src, to = (tmp_path / 'f293').resolve(), (tmp_path / 'f293.as_recorded').resolve()
+    (to / 'old').mkdir(parents=True)
+    (to / 'old' / 'x.txt').write_text('older', encoding='utf-8')
+    (src / 'tape').mkdir(parents=True)
+    rec.write_json(src / 'RESULT.json', {'status': 'ended', 'tape': str(src / 'tape'), 'cwd': str(src),
+                                         'pipeline_run_dir': None,
+                                         'argv': [str(src) + 'x', '--save-dir', str(src / 'save'), '/elsewhere']})
+    assert rec.move_run(src, to) == to and not src.exists() and not (to / 'old').exists()
+    assert json.loads((to / 'RESULT.json').read_text(encoding='utf-8')) == {
+        'status': 'ended', 'tape': str(to / 'tape'), 'cwd': str(to), 'pipeline_run_dir': None,
+        'argv': [str(src) + 'x', '--save-dir', str(to / 'save'), '/elsewhere']}
+    bare, kept = tmp_path / 'r1', (tmp_path / 'r1.as_recorded').resolve()
+    (bare / 'tape').mkdir(parents=True)
+    assert rec.move_run(bare, kept) == kept and (kept / 'tape').is_dir() and not bare.exists()
+    assert not (kept / 'RESULT.json').exists()
