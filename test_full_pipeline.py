@@ -41,6 +41,7 @@ Architecture (post-#26 refactor, 2026-04-19; sense-handler split 2026-05-05):
                     with the loop; sense was extracted because it owns no
                     rebound locals — only mutates containers.
 """
+# release_held_object_in_place (named in the docstring above) was deleted in the readable migration, phase P1, 22 Nov 2026.
 
 import sys
 import os
@@ -1491,6 +1492,7 @@ def plan_or_stop(st, env, execution):
     # holding — no drop, ever.  (release_held_object_in_place is
     # kept in execution.py per the dead-code policy but is no
     # longer called from the loop.)
+    # (release_held_object_in_place was deleted in the readable migration, phase P1, 22 Nov 2026.)
     if st.round.plan is None and st.round.held_obj_name is not None:
         print(f"  no mission plan with {st.round.held_obj_name} held — planning "
               f"a disposal place instead (audit #58 drop retired "

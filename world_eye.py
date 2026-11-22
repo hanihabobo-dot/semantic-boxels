@@ -30,6 +30,7 @@ the belief or the planner (same contract as telemetry.py).
 Module API mirrors telemetry.py: ``enable`` / ``disable`` / ``snapshot`` /
 ``is_active``; every call is a no-op while disabled.
 """
+# is_active (named in the docstring above) was deleted in the readable migration, phase P1, 22 Nov 2026.
 from __future__ import annotations
 
 import json

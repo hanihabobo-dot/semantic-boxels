@@ -60,7 +60,7 @@ The sound (quiet retro synth music and effects) is opt-in through the environmen
 
 `run` refuses to start while another pipeline run is alive, because two runs would race on PDDLStream's `temp/` directory. Closing the GUI window or pressing Ctrl-C ends the run. A closed PyBullet window would leave the process spinning at full CPU, so the launcher watches the window and ends what is left (`tools/run_procs.sh`), and the console makes Ctrl-C end the process at once. `run ps` flags a ghost run (its window closed) and `run kill` ends every pipeline process.
 
-`tools/boxels.ico`, drawn by `tools/make_icon.py`, is the icon for a desktop shortcut to `pwsh -NoExit -File run.ps1 tampura`.
+`tools/boxels.ico`, drawn by `tools/make_icon.py` (deleted in the readable migration, phase P1; its last commit is a66d95e), is the icon for a desktop shortcut to `pwsh -NoExit -File run.ps1 tampura`.
 
 ### The console and the run directory
 

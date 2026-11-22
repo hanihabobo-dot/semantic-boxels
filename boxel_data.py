@@ -234,6 +234,7 @@ class BoxelRegistry:
             # margin + AABB rounding — same convention used in
             # execution.release_held_object_in_place and
             # boxel_env.annotate_free_space_surface.
+            # (execution.release_held_object_in_place was deleted in the readable migration, phase P1, 22 Nov 2026.)
             obj_boxel.on_surface = (
                 "table" if placed_min[2] <= table_surface_height + 0.01 else None
             )

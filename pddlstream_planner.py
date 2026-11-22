@@ -1393,6 +1393,7 @@ class PDDLStreamPlanner:
         # can see at a glance which atoms PDDLStream has to work with.
         # Tagged [#76-diag] so the smart_filter passes it through
         # unchanged (matches the existing #60-diag convention).
+        # (smart_filter.py was deleted in the readable migration, phase P1, 22 Nov 2026.)
         init_by_pred: Dict[str, int] = {}
         boxel_fits_by_obj: Dict[str, int] = {}
         view_clear_shadows: List[str] = []

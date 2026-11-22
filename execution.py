@@ -31,6 +31,7 @@ the BeliefState, the registry, and the high-level decision logic, while
 this module owns the geometry/physics primitives plus the sense action
 handler.
 """
+# release_held_object_in_place (named in the docstring above) was deleted in the readable migration, phase P1, 22 Nov 2026; git keeps it up to 6f38c36.
 
 import os
 import time
@@ -655,6 +656,7 @@ def _release_and_verify_drop(
 
     Returns True on a verified drop; False after exhausting max_attempts.
     """
+    # release_held_object_in_place (named in the docstring above) was deleted in the readable migration, phase P1, 22 Nov 2026.
     if dropped_name is None or dropped_name not in env.objects:
         # Without a name we can't read the object's pose to verify —
         # best effort: open the fingers and let whatever sits between
@@ -670,6 +672,7 @@ def _release_and_verify_drop(
     # loop diag below; tilt-at-grip vs tilt-at-release split visible
     # across consecutive lines.  Fires for execute_place / execute_stack /
     # release_held_object_in_place - extra signal welcome on all three.
+    # (release_held_object_in_place was deleted in the readable migration, phase P1, 22 Nov 2026.)
     pre_pos, pre_orn = p.getBasePositionAndOrientation(held_body_id)
     pre_aabb_min, pre_aabb_max = p.getAABB(held_body_id)
     pre_euler = p.getEulerFromQuaternion(pre_orn)
@@ -1732,6 +1735,7 @@ def execute_stack(robot_id, env, obj_name, on_obj_name, grasp, config,
 # (audit S-01) — so the typed return value is what keeps the contract
 # visible.  Do not collapse it back to a bare True/False without
 # preserving the reason tag for trace auditing.
+# (release_held_object_in_place was deleted in the readable migration, phase P1, 22 Nov 2026.)
 
 
 @dataclass(frozen=True)

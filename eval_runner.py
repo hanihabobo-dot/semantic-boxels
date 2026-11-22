@@ -22,6 +22,7 @@ Usage:
 Exit code 0 if every cell produced a timing_summary.json (success or fail);
 non-zero if any cell crashed/timed out (or above --max-failures).
 """
+# SmartConsoleFilter (smart_filter.py, named in the docstring above) was deleted in the readable migration, phase P1, 22 Nov 2026.
 
 import argparse
 import csv
