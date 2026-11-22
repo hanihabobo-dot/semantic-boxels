@@ -3242,37 +3242,12 @@ def handle_sense_action(
         # conservative.  A body with genuinely zero pixels cannot be
         # localized this way and still burns a strike below.
         if not _loc_names and detected_bodies:
-            _cand = {b: body_id_to_name[b] for b in detected_bodies
-                     if b in body_id_to_name}
-            _sliver = detect_objects_from_render(
-                sense_seg, _sense_depth_buf, sense_view, sense_proj,
-                _cand, env.camera_position, env.table_surface_height,
-                min_pixels=1) if _cand else {}
-            for _nm, _det in _sliver.items():
-                _c = _det.est_center
-                _half = np.maximum(
-                    (np.asarray(_det.est_max) - np.asarray(_det.est_min)) / 2.0,
-                    NOMINAL_HIDDEN_EXTENTS / 2.0)
-                _lo = _c - _half
-                _hi = _c + _half
-                if _lo[2] <= env.table_surface_height + DETECTION_SUPPORT_SNAP:
-                    _lo[2] = env.table_surface_height
-                    _hi[2] = max(_hi[2],
-                                 env.table_surface_height
-                                 + float(NOMINAL_HIDDEN_EXTENTS[2]))
-                sense_detections[_nm] = ObjectDetection(
-                    name=_nm, body_id=_det.body_id,
-                    pixel_count=_det.pixel_count,
-                    # A first registration's pose radius reads the pixel
-                    # step (pose_belief.pose_radius): the sliver's own.
-                    pixel_steps=_det.pixel_steps,
-                    est_min=_lo, est_max=_hi)
-                print(f"    [F15] {_nm} renders {_det.pixel_count} px — under "
-                      f"the {DETECTION_MIN_PIXELS} px detection minimum, but "
-                      f"its pixels localize it: registering a conservative "
-                      f"{NOMINAL_HIDDEN_EXTENTS[0] * 100:.0f} cm class box at "
-                      f"[{_c[0]:.3f},{_c[1]:.3f},{_c[2]:.3f}] instead of "
-                      f"refusing the observation.")
+            _localize_slivers(
+                env=env, body_id_to_name=body_id_to_name,
+                sense_detections=sense_detections,
+                _sense_depth_buf=_sense_depth_buf, sense_seg=sense_seg,
+                sense_view=sense_view, sense_proj=sense_proj,
+                detected_bodies=detected_bodies)
             _loc_names = [body_id_to_name[b] for b in detected_bodies
                           if b in body_id_to_name
                           and body_id_to_name[b] in sense_detections]
@@ -3331,6 +3306,44 @@ def handle_sense_action(
         _register_new_detections=_register_new_detections,
         blocked_fraction=blocked_fraction, blocked_bbox=blocked_bbox)
     return ActionResult(continue_=False, reason="sense_still_blocked")
+
+
+def _localize_slivers(
+    *,
+    env, body_id_to_name, sense_detections, _sense_depth_buf, sense_seg,
+    sense_view, sense_proj, detected_bodies,
+):
+    _cand = {b: body_id_to_name[b] for b in detected_bodies
+             if b in body_id_to_name}
+    _sliver = detect_objects_from_render(
+        sense_seg, _sense_depth_buf, sense_view, sense_proj,
+        _cand, env.camera_position, env.table_surface_height,
+        min_pixels=1) if _cand else {}
+    for _nm, _det in _sliver.items():
+        _c = _det.est_center
+        _half = np.maximum(
+            (np.asarray(_det.est_max) - np.asarray(_det.est_min)) / 2.0,
+            NOMINAL_HIDDEN_EXTENTS / 2.0)
+        _lo = _c - _half
+        _hi = _c + _half
+        if _lo[2] <= env.table_surface_height + DETECTION_SUPPORT_SNAP:
+            _lo[2] = env.table_surface_height
+            _hi[2] = max(_hi[2],
+                         env.table_surface_height
+                         + float(NOMINAL_HIDDEN_EXTENTS[2]))
+        sense_detections[_nm] = ObjectDetection(
+            name=_nm, body_id=_det.body_id,
+            pixel_count=_det.pixel_count,
+            # A first registration's pose radius reads the pixel
+            # step (pose_belief.pose_radius): the sliver's own.
+            pixel_steps=_det.pixel_steps,
+            est_min=_lo, est_max=_hi)
+        print(f"    [F15] {_nm} renders {_det.pixel_count} px — under "
+              f"the {DETECTION_MIN_PIXELS} px detection minimum, but "
+              f"its pixels localize it: registering a conservative "
+              f"{NOMINAL_HIDDEN_EXTENTS[0] * 100:.0f} cm class box at "
+              f"[{_c[0]:.3f},{_c[1]:.3f},{_c[2]:.3f}] instead of "
+              f"refusing the observation.")
 
 
 def _sense_unlocalizable(
