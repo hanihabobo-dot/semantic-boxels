@@ -97,7 +97,7 @@ class BoxelTestEnv(WorldPlacement):
         near_plane: float = 0.01,
         far_plane: float = 5.0,
         window_width: int = 1280,
-        window_height: int = 600,
+        window_height: int = 720,
         adopt_client: Optional[int] = None,
     ):
         """
@@ -126,7 +126,12 @@ class BoxelTestEnv(WorldPlacement):
             near_plane: Near clipping plane distance
             far_plane: Far clipping plane distance
             window_width: Width of the PyBullet GUI window
-            window_height: Height of the PyBullet GUI window
+            window_height: Height of the PyBullet GUI window.  PyBullet
+                stacks its three camera panes at fixed places down the
+                left edge; the third one ends at y = 695 and the status
+                bar takes 22 px, so 717 is the least that shows all three
+                in full and 720 the round number.  Under about 700 the
+                third pane is pushed up over the depth pane.
             adopt_client: An existing physics client to adopt as the
                 executing world (None: build our own scene, as always).
         """
@@ -198,6 +203,14 @@ class BoxelTestEnv(WorldPlacement):
             p.setRealTimeSimulation(0, physicsClientId=self.client_id)
             p.setAdditionalSearchPath(pybullet_data.getDataPath(),
                                       physicsClientId=self.client_id)
+        if gui and not self._adopted:
+            # Display only.  PyBullet opens its three camera panes empty (a
+            # white field with a diagonal line) and fills them at the first
+            # camera render, which is the first observation, seconds later,
+            # once the scene has loaded.  One render of the still empty
+            # world fills them now.  Never on an adopted world, whose
+            # renders are its owner's.
+            self.refresh_debug_camera_views()
         # BF#59 solver_iters: our own world's solver iterations, the same
         # value as the bridge's executing world (an adopted world is set
         # by d9_setup).  The plan client never steps and keeps the default.
@@ -1107,23 +1120,39 @@ class BoxelTestEnv(WorldPlacement):
 
     def refresh_debug_camera_views(self) -> None:
         """
-        Re-run the OpenGL camera render (no return values needed).
+        Render the robot's camera once more for the window's camera panes
+        (display only: nothing is returned or kept).
 
-        PyBullet's ExampleBrowser shows RGB/depth in the left panes when the
-        hardware renderer draws the off-screen camera; that only happens while
-        COV_ENABLE_RENDERING is on.  Call after exiting RenderingLock or
-        between executed actions so the thumbnails update.
+        PyBullet copies every camera render on the window's client into the
+        three panes on the left (RGB, depth, segmentation mask), whichever
+        renderer made it.  Between observations the panes go stale, so this
+        is called after a plan, after an executed action and after
+        world_eye's window screenshot (TB-40); and once by __init__ when
+        our own window opens, on the still empty world, so that the panes
+        do not start as PyBullet's empty placeholders.  The hardware
+        renderer draws only while COV_ENABLE_RENDERING is on: call it
+        after leaving a RenderingLock.
+
+        The boxel overlay's bodies are put out of view for the render, as
+        for every observation (#P1 F19), so the panes show what the robot's
+        camera sees and nothing else (TB-48; Hani, 2026-11-15 and
+        2026-11-21).  Where no overlay body exists (the bridge draws lines
+        only) the two calls move nothing.
         """
         if not self._gui:
             return
         view_matrix, projection_matrix = self._view_and_projection_matrices()
-        p.getCameraImage(
-            width=self.image_width,
-            height=self.image_height,
-            viewMatrix=view_matrix,
-            projectionMatrix=projection_matrix,
-            renderer=p.ER_BULLET_HARDWARE_OPENGL,
-        )
+        conceal_overlay_for_observation()
+        try:
+            p.getCameraImage(
+                width=self.image_width,
+                height=self.image_height,
+                viewMatrix=view_matrix,
+                projectionMatrix=projection_matrix,
+                renderer=p.ER_BULLET_HARDWARE_OPENGL,
+            )
+        finally:
+            restore_overlay_after_observation()
 
     def get_camera_observation(self) -> CameraObservation:
         """
@@ -1143,16 +1172,24 @@ class BoxelTestEnv(WorldPlacement):
         """
         view_matrix, projection_matrix = self._view_and_projection_matrices()
         if self._gui:
-            # Display-only side effect: keep the ExampleBrowser RGB/depth
-            # panes fresh via the hardware renderer (pre-#56 pane
-            # behaviour).  Detection ignores this image.
-            p.getCameraImage(
-                width=self.image_width,
-                height=self.image_height,
-                viewMatrix=view_matrix,
-                projectionMatrix=projection_matrix,
-                renderer=p.ER_BULLET_HARDWARE_OPENGL,
-            )
+            # Display-only side effect, kept from before #56: a hardware
+            # render for the window's panes.  Detection ignores this
+            # image, and it does not stay in the panes: PyBullet copies
+            # the TinyRenderer render of detect_objects below into them
+            # as soon as that is made, so this one shows only for the
+            # time that render takes.  The overlay's bodies are out of
+            # view for it, as in refresh_debug_camera_views (TB-48).
+            conceal_overlay_for_observation()
+            try:
+                p.getCameraImage(
+                    width=self.image_width,
+                    height=self.image_height,
+                    viewMatrix=view_matrix,
+                    projectionMatrix=projection_matrix,
+                    renderer=p.ER_BULLET_HARDWARE_OPENGL,
+                )
+            finally:
+                restore_overlay_after_observation()
         detections, rgb_image, depth_buffer, seg_mask = self.detect_objects()
         depth_image = self._depth_buffer_to_meters(depth_buffer)
         # Full-frame point cloud stays disabled (no consumer);
