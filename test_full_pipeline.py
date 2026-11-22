@@ -88,7 +88,6 @@ import world_eye          # textual world/belief/camera snapshots (2026-09-18)
 from boxel_data import BoxelRegistry, BoxelType
 from cell_merger import merge_free_space_cells
 from perception import grid_would_hit
-from free_space import split_free_boxel  # noqa: F401  (kept for future use)
 from pddlstream_planner import PDDLStreamPlanner, search_options_from
 from streams import RobotConfig
 from robot_utils import (move_robot_smooth, hold_at_config,
