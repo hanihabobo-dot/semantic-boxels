@@ -175,6 +175,8 @@ CARRY_TRAP_COLLINEAR_COS = 0.9999
 # step count today's stream would have commanded for the same waypoints.
 _TODAY_PAIR_STEPS = 30
 
+from episode_state import EpisodeState, EpisodeOptions, EARLY_FALSE
+
 
 def carry_trapezoid_schedule(points, vmax=None, amax=None, dt=None):
     """carry_trapezoid's schedule (BF#59), ported from carry_motion's tested
@@ -787,6 +789,22 @@ def main(gui=True, run_logger=None, scene_config=None,
                         on decides whether anything is drawn at all).
     There is no goal argument: main() builds the goal.
     """
+    st = EpisodeState(
+        EpisodeOptions(
+            gui=gui, run_logger=run_logger, scene_config=scene_config,
+            draw_boxel_overlays=draw_boxel_overlays, show_free=show_free,
+            goal_kind=goal_kind, stack_height=stack_height,
+            unit_costs=unit_costs, baseline=baseline,
+            uniform_cell_size=uniform_cell_size, min_boxel_size=min_boxel_size,
+            run_config=run_config, telemetry_enabled=telemetry_enabled,
+            telemetry_period=telemetry_period,
+            telemetry_heartbeat=telemetry_heartbeat,
+            oracle_phases=oracle_phases, after_settle=after_settle,
+            gui_hold_s=gui_hold_s, goal_at_home=goal_at_home,
+            held_cargo_resolve=held_cargo_resolve,
+            home_hold_step_cap=home_hold_step_cap),
+        target_name=target_name, domain_file=domain_file,
+        home_joints=home_joints)
     print("=" * 60)
     print("FULL PIPELINE: PDDLStream + Replanning")
     print("=" * 60)
@@ -813,10 +831,10 @@ def main(gui=True, run_logger=None, scene_config=None,
     world_eye.SAVE_IMAGES = getattr(args, 'save_screenshots', 'off') == 'on'
     # Path 9: --look on loads the look domain (M8's plus the look delta) and
     # needs M8's pose machinery; off, nothing below differs from the tag.
-    look_mode = look_domain.mode_of(getattr(args, 'look', 'off'))   # off, boxel, centred
-    look_on = look_mode != 'off'
-    if look_on and not pose_belief.SWITCHES['M8']:
-        raise ValueError(f"--look {look_mode} needs --m8 on")
+    st.setup.look_mode = look_domain.mode_of(getattr(args, 'look', 'off'))   # off, boxel, centred
+    st.setup.look_on = st.setup.look_mode != 'off'
+    if st.setup.look_on and not pose_belief.SWITCHES['M8']:
+        raise ValueError(f"--look {st.setup.look_mode} needs --m8 on")
     # Path 9, the arm camera only (arm_eye): --eye arm needs a look, and its
     # start configuration is q_home: --eye-start-joints, else the caller's
     # home joints (find_dice: DEFAULT_ARM_POS), else TAMPURA's home joints
@@ -825,35 +843,35 @@ def main(gui=True, run_logger=None, scene_config=None,
     # current_config is home_config, and with M8 q_home is a view config, so
     # a move there gives back the run's first view.  With --eye fixed none
     # of this runs and the tabletop's q_home stays REST_POSES.
-    eye = getattr(args, 'eye', 'fixed')
-    arm_eye.check_mode(eye, look_mode)
-    if eye == 'arm':
+    st.setup.eye = getattr(args, 'eye', 'fixed')
+    arm_eye.check_mode(st.setup.eye, st.setup.look_mode)
+    if st.setup.eye == 'arm':
         _start = arm_eye.parse_joints(getattr(args, 'eye_start_joints', ''))
-        if _start is not None and home_joints is not None and \
-                not np.allclose(_start, home_joints):
+        if _start is not None and st.setup.home_joints is not None and \
+                not np.allclose(_start, st.setup.home_joints):
             raise ValueError("--eye-start-joints differs from the caller's home "
                              "joints: the start configuration is q_home")
         if _start is not None:
-            home_joints = _start
-        elif home_joints is None:
-            home_joints = list(arm_eye.TAMPURA_HOME_JOINTS)
-        eye_start = list(home_joints)
-    if domain_file is None and look_on:
-        domain_file = look_domain.domain_file(look_mode, True)
-    elif domain_file is None and pose_belief.SWITCHES['M8']:
-        domain_file = m8_domain.domain_file(True)
+            st.setup.home_joints = _start
+        elif st.setup.home_joints is None:
+            st.setup.home_joints = list(arm_eye.TAMPURA_HOME_JOINTS)
+        st.setup.eye_start = list(st.setup.home_joints)
+    if st.setup.domain_file is None and st.setup.look_on:
+        st.setup.domain_file = look_domain.domain_file(st.setup.look_mode, True)
+    elif st.setup.domain_file is None and pose_belief.SWITCHES['M8']:
+        st.setup.domain_file = m8_domain.domain_file(True)
     # BF#52: the fold (pddlstream_planner.over_region_facts) is offered
     # unless --sense-over-region off (the A/B).  Not a pose_belief switch:
     # those gate the pose writers as a set.
-    sense_over_region = getattr(args, 'sense_over_region', 'on') == 'on'
+    st.setup.sense_over_region = getattr(args, 'sense_over_region', 'on') == 'on'
     # BF#53: the optimistic search's settings, pddlstream solve() keyword
     # arguments (run_logger's --search-effort-weight and
     # --search-initial-complexity, defaults 1 and 3; 'off' and 0 leave
     # pddlstream's own).
-    search_effort_weight = str(getattr(args, 'search_effort_weight', '1'))
-    search_initial_complexity = int(getattr(args, 'search_initial_complexity', 3))
-    search_options = search_options_from(search_effort_weight,
-                                         search_initial_complexity)
+    st.setup.search_effort_weight = str(getattr(args, 'search_effort_weight', '1'))
+    st.setup.search_initial_complexity = int(getattr(args, 'search_initial_complexity', 3))
+    st.setup.search_options = search_options_from(st.setup.search_effort_weight,
+                                         st.setup.search_initial_complexity)
     # BF#59: the die-slip campaign's switches (run_logger's --slip-fixes),
     # set every run; every fix registered itself at its module's import,
     # so an unknown name is refused here, before anything runs.
@@ -869,18 +887,18 @@ def main(gui=True, run_logger=None, scene_config=None,
     execution.M7 = getattr(args, 'm7', 'on') == 'on'
     # The two known domains must match the switch (a caller may pass
     # another file deliberately; that one is not judged here).
-    _dom = os.path.abspath(domain_file) if domain_file else m8_domain.LIVE_FILE
+    _dom = os.path.abspath(st.setup.domain_file) if st.setup.domain_file else m8_domain.LIVE_FILE
     if _dom in (m8_domain.LIVE_FILE, m8_domain.GENERATED_FILE) and \
             (_dom == m8_domain.GENERATED_FILE) != pose_belief.SWITCHES['M8']:
         raise ValueError(f"domain {os.path.basename(_dom)} does not match "
                          f"M8 {'on' if pose_belief.SWITCHES['M8'] else 'off'}")
     _dom_look = {os.path.abspath(f): m
                  for m, f in look_domain.GENERATED_FILES.items()}.get(_dom, 'off')
-    if _dom_look != look_mode:
+    if _dom_look != st.setup.look_mode:
         raise ValueError(f"domain {os.path.basename(_dom)} does not match "
-                         f"--look {look_mode}")
+                         f"--look {st.setup.look_mode}")
     print(f"  model tweaks: {pose_belief.SWITCHES}; domain "
-          f"{os.path.basename(domain_file or m8_domain.LIVE_FILE)}")
+          f"{os.path.basename(st.setup.domain_file or m8_domain.LIVE_FILE)}")
     # The curated console's header (a no-op without console_ui installed).
     _switch_text = ', '.join(f"{k} {'on' if v else 'off'}"
                              for k, v in pose_belief.SWITCHES.items())
@@ -889,7 +907,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                f"{run_config.get('n_occluders')} occluders, "
                f"{run_config.get('n_targets')} targets, "
                f"{run_config.get('n_hidden')} hidden" if run_config else None),
-        goal=(goal_kind + (f" {target_name}" if target_name else "")
+        goal=(goal_kind + (f" {st.setup.target_name}" if st.setup.target_name else "")
               + (" at home" if goal_at_home else "")),
         switches=(f"{_switch_text}, grip squeeze "
                   f"{robot_utils.GRIP_SQUEEZE * 1000:g} mm, planner "
@@ -901,7 +919,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     # PHASE 1: Setup Environment
     # =========================================================
     print("\n--- Phase 1: Environment Setup ---")
-    if not oracle_phases and (goal_kind != 'holding' or target_name is None):
+    if not oracle_phases and (goal_kind != 'holding' or st.setup.target_name is None):
         raise ValueError("oracle_phases=False needs goal_kind 'holding' "
                          "and a target_name")
     if env is None:
@@ -983,16 +1001,16 @@ def main(gui=True, run_logger=None, scene_config=None,
     # settle (scene construction; an adopted world is not moved), and after it
     # the overview camera is the arm camera: there for the first image, and
     # where the arm stands for every later image and cast (follow_arm).
-    if eye == 'arm':
-        arm_eye.place_arm(env, eye_start)
+    if st.setup.eye == 'arm':
+        arm_eye.place_arm(env, st.setup.eye_start)
     # Let settle: 50 steps at 240 Hz ≈ 0.2 s.  Enough for the loaded
     # Panda + cubes to reach static equilibrium after spawning.
     for _ in range(50):
         env.step_simulation()
     env.update_object_positions()
-    if eye == 'arm':
+    if st.setup.eye == 'arm':
         _cam = arm_eye.use_start_view(env)
-        eye_camera_pose = _cam['camera_pose']
+        st.setup.eye_camera_pose = _cam['camera_pose']
         print(f"  [eye] the overview camera is the arm camera at the start "
               f"configuration: {np.round(_cam['camera_position'], 3).tolist()}")
         arm_eye.follow_arm(env)
@@ -1026,8 +1044,8 @@ def main(gui=True, run_logger=None, scene_config=None,
                   f"from physics settling drift). Continuing without "
                   f"retry.", file=sys.stderr)
 
-    robot_id = env.objects["robot"].object_id
-    print(f"Robot ID: {robot_id}")
+    st.setup.robot_id = env.objects["robot"].object_id
+    print(f"Robot ID: {st.setup.robot_id}")
 
     # #P4 B3(c): the caller's read-only check between the settle and the
     # first render (the bridge's D9 hook; it steps and moves nothing).
@@ -1048,13 +1066,13 @@ def main(gui=True, run_logger=None, scene_config=None,
     print("\n--- Phase 2: Calculating Boxels ---")
     obs = env.get_camera_observation()
     all_known = obs.boxels
-    if eye == 'arm':
+    if st.setup.eye == 'arm':
         # Path 9, --eye arm (PLAN 11.16): the part of the safe window the
         # first image does not show joins the known boxels as hidden regions,
         # as tall as the planner's prior for a hidden target, so free space at
         # the table top is made only where the image showed the table.
         _unseen = arm_eye.unseen_boxels(
-            eye_camera_pose, env._SAFE_TABLE_X_RANGE, env._SAFE_TABLE_Y_RANGE,
+            st.setup.eye_camera_pose, env._SAFE_TABLE_X_RANGE, env._SAFE_TABLE_Y_RANGE,
             env.table_surface_height, float(streams.NOMINAL_HIDDEN_EXTENTS[2]),
             known=all_known)
         all_known = all_known + _unseen
@@ -1071,8 +1089,8 @@ def main(gui=True, run_logger=None, scene_config=None,
     # Free-space geometry is stateless until here; tag table-contact info
     # so the planner can emit (on_surface ?b) for place actions (audit #35).
     env.annotate_free_space_surface(merged_free)
-    all_boxels = all_known + merged_free
-    print(f"  Calculated {len(all_boxels)} boxels")
+    st.setup.all_boxels = all_known + merged_free
+    print(f"  Calculated {len(st.setup.all_boxels)} boxels")
 
     # =========================================================
     # PHASE 3: Create Registry
@@ -1086,12 +1104,12 @@ def main(gui=True, run_logger=None, scene_config=None,
     # Post-#35: producers emit BoxelData with semantic IDs (object name for
     # OBJECT, "shadow_of_<name>" for SHADOW) and parent linkage already set.
     # Free-space cells arrive with empty IDs; add_boxel assigns "free_NNN".
-    registry = BoxelRegistry()
-    for bd in all_boxels:
-        registry.add_boxel(bd)
+    st.setup.registry = BoxelRegistry()
+    for bd in st.setup.all_boxels:
+        st.setup.registry.add_boxel(bd)
     # M8 A: the initial registrations' pose radius (no-op, no render,
     # while every switch is OFF).
-    record_initial_detections(env, registry)
+    record_initial_detections(env, st.setup.registry)
     # BF#65 option 1 (D6, M2; no-op with the switch off): every registered
     # object whose class declares a cavity that holds a target class gets
     # its interior region, unknown, before the shadow list below is taken,
@@ -1099,22 +1117,22 @@ def main(gui=True, run_logger=None, scene_config=None,
     # a target the first render shows INSIDE a standing cover's box leaves
     # the registry again and is recorded as seen under that cover.
     if interior_regions.ENABLED:
-        interior_regions.cast_first_observation(env, registry, [target_name])
-    registry.save_to_json("boxel_data.json")
+        interior_regions.cast_first_observation(env, st.setup.registry, [st.setup.target_name])
+    st.setup.registry.save_to_json("boxel_data.json")
     if run_logger:
         run_logger.save_artefact("boxel_data.json")
 
     # Extract the two categories the planner cares about:
     # - shadows: regions that might hide the target (must be sensed)
     # - occluders: objects blocking those shadows (must be relocated first)
-    shadows = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.SHADOW]
-    occluders = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.OBJECT]
-    print(f"  {len(registry.boxels)} boxels, {len(shadows)} shadows, {len(occluders)} occluders")
+    st.setup.shadows = [b.id for b in st.setup.registry.boxels.values() if b.boxel_type == BoxelType.SHADOW]
+    st.setup.occluders = [b.id for b in st.setup.registry.boxels.values() if b.boxel_type == BoxelType.OBJECT]
+    print(f"  {len(st.setup.registry.boxels)} boxels, {len(st.setup.shadows)} shadows, {len(st.setup.occluders)} occluders")
 
-    viz = None
+    st.setup.viz = None
     if gui and draw_boxel_overlays:
-        viz = BoxelVisualizer(phantoms=overlay_bodies)
-        viz.draw_registry(registry, duration=0, label_size=1.0,
+        st.setup.viz = BoxelVisualizer(phantoms=overlay_bodies)
+        st.setup.viz.draw_registry(st.setup.registry, duration=0, label_size=1.0,
                           skip_free=not show_free)
 
     # =========================================================
@@ -1153,17 +1171,17 @@ def main(gui=True, run_logger=None, scene_config=None,
     # occluders and re-detecting it can, so the episode still runs.
     # #P4 B3(c): oracle_phases=False runs none of this; the robot then
     # knows of the target only what perception registered.
-    hidden_targets_set = set()
+    st.setup.hidden_targets_set = set()
     target_to_shadow = {}
     if oracle_phases:
         visible_now, _ = env.oracle_detect_objects()
-        hidden_targets_set = set(all_targets) - set(visible_now)
-    for tname in hidden_targets_set:
+        st.setup.hidden_targets_set = set(all_targets) - set(visible_now)
+    for tname in st.setup.hidden_targets_set:
         tpos = np.array(env.objects[tname].position)
         t_min, t_max = p.getAABB(env.objects[tname].object_id)
         containing_only = None
-        for shadow_id in shadows:
-            sb = registry.get_boxel(shadow_id)
+        for shadow_id in st.setup.shadows:
+            sb = st.setup.registry.get_boxel(shadow_id)
             if not (sb and np.all(tpos >= sb.min_corner)
                     and np.all(tpos <= sb.max_corner)):
                 continue
@@ -1186,33 +1204,33 @@ def main(gui=True, run_logger=None, scene_config=None,
                   f"re-detection after its occluders move",
                   file=sys.stderr)
 
-    visible_target_locations = {}
-    on_relations: Dict[str, str] = {}      # stacked_obj -> support_obj
-    physical_failures: list = []           # audit #40 — per-action verifier log
-    stack_target_objects = []              # populated only for --goal stack
+    st.setup.visible_target_locations = {}
+    st.setup.on_relations: Dict[str, str] = {}      # stacked_obj -> support_obj
+    st.setup.physical_failures: list = []           # audit #40 — per-action verifier log
+    st.setup.stack_target_objects = []              # populated only for --goal stack
 
     if goal_kind == 'holding':
-        if target_name is not None:
+        if st.setup.target_name is not None:
             # #P4 B3(c): the caller names the target symbol; whether its
             # location is known is perception's: a registered OBJECT
             # boxel from the first observation.
-            for boxel in registry.boxels.values():
-                if boxel.object_name == target_name:
-                    visible_target_locations[target_name] = boxel.id
+            for boxel in st.setup.registry.boxels.values():
+                if boxel.object_name == st.setup.target_name:
+                    st.setup.visible_target_locations[st.setup.target_name] = boxel.id
                     break
-            if target_name in visible_target_locations:
-                print(f"  Target: {target_name} at boxel "
-                      f"{visible_target_locations[target_name]} (given; in "
+            if st.setup.target_name in st.setup.visible_target_locations:
+                print(f"  Target: {st.setup.target_name} at boxel "
+                      f"{st.setup.visible_target_locations[st.setup.target_name]} (given; in "
                       f"the first observation, direct pick)")
             else:
-                print(f"  Target: {target_name} (given; not in the first "
+                print(f"  Target: {st.setup.target_name} (given; not in the first "
                       f"observation; the robot must search)")
-        elif hidden_targets_set:
+        elif st.setup.hidden_targets_set:
             hidden_targets_ordered = [t for t in all_targets
-                                      if t in hidden_targets_set]
-            target_name = random.choice(hidden_targets_ordered)
-            oracle_hidden_shadow = target_to_shadow.get(target_name)
-            print(f"  Target: {target_name}")
+                                      if t in st.setup.hidden_targets_set]
+            st.setup.target_name = random.choice(hidden_targets_ordered)
+            oracle_hidden_shadow = target_to_shadow.get(st.setup.target_name)
+            print(f"  Target: {st.setup.target_name}")
             if oracle_hidden_shadow is not None:
                 print(f"  ORACLE: Actually hidden in {oracle_hidden_shadow} "
                       f"(camera-ray occlusion; shadow AABB also contains "
@@ -1228,40 +1246,40 @@ def main(gui=True, run_logger=None, scene_config=None,
             # Pick a random visible target and resolve its boxel ID so the
             # planner can generate a direct move→pick plan without sensing.
             print(f"  No targets hidden — all visible from camera.")
-            target_name = random.choice(all_targets)
-            for boxel in registry.boxels.values():
-                if boxel.object_name == target_name:
-                    visible_target_locations[target_name] = boxel.id
+            st.setup.target_name = random.choice(all_targets)
+            for boxel in st.setup.registry.boxels.values():
+                if boxel.object_name == st.setup.target_name:
+                    st.setup.visible_target_locations[st.setup.target_name] = boxel.id
                     break
-            if target_name in visible_target_locations:
-                print(f"  Target: {target_name} at boxel "
-                      f"{visible_target_locations[target_name]} (direct pick)")
+            if st.setup.target_name in st.setup.visible_target_locations:
+                print(f"  Target: {st.setup.target_name} at boxel "
+                      f"{st.setup.visible_target_locations[st.setup.target_name]} (direct pick)")
             else:
-                print(f"  WARNING: Target {target_name} has no boxel in registry")
+                print(f"  WARNING: Target {st.setup.target_name} has no boxel in registry")
                 env.close()
                 return False
-        goal = ('holding', target_name)
+        st.setup.goal = ('holding', st.setup.target_name)
     elif goal_kind == 'stack':
         # stack_scene has no occluders → no shadows → no sensing needed.
         # Every cube is its own visible target so the planner can pick
         # any of them without a search loop.
-        stack_target_objects = list(all_targets)
-        for tname in stack_target_objects:
-            for boxel in registry.boxels.values():
+        st.setup.stack_target_objects = list(all_targets)
+        for tname in st.setup.stack_target_objects:
+            for boxel in st.setup.registry.boxels.values():
                 if boxel.object_name == tname:
-                    visible_target_locations[tname] = boxel.id
+                    st.setup.visible_target_locations[tname] = boxel.id
                     break
-        goal = build_stack_goal(stack_target_objects, stack_height)
+        st.setup.goal = build_stack_goal(st.setup.stack_target_objects, stack_height)
         # ``target_name`` is still referenced in the holding-style log
         # paths (planner export, replan loop banner).  Pick the top of
         # the requested tower as a representative — it matches the
         # holding semantics ("the object the user cares about").
-        if isinstance(goal, tuple) and goal[0] == 'and':
-            target_name = str(goal[1][1])
+        if isinstance(st.setup.goal, tuple) and st.setup.goal[0] == 'and':
+            st.setup.target_name = str(st.setup.goal[1][1])
         else:
-            target_name = str(goal[1])
-        print(f"  Stack goal: {goal}")
-        print(f"  Stackable cubes: {stack_target_objects}")
+            st.setup.target_name = str(st.setup.goal[1])
+        print(f"  Stack goal: {st.setup.goal}")
+        print(f"  Stackable cubes: {st.setup.stack_target_objects}")
     elif goal_kind == 'find-and-tray-stack':
         # audit #55 — 2-cube tower on tray (smallest goal that exercises
         # sense → pick → stack end-to-end).  One VISIBLE cube placed on
@@ -1281,9 +1299,9 @@ def main(gui=True, run_logger=None, scene_config=None,
         # audit #67 — classify by camera-ray occlusion (matches Phase 1
         # and the holding-goal path above), not AABB containment.
         visible_targets = [t for t in all_targets
-                           if t not in hidden_targets_set]
+                           if t not in st.setup.hidden_targets_set]
         hidden_targets = [t for t in all_targets
-                          if t in hidden_targets_set]
+                          if t in st.setup.hidden_targets_set]
         if not visible_targets or not hidden_targets:
             env.close()
             raise RuntimeError(
@@ -1294,19 +1312,19 @@ def main(gui=True, run_logger=None, scene_config=None,
             )
         chosen_visible = random.choice(visible_targets)
         chosen_hidden = random.choice(hidden_targets)
-        stack_target_objects = [chosen_visible, chosen_hidden]
+        st.setup.stack_target_objects = [chosen_visible, chosen_hidden]
         print(f"  2-cube tray tower: {chosen_visible} (on tray) + "
               f"{chosen_hidden} (on {chosen_visible})")
         # Visible cube → emit obj_at_boxel; hidden cube stays unknown
         # until the sense action uncovers it.
-        for boxel in registry.boxels.values():
+        for boxel in st.setup.registry.boxels.values():
             if boxel.object_name == chosen_visible:
-                visible_target_locations[chosen_visible] = boxel.id
+                st.setup.visible_target_locations[chosen_visible] = boxel.id
                 break
-        goal = ('and', ('on', chosen_visible, tray_obj),
+        st.setup.goal = ('and', ('on', chosen_visible, tray_obj),
                        ('on', chosen_hidden, chosen_visible))
-        target_name = chosen_hidden  # belief / sense logging
-        print(f"  Find-and-tray-stack goal: {goal}")
+        st.setup.target_name = chosen_hidden  # belief / sense logging
+        print(f"  Find-and-tray-stack goal: {st.setup.goal}")
         print(f"  Tray: {tray_obj}")
     else:
         raise ValueError(f"Unsupported --goal '{goal_kind}'. "
@@ -1321,10 +1339,10 @@ def main(gui=True, run_logger=None, scene_config=None,
     # mode reads none of the map for its facts (pddlstream_planner
     # _build_init names what hides a view per configuration), and its render
     # would be one more image with no reader.
-    shadow_occluder_map = {}
-    if eye != 'arm':
-        shadow_occluder_map = compute_shadow_blockers(
-            env.camera_position, registry, shadows, occluders, env
+    st.setup.shadow_occluder_map = {}
+    if st.setup.eye != 'arm':
+        st.setup.shadow_occluder_map = compute_shadow_blockers(
+            env.camera_position, st.setup.registry, st.setup.shadows, st.setup.occluders, env
         )
         # compute_shadow_blockers applies the tolerance-aligned census plus
         # the (adjacency-gated) parent-relationship fallback internally, so
@@ -1334,8 +1352,8 @@ def main(gui=True, run_logger=None, scene_config=None,
         # is schedulable — exactly what happens for marginal grazers and
         # far-displaced carve fragments post-F5.  Log it as information,
         # not as the broken-linkage warning it used to be.
-        for shadow_id in shadows:
-            if not shadow_occluder_map.get(shadow_id):
+        for shadow_id in st.setup.shadows:
+            if not st.setup.shadow_occluder_map.get(shadow_id):
                 print(f"  Shadow {shadow_id}: no blocker above sense "
                       f"tolerance — view-clear, directly sensable")
 
@@ -1343,16 +1361,16 @@ def main(gui=True, run_logger=None, scene_config=None,
     # The planner reasons about boxel IDs like "obj_000"; execution needs
     # PyBullet body IDs and names like "red_object".  This mapping lets the
     # action dispatcher translate plan parameters into simulator calls.
-    boxel_to_pybullet = {}
-    for boxel in registry.boxels.values():
+    st.setup.boxel_to_pybullet = {}
+    for boxel in st.setup.registry.boxels.values():
         if boxel.object_name and boxel.object_name in env.objects:
             # Name and body id only (#P1 WP2c): poses come from the registry.
-            boxel_to_pybullet[boxel.id] = {
+            st.setup.boxel_to_pybullet[boxel.id] = {
                 'name': boxel.object_name,
                 'pybullet_id': env.objects[boxel.object_name].object_id,
             }
 
-    print(f"  Boxel->PyBullet mapping: {len(boxel_to_pybullet)} objects")
+    print(f"  Boxel->PyBullet mapping: {len(st.setup.boxel_to_pybullet)} objects")
 
     # =========================================================
     # PHASE 5: Planning with Replanning Loop
@@ -1374,27 +1392,27 @@ def main(gui=True, run_logger=None, scene_config=None,
     # GUI ids to plan ids via env.plan_body_id() at the planner boundary.
     # Execution-side code (execute_pick / detect_execution_collisions /
     # compute_shadow_blockers) keeps using GUI ids unchanged.
-    object_body_ids = {}        # plan-side, consumed by BoxelStreams
+    st.setup.object_body_ids = {}        # plan-side, consumed by BoxelStreams
     for name, obj_info in env.objects.items():
         if name not in ("plane", "table", "robot"):
-            object_body_ids[name] = env.plan_body_id(obj_info.object_id)
-    for boxel in registry.boxels.values():
-        if boxel.object_name and boxel.object_name in object_body_ids:
-            object_body_ids[boxel.id] = object_body_ids[boxel.object_name]
+            st.setup.object_body_ids[name] = env.plan_body_id(obj_info.object_id)
+    for boxel in st.setup.registry.boxels.values():
+        if boxel.object_name and boxel.object_name in st.setup.object_body_ids:
+            st.setup.object_body_ids[boxel.id] = st.setup.object_body_ids[boxel.object_name]
 
     # Two parallel support-id sets: planner needs plan-side ids (its
     # collision checks run on plan_client_id); execution needs the GUI ids
     # (detect_execution_collisions runs on client_id).
-    planner_support_body_ids = frozenset({
+    st.setup.planner_support_body_ids = frozenset({
         env.plan_body_id(env.objects["plane"].object_id),
         env.plan_body_id(env.objects["table"].object_id),
     })
-    support_body_ids = frozenset({
+    st.setup.support_body_ids = frozenset({
         env.objects["plane"].object_id,
         env.objects["table"].object_id,
     })
 
-    body_id_to_name = {info.object_id: name
+    st.setup.body_id_to_name = {info.object_id: name
                        for name, info in env.objects.items()}
 
     # -----------------------------------------------------------------
@@ -1420,7 +1438,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     if _tele_on and run_logger is not None:
         _rm = robot_model()
         telemetry.enable(
-            env.client_id, robot_id, body_id_to_name, run_logger.run_dir,
+            env.client_id, st.setup.robot_id, st.setup.body_id_to_name, run_logger.run_dir,
             frame_period_s=telemetry_period,
             heartbeat_period_s=telemetry_heartbeat,
             ee_link=_rm.ee_link, arm_joints=_rm.arm_joints,
@@ -1442,7 +1460,7 @@ def main(gui=True, run_logger=None, scene_config=None,
         # cost), on arms it under the GUI too.
         _rm = robot_model()
         telemetry.enable(
-            env.client_id, robot_id, body_id_to_name,
+            env.client_id, st.setup.robot_id, st.setup.body_id_to_name,
             run_logger.run_dir if run_logger is not None else None,
             ee_link=_rm.ee_link, arm_joints=_rm.arm_joints,
             finger_joints=_rm.finger_joints, counts_only=True)
@@ -1458,7 +1476,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     # (known-empty shadows, moved occluders, current config) is passed
     # in each plan() call so replanning always starts from scratch with
     # the latest world state.
-    belief = BeliefState(shadows, target_name)
+    st.setup.belief = BeliefState(st.setup.shadows, st.setup.target_name)
     tray_name = next((name for name, info in env.objects.items()
                       if info.is_tray), None)
     # Path 9, --eye arm: the planner gets no camera.  Its camera facts
@@ -1466,86 +1484,86 @@ def main(gui=True, run_logger=None, scene_config=None,
     # still in view, and in this mode none does; the sense gate's hide test
     # takes the box test (streams.test_target_can_hide_in_shadow).
     planner_camera_pos = env.camera_position
-    if eye == 'arm':
+    if st.setup.eye == 'arm':
         planner_camera_pos = None
-    planner = PDDLStreamPlanner(registry, robot_id=env.plan_robot_id,
-                                shadow_occluder_map=shadow_occluder_map,
+    st.setup.planner = PDDLStreamPlanner(st.setup.registry, robot_id=env.plan_robot_id,
+                                shadow_occluder_map=st.setup.shadow_occluder_map,
                                 physics_client=env.plan_client_id,
-                                object_body_ids=object_body_ids,
-                                support_body_ids=planner_support_body_ids,
+                                object_body_ids=st.setup.object_body_ids,
+                                support_body_ids=st.setup.planner_support_body_ids,
                                 camera_pos=planner_camera_pos,
                                 tray_name=tray_name,
-                                domain_file=domain_file)
-    planner.search_options = dict(search_options)          # BF#53
+                                domain_file=st.setup.domain_file)
+    st.setup.planner.search_options = dict(st.setup.search_options)          # BF#53
     # G10: which domain and stream texts the planner loaded, under which
     # switches (the stream file's sha and the fold's switch since BF#52,
     # the search's settings since BF#53).
-    ledger_event('domain', file=os.path.basename(domain_file or m8_domain.LIVE_FILE),
-                 sha=m8_domain.sha(planner.domain_pddl),
+    ledger_event('domain', file=os.path.basename(st.setup.domain_file or m8_domain.LIVE_FILE),
+                 sha=m8_domain.sha(st.setup.planner.domain_pddl),
                  stream_file=os.path.basename(m8_domain.STREAM_LIVE_FILE),
-                 stream_sha=m8_domain.sha(planner.stream_pddl),
+                 stream_sha=m8_domain.sha(st.setup.planner.stream_pddl),
                  switches=dict(pose_belief.SWITCHES,
-                               sense_over_region=sense_over_region,
+                               sense_over_region=st.setup.sense_over_region,
                                interior_regions=interior_regions.ENABLED,     # BF#65
-                               search_effort_weight=search_effort_weight,
-                               search_initial_complexity=search_initial_complexity,
+                               search_effort_weight=st.setup.search_effort_weight,
+                               search_initial_complexity=st.setup.search_initial_complexity,
                                slip_fixes=slip_fixes.spec(),                  # BF#59
-                               **({'look': look_mode} if look_on else {})))   # path 9
+                               **({'look': st.setup.look_mode} if st.setup.look_on else {})))   # path 9
     # #P4 B3(d): the scene's reach envelope (None: streams' constants),
     # and D7 (i) to (iii): the home joints, and with a declared goal
     # configuration its init facts and the goal conjunct.
     if env.reach_envelope is not None:
-        planner.streams.set_reach(*env.reach_envelope)
+        st.setup.planner.streams.set_reach(*env.reach_envelope)
     # BF#45: the executor's contact rule for the kin stream's contact
     # check (a task's own floor, D8; the table height for boxels without
     # a surface of their own).
-    planner.streams.contact_floor = pick_contact_floor(env)
-    planner.streams.surface_z_default = float(env.table_surface_height)
-    if home_joints is not None:
-        planner.streams.set_home_joints(home_joints)
+    st.setup.planner.streams.contact_floor = pick_contact_floor(env)
+    st.setup.planner.streams.surface_z_default = float(env.table_surface_height)
+    if st.setup.home_joints is not None:
+        st.setup.planner.streams.set_home_joints(st.setup.home_joints)
     if goal_at_home:
-        planner.goal_config = planner.home_config
-        goal = ('and', goal, ('at_config', planner.home_config))
+        st.setup.planner.goal_config = st.setup.planner.home_config
+        st.setup.goal = ('and', st.setup.goal, ('at_config', st.setup.planner.home_config))
     # F6: the meaning of the sense hideability fact is a CLI choice
     # until the A/B settles the default (see run_logger --sense-gate).
-    planner.sense_gate = getattr(args, 'sense_gate', 'off')
-    planner.corridor_test = getattr(args, 'corridor_test', 'cell+object')
+    st.setup.planner.sense_gate = getattr(args, 'sense_gate', 'off')
+    st.setup.planner.corridor_test = getattr(args, 'corridor_test', 'cell+object')
     _ssr = getattr(args, 'search_sample_ratio', None)
     if _ssr is not None:
-        planner.search_sample_ratio = _ssr
+        st.setup.planner.search_sample_ratio = _ssr
     _pcs = getattr(args, 'path_check_step', None)
     if _pcs is not None:
-        planner.streams.path_check_step = _pcs
-    planner.streams.path_check_diag = bool(getattr(args, 'path_check_diag', False))
+        st.setup.planner.streams.path_check_step = _pcs
+    st.setup.planner.streams.path_check_diag = bool(getattr(args, 'path_check_diag', False))
 
     # World eye (2026-09-18): textual snapshots of world + belief + camera
     # view at every decision and observation point of the loop, into
     # eye.log / eye.jsonl in the run directory (tools/eye.py queries them
     # by plan / step / time).  Pure observer, GUI and headless alike.
     if run_logger is not None:
-        world_eye.enable(run_logger.run_dir, env, robot_id, body_id_to_name)
+        world_eye.enable(run_logger.run_dir, env, st.setup.robot_id, st.setup.body_id_to_name)
         world_eye.snapshot("initial observation (phase 2-4)",
-                           registry=registry, belief=belief, plan_count=0,
+                           registry=st.setup.registry, belief=st.setup.belief, plan_count=0,
                            with_view=True, save_image=True,
-                           on_relations=on_relations,
-                           shadow_occluder_map=shadow_occluder_map,
-                           extra={"goal": str(goal),
-                                  "hidden_targets": sorted(hidden_targets_set)})
+                           on_relations=st.setup.on_relations,
+                           shadow_occluder_map=st.setup.shadow_occluder_map,
+                           extra={"goal": str(st.setup.goal),
+                                  "hidden_targets": sorted(st.setup.hidden_targets_set)})
 
     # The planner needs to reason about every object that may participate
     # in the goal.  For 'holding' that's just the chosen target; for
     # 'stack' it's every cube in the requested tower.
-    planner_target_objects = (
-        stack_target_objects
+    st.setup.planner_target_objects = (
+        st.setup.stack_target_objects
         if goal_kind in ('stack', 'find-and-tray-stack')
-        else [target_name]
+        else [st.setup.target_name]
     )
 
     # Review round 2 (2026-09-19): the export runs the same _build_init
     # as the first plan, and under --sense-gate strict that raycasts the
     # plan client — pose it from the belief first, exactly as the loop
     # does before every plan(), so the artefact is the planner's init.
-    env.sync_to_plan_client(registry=registry)
+    env.sync_to_plan_client(registry=st.setup.registry)
     if stop_before_planning:
         # #P4 B3(c): B2's deliverable stops here, before any plan() call
         # (and before the problem export, which runs _build_init).
@@ -1558,10 +1576,10 @@ def main(gui=True, run_logger=None, scene_config=None,
     # cluster the snapshot is read-only and every arm O episode of the
     # 2026-10-30 campaigns crashed here (the smoke returns above this line).
     _export_dir = str(run_logger.run_dir) if run_logger else tempfile.gettempdir()
-    problem_path = planner.export_problem_pddl(
-        target_objects=planner_target_objects,
-        goal=goal,
-        visible_target_locations=visible_target_locations,
+    problem_path = st.setup.planner.export_problem_pddl(
+        target_objects=st.setup.planner_target_objects,
+        goal=st.setup.goal,
+        visible_target_locations=st.setup.visible_target_locations,
         filepath=os.path.join(_export_dir, 'problem_debug.pddl'),
     )
     print(f"  Exported initial problem to {problem_path}")
@@ -1570,44 +1588,44 @@ def main(gui=True, run_logger=None, scene_config=None,
     # M8 C: the observation configurations, computed in the plan twin at
     # every _build_init from here on (the export above has none).
     if pose_belief.SWITCHES['M8']:
-        planner.m8_views = observe_views.ObserveViews(
-            env, planner.streams._robot_base_xy)
+        st.setup.planner.m8_views = observe_views.ObserveViews(
+            env, st.setup.planner.streams._robot_base_xy)
         # BF#52: the fold's switch (over_region_facts needs m8_views).
-        planner.sense_over_region = sense_over_region
+        st.setup.planner.sense_over_region = st.setup.sense_over_region
         # Path 9: the look's viewpoints, from the same plan twin.  The boxel
         # look chooses its own (look_views); the centred look takes the tag's
         # observe rule from m8_views.
-        if look_on:
-            if look_mode == 'boxel':
-                planner.look_views = look_views.LookViews(
-                    planner.m8_views, reachable=planner.streams.ee_reachable)
-            planner.look_on = True
-            planner.look_mode = look_mode
+        if st.setup.look_on:
+            if st.setup.look_mode == 'boxel':
+                st.setup.planner.look_views = look_views.LookViews(
+                    st.setup.planner.m8_views, reachable=st.setup.planner.streams.ee_reachable)
+            st.setup.planner.look_on = True
+            st.setup.planner.look_mode = st.setup.look_mode
 
-    boxel_centers = {b.id: b.center for b in registry.boxels.values()}
+    st.setup.boxel_centers = {b.id: b.center for b in st.setup.registry.boxels.values()}
 
-    plan_count = 0
+    st.counts.plan_count = 0
     # Audit #73 step 3(c) plot 4: count of executed sense actions
     # (one increment per entry into the 'sense' dispatch branch,
     # regardless of outcome).  Mirrors plan_count plumbing through
     # to report_run_outcome → timing_summary.json.
-    sense_count = 0
+    st.counts.sense_count = 0
     # M8 C2: executed observes, and the observe bound's strikes per
     # object as (count, the box at the last strike, the boxel object).
-    observe_count = 0
-    observe_strikes: Dict[str, tuple] = {}
-    m8_per_plan: list = []
-    look_count = 0                   # path 9: executed looks, and the stats
-    look_per_plan: list = []         # of each plan call's look facts
+    st.counts.observe_count = 0
+    st.counts.observe_strikes: Dict[str, tuple] = {}
+    st.counts.m8_per_plan: list = []
+    st.counts.look_count = 0                   # path 9: executed looks, and the stats
+    st.counts.look_per_plan: list = []         # of each plan call's look facts
     # Per-call planner.plan() durations.  Captured originally for
     # audit #30 baseline timing; now consumed by the eval runner
     # (audit #9) for scalability plots.
-    total_plan_time = 0.0
-    plan_times = []
+    st.counts.total_plan_time = 0.0
+    st.counts.plan_times = []
     # Audit #73 step 2(d) plot 11: per-replan boxel count snapshots.
     # Captured after reboxelize_free_space so each entry reflects what
     # THIS planner.plan() call actually sees.
-    boxel_counts_per_replan: list = []
+    st.counts.boxel_counts_per_replan: list = []
     # --- Reactive replanning loop ---
     # Design: the PDDL sense action is OPTIMISTIC — it assumes the
     # target will be found.  When execution reveals otherwise (empty or
@@ -1621,16 +1639,16 @@ def main(gui=True, run_logger=None, scene_config=None,
     # or given up; planner returns no plan -> planner_failed), or the eval runner
     # kills the cell at its per-cell wall-clock --timeout (exit_reason="timeout").
     # Time-bounded, not replan-count-bounded.
-    held_body_id = None              # PyBullet body ID of the held object
+    st.hand.held_body_id = None              # PyBullet body ID of the held object
                                      # (set during pick, cleared after
                                      # place/stack — #P1: the friction
                                      # grasp replaced the constraint id)
-    held_object_boxel_id = None      # registry boxel ID of the held object
-    exit_reason = None               # tracks why the loop ended for Phase 6
-    current_config = planner.home_config  # robot's last known joint config
+    st.hand.held_object_boxel_id = None      # registry boxel ID of the held object
+    st.ending.exit_reason = None               # tracks why the loop ended for Phase 6
+    st.arm.current_config = st.setup.planner.home_config  # robot's last known joint config
     # Detect infinite-replan loops: if sensing the same shadow stays
     # "still_blocked" 3+ times, give up on it (audit #78c).
-    blocked_counts = {}  # shadow_id → consecutive-block count
+    st.strikes.blocked_counts = {}  # shadow_id → consecutive-block count
     # Audit #21: shadows we gave up on after 3 still_blocked outcomes
     # are NOT observed empty — the loop only LIES about them being
     # not_here so the planner stops re-attempting them.  Track the IDs
@@ -1639,7 +1657,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     # real fix (re-ground blocker atoms) landed with #P1 F2's
     # blocks_view_at re-keying; the 3-strike giveup stays as a bound
     # for shadows that remain physically unclearable.
-    blocked_giveup_shadows: set = set()
+    st.strikes.blocked_giveup_shadows: set = set()
     # #P1 F2: per-object failed-pick strike counter, mirroring
     # blocked_counts.  The single fixed top-down grasp makes a failed
     # pick against an unmoved object deterministic — without a bound
@@ -1649,8 +1667,8 @@ def main(gui=True, run_logger=None, scene_config=None,
     # yields nothing) so the planner changes course or honestly finds
     # no plan; exit_reason "pick_giveup" classifies that ending.  A
     # successful pick of the object clears its counter.
-    pick_fail_counts: Dict[str, int] = {}
-    pick_giveup_objects: set = set()
+    st.strikes.pick_fail_counts: Dict[str, int] = {}
+    st.strikes.pick_giveup_objects: set = set()
     # Non-absorbing giveup (2026-08-21, investigation synthesis): a
     # permanent "ungraspable" mark froze every shadow the object blocks
     # for the rest of the episode (run 10-55-47: orange 3/3 made the
@@ -1660,8 +1678,8 @@ def main(gui=True, run_logger=None, scene_config=None,
     # the re-aimed descent may now succeed.  At most 2 paroles per
     # object, so a truly ungraspable object still ends in a bounded
     # giveup instead of a slow infinite loop.
-    pick_giveup_marked_at: Dict[str, int] = {}
-    pick_parole_counts: Dict[str, int] = {}
+    st.strikes.pick_giveup_marked_at: Dict[str, int] = {}
+    st.strikes.pick_parole_counts: Dict[str, int] = {}
     # Review fix 2026-08-20 (integration): transit losses (EmptyHandError
     # at place/stack entry) need their OWN strike counter — the pick
     # succeeds each cycle (resetting pick_fail_counts), the hold slips
@@ -1669,7 +1687,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     # replan cycle is unbounded.  NOT reset by a successful pick (that
     # proves nothing about transport); cleared by a delivered
     # place/stack of the object.  3 strikes → same giveup path.
-    transit_loss_counts: Dict[str, int] = {}
+    st.strikes.transit_loss_counts: Dict[str, int] = {}
     # #P1 F9: contains_nontarget REDISCOVERY strike counter, closing the
     # asymmetry with the audit-#21 blocked-view / F2 pick / transit-loss
     # bounds.  A sense that rediscovers an ALREADY-REGISTERED object
@@ -1680,57 +1698,57 @@ def main(gui=True, run_logger=None, scene_config=None,
     # re-created (the OBJECT boxel still refreshes for census/collision);
     # like the audit-#21 giveup this is absorbing — the belief may end
     # incomplete, and the episode ends honestly if the target hid there.
-    nontarget_rediscovery_counts: Dict[str, int] = {}
+    st.strikes.nontarget_rediscovery_counts: Dict[str, int] = {}
     # #P2 (a)/(d) (2026-09-19): world-integrity events (perception-only
     # verdicts after every move/pick/place/stack: disturbed, toppled,
     # off_support, lost, knocked_off_table) persisted in the summary;
     # F28: physical stack failures per (object, support) with a 3-strike
     # honest ending; episode_over ends the loop from inside a plan.
-    integrity_events: list = []
-    stack_fail_counts: Dict[tuple, int] = {}
-    disturbed_counts: Dict[str, int] = {}   # reset every plan
-    target_lost_seen = False                # a goal object's region observed empty
-    episode_over = False
+    st.counts.integrity_events: list = []
+    st.strikes.stack_fail_counts: Dict[tuple, int] = {}
+    st.strikes.disturbed_counts: Dict[str, int] = {}   # reset every plan
+    st.ending.target_lost_seen = False                # a goal object's region observed empty
+    st.ending.episode_over = False
     # #P4 B3(d), D7 (iv)-(vi): the held body's cargo data (the plan's
     # grasp offset in xy, set by a verified pick), the at-home state of
     # the last move (True only right after a move to q_home that passed
     # the at-home test), consecutive planned moves to q_home that failed
     # it, and the counter behind the fresh q_readback_k symbols.
-    held_grasp_xy = None
-    at_home_ok = False
-    home_misses = 0
-    readback_count = 0
+    st.hand.held_grasp_xy = None
+    st.arm.at_home_ok = False
+    st.arm.home_misses = 0
+    st.arm.readback_count = 0
 
     def _at_home(joints) -> bool:
         """TAMPURA's at-home test on the 7-joint readback (D7 (v))."""
         return bool(np.allclose(np.asarray(joints, dtype=float),
-                                np.asarray(planner.home_config.joint_positions,
+                                np.asarray(st.setup.planner.home_config.joint_positions,
                                            dtype=float),
                                 rtol=1e-4, atol=1e-4))
 
     def _readback_config(joints, name):
         """A readback configuration; while holding (D7 (iv) on) it carries
         the held body as cargo."""
-        if (held_cargo_resolve and held_body_id is not None
-                and held_grasp_xy is not None):
-            _hbd = registry.get_boxel(body_id_to_name.get(held_body_id))
+        if (held_cargo_resolve and st.hand.held_body_id is not None
+                and st.hand.held_grasp_xy is not None):
+            _hbd = st.setup.registry.get_boxel(st.setup.body_id_to_name.get(st.hand.held_body_id))
             if _hbd is not None:
                 return held_cargo_config(
-                    joints, name, env, held_body_id,
+                    joints, name, env, st.hand.held_body_id,
                     (np.asarray(_hbd.min_corner, dtype=float),
                      np.asarray(_hbd.max_corner, dtype=float)),
-                    held_grasp_xy)
+                    st.hand.held_grasp_xy)
         return RobotConfig(joint_positions=np.asarray(joints), name=name)
 
     if goal_at_home:
         # D7 (v) at the start: the initial configuration is q_home only
         # if the readback passes the at-home test.
-        _q0 = arm_joint_positions(robot_id)
+        _q0 = arm_joint_positions(st.setup.robot_id)
         if not _at_home(_q0):
-            current_config = RobotConfig(joint_positions=_q0,
+            st.arm.current_config = RobotConfig(joint_positions=_q0,
                                          name="q_readback_0")
             print(f"  [D7] initial arm readback is not at q_home "
-                  f"(max |dq| {np.max(np.abs(_q0 - planner.home_config.joint_positions)):.2e} rad)")
+                  f"(max |dq| {np.max(np.abs(_q0 - st.setup.planner.home_config.joint_positions)):.2e} rad)")
 
     def _integrity_after(label: str) -> bool:
         """Run the world-integrity monitor after an executed action and
@@ -1742,14 +1760,13 @@ def main(gui=True, run_logger=None, scene_config=None,
         release observation and replan absorb it.  Returns True when
         the dispatcher should break out of the plan.
         """
-        nonlocal exit_reason, episode_over, target_lost_seen
-        _held_name = (body_id_to_name.get(held_body_id)
-                      if held_body_id is not None else None)
+        _held_name = (st.setup.body_id_to_name.get(st.hand.held_body_id)
+                      if st.hand.held_body_id is not None else None)
         events, _dets, _render = world_integrity_check(
-            env=env, registry=registry, belief=belief, viz=viz,
-            shadows=shadows, occluders=occluders,
-            shadow_occluder_map=shadow_occluder_map,
-            boxel_centers=boxel_centers, on_relations=on_relations,
+            env=env, registry=st.setup.registry, belief=st.setup.belief, viz=st.setup.viz,
+            shadows=st.setup.shadows, occluders=st.setup.occluders,
+            shadow_occluder_map=st.setup.shadow_occluder_map,
+            boxel_centers=st.setup.boxel_centers, on_relations=st.setup.on_relations,
             held_name=_held_name, label=label)
         # Review 2026-09-19: this render is an observation of the whole
         # workspace like the sense render — a body it shows for the
@@ -1758,27 +1775,27 @@ def main(gui=True, run_logger=None, scene_config=None,
         # partly behind the arm in this render is left for a clearer one
         # (round 2: a first registration from a sliver made a wrong box).
         _registered = register_new_detections(
-            env=env, registry=registry, belief=belief, viz=viz,
-            detections=_dets, target_name=target_name, shadows=shadows,
-            occluders=occluders, shadow_occluder_map=shadow_occluder_map,
-            boxel_centers=boxel_centers, boxel_to_pybullet=boxel_to_pybullet,
-            object_body_ids=object_body_ids,
+            env=env, registry=st.setup.registry, belief=st.setup.belief, viz=st.setup.viz,
+            detections=_dets, target_name=st.setup.target_name, shadows=st.setup.shadows,
+            occluders=st.setup.occluders, shadow_occluder_map=st.setup.shadow_occluder_map,
+            boxel_centers=st.setup.boxel_centers, boxel_to_pybullet=st.setup.boxel_to_pybullet,
+            object_body_ids=st.setup.object_body_ids,
             skip_names=frozenset([_held_name] if _held_name else []),
-            render=_render, held_body_id=held_body_id)
+            render=_render, held_body_id=st.hand.held_body_id)
         for e in events:
-            e["plan"] = plan_count
-        integrity_events.extend(events)
+            e["plan"] = st.counts.plan_count
+        st.counts.integrity_events.extend(events)
         if not events and not _registered:
             return False
         # The motion planner's world follows the belief at once (the
         # runtime plan_motion re-solve runs before the next sync): a body
         # registered a moment ago was parked below the table until now.
-        env.sync_to_plan_client(held_body_id=held_body_id, registry=registry)
+        env.sync_to_plan_client(held_body_id=st.hand.held_body_id, registry=st.setup.registry)
         knocked = {e["object"] for e in events if e["kind"] == "knocked_off_table"}
-        critical = knocked & set(planner_target_objects)
+        critical = knocked & set(st.setup.planner_target_objects)
         if critical:
-            exit_reason = "knocked_off_table"
-            episode_over = True
+            st.ending.exit_reason = "knocked_off_table"
+            st.ending.episode_over = True
             print(f"  ERROR: goal-critical object(s) {sorted(critical)} fell "
                   f"off the table after {label} — ending the episode "
                   f"honestly (#P2).")
@@ -1790,21 +1807,21 @@ def main(gui=True, run_logger=None, scene_config=None,
         # stop forcing replans after the third within one plan (the
         # belief is updated regardless, the plan runs on, and the
         # suppression is printed); a registration counts as a change.
-        if {e["object"] for e in events if e["kind"] == "lost"} & set(planner_target_objects):
-            target_lost_seen = True
+        if {e["object"] for e in events if e["kind"] == "lost"} & set(st.setup.planner_target_objects):
+            st.ending.target_lost_seen = True
         _replan = bool(_registered)
         for e in events:
             if e["kind"] == "disturbed":
-                disturbed_counts[e["object"]] = disturbed_counts.get(e["object"], 0) + 1
-                if disturbed_counts[e["object"]] <= 3:
+                st.strikes.disturbed_counts[e["object"]] = st.strikes.disturbed_counts.get(e["object"], 0) + 1
+                if st.strikes.disturbed_counts[e["object"]] <= 3:
                     _replan = True
                 else:
                     print(f"  [integrity] {e['object']} disturbed "
-                          f"{disturbed_counts[e['object']]} times in this plan — "
+                          f"{st.strikes.disturbed_counts[e['object']]} times in this plan — "
                           f"belief updated, no further replan for it this plan")
             else:
                 _replan = True
-        if _replan and held_body_id is None:
+        if _replan and st.hand.held_body_id is None:
             print(f"  belief changed after {label} — replanning "
                   f"(#P2 integrity)")
             return True
@@ -1820,8 +1837,8 @@ def main(gui=True, run_logger=None, scene_config=None,
     # own verified held state (set only by a pad-force-verified pick and
     # cleared on every release/loss path); the belief keeps
     # target_found_in as the record of WHERE the target was found.
-    _target_body_id = (env.objects[target_name].object_id
-                       if goal_kind == 'holding' and target_name in env.objects
+    st.setup._target_body_id = (env.objects[st.setup.target_name].object_id
+                       if goal_kind == 'holding' and st.setup.target_name in env.objects
                        else None)
 
     def _loop_done() -> bool:
@@ -1831,77 +1848,77 @@ def main(gui=True, run_logger=None, scene_config=None,
         # goal test also needs the last move to q_home to have passed
         # the at-home test.
         if goal_kind == 'holding':
-            return (held_body_id is not None
-                    and held_body_id == _target_body_id
-                    and (at_home_ok or not goal_at_home))
-        return goal_satisfied(goal, on_relations)
+            return (st.hand.held_body_id is not None
+                    and st.hand.held_body_id == st.setup._target_body_id
+                    and (st.arm.at_home_ok or not goal_at_home))
+        return goal_satisfied(st.setup.goal, st.setup.on_relations)
 
     while not _loop_done():
-        plan_count += 1
-        disturbed_counts.clear()   # the #P2 disturbance cap is per plan
+        st.counts.plan_count += 1
+        st.strikes.disturbed_counts.clear()   # the #P2 disturbance cap is per plan
         # M7 (Hani, 2026-11-20): a region suspended at the F9 give-up is
         # offered again once its time is up (with --m7 off nothing is
         # suspended).
         with provenance('suspension_over'):
-            for _sid in belief.release_suspended(time.perf_counter()):
+            for _sid in st.setup.belief.release_suspended(time.perf_counter()):
                 print(f"  [M7] {_sid} is back in the search: its "
                       f"{execution.M7_SUSPEND_S:.0f} s suspension at the F9 "
                       f"give-up is over")
-        unknown_shadows = belief.get_unknown_shadows()
+        unknown_shadows = st.setup.belief.get_unknown_shadows()
         # #P1 F15: parked-unresolved fragments are withheld from the
         # planner exactly like eliminated ones (or the episode loops on
         # them forever), but the BELIEF keeps them distinct — they were
         # never observed empty, and the run outcome discloses them.
-        known_empty = (belief.get_known_empty_shadows()
-                       + belief.get_parked_shadows())
+        known_empty = (st.setup.belief.get_known_empty_shadows()
+                       + st.setup.belief.get_parked_shadows())
         # BF#65 (d) (no-op with --interior-regions off): while the target is
         # recorded as seen under a cover, the planner is offered that
         # cover's interior region alone; the other unknown regions are
         # withheld like the parked ones (the belief keeps them unknown).
-        _withheld = interior_regions.withheld(
-            registry, belief, planner_target_objects)
-        known_empty = known_empty + _withheld
+        st.round._withheld = interior_regions.withheld(
+            st.setup.registry, st.setup.belief, st.setup.planner_target_objects)
+        known_empty = known_empty + st.round._withheld
 
         # Giveup parole (2026-08-21): see the pick_giveup_marked_at
         # comment above.  Runs before planner.plan() so the paroled
         # object's grasps are offered again this replan.
-        for _obj, _at in list(pick_giveup_marked_at.items()):
-            if (plan_count - _at >= 4
-                    and _obj in pick_giveup_objects
-                    and pick_parole_counts.get(_obj, 0) < 2):
-                pick_parole_counts[_obj] = \
-                    pick_parole_counts.get(_obj, 0) + 1
-                pick_giveup_objects.discard(_obj)
-                planner.streams.ungraspable_objects.discard(_obj)
-                pick_fail_counts.pop(_obj, None)
-                transit_loss_counts.pop(_obj, None)
-                pick_giveup_marked_at.pop(_obj, None)
+        for _obj, _at in list(st.strikes.pick_giveup_marked_at.items()):
+            if (st.counts.plan_count - _at >= 4
+                    and _obj in st.strikes.pick_giveup_objects
+                    and st.strikes.pick_parole_counts.get(_obj, 0) < 2):
+                st.strikes.pick_parole_counts[_obj] = \
+                    st.strikes.pick_parole_counts.get(_obj, 0) + 1
+                st.strikes.pick_giveup_objects.discard(_obj)
+                st.setup.planner.streams.ungraspable_objects.discard(_obj)
+                st.strikes.pick_fail_counts.pop(_obj, None)
+                st.strikes.transit_loss_counts.pop(_obj, None)
+                st.strikes.pick_giveup_marked_at.pop(_obj, None)
                 print(f"  giveup parole "
-                      f"{pick_parole_counts[_obj]}/2: {_obj} re-enters "
+                      f"{st.strikes.pick_parole_counts[_obj]}/2: {_obj} re-enters "
                       f"the grasp stream after 4 replans (#P1 "
                       f"non-absorbing giveup)")
 
         # M8 C2: an object's observe strikes, removed look pairs and
         # parking reset once it is re-registered or a later detection
         # re-poses it (its box moved by more than 1 mm).
-        if planner.m8_views is not None:
-            for _obj, (_n, _box, _bd0) in list(observe_strikes.items()):
-                _bd = registry.get_boxel(_obj)
+        if st.setup.planner.m8_views is not None:
+            for _obj, (_n, _box, _bd0) in list(st.counts.observe_strikes.items()):
+                _bd = st.setup.registry.get_boxel(_obj)
                 if (_bd is None or _bd is not _bd0 or not np.allclose(
                         np.concatenate([_bd.min_corner, _bd.max_corner]), _box,
                         atol=1e-3)):
-                    observe_strikes.pop(_obj)
-                    planner.m8_views.parked.discard(_obj)
-                    planner.m8_views.removed = {r for r in planner.m8_views.removed
+                    st.counts.observe_strikes.pop(_obj)
+                    st.setup.planner.m8_views.parked.discard(_obj)
+                    st.setup.planner.m8_views.removed = {r for r in st.setup.planner.m8_views.removed
                                                 if r[0] != _obj}
-                    if getattr(planner, 'look_views', None) is not None:
-                        planner.look_views.forget(_obj)
+                    if getattr(st.setup.planner, 'look_views', None) is not None:
+                        st.setup.planner.look_views.forget(_obj)
                     print(f"  [M8] observe strikes of {_obj} reset (re-registered "
                           f"or re-posed)")
 
-        print(f"\n=== PLAN #{plan_count} ===")
+        print(f"\n=== PLAN #{st.counts.plan_count} ===")
         if goal_kind == 'find-and-tray-stack':
-            print(f"Tray-stack progress: {on_relations} "
+            print(f"Tray-stack progress: {st.setup.on_relations} "
                   f"(unknown shadows: {len(unknown_shadows)})")
         elif goal_kind == 'holding':
             print(f"Unknown shadows remaining: {len(unknown_shadows)}")
@@ -1912,20 +1929,20 @@ def main(gui=True, run_logger=None, scene_config=None,
             # ground a direct pick from its OBJECT boxel.  belief.
             # target_found_in stays None until the pick sets it, so the
             # loop keeps going on the registry, not on the belief flag.
-            _target_bd = registry.get_boxel(target_name)
+            _target_bd = st.setup.registry.get_boxel(st.setup.target_name)
             if not unknown_shadows and _target_bd is not None:
                 _tc = _target_bd.center
-                print(f"  no unknown shadows remain, but {target_name} is "
+                print(f"  no unknown shadows remain, but {st.setup.target_name} is "
                       f"registered at [{_tc[0]:.3f},{_tc[1]:.3f},"
                       f"{_tc[2]:.3f}] (seen by an observation) — "
                       f"planning a direct pick (#P1 F20)")
-            elif not unknown_shadows and belief.get_suspended_shadows():
+            elif not unknown_shadows and st.setup.belief.get_suspended_shadows():
                 # M7 (Hani, 2026-11-20): nothing is left to search but
                 # regions suspended at the F9 give-up.  The episode fails
                 # here, without a planner call, and says why.
-                exit_reason = "rediscovery_giveup"
+                st.ending.exit_reason = "rediscovery_giveup"
                 print(f"ERROR: No unknown shadows remain; "
-                      f"{sorted(belief.get_suspended_shadows())} suspended at "
+                      f"{sorted(st.setup.belief.get_suspended_shadows())} suspended at "
                       f"the F9 give-up (M7), not searched; the target may "
                       f"be inside.")
                 break
@@ -1934,19 +1951,19 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # but with the still_blocked 3-strike give-up some of
                 # the shadows below were never observed empty.  The
                 # final FAILED message classifies on blocked_giveup_shadows.
-                exit_reason = "all_searched"
-                if blocked_giveup_shadows:
+                st.ending.exit_reason = "all_searched"
+                if st.strikes.blocked_giveup_shadows:
                     print(f"ERROR: No unknown shadows remain — but "
-                          f"{len(blocked_giveup_shadows)} of "
-                          f"{len(shadows)} were given up after repeated "
+                          f"{len(st.strikes.blocked_giveup_shadows)} of "
+                          f"{len(st.setup.shadows)} were given up after repeated "
                           f"still_blocked outcomes (audit #21), not "
                           f"observed empty.  Target may still be hiding "
-                          f"in: {sorted(blocked_giveup_shadows)}")
+                          f"in: {sorted(st.strikes.blocked_giveup_shadows)}")
                 else:
                     print("ERROR: Searched all shadows but target not found!")
                 break
         else:
-            print(f"Stack progress: {on_relations} (goal {goal})")
+            print(f"Stack progress: {st.setup.on_relations} (goal {st.setup.goal})")
 
         # --- Held-object handling (audit #58) -----------------------------
         # Pre-#58: any held object was unconditionally dropped here so the
@@ -1958,9 +1975,9 @@ def main(gui=True, run_logger=None, scene_config=None,
         # object_in_place stays as a SAFETY NET for the case where the
         # held cube blocks all plans (planner returns None below — see
         # the safety-net branch after planner.plan).
-        held_obj_name: Optional[str] = None
-        if held_body_id is not None:
-            held_obj_name = body_id_to_name.get(held_body_id)
+        st.round.held_obj_name: Optional[str] = None
+        if st.hand.held_body_id is not None:
+            st.round.held_obj_name = st.setup.body_id_to_name.get(st.hand.held_body_id)
 
         # Ensure the free-space partition is consistent before the planner
         # reads the registry (audit #25).  After a place action,
@@ -1968,17 +1985,17 @@ def main(gui=True, run_logger=None, scene_config=None,
         # free boxel is gone but no replacement exists yet.  If a sense
         # action already triggered reboxelization (clearing the flag),
         # this is a no-op — avoiding the double octree+merge cost.
-        if registry.dirty:
-            reboxelize_free_space(registry, env, boxel_centers, viz, show_free)
+        if st.setup.registry.dirty:
+            reboxelize_free_space(st.setup.registry, env, st.setup.boxel_centers, st.setup.viz, show_free)
         # Audit #73 step 2(d) plot 11: snapshot boxel counts post-
         # reboxelize so each entry reflects what THIS planner.plan() will
         # see (not the stale pre-reboxelize partition).
         try:
-            boxel_counts_per_replan.append({
-                "plan_index": plan_count,
-                "n_object_boxels": len(registry.get_object_boxels()),
-                "n_shadow_boxels": len(registry.get_shadow_boxels()),
-                "n_free_space_boxels": len(registry.get_free_space_boxels()),
+            st.counts.boxel_counts_per_replan.append({
+                "plan_index": st.counts.plan_count,
+                "n_object_boxels": len(st.setup.registry.get_object_boxels()),
+                "n_shadow_boxels": len(st.setup.registry.get_shadow_boxels()),
+                "n_free_space_boxels": len(st.setup.registry.get_free_space_boxels()),
             })
         except Exception as e:
             print(f"  WARNING: could not snapshot per-replan boxel counts: {e}")
@@ -1991,14 +2008,14 @@ def main(gui=True, run_logger=None, scene_config=None,
         # `with RenderingLock(env.client_id):` block was the source of the
         # GUI freeze — it's no longer needed.
         # #P1 WP2c: the collision world is posed from the belief.
-        env.sync_to_plan_client(held_body_id=held_body_id, registry=registry)
+        env.sync_to_plan_client(held_body_id=st.hand.held_body_id, registry=st.setup.registry)
         plan_t0 = time.perf_counter()
-        plan = planner.plan(
-            target_objects=planner_target_objects,
-            goal=goal,
-            current_config=current_config,
+        st.round.plan = st.setup.planner.plan(
+            target_objects=st.setup.planner_target_objects,
+            goal=st.setup.goal,
+            current_config=st.arm.current_config,
             known_empty_shadows=known_empty,
-            moved_occluders=dict(belief.occluders_moved),
+            moved_occluders=dict(st.setup.belief.occluders_moved),
             max_time=args.max_plan_time,  # audit #76 — CLI plumb (default
                               # 1800.0, the audit #54 follow-up bump from
                               # 120 s).  Lower values fail fast for
@@ -2006,40 +2023,40 @@ def main(gui=True, run_logger=None, scene_config=None,
                               # 30-min budget that lets the sampler retry
                               # many skeletons / stream samples.
             verbose=(args.log_level == 'verbose'),  # audit #76 plumb
-            visible_target_locations=visible_target_locations,
+            visible_target_locations=st.setup.visible_target_locations,
             # on/clear facts only emitted into init when stackable
             # objects is supplied — holding-goal runs pay nothing.
             # find-and-tray-stack (audit #49) reuses the same plumbing
             # because its goal AST is built from (on ?o ?x) clauses.
-            on_relations=(on_relations
+            on_relations=(st.setup.on_relations
                           if goal_kind in ('stack', 'find-and-tray-stack')
                           else None),
-            stackable_objects=(stack_target_objects
+            stackable_objects=(st.setup.stack_target_objects
                                if goal_kind in ('stack',
                                                 'find-and-tray-stack')
                                else None),
             unit_costs=unit_costs,
             planner=args.planner,    # F30: search weight is a CLI choice
-            held_obj=held_obj_name,  # audit #58 — preserve grasp across replans
+            held_obj=st.round.held_obj_name,  # audit #58 — preserve grasp across replans
         )
         plan_dt = time.perf_counter() - plan_t0
-        if planner.last_m8_stats:
-            m8_per_plan.append(dict(planner.last_m8_stats, plan=plan_count))
-        if planner.last_look_stats:
-            look_per_plan.append(dict(planner.last_look_stats, plan=plan_count))
+        if st.setup.planner.last_m8_stats:
+            st.counts.m8_per_plan.append(dict(st.setup.planner.last_m8_stats, plan=st.counts.plan_count))
+        if st.setup.planner.last_look_stats:
+            st.counts.look_per_plan.append(dict(st.setup.planner.last_look_stats, plan=st.counts.plan_count))
         # #P4 B0: every plan() call and its result go to the run ledger
         # (gates G3, G10, G11).
-        ledger_event('plan', plan_id=plan_count, call='mission', goal=goal,
-                     targets=list(planner_target_objects),
-                     actions=ledger_plan(plan),
-                     plan_obj=(id(plan) if plan is not None else None),
+        ledger_event('plan', plan_id=st.counts.plan_count, call='mission', goal=st.setup.goal,
+                     targets=list(st.setup.planner_target_objects),
+                     actions=ledger_plan(st.round.plan),
+                     plan_obj=(id(st.round.plan) if st.round.plan is not None else None),
                      plan_time_s=plan_dt)
         world_eye.snapshot(
-            f"plan#{plan_count} planned ({'no plan' if plan is None else str(len(plan)) + ' actions'})",
-            registry=registry, belief=belief, plan_count=plan_count,
-            held=held_obj_name, on_relations=on_relations,
-            shadow_occluder_map=shadow_occluder_map,
-            init_facts=planner.last_init, plan=plan,
+            f"plan#{st.counts.plan_count} planned ({'no plan' if st.round.plan is None else str(len(st.round.plan)) + ' actions'})",
+            registry=st.setup.registry, belief=st.setup.belief, plan_count=st.counts.plan_count,
+            held=st.round.held_obj_name, on_relations=st.setup.on_relations,
+            shadow_occluder_map=st.setup.shadow_occluder_map,
+            init_facts=st.setup.planner.last_init, plan=st.round.plan,
             extra={"plan_time_s": round(plan_dt, 2)})
 
         # No-plan-while-holding (2026-08-21, user directive: NEVER
@@ -2056,58 +2073,58 @@ def main(gui=True, run_logger=None, scene_config=None,
         # holding — no drop, ever.  (release_held_object_in_place is
         # kept in execution.py per the dead-code policy but is no
         # longer called from the loop.)
-        if plan is None and held_obj_name is not None:
-            print(f"  no mission plan with {held_obj_name} held — planning "
+        if st.round.plan is None and st.round.held_obj_name is not None:
+            print(f"  no mission plan with {st.round.held_obj_name} held — planning "
                   f"a disposal place instead (audit #58 drop retired "
                   f"2026-08-21).")
             plan_t1 = time.perf_counter()
-            plan = planner.plan(
-                target_objects=planner_target_objects,
+            st.round.plan = st.setup.planner.plan(
+                target_objects=st.setup.planner_target_objects,
                 goal=('handempty',),
-                current_config=current_config,
+                current_config=st.arm.current_config,
                 known_empty_shadows=known_empty,
-                moved_occluders=dict(belief.occluders_moved),
+                moved_occluders=dict(st.setup.belief.occluders_moved),
                 max_time=args.max_plan_time,  # audit #76 plumb
                 verbose=(args.log_level == 'verbose'),  # audit #76 plumb
-                visible_target_locations=visible_target_locations,
-                on_relations=(on_relations
+                visible_target_locations=st.setup.visible_target_locations,
+                on_relations=(st.setup.on_relations
                               if goal_kind in ('stack', 'find-and-tray-stack')
                               else None),
-                stackable_objects=(stack_target_objects
+                stackable_objects=(st.setup.stack_target_objects
                                    if goal_kind in ('stack',
                                                     'find-and-tray-stack')
                                    else None),
                 unit_costs=unit_costs,
                 planner=args.planner,
-                held_obj=held_obj_name,
+                held_obj=st.round.held_obj_name,
             )
             plan_dt += time.perf_counter() - plan_t1
-            ledger_event('plan', plan_id=plan_count, call='disposal',
+            ledger_event('plan', plan_id=st.counts.plan_count, call='disposal',
                          goal=('handempty',),
-                         targets=list(planner_target_objects),
-                         actions=ledger_plan(plan),
-                         plan_obj=(id(plan) if plan is not None else None),
+                         targets=list(st.setup.planner_target_objects),
+                         actions=ledger_plan(st.round.plan),
+                         plan_obj=(id(st.round.plan) if st.round.plan is not None else None),
                          plan_time_s=time.perf_counter() - plan_t1)
-            if plan is None:
-                exit_reason = "no_plan_while_holding"
-                _bd = getattr(planner, 'last_no_plan_binding_death', None)
+            if st.round.plan is None:
+                st.ending.exit_reason = "no_plan_while_holding"
+                _bd = getattr(st.setup.planner, 'last_no_plan_binding_death', None)
                 if _bd:
                     print(f"  note: the disposal no-plan was a #P1 F7 "
                           f"binding death — {_bd['skeletons']} action "
                           f"skeleton(s) existed, stream binding failed "
                           f"(sample_time={_bd['sample_time']:.3f}s; "
                           f"[F7-diag] in the log has the skeleton).")
-                print(f"ERROR: no disposal plan for {held_obj_name} either — "
+                print(f"ERROR: no disposal plan for {st.round.held_obj_name} either — "
                       f"ending the episode honestly while holding (no blind "
                       f"drop; user directive 2026-08-21).")
                 # C-07: the round called the planner twice; count its time.
-                total_plan_time += plan_dt
-                plan_times.append(plan_dt)
+                st.counts.total_plan_time += plan_dt
+                st.counts.plan_times.append(plan_dt)
                 break
-        total_plan_time += plan_dt
-        plan_times.append(plan_dt)
-        print(f"  [timing] planner.plan() #{plan_count}: {plan_dt:.3f}s "
-              f"(cumulative {total_plan_time:.3f}s)")
+        st.counts.total_plan_time += plan_dt
+        st.counts.plan_times.append(plan_dt)
+        print(f"  [timing] planner.plan() #{st.counts.plan_count}: {plan_dt:.3f}s "
+              f"(cumulative {st.counts.total_plan_time:.3f}s)")
 
         if gui:
             env.refresh_debug_camera_views()
@@ -2117,11 +2134,11 @@ def main(gui=True, run_logger=None, scene_config=None,
         # region the target was seen in.  The record ends and the next
         # plan is offered every unknown region; the episode does not end
         # on a restriction the belief never held.
-        if plan is None and held_obj_name is None and _withheld:
-            interior_regions.release(planner_target_objects)
+        if st.round.plan is None and st.round.held_obj_name is None and st.round._withheld:
+            interior_regions.release(st.setup.planner_target_objects)
             continue
 
-        if plan is None:
+        if st.round.plan is None:
             # #P1 F2: classify "pick_giveup" only when a GOAL-CRITICAL
             # object (the holding target / a stack-goal cube) was
             # withdrawn from the grasp stream — then the goal is
@@ -2131,11 +2148,11 @@ def main(gui=True, run_logger=None, scene_config=None,
             # mis-attributed unrelated no-plans to grasping), so those
             # runs keep "planner_failed" with a disclosure line.
             goal_critical_giveups = (
-                pick_giveup_objects & set(planner_target_objects))
-            binding_death = getattr(planner,
+                st.strikes.pick_giveup_objects & set(st.setup.planner_target_objects))
+            binding_death = getattr(st.setup.planner,
                                     'last_no_plan_binding_death', None)
             if goal_critical_giveups:
-                exit_reason = "pick_giveup"
+                st.ending.exit_reason = "pick_giveup"
                 print(f"ERROR: No plan found — goal-critical object(s) "
                       f"marked ungraspable after repeated pick failures: "
                       f"{sorted(goal_critical_giveups)} (#P1 F2 giveup).")
@@ -2146,7 +2163,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # classified instead of folding into the generic
                 # planner_failed bucket.  Root cause (skeleton-queue
                 # scheduling; see the F7 audit entry) is #P2 scope.
-                exit_reason = "no_plan_binding_death"
+                st.ending.exit_reason = "no_plan_binding_death"
                 print(f"ERROR: No plan found — but PDDLStream DID find "
                       f"{binding_death['skeletons']} action skeleton(s) "
                       f"and stream binding failed to deliver values "
@@ -2155,27 +2172,27 @@ def main(gui=True, run_logger=None, scene_config=None,
                       f"#P1 F7 binding-death class.  The last skeleton "
                       f"is in the log ([F7-diag]).")
             else:
-                exit_reason = "planner_failed"
-                if pick_giveup_objects:
+                st.ending.exit_reason = "planner_failed"
+                if st.strikes.pick_giveup_objects:
                     print(f"ERROR: No plan found.  Note: "
-                          f"{len(pick_giveup_objects)} non-goal object(s) "
+                          f"{len(st.strikes.pick_giveup_objects)} non-goal object(s) "
                           f"were earlier withdrawn from the grasp stream "
                           f"after repeated pick failures "
-                          f"({sorted(pick_giveup_objects)}) and may "
+                          f"({sorted(st.strikes.pick_giveup_objects)}) and may "
                           f"contribute (#P1 F2).")
                 else:
                     print("ERROR: No plan found!")
             break
 
-        print(f"Plan: {len(plan)} actions")
-        for i, action in enumerate(plan):
+        print(f"Plan: {len(st.round.plan)} actions")
+        for i, action in enumerate(st.round.plan):
             print(f"  {i+1}. {action[0]}")
 
         # Safety gate: during planning, streams may emit "heuristic"
         # configs (e.g. boxel-center approximations) when no robot_id is
         # available.  These are geometrically reasonable but not IK-valid,
         # so executing them would drive the real arm to arbitrary poses.
-        for action in plan:
+        for action in st.round.plan:
             for param in action[1:]:
                 if isinstance(param, RobotConfig) and param.is_heuristic:
                     raise RuntimeError(
@@ -2189,29 +2206,29 @@ def main(gui=True, run_logger=None, scene_config=None,
         # loop breaks early on two conditions:
         #   • sense reveals new info → replan with updated belief
         #   • IK failure → replan from current config
-        for i, action in enumerate(plan):
+        for i, action in enumerate(st.round.plan):
             action_name = action[0]
             params = action[1:]
             # #P4 B0: the dispatcher context for this step (gate G3).
             # Every exit from the step below closes it with a status.
-            dispatch_begin(plan_count, i + 1, action_name, params,
-                           plan_obj=id(plan))
+            dispatch_begin(st.counts.plan_count, i + 1, action_name, params,
+                           plan_obj=id(st.round.plan))
 
             print(f"\n  Executing: {action_name}")
             world_eye.snapshot(
-                f"plan#{plan_count} before action {i + 1}/{len(plan)} "
+                f"plan#{st.counts.plan_count} before action {i + 1}/{len(st.round.plan)} "
                 f"{action_name}("
                 f"{', '.join(x for x in params if isinstance(x, str))})",
-                registry=registry, belief=belief, plan_count=plan_count,
-                held=(body_id_to_name.get(held_body_id)
-                      if held_body_id is not None else None),
-                on_relations=on_relations,
-                shadow_occluder_map=shadow_occluder_map)
+                registry=st.setup.registry, belief=st.setup.belief, plan_count=st.counts.plan_count,
+                held=(st.setup.body_id_to_name.get(st.hand.held_body_id)
+                      if st.hand.held_body_id is not None else None),
+                on_relations=st.setup.on_relations,
+                shadow_occluder_map=st.setup.shadow_occluder_map)
             # #P4 B3(d), D7 (vi): any action but a sense or an observe
             # (M8 C2: one render, no motion) may move the arm, so the
             # at-home state holds only until the next one.
             if action_name not in ('sense', 'observe', 'look'):
-                at_home_ok = False
+                st.arm.at_home_ok = False
             # #P1 F17: segment the telemetry stream by dispatched action,
             # so every frame, event and summary is attributable to the
             # action that produced it.
@@ -2219,7 +2236,7 @@ def main(gui=True, run_logger=None, scene_config=None,
             # label — configs and trajectories carry numpy arrays whose
             # repr would swamp the line.
             telemetry.phase(
-                f"plan#{plan_count} action {i + 1}/{len(plan)}: "
+                f"plan#{st.counts.plan_count} action {i + 1}/{len(st.round.plan)}: "
                 f"{action_name}("
                 f"{', '.join(x for x in params if isinstance(x, str))})")
 
@@ -2248,30 +2265,30 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # made while holding is re-solved from the readback with
                 # the held body as cargo, whatever the drift, toward the
                 # planned goal configuration.
-                _cargo = held_cargo_resolve and held_body_id is not None
-                if current_config is not None and len(traj.waypoints) > 0:
+                _cargo = held_cargo_resolve and st.hand.held_body_id is not None
+                if st.arm.current_config is not None and len(traj.waypoints) > 0:
                     diff = float(np.linalg.norm(
-                        np.asarray(current_config.joint_positions)
+                        np.asarray(st.arm.current_config.joint_positions)
                         - np.asarray(traj.waypoints[0].joint_positions)))
                     if diff > 1e-2 or _cargo:
                         if _cargo:
                             q1_runtime = _readback_config(
-                                current_config.joint_positions,
-                                f"{current_config.name}_runtime")
+                                st.arm.current_config.joint_positions,
+                                f"{st.arm.current_config.name}_runtime")
                             if not q1_runtime.held_body_ids:
                                 print(f"    WARNING: no estimated box for "
                                       f"the held body; the re-solve runs "
                                       f"without cargo (D7 (iv))")
                         else:
                             q1_runtime = RobotConfig(
-                                joint_positions=np.asarray(current_config.joint_positions),
-                                name=f"{current_config.name}_runtime",
+                                joint_positions=np.asarray(st.arm.current_config.joint_positions),
+                                name=f"{st.arm.current_config.name}_runtime",
                                 ignored_body_ids=q1.ignored_body_ids,
                                 held_body_ids=q1.held_body_ids,
                                 grasp_ee_offset=q1.grasp_ee_offset,
                             )
                         try:
-                            (new_traj,) = next(planner.streams.plan_motion(q1_runtime, q2))
+                            (new_traj,) = next(st.setup.planner.streams.plan_motion(q1_runtime, q2))
                             # print(f"    [#60-fix(i)] replanned motion from runtime pose "
                             #       f"(prior diff={diff:.4f} rad, "
                             #       f"{len(new_traj.waypoints)} waypoints)")
@@ -2295,21 +2312,21 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # BF#59 carry_hold_check: the finger and wrist readback at
                 # the start of a move made while holding (None when the
                 # switch is off or the hand is empty).
-                _carry0 = carry_hold_begin(robot_id, held_body_id)
+                _carry0 = carry_hold_begin(st.setup.robot_id, st.hand.held_body_id)
 
                 # Stream the waypoints (stream_move_waypoints: today's
                 # per-pair stream with the settle at the last one, the
                 # #P1 endpoint hold and the F17 notes; BF#59
                 # carry_trapezoid's one schedule when it is on and a
                 # body is held).
-                stream_move_waypoints(robot_id, traj.waypoints, gui,
-                                      holding=held_body_id is not None)
+                stream_move_waypoints(st.setup.robot_id, traj.waypoints, gui,
+                                      holding=st.hand.held_body_id is not None)
                 # Read the arm's true joint state after motion completes.
                 # Position control can undershoot the IK target; if we
                 # used the planned q2 directly, errors would accumulate
                 # across chained actions and confuse the next replan
                 # (audit #86).
-                if goal_at_home and q2 == planner.home_config:
+                if goal_at_home and q2 == st.setup.planner.home_config:
                     # #P4 B3(d), D7 (vii) and (v): a move to the goal
                     # configuration ends with the final hold (when a cap
                     # is declared), then TAMPURA's at-home test judges the
@@ -2318,16 +2335,16 @@ def main(gui=True, run_logger=None, scene_config=None,
                     _hold_steps = 0
                     if home_hold_step_cap is not None:
                         _, _hold_steps = hold_at_config(
-                            robot_id, planner.home_config.joint_positions,
+                            st.setup.robot_id, st.setup.planner.home_config.joint_positions,
                             int(home_hold_step_cap), gui=gui)
-                    actual_joints = arm_joint_positions(robot_id)
-                    at_home_ok = _at_home(actual_joints)
+                    actual_joints = arm_joint_positions(st.setup.robot_id)
+                    st.arm.at_home_ok = _at_home(actual_joints)
                     _max_err = float(np.max(np.abs(
                         actual_joints - np.asarray(
-                            planner.home_config.joint_positions, dtype=float))))
-                    if at_home_ok:
-                        home_misses = 0
-                        current_config = _readback_config(actual_joints,
+                            st.setup.planner.home_config.joint_positions, dtype=float))))
+                    if st.arm.at_home_ok:
+                        st.arm.home_misses = 0
+                        st.arm.current_config = _readback_config(actual_joints,
                                                           q2.name)
                     else:
                         # M8 C1: q_home is also a sense view spot; a miss
@@ -2336,34 +2353,34 @@ def main(gui=True, run_logger=None, scene_config=None,
                         # final move (the goal move, whichever boxel names
                         # q_home), not for a move made to sense from there.
                         if (dest_boxel_id == HOME_PSEUDO_BOXEL
-                                or i == len(plan) - 1):
-                            home_misses += 1
-                        readback_count += 1
-                        current_config = _readback_config(
-                            actual_joints, f"q_readback_{readback_count}")
-                    ledger_event('at_home_test', passed=at_home_ok,
+                                or i == len(st.round.plan) - 1):
+                            st.arm.home_misses += 1
+                        st.arm.readback_count += 1
+                        st.arm.current_config = _readback_config(
+                            actual_joints, f"q_readback_{st.arm.readback_count}")
+                    ledger_event('at_home_test', passed=st.arm.at_home_ok,
                                  max_abs_err=_max_err, hold_steps=_hold_steps,
-                                 consecutive_misses=home_misses,
-                                 config=current_config.name)
+                                 consecutive_misses=st.arm.home_misses,
+                                 config=st.arm.current_config.name)
                     print(f"    [D7] at-home test "
-                          f"{'passed' if at_home_ok else 'FAILED'}: max "
+                          f"{'passed' if st.arm.at_home_ok else 'FAILED'}: max "
                           f"|dq| {_max_err:.2e} rad after a {_hold_steps}-step "
-                          f"hold (config {current_config.name})")
+                          f"hold (config {st.arm.current_config.name})")
                 else:
                     actual_joints = np.array(
-                        [p.getJointState(robot_id, i)[0] for i in robot_model().arm_joints]
+                        [p.getJointState(st.setup.robot_id, i)[0] for i in robot_model().arm_joints]
                     )
-                    current_config = _readback_config(actual_joints, q2.name)
+                    st.arm.current_config = _readback_config(actual_joints, q2.name)
                 detect_execution_collisions(
-                    robot_id, env.client_id,
-                    held_body_id=held_body_id,
-                    support_body_ids=support_body_ids,
+                    st.setup.robot_id, env.client_id,
+                    held_body_id=st.hand.held_body_id,
+                    support_body_ids=st.setup.support_body_ids,
                     label=f"move to {dest_boxel_id}",
-                    body_names=body_id_to_name)
+                    body_names=st.setup.body_id_to_name)
                 print(f"    -> Arrived at {dest_boxel_id}")
-                if goal_at_home and home_misses >= 2:
-                    exit_reason = "home_not_reached"
-                    episode_over = True
+                if goal_at_home and st.arm.home_misses >= 2:
+                    st.ending.exit_reason = "home_not_reached"
+                    st.ending.episode_over = True
                     print(f"ERROR: two consecutive planned moves to q_home "
                           f"left TAMPURA's at-home test false; ending the "
                           f"episode (home_not_reached, D7 (vi)).")
@@ -2381,50 +2398,50 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # losses the die ended outside W, so that replan mostly
                 # ends as target_lost (reviews/loss_dynamics.md).
                 _carry = carry_hold_end(
-                    robot_id, held_body_id, _carry0,
-                    body_id_to_name.get(held_body_id), dest_boxel_id, gui)
+                    st.setup.robot_id, st.hand.held_body_id, _carry0,
+                    st.setup.body_id_to_name.get(st.hand.held_body_id), dest_boxel_id, gui)
                 if _carry is not None and not _carry.held:
-                    _lost_obj = body_id_to_name.get(held_body_id,
-                                                    str(held_body_id))
-                    transit_loss_counts[_lost_obj] = \
-                        transit_loss_counts.get(_lost_obj, 0) + 1
-                    print(f"    transit loss {transit_loss_counts[_lost_obj]}"
+                    _lost_obj = st.setup.body_id_to_name.get(st.hand.held_body_id,
+                                                    str(st.hand.held_body_id))
+                    st.strikes.transit_loss_counts[_lost_obj] = \
+                        st.strikes.transit_loss_counts.get(_lost_obj, 0) + 1
+                    print(f"    transit loss {st.strikes.transit_loss_counts[_lost_obj]}"
                           f"/3 for {_lost_obj} (review-fix strike counter)")
-                    if (transit_loss_counts[_lost_obj] >= 3
-                            and _lost_obj not in pick_giveup_objects):
+                    if (st.strikes.transit_loss_counts[_lost_obj] >= 3
+                            and _lost_obj not in st.strikes.pick_giveup_objects):
                         print(f"    ERROR: {_lost_obj} lost in transit "
-                              f"{transit_loss_counts[_lost_obj]} times, "
+                              f"{st.strikes.transit_loss_counts[_lost_obj]} times, "
                               f"giving up on grasping it (#P1 F2 giveup, "
                               f"transit edition).")
-                        pick_giveup_objects.add(_lost_obj)
-                        planner.streams.ungraspable_objects.add(_lost_obj)
-                        pick_giveup_marked_at[_lost_obj] = plan_count
-                    held_body_id = None
-                    held_object_boxel_id = None
+                        st.strikes.pick_giveup_objects.add(_lost_obj)
+                        st.setup.planner.streams.ungraspable_objects.add(_lost_obj)
+                        st.strikes.pick_giveup_marked_at[_lost_obj] = st.counts.plan_count
+                    st.hand.held_body_id = None
+                    st.hand.held_object_boxel_id = None
                     # The readback just taken carried the lost body as
                     # cargo; the same readback without it (the hand is
                     # empty now) starts the next plan.
-                    current_config = _readback_config(
-                        current_config.joint_positions, current_config.name)
+                    st.arm.current_config = _readback_config(
+                        st.arm.current_config.joint_positions, st.arm.current_config.name)
                     audit_robot_held_state(
-                        env, robot_id, expected_held_body_id=None,
+                        env, st.setup.robot_id, expected_held_body_id=None,
                         tag=f"post-carry-loss:{_lost_obj}")
                     env.update_object_positions()
                     # M8 A: lost in transit, its pose is unknown.
-                    pose_belief.mark_pose_unknown(registry.get_boxel(_lost_obj))
-                    _lost = refresh_object_aabbs(env, registry, viz=viz,
+                    pose_belief.mark_pose_unknown(st.setup.registry.get_boxel(_lost_obj))
+                    _lost = refresh_object_aabbs(env, st.setup.registry, viz=st.setup.viz,
                                                  check_lost=True)
                     if _lost:
                         retire_lost_objects(
-                            _lost, registry, viz, shadows,
-                            shadow_occluder_map, boxel_centers,
-                            occluders, belief, env=env)
+                            _lost, st.setup.registry, st.setup.viz, st.setup.shadows,
+                            st.setup.shadow_occluder_map, st.setup.boxel_centers,
+                            st.setup.occluders, st.setup.belief, env=env)
                     dispatch_end('empty_hand')
                     break
                 # #P2 (a): a transit is the action that most often
                 # disturbs bystanders (F18, F10) and nothing re-read the
                 # scene after it until now.
-                if _integrity_after(f"plan#{plan_count} move({dest_boxel_id})"):
+                if _integrity_after(f"plan#{st.counts.plan_count} move({dest_boxel_id})"):
                     dispatch_end('integrity_replan')
                     break
 
@@ -2432,7 +2449,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # Audit #73 step 3(c) plot 4: count every attempted
                 # sense action (any outcome — found_target, empty,
                 # contains_nontarget, still_blocked, missing_shadow).
-                sense_count += 1
+                st.counts.sense_count += 1
                 # See pipeline_actions.handle_sense_action for the full
                 # body.  When result.continue_ is False the dispatch
                 # loop breaks → outer replan loop drops any held object
@@ -2440,22 +2457,22 @@ def main(gui=True, run_logger=None, scene_config=None,
                 sense_result = handle_sense_action(
                     action_params=params,
                     env=env,
-                    registry=registry,
-                    belief=belief,
-                    viz=viz,
-                    target_name=target_name,
-                    robot_id=robot_id,
-                    support_body_ids=support_body_ids,
-                    shadows=shadows,
-                    occluders=occluders,
-                    shadow_occluder_map=shadow_occluder_map,
-                    blocked_counts=blocked_counts,
-                    blocked_giveup_shadows=blocked_giveup_shadows,
-                    nontarget_rediscovery_counts=nontarget_rediscovery_counts,
-                    boxel_centers=boxel_centers,
-                    boxel_to_pybullet=boxel_to_pybullet,
-                    object_body_ids=object_body_ids,
-                    body_id_to_name=body_id_to_name,
+                    registry=st.setup.registry,
+                    belief=st.setup.belief,
+                    viz=st.setup.viz,
+                    target_name=st.setup.target_name,
+                    robot_id=st.setup.robot_id,
+                    support_body_ids=st.setup.support_body_ids,
+                    shadows=st.setup.shadows,
+                    occluders=st.setup.occluders,
+                    shadow_occluder_map=st.setup.shadow_occluder_map,
+                    blocked_counts=st.strikes.blocked_counts,
+                    blocked_giveup_shadows=st.strikes.blocked_giveup_shadows,
+                    nontarget_rediscovery_counts=st.strikes.nontarget_rediscovery_counts,
+                    boxel_centers=st.setup.boxel_centers,
+                    boxel_to_pybullet=st.setup.boxel_to_pybullet,
+                    object_body_ids=st.setup.object_body_ids,
+                    body_id_to_name=st.setup.body_id_to_name,
                     show_free=show_free,
                 )
                 ledger_event('sense_result', reason=sense_result.reason,
@@ -2469,41 +2486,41 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # configuration re-poses the registered objects it shows
                 # completely; every observe forces a replan.
                 obj_str, look_q = str(params[0]), params[1]
-                observe_count += 1
+                st.counts.observe_count += 1
                 status, lost = handle_observe_action(
-                    env=env, registry=registry, viz=viz, obj=obj_str,
-                    robot_id=robot_id,
+                    env=env, registry=st.setup.registry, viz=st.setup.viz, obj=obj_str,
+                    robot_id=st.setup.robot_id,
                     pose_known=lambda bd: pose_belief.pose_known(
                         bd, robot_model().finger_limits[0][1],
-                        planner.streams.GRASP_MAX_SPAN,
-                        planner.streams.GRASP_SQUARE_TOL))
+                        st.setup.planner.streams.GRASP_MAX_SPAN,
+                        st.setup.planner.streams.GRASP_SQUARE_TOL))
                 if lost:
                     # Not seen at all and its region renders empty: the
                     # lost path, exactly as after a sense; no strike.
-                    retire_lost_objects([obj_str], registry, viz, shadows,
-                                        shadow_occluder_map, boxel_centers,
-                                        occluders, belief, env=env)
-                    if obj_str in planner_target_objects:
-                        target_lost_seen = True
+                    retire_lost_objects([obj_str], st.setup.registry, st.setup.viz, st.setup.shadows,
+                                        st.setup.shadow_occluder_map, st.setup.boxel_centers,
+                                        st.setup.occluders, st.setup.belief, env=env)
+                    if obj_str in st.setup.planner_target_objects:
+                        st.ending.target_lost_seen = True
                 elif (status == 'observe_incomplete'
-                      and registry.get_boxel(obj_str) is not None):
-                    _bd = registry.get_boxel(obj_str)
+                      and st.setup.registry.get_boxel(obj_str) is not None):
+                    _bd = st.setup.registry.get_boxel(obj_str)
                     _k = observe_views.look_index(look_q.name, obj_str)
-                    planner.m8_views.removed.add((obj_str, _k))
-                    _n = observe_strikes.get(obj_str, (0,))[0] + 1
-                    observe_strikes[obj_str] = (
+                    st.setup.planner.m8_views.removed.add((obj_str, _k))
+                    _n = st.counts.observe_strikes.get(obj_str, (0,))[0] + 1
+                    st.counts.observe_strikes[obj_str] = (
                         _n, np.concatenate([_bd.min_corner, _bd.max_corner]), _bd)
                     _left = (len(observe_views.LOOK_STANDOFFS)
                              * len(observe_views.LOOK_WRIST_YAWS)
-                             - sum(1 for r in planner.m8_views.removed
+                             - sum(1 for r in st.setup.planner.m8_views.removed
                                    if r[0] == obj_str))
                     if _n >= 3 or _left <= 0:
-                        planner.m8_views.parked.add(obj_str)
+                        st.setup.planner.m8_views.parked.add(obj_str)
                     print(f"    [M8] observe strike {_n}/3 for {obj_str}; look "
                           f"{look_q.name} removed"
-                          f"{'; PARKED (no look configurations)' if obj_str in planner.m8_views.parked else ''}")
+                          f"{'; PARKED (no look configurations)' if obj_str in st.setup.planner.m8_views.parked else ''}")
                 else:
-                    observe_strikes.pop(obj_str, None)
+                    st.counts.observe_strikes.pop(obj_str, None)
                 ledger_event('observe_result', obj=obj_str, status=status,
                              lost=lost, config=look_q.name)
                 dispatch_end(status)
@@ -2516,32 +2533,32 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # nothing else (look_action.LOOK_SPEC); the strikes are this
                 # loop's rules.  The plan goes on when the unconditional
                 # effects hold in the belief, else the loop replans.
-                look_count += 1
+                st.counts.look_count += 1
                 obj_str = str(params[0])
-                look_q = params[2] if look_mode == 'centred' else params[3]
-                if look_mode == 'centred':
+                look_q = params[2] if st.setup.look_mode == 'centred' else params[3]
+                if st.setup.look_mode == 'centred':
                     _named = [str(params[1])]      # the plan names one hypothesis
                 else:
-                    _named = [str(f[2]) for f in planner.last_init
+                    _named = [str(f[2]) for f in st.setup.planner.last_init
                               if f[0] == 'reveals'
                               and getattr(f[1], 'name', f[1]) == look_q.name]
                 look_result = handle_look_action(
                     action_params=params, named=_named, env=env,
-                    registry=registry, belief=belief, viz=viz,
-                    robot_id=robot_id, held_body_id=held_body_id,
-                    support_body_ids=support_body_ids, shadows=shadows,
-                    occluders=occluders,
-                    shadow_occluder_map=shadow_occluder_map,
-                    blocked_counts=blocked_counts,
-                    blocked_giveup_shadows=blocked_giveup_shadows,
-                    boxel_centers=boxel_centers,
-                    boxel_to_pybullet=boxel_to_pybullet,
-                    object_body_ids=object_body_ids,
+                    registry=st.setup.registry, belief=st.setup.belief, viz=st.setup.viz,
+                    robot_id=st.setup.robot_id, held_body_id=st.hand.held_body_id,
+                    support_body_ids=st.setup.support_body_ids, shadows=st.setup.shadows,
+                    occluders=st.setup.occluders,
+                    shadow_occluder_map=st.setup.shadow_occluder_map,
+                    blocked_counts=st.strikes.blocked_counts,
+                    blocked_giveup_shadows=st.strikes.blocked_giveup_shadows,
+                    boxel_centers=st.setup.boxel_centers,
+                    boxel_to_pybullet=st.setup.boxel_to_pybullet,
+                    object_body_ids=st.setup.object_body_ids,
                     pose_known=lambda bd: pose_belief.pose_known(
                         bd, robot_model().finger_limits[0][1],
-                        planner.streams.GRASP_MAX_SPAN,
-                        planner.streams.GRASP_SQUARE_TOL),
-                    target_name=target_name, mode=look_mode)
+                        st.setup.planner.streams.GRASP_MAX_SPAN,
+                        st.setup.planner.streams.GRASP_SQUARE_TOL),
+                    target_name=st.setup.target_name, mode=st.setup.look_mode)
                 ledger_event('look_reveals', config=look_q.name, named=_named)
                 ledger_event('look_result', reason=look_result.reason,
                              continue_=look_result.continue_, obj=obj_str,
@@ -2557,13 +2574,13 @@ def main(gui=True, run_logger=None, scene_config=None,
                     dispatch_end('stale_precondition')
                     break
                 if not look_result.continue_:
-                    _bd = registry.get_boxel(obj_str)
+                    _bd = st.setup.registry.get_boxel(obj_str)
                     if (look_result.reason == 'look_pose_incomplete'
                             and _bd is not None):
                         # The observe bound's rule: three looks that do not
                         # give the pose park the object until its box moves.
-                        _n = observe_strikes.get(obj_str, (0,))[0] + 1
-                        observe_strikes[obj_str] = (
+                        _n = st.counts.observe_strikes.get(obj_str, (0,))[0] + 1
+                        st.counts.observe_strikes[obj_str] = (
                             _n, np.concatenate([_bd.min_corner, _bd.max_corner]), _bd)
                         # The centred look's configurations are the tag's
                         # observe ones: a look that did not give the pose
@@ -2571,26 +2588,26 @@ def main(gui=True, run_logger=None, scene_config=None,
                         # look's configurations have other names: no index).
                         _k = observe_views.look_index(look_q.name, obj_str)
                         if _k is not None:
-                            planner.m8_views.removed.add((obj_str, _k))
-                        elif (look_mode == 'boxel'
-                              and planner.look_views is not None):
+                            st.setup.planner.m8_views.removed.add((obj_str, _k))
+                        elif (st.setup.look_mode == 'boxel'
+                              and st.setup.planner.look_views is not None):
                             # The boxel look's counterpart (PLAN.md 11.13):
                             # the view whose image did not give the pose no
                             # longer counts as revealing this body.
-                            planner.look_views.refute(
+                            st.setup.planner.look_views.refute(
                                 obj_str, look_q.joint_positions)
                             print(f"    [look] the view from {look_q.name} is "
                                   f"withdrawn for {obj_str}")
                         _left = (len(observe_views.LOOK_STANDOFFS)
                                  * len(observe_views.LOOK_WRIST_YAWS)
-                                 - sum(1 for r in planner.m8_views.removed
+                                 - sum(1 for r in st.setup.planner.m8_views.removed
                                        if r[0] == obj_str))
                         _park = _n >= 3 or (_k is not None and _left <= 0)
                         if _park:
-                            planner.m8_views.parked.add(obj_str)
+                            st.setup.planner.m8_views.parked.add(obj_str)
                         print(f"    [look] pose strike {_n}/3 for {obj_str}"
                               f"{'; PARKED' if _park else ''}")
-                    elif (look_mode == 'centred'
+                    elif (st.setup.look_mode == 'centred'
                           and look_result.reason == 'look_blocked'):
                         # The render still hid part of ?h (the twin said all of
                         # it was in view): that configuration leaves the facts,
@@ -2599,12 +2616,12 @@ def main(gui=True, run_logger=None, scene_config=None,
                         # (the handler's strike rule).
                         _k = observe_views.look_index(look_q.name, str(params[1]))
                         if _k is not None:
-                            planner.m8_views.removed.add((str(params[1]), _k))
+                            st.setup.planner.m8_views.removed.add((str(params[1]), _k))
                             print(f"    [look] centred view {look_q.name} left "
                                   f"{params[1]} blocked: configuration removed")
                     dispatch_end('look_outcome')
                     break
-                observe_strikes.pop(obj_str, None)
+                st.counts.observe_strikes.pop(obj_str, None)
                 # Q5 (Hani's decision, tracks/look/Q4_Q6_CHECK.md): a look
                 # whose image registered a body the belief did not hold (M-1)
                 # ends the plan for a replan, as _integrity_after does for
@@ -2636,8 +2653,8 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # have cleared this, but a fresh planner skeleton can in
                 # principle chain pick→pick without an intervening place;
                 # double-grasping would silently pinch two bodies.
-                if held_body_id is not None:
-                    held_name = body_id_to_name.get(held_body_id, str(held_body_id))
+                if st.hand.held_body_id is not None:
+                    held_name = st.setup.body_id_to_name.get(st.hand.held_body_id, str(st.hand.held_body_id))
                     print(f"    ERROR: Cannot pick {obj_str} — gripper already "
                           f"holds {held_name}. Replanning.")
                     dispatch_end('stale_precondition')
@@ -2646,10 +2663,10 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # Resolve symbolic name → PyBullet object.  The target
                 # isn't in boxel_to_pybullet (it's hidden), so we
                 # handle it as a special case.
-                if obj_str in boxel_to_pybullet:
-                    pick_obj_name = boxel_to_pybullet[obj_str]['name']
-                elif obj_str == target_name:
-                    pick_obj_name = target_name
+                if obj_str in st.setup.boxel_to_pybullet:
+                    pick_obj_name = st.setup.boxel_to_pybullet[obj_str]['name']
+                elif obj_str == st.setup.target_name:
+                    pick_obj_name = st.setup.target_name
                 else:
                     print(f"    ERROR: Cannot resolve PyBullet object for '{obj_str}'")
                     dispatch_end('stale_precondition')
@@ -2661,7 +2678,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # audit #76), so a missing boxel means the planner acted
                 # on a stale fact — say so and replan instead of reading
                 # the simulator.
-                _pick_bd = registry.get_boxel(obj_str)
+                _pick_bd = st.setup.registry.get_boxel(obj_str)
                 if _pick_bd is None:
                     print(f"    ERROR: no registry estimate for {obj_str} — "
                           f"the pick was grounded on a fact the belief no "
@@ -2674,8 +2691,8 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # margin): replan, which observes first.
                 if pose_belief.SWITCHES['M8'] and not pose_belief.pose_known(
                         _pick_bd, robot_model().finger_limits[0][1],
-                        planner.streams.GRASP_MAX_SPAN,
-                        planner.streams.GRASP_SQUARE_TOL):
+                        st.setup.planner.streams.GRASP_MAX_SPAN,
+                        st.setup.planner.streams.GRASP_SQUARE_TOL):
                     print(f"    [M8] {obj_str} pose_radius "
                           f"{_pick_bd.pose_radius * 1e3:.2f} mm is outside its "
                           f"commit margin — the pick's obj_pose_known no longer "
@@ -2687,7 +2704,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                              np.asarray(_pick_bd.max_corner, dtype=float).copy())
 
                 result = execute_pick(
-                    robot_id, env, pick_obj_name, pick_pos,
+                    st.setup.robot_id, env, pick_obj_name, pick_pos,
                     grasp, config, gui, obj_aabb=pick_aabb, pose=_pick_bd)
                 if result[0] is None:
                     print(f"    IK or grip failure during pick — replanning "
@@ -2700,23 +2717,23 @@ def main(gui=True, run_logger=None, scene_config=None,
                     # reports no plan (classified as pick_giveup below)
                     # instead of regenerating the identical miss
                     # forever.
-                    pick_fail_counts[obj_str] = \
-                        pick_fail_counts.get(obj_str, 0) + 1
-                    print(f"    pick failure {pick_fail_counts[obj_str]}/3 "
+                    st.strikes.pick_fail_counts[obj_str] = \
+                        st.strikes.pick_fail_counts.get(obj_str, 0) + 1
+                    print(f"    pick failure {st.strikes.pick_fail_counts[obj_str]}/3 "
                           f"for {obj_str} (#P1 F2 strike counter)")
-                    if (pick_fail_counts[obj_str] >= 3
-                            and obj_str not in pick_giveup_objects):
+                    if (st.strikes.pick_fail_counts[obj_str] >= 3
+                            and obj_str not in st.strikes.pick_giveup_objects):
                         print(f"    ERROR: {obj_str} failed "
-                              f"{pick_fail_counts[obj_str]} pick attempts "
+                              f"{st.strikes.pick_fail_counts[obj_str]} pick attempts "
                               f"— giving up on grasping it (#P1 F2, "
                               f"mirrors audit #21).  Object is NOT "
                               f"picked; marking it ungraspable so the "
                               f"planner stops re-attempting.  Real "
                               f"remedy: the shape-aware grasp sampler "
                               f"(#P1 step (4)).")
-                        pick_giveup_objects.add(obj_str)
-                        planner.streams.ungraspable_objects.add(obj_str)
-                        pick_giveup_marked_at[obj_str] = plan_count
+                        st.strikes.pick_giveup_objects.add(obj_str)
+                        st.setup.planner.streams.ungraspable_objects.add(obj_str)
+                        st.strikes.pick_giveup_marked_at[obj_str] = st.counts.plan_count
                     # #P1: a failed grasp attempt can shove or topple
                     # the object (the descent or close physically
                     # touched it).  Refresh every OBJECT boxel from
@@ -2729,49 +2746,49 @@ def main(gui=True, run_logger=None, scene_config=None,
                     env.update_object_positions()
                     # #P1 step (3c): hand is empty here — also check
                     # for objects whose believed region renders empty.
-                    _lost = refresh_object_aabbs(env, registry, viz=viz,
+                    _lost = refresh_object_aabbs(env, st.setup.registry, viz=st.setup.viz,
                                                  check_lost=True)
                     if _lost:
                         retire_lost_objects(
-                            _lost, registry, viz, shadows,
-                            shadow_occluder_map, boxel_centers,
-                            occluders, belief, env=env)
+                            _lost, st.setup.registry, st.setup.viz, st.setup.shadows,
+                            st.setup.shadow_occluder_map, st.setup.boxel_centers,
+                            st.setup.occluders, st.setup.belief, env=env)
                     # M10 (PLAN_P4_POSE_GRASP_SAMPLERS.md E): every body
                     # the pads touched, bystanders too, has an unknown
                     # pose until a complete detection says otherwise
                     # (set after the refresh, which cannot undo it).
                     for _tn in sorted(result.touched):
-                        _tb = registry.get_boxel(_tn)
+                        _tb = st.setup.registry.get_boxel(_tn)
                         if _tb is not None:
                             _tb.pose_radius = float('inf')
                             print(f"    [M10] {_tn} touched by the pads in the "
                                   f"failed pick — pose unknown")
                     dispatch_end('pick_failure')
                     break
-                held_body_id, current_config = result.held_body_id, result.config
+                st.hand.held_body_id, st.arm.current_config = result.held_body_id, result.config
                 # #P4 B3(d), D7 (iv): the cargo offset in xy is the plan's
                 # grasp; the post-pick readback carries the held body.
-                held_grasp_xy = np.array(grasp.position[:2], dtype=float)
-                current_config = _readback_config(
-                    current_config.joint_positions, current_config.name)
+                st.hand.held_grasp_xy = np.array(grasp.position[:2], dtype=float)
+                st.arm.current_config = _readback_config(
+                    st.arm.current_config.joint_positions, st.arm.current_config.name)
                 # #P1 F2: a successful pick proves the object is
                 # graspable from its current pose — reset its strike
                 # counter so unrelated later failures start fresh.
-                pick_fail_counts.pop(obj_str, None)
+                st.strikes.pick_fail_counts.pop(obj_str, None)
                 # Track the registry boxel ID corresponding to the held
                 # body so the emergency-drop path can relocate the right
                 # OBJECT boxel if we have to release mid-plan.
-                held_object_boxel_id = obj_str if obj_str in boxel_to_pybullet else None
+                st.hand.held_object_boxel_id = obj_str if obj_str in st.setup.boxel_to_pybullet else None
                 detect_execution_collisions(
-                    robot_id, env.client_id,
-                    held_body_id=held_body_id,
-                    support_body_ids=support_body_ids,
+                    st.setup.robot_id, env.client_id,
+                    held_body_id=st.hand.held_body_id,
+                    support_body_ids=st.setup.support_body_ids,
                     label=f"after pick {pick_obj_name}",
-                    body_names=body_id_to_name)
+                    body_names=st.setup.body_id_to_name)
                 print(f"    *** {pick_obj_name} PICKED UP! ***")
                 # #P2 (a): the descent and the lift can shove neighbours;
                 # the held object is excluded (F26).
-                if _integrity_after(f"plan#{plan_count} pick({pick_obj_name})"):
+                if _integrity_after(f"plan#{st.counts.plan_count} pick({pick_obj_name})"):
                     dispatch_end('integrity_replan')
                     break
                 # Audit #48: clear the symbolic stack relation so the next
@@ -2779,10 +2796,10 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # while also asserting (holding obj_str).  Mirrors the PDDL
                 # pick conditional effect (forall ?x: when (on ?o ?x) then
                 # not (on ?o ?x)).  No-op when obj_str was on the table.
-                on_relations.pop(obj_str, None)
-                if pick_obj_name == target_name:
-                    belief.target_found_in = visible_target_locations.get(
-                        target_name, "picked")
+                st.setup.on_relations.pop(obj_str, None)
+                if pick_obj_name == st.setup.target_name:
+                    st.setup.belief.target_found_in = st.setup.visible_target_locations.get(
+                        st.setup.target_name, "picked")
 
             elif action_name in ('place', 'place_hiding'):
                 # F31: place_hiding is the same placement at cost 3 (it
@@ -2801,20 +2818,20 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # Resolve destination: prefer boxel center (for free-space
                 # targets); fall back to the object's recorded position
                 # (for placing onto another object's boxel).
-                if boxel_id_str in boxel_centers:
-                    place_pos = boxel_centers[boxel_id_str]
-                elif registry.get_boxel(boxel_id_str) is not None:
+                if boxel_id_str in st.setup.boxel_centers:
+                    place_pos = st.setup.boxel_centers[boxel_id_str]
+                elif st.setup.registry.get_boxel(boxel_id_str) is not None:
                     # #P1 WP2b: the registry estimate, not the spawn-time
                     # simulator position boxel_to_pybullet carries.
                     place_pos = np.asarray(
-                        registry.get_boxel(boxel_id_str).center, dtype=float)
+                        st.setup.registry.get_boxel(boxel_id_str).center, dtype=float)
                 else:
                     print(f"    ERROR: Cannot resolve position for boxel '{boxel_id_str}'")
                     dispatch_end('stale_precondition')
                     break
                 # #P4 B0 gate G4: the commanded destination against the
                 # planned boxel's registry centre.
-                _planned_bd = registry.get_boxel(boxel_id_str)
+                _planned_bd = st.setup.registry.get_boxel(boxel_id_str)
                 ledger_event(
                     'place_target', boxel=boxel_id_str,
                     target_xy=np.asarray(place_pos, dtype=float)[:2],
@@ -2825,7 +2842,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                     # #P1 WP2b: the held object's estimated box (registry,
                     # rigid size; it survives the pick) gives the release
                     # height — no simulator read.
-                    _held_bd = registry.get_boxel(obj_str)
+                    _held_bd = st.setup.registry.get_boxel(obj_str)
                     if _held_bd is None:
                         print(f"    ERROR: no registry estimate for the held "
                               f"{obj_str} — cannot size the release; "
@@ -2833,8 +2850,8 @@ def main(gui=True, run_logger=None, scene_config=None,
                         dispatch_end('stale_precondition')
                         break
                     place_result = execute_place(
-                        robot_id, env, obj_str, place_pos, grasp, config,
-                        held_body_id, gui,
+                        st.setup.robot_id, env, obj_str, place_pos, grasp, config,
+                        st.hand.held_body_id, gui,
                         held_aabb=(np.asarray(_held_bd.min_corner, dtype=float).copy(),
                                    np.asarray(_held_bd.max_corner, dtype=float).copy()))
                 except EmptyHandError:
@@ -2846,39 +2863,39 @@ def main(gui=True, run_logger=None, scene_config=None,
                     # boxels from live PyBullet, and replan.
                     print(f"    empty hand at place entry for {obj_str}; "
                           f"clearing held state and replanning (#P1 F1).")
-                    transit_loss_counts[obj_str] = \
-                        transit_loss_counts.get(obj_str, 0) + 1
-                    print(f"    transit loss {transit_loss_counts[obj_str]}"
+                    st.strikes.transit_loss_counts[obj_str] = \
+                        st.strikes.transit_loss_counts.get(obj_str, 0) + 1
+                    print(f"    transit loss {st.strikes.transit_loss_counts[obj_str]}"
                           f"/3 for {obj_str} (review-fix strike counter)")
-                    if (transit_loss_counts[obj_str] >= 3
-                            and obj_str not in pick_giveup_objects):
+                    if (st.strikes.transit_loss_counts[obj_str] >= 3
+                            and obj_str not in st.strikes.pick_giveup_objects):
                         print(f"    ERROR: {obj_str} lost in transit "
-                              f"{transit_loss_counts[obj_str]} times — "
+                              f"{st.strikes.transit_loss_counts[obj_str]} times — "
                               f"giving up on grasping it (#P1 F2 giveup, "
                               f"transit edition).")
-                        pick_giveup_objects.add(obj_str)
-                        planner.streams.ungraspable_objects.add(obj_str)
-                        pick_giveup_marked_at[obj_str] = plan_count
-                    held_body_id = None
-                    held_object_boxel_id = None
+                        st.strikes.pick_giveup_objects.add(obj_str)
+                        st.setup.planner.streams.ungraspable_objects.add(obj_str)
+                        st.strikes.pick_giveup_marked_at[obj_str] = st.counts.plan_count
+                    st.hand.held_body_id = None
+                    st.hand.held_object_boxel_id = None
                     audit_robot_held_state(
-                        env, robot_id, expected_held_body_id=None,
+                        env, st.setup.robot_id, expected_held_body_id=None,
                         tag=f"post-empty-hand-place:{obj_str}")
                     env.update_object_positions()
                     # M8 A: lost in transit, its pose is unknown.
-                    pose_belief.mark_pose_unknown(registry.get_boxel(obj_str))
+                    pose_belief.mark_pose_unknown(st.setup.registry.get_boxel(obj_str))
                     # #P1 step (3c): a transit-slipped object that fell
                     # somewhere visible is re-posed by the refresh; one
                     # that fell OFF the table (or out of view) leaves
                     # its believed region rendering empty — retire it
                     # instead of re-picking a stale fiction.
-                    _lost = refresh_object_aabbs(env, registry, viz=viz,
+                    _lost = refresh_object_aabbs(env, st.setup.registry, viz=st.setup.viz,
                                                  check_lost=True)
                     if _lost:
                         retire_lost_objects(
-                            _lost, registry, viz, shadows,
-                            shadow_occluder_map, boxel_centers,
-                            occluders, belief, env=env)
+                            _lost, st.setup.registry, st.setup.viz, st.setup.shadows,
+                            st.setup.shadow_occluder_map, st.setup.boxel_centers,
+                            st.setup.occluders, st.setup.belief, env=env)
                     dispatch_end('empty_hand')
                     break
                 if place_result is None:
@@ -2892,21 +2909,21 @@ def main(gui=True, run_logger=None, scene_config=None,
                     # let go of.  The finger joints are the probe now:
                     # ≥ 0.035 per finger means the release ran.
                     fingers_open = all(
-                        p.getJointState(robot_id, fj)[0] >= 0.035
+                        p.getJointState(st.setup.robot_id, fj)[0] >= 0.035
                         for fj in robot_model().finger_joints)
                     if fingers_open:
                         print(f"    drop-verify failed for {obj_str}; "
                               f"clearing held state and replanning "
                               f"(audit #79).")
-                        held_body_id = None
-                        held_object_boxel_id = None
+                        st.hand.held_body_id = None
+                        st.hand.held_object_boxel_id = None
                         # Audit #82: before yielding control to the next
                         # planner.plan() with (handempty) in init, log
                         # whether physics agrees.  A ghost cube here means
                         # the next pick starts while we're still friction-
                         # pinned to a previous cube — the "two cubes" bug.
                         audit_robot_held_state(
-                            env, robot_id, expected_held_body_id=None,
+                            env, st.setup.robot_id, expected_held_body_id=None,
                             tag=f"post-clear-place:{obj_str}")
                         # Audit #83: drop-verify failed, so the cube
                         # may have fallen off the gripper somewhere
@@ -2918,18 +2935,18 @@ def main(gui=True, run_logger=None, scene_config=None,
                         # M8 A: the released object is loose at a pose
                         # nothing observed yet; a complete detection in
                         # the refresh sets it again.
-                        pose_belief.mark_pose_unknown(registry.get_boxel(obj_str))
-                        refresh_object_aabbs(env, registry, viz=viz)
+                        pose_belief.mark_pose_unknown(st.setup.registry.get_boxel(obj_str))
+                        refresh_object_aabbs(env, st.setup.registry, viz=st.setup.viz)
                     else:
                         print(f"    IK failure during place — replanning (audit #82)")
                     dispatch_end('place_failure')
                     break
-                current_config = place_result
-                held_body_id = None
-                held_object_boxel_id = None
+                st.arm.current_config = place_result
+                st.hand.held_body_id = None
+                st.hand.held_object_boxel_id = None
                 # Review fix: a delivered place proves transport works —
                 # clear the object's transit-loss strikes.
-                transit_loss_counts.pop(obj_str, None)
+                st.strikes.transit_loss_counts.pop(obj_str, None)
 
                 # Refresh positions after the physics settle step inside
                 # execute_place — objects may have shifted slightly.
@@ -2946,11 +2963,11 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # shaped by the object AABB which never align with the
                 # octree-grid edges of existing free boxels.  Re-running
                 # the octree produces fine cells that merge naturally.
-                consumed_free = registry.get_boxel(boxel_id_str)
+                consumed_free = st.setup.registry.get_boxel(boxel_id_str)
                 if (consumed_free is not None
                         and consumed_free.boxel_type == BoxelType.FREE_SPACE):
-                    placed_name = (boxel_to_pybullet[obj_str]['name']
-                                   if obj_str in boxel_to_pybullet
+                    placed_name = (st.setup.boxel_to_pybullet[obj_str]['name']
+                                   if obj_str in st.setup.boxel_to_pybullet
                                    else obj_str)
                     if placed_name in env.objects:
                         # #P1 step (3): the post-place carve reads the
@@ -2968,7 +2985,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                         _prender = (env._depth_buffer_to_meters(_pbuf), _pseg,
                                     *env._view_and_projection_matrices())
                         _frame_cut = False
-                        if (_det is not None and eye == 'arm'
+                        if (_det is not None and st.setup.eye == 'arm'
                                 and not arm_eye.in_frame(
                                     _prender[2], (_det.est_min, _det.est_max))):
                             # Path 9, --eye arm: a detection the frame cuts
@@ -2980,7 +2997,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                             _det = None
                             _frame_cut = True
                         _commanded = _det is None
-                        _prev_bd = registry.get_boxel(obj_str)
+                        _prev_bd = st.setup.registry.get_boxel(obj_str)
                         _prev_ext = (
                             np.asarray(_prev_bd.max_corner, dtype=float)
                             - np.asarray(_prev_bd.min_corner, dtype=float)
@@ -3013,7 +3030,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                                   f"post-place carve skipped")
 
                     if placed_name in env.objects and aabb_min is not None:
-                        registry.update_after_place(
+                        st.setup.registry.update_after_place(
                             free_boxel_id=boxel_id_str,
                             object_boxel_id=obj_str,
                             placed_min=aabb_min,
@@ -3023,7 +3040,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                         # M8 A: an observed placement takes the formula (if
                         # complete); the occluded fallback is the commanded
                         # cell, PLACE_POSE_TOL.
-                        _placed_bd = registry.get_boxel(obj_str)
+                        _placed_bd = st.setup.registry.get_boxel(obj_str)
                         if _commanded:
                             pose_belief.mark_pose_commanded(_placed_bd)
                         elif _placed_bd is not None:
@@ -3033,22 +3050,22 @@ def main(gui=True, run_logger=None, scene_config=None,
                                                    _det, _prender),
                                 rigid_ext=_prev_ext)
 
-                        if viz is not None:
-                            viz.remove_boxel_viz(boxel_id_str)
-                            moved_bd = registry.get_boxel(obj_str)
+                        if st.setup.viz is not None:
+                            st.setup.viz.remove_boxel_viz(boxel_id_str)
+                            moved_bd = st.setup.registry.get_boxel(obj_str)
                             if moved_bd is not None:
-                                viz.remove_boxel_viz(obj_str)
-                                viz.draw_boxel_data(moved_bd)
+                                st.setup.viz.remove_boxel_viz(obj_str)
+                                st.setup.viz.draw_boxel_data(moved_bd)
 
                 # Rebuild shadow_occluder_map from current physics state so
                 # blocks_view_at facts reflect the relocated occluder's new
                 # position on the next replan (audit #73, #24 fixed).
                 # Path 9, --eye arm: no census (see Phase 3).
-                if eye != 'arm':
-                    shadow_occluder_map = compute_shadow_blockers(
-                        env.camera_position, registry, shadows, occluders, env
+                if st.setup.eye != 'arm':
+                    st.setup.shadow_occluder_map = compute_shadow_blockers(
+                        env.camera_position, st.setup.registry, st.setup.shadows, st.setup.occluders, env
                     )
-                    planner.shadow_occluder_map = shadow_occluder_map
+                    st.setup.planner.shadow_occluder_map = st.setup.shadow_occluder_map
 
                 # Record the relocation in belief state so the planner
                 # knows this occluder is no longer blocking its original
@@ -3069,9 +3086,9 @@ def main(gui=True, run_logger=None, scene_config=None,
                 #     (audit #73; #24 fixed) so blocks_view_at facts are current.
                 # Full shadow recomputation would require re-running the camera
                 # observation pipeline, which is a separate concern (audit #4).
-                if obj_str in boxel_to_pybullet:
-                    placed_obj_name = boxel_to_pybullet[obj_str]['name']
-                    belief.mark_occluder_moved(obj_str, boxel_id_str)
+                if obj_str in st.setup.boxel_to_pybullet:
+                    placed_obj_name = st.setup.boxel_to_pybullet[obj_str]['name']
+                    st.setup.belief.mark_occluder_moved(obj_str, boxel_id_str)
                     print(f"    *** {placed_obj_name} PLACED at {boxel_id_str}! ***")
                 else:
                     print(f"    *** {obj_str} PLACED at {boxel_id_str}! ***")
@@ -3079,13 +3096,13 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # after a placement — the moment a placed body can hide
                 # another (F31).
                 world_eye.snapshot(
-                    f"plan#{plan_count} after place({obj_str}, {boxel_id_str})",
-                    registry=registry, belief=belief, plan_count=plan_count,
-                    save_image=True, on_relations=on_relations,
-                    shadow_occluder_map=shadow_occluder_map)
+                    f"plan#{st.counts.plan_count} after place({obj_str}, {boxel_id_str})",
+                    registry=st.setup.registry, belief=st.setup.belief, plan_count=st.counts.plan_count,
+                    save_image=True, on_relations=st.setup.on_relations,
+                    shadow_occluder_map=st.setup.shadow_occluder_map)
                 # #P2 (a): bystanders after the place (the placed object's
                 # own belief was just refreshed by the carve above).
-                if _integrity_after(f"plan#{plan_count} place({obj_str})"):
+                if _integrity_after(f"plan#{st.counts.plan_count} place({obj_str})"):
                     dispatch_end('integrity_replan')
                     break
 
@@ -3106,8 +3123,8 @@ def main(gui=True, run_logger=None, scene_config=None,
                     # #P1 WP2b: the held object's and the support's
                     # estimated boxes (registry) give the destination and
                     # the release height — no simulator read.
-                    _held_bd = registry.get_boxel(obj_str)
-                    _sup_bd = registry.get_boxel(on_obj_str)
+                    _held_bd = st.setup.registry.get_boxel(obj_str)
+                    _sup_bd = st.setup.registry.get_boxel(on_obj_str)
                     if _held_bd is None or _sup_bd is None:
                         print(f"    ERROR: no registry estimate for "
                               f"{'the held ' + obj_str if _held_bd is None else 'the support ' + on_obj_str}"
@@ -3115,8 +3132,8 @@ def main(gui=True, run_logger=None, scene_config=None,
                         dispatch_end('stale_precondition')
                         break
                     stack_result = execute_stack(
-                        robot_id, env, obj_str, on_obj_str, grasp, config,
-                        held_body_id, gui,
+                        st.setup.robot_id, env, obj_str, on_obj_str, grasp, config,
+                        st.hand.held_body_id, gui,
                         held_aabb=(np.asarray(_held_bd.min_corner, dtype=float).copy(),
                                    np.asarray(_held_bd.max_corner, dtype=float).copy()),
                         support_aabb=(np.asarray(_sup_bd.min_corner, dtype=float).copy(),
@@ -3127,35 +3144,35 @@ def main(gui=True, run_logger=None, scene_config=None,
                     # classifier can't misfile it as an IK failure.
                     print(f"    empty hand at stack entry for {obj_str}; "
                           f"clearing held state and replanning (#P1 F1).")
-                    transit_loss_counts[obj_str] = \
-                        transit_loss_counts.get(obj_str, 0) + 1
-                    print(f"    transit loss {transit_loss_counts[obj_str]}"
+                    st.strikes.transit_loss_counts[obj_str] = \
+                        st.strikes.transit_loss_counts.get(obj_str, 0) + 1
+                    print(f"    transit loss {st.strikes.transit_loss_counts[obj_str]}"
                           f"/3 for {obj_str} (review-fix strike counter)")
-                    if (transit_loss_counts[obj_str] >= 3
-                            and obj_str not in pick_giveup_objects):
+                    if (st.strikes.transit_loss_counts[obj_str] >= 3
+                            and obj_str not in st.strikes.pick_giveup_objects):
                         print(f"    ERROR: {obj_str} lost in transit "
-                              f"{transit_loss_counts[obj_str]} times — "
+                              f"{st.strikes.transit_loss_counts[obj_str]} times — "
                               f"giving up on grasping it (#P1 F2 giveup, "
                               f"transit edition).")
-                        pick_giveup_objects.add(obj_str)
-                        planner.streams.ungraspable_objects.add(obj_str)
-                        pick_giveup_marked_at[obj_str] = plan_count
-                    held_body_id = None
-                    held_object_boxel_id = None
+                        st.strikes.pick_giveup_objects.add(obj_str)
+                        st.setup.planner.streams.ungraspable_objects.add(obj_str)
+                        st.strikes.pick_giveup_marked_at[obj_str] = st.counts.plan_count
+                    st.hand.held_body_id = None
+                    st.hand.held_object_boxel_id = None
                     audit_robot_held_state(
-                        env, robot_id, expected_held_body_id=None,
+                        env, st.setup.robot_id, expected_held_body_id=None,
                         tag=f"post-empty-hand-stack:{obj_str}")
                     env.update_object_positions()
                     # M8 A: lost in transit, its pose is unknown.
-                    pose_belief.mark_pose_unknown(registry.get_boxel(obj_str))
+                    pose_belief.mark_pose_unknown(st.setup.registry.get_boxel(obj_str))
                     # #P1 step (3c): see the place-edition comment.
-                    _lost = refresh_object_aabbs(env, registry, viz=viz,
+                    _lost = refresh_object_aabbs(env, st.setup.registry, viz=st.setup.viz,
                                                  check_lost=True)
                     if _lost:
                         retire_lost_objects(
-                            _lost, registry, viz, shadows,
-                            shadow_occluder_map, boxel_centers,
-                            occluders, belief, env=env)
+                            _lost, st.setup.registry, st.setup.viz, st.setup.shadows,
+                            st.setup.shadow_occluder_map, st.setup.boxel_centers,
+                            st.setup.occluders, st.setup.belief, env=env)
                     dispatch_end('empty_hand')
                     break
                 if stack_result is None:
@@ -3170,7 +3187,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                     # means the release ran; closed fingers mean the
                     # failure was IK, grip intact.
                     fingers_open = all(
-                        p.getJointState(robot_id, fj)[0] >= 0.035
+                        p.getJointState(st.setup.robot_id, fj)[0] >= 0.035
                         for fj in robot_model().finger_joints)
                     if fingers_open:
                         print(f"    drop-verify failed for {obj_str} on "
@@ -3178,25 +3195,25 @@ def main(gui=True, run_logger=None, scene_config=None,
                               f"replanning (audit #79).")
                         # #P2 F28: bounded physical stack failures.
                         _sk = (obj_str, on_obj_str)
-                        stack_fail_counts[_sk] = stack_fail_counts.get(_sk, 0) + 1
-                        print(f"    stack failure {stack_fail_counts[_sk]}/3 for "
+                        st.strikes.stack_fail_counts[_sk] = st.strikes.stack_fail_counts.get(_sk, 0) + 1
+                        print(f"    stack failure {st.strikes.stack_fail_counts[_sk]}/3 for "
                               f"{obj_str} on {on_obj_str} (#P2 F28 strike counter)")
-                        if stack_fail_counts[_sk] >= 3:
-                            exit_reason = "stack_giveup"
-                            episode_over = True
+                        if st.strikes.stack_fail_counts[_sk] >= 3:
+                            st.ending.exit_reason = "stack_giveup"
+                            st.ending.episode_over = True
                             print(f"    ERROR: {obj_str} on {on_obj_str} failed "
-                                  f"{stack_fail_counts[_sk]} physical stack "
+                                  f"{st.strikes.stack_fail_counts[_sk]} physical stack "
                                   f"attempts — ending the episode honestly "
                                   f"(#P2 F28).")
-                        held_body_id = None
-                        held_object_boxel_id = None
+                        st.hand.held_body_id = None
+                        st.hand.held_object_boxel_id = None
                         # Audit #82: mirror of the place branch above —
                         # log physical held state at the symbolic-clear
                         # boundary so the "two cubes" divergence surfaces
                         # before the next plan_motion crashes into the
                         # ghost.
                         audit_robot_held_state(
-                            env, robot_id, expected_held_body_id=None,
+                            env, st.setup.robot_id, expected_held_body_id=None,
                             tag=f"post-clear-stack:{obj_str}")
                         # Audit #83: mirror of the place branch.  The
                         # stacked cube landed somewhere (likely the
@@ -3207,18 +3224,18 @@ def main(gui=True, run_logger=None, scene_config=None,
                         # cascades.  Refresh from live PyBullet.
                         # M8 A: the released object's pose is unknown
                         # until a complete detection (as for place).
-                        pose_belief.mark_pose_unknown(registry.get_boxel(obj_str))
-                        refresh_object_aabbs(env, registry, viz=viz)
+                        pose_belief.mark_pose_unknown(st.setup.registry.get_boxel(obj_str))
+                        refresh_object_aabbs(env, st.setup.registry, viz=st.setup.viz)
                     else:
                         print(f"    IK failure during stack — replanning (audit #30)")
                     dispatch_end('stack_failure')
                     break
-                current_config = stack_result
-                held_body_id = None
-                held_object_boxel_id = None
+                st.arm.current_config = stack_result
+                st.hand.held_body_id = None
+                st.hand.held_object_boxel_id = None
                 # Review fix: a delivered stack proves transport works —
                 # clear the object's transit-loss strikes.
-                transit_loss_counts.pop(obj_str, None)
+                st.strikes.transit_loss_counts.pop(obj_str, None)
 
                 env.update_object_positions()
                 # (boxel_to_pybullet carried simulator positions here
@@ -3238,7 +3255,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                 if obj_str in env.objects:
                     _det = env.detect_objects()[0].get(obj_str)
                     _frame_cut = False
-                    if (_det is not None and eye == 'arm'
+                    if (_det is not None and st.setup.eye == 'arm'
                             and not arm_eye.in_frame(
                                 env._view_and_projection_matrices()[0],
                                 (_det.est_min, _det.est_max))):
@@ -3248,7 +3265,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                               f"image: its box goes on {on_obj_str}'s top")
                         _det = None
                         _frame_cut = True
-                    bd = registry.get_boxel(obj_str)
+                    bd = st.setup.registry.get_boxel(obj_str)
                     if bd is not None:
                         _cur_ext = (np.asarray(bd.max_corner, dtype=float)
                                     - np.asarray(bd.min_corner, dtype=float))
@@ -3262,7 +3279,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                                               _det.est_max[2]])
                             a_min = a_max - _canon
                         else:
-                            _sup_bd = registry.get_boxel(on_obj_str)
+                            _sup_bd = st.setup.registry.get_boxel(on_obj_str)
                             _sc = (np.asarray(_sup_bd.center, dtype=float)
                                    if _sup_bd is not None
                                    else np.asarray(bd.center, dtype=float))
@@ -3286,10 +3303,10 @@ def main(gui=True, run_logger=None, scene_config=None,
                         bd.min_corner = a_min
                         bd.max_corner = a_max
                         bd.on_surface = None
-                        boxel_centers[obj_str] = bd.center
-                        if viz is not None:
-                            viz.remove_boxel_viz(obj_str)
-                            viz.draw_boxel_data(bd)
+                        st.setup.boxel_centers[obj_str] = bd.center
+                        if st.setup.viz is not None:
+                            st.setup.viz.remove_boxel_viz(obj_str)
+                            st.setup.viz.draw_boxel_data(bd)
 
                 # Audit #40: gate the on_relations write on a physics
                 # check.  execute_stack's 60-step settle can leave a
@@ -3311,18 +3328,18 @@ def main(gui=True, run_logger=None, scene_config=None,
                           f"{on_obj_str} — {stack_reason} — the robot's "
                           f"observation accepted this stack; recorded, not "
                           f"acted on")
-                    physical_failures.append({
+                    st.setup.physical_failures.append({
                         "action": "stack",
                         "obj": obj_str,
                         "on": on_obj_str,
                         "reason": stack_reason,
-                        "plan": plan_count,
+                        "plan": st.counts.plan_count,
                         "scoring_only": True,
                     })
                 # Replace any prior support of obj_str (re-stacking) —
                 # the conditional pick effect in the domain already
                 # cleared the old support symbolically.
-                on_relations[obj_str] = on_obj_str
+                st.setup.on_relations[obj_str] = on_obj_str
                 # Stacking does NOT consume free space (we placed onto
                 # an OBJECT, not a FREE_SPACE), so reboxelize_free_space
                 # is unnecessary here.  Any registry.dirty flag set by
@@ -3330,12 +3347,12 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # next plan iteration via the existing dirty-flag check.
                 print(f"    *** {obj_str} STACKED on {on_obj_str}! ***")
                 world_eye.snapshot(
-                    f"plan#{plan_count} after stack({obj_str}, {on_obj_str})",
-                    registry=registry, belief=belief, plan_count=plan_count,
-                    save_image=True, on_relations=on_relations,
-                    shadow_occluder_map=shadow_occluder_map)
+                    f"plan#{st.counts.plan_count} after stack({obj_str}, {on_obj_str})",
+                    registry=st.setup.registry, belief=st.setup.belief, plan_count=st.counts.plan_count,
+                    save_image=True, on_relations=st.setup.on_relations,
+                    shadow_occluder_map=st.setup.shadow_occluder_map)
                 # #P2 (a): bystanders and the tower after the stack.
-                if _integrity_after(f"plan#{plan_count} stack({obj_str})"):
+                if _integrity_after(f"plan#{st.counts.plan_count} stack({obj_str})"):
                     dispatch_end('integrity_replan')
                     break
 
@@ -3346,7 +3363,7 @@ def main(gui=True, run_logger=None, scene_config=None,
         # A step left by a break that named no reason is recorded as such
         # (gate G3 fails on it); after a labelled exit this is a no-op.
         dispatch_end('unlabelled')
-        if episode_over:
+        if st.ending.episode_over:
             break
 
     # =========================================================
@@ -3355,7 +3372,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     # Classify outcome (the exit_reason set during the loop tells us
     # exactly why we stopped) and hand off to report_run_outcome for
     # printing + timing_summary.json write.
-    physics_failures: list = []
+    st.ending.physics_failures: list = []
     if goal_kind == 'holding':
         # Audit S-18: belief.is_target_found() flips on a successful
         # sense OR a successful pick — neither implies the gripper
@@ -3365,96 +3382,96 @@ def main(gui=True, run_logger=None, scene_config=None,
         # wrong body.  Gate the success on a physics check so the
         # holding-goal path matches the stack-goal path's audit-#40
         # rigour.
-        symbolic_ok = belief.is_target_found()
+        symbolic_ok = st.setup.belief.is_target_found()
         # #P4 B3(d), D7 (vi): with a declared goal configuration the goal
         # also needs the arm at q_home by TAMPURA's test.
-        if goal_at_home and not at_home_ok:
+        if goal_at_home and not st.arm.at_home_ok:
             symbolic_ok = False
         if symbolic_ok:
-            ok, reason = _verify_holding(env, target_name, held_body_id)
+            ok, reason = _verify_holding(env, st.setup.target_name, st.hand.held_body_id)
             if not ok:
-                physics_failures.append(f"(holding {target_name}) — {reason}")
+                st.ending.physics_failures.append(f"(holding {st.setup.target_name}) — {reason}")
                 print(f"  PHYSICAL_FAILURE (goal): "
-                      f"(holding {target_name}) — {reason}")
+                      f"(holding {st.setup.target_name}) — {reason}")
                 # Reclassify the exit reason so the FAILED summary
                 # in report_run_outcome doesn't fall through to the
                 # timeout default — the loop exited cleanly on belief,
                 # the failure is a physics mismatch with that belief.
-                if exit_reason is None:
-                    exit_reason = "physics_mismatch"
-        success = symbolic_ok and not physics_failures
+                if st.ending.exit_reason is None:
+                    st.ending.exit_reason = "physics_mismatch"
+        st.ending.success = symbolic_ok and not st.ending.physics_failures
     else:
-        symbolic_ok = goal_satisfied(goal, on_relations)
+        symbolic_ok = goal_satisfied(st.setup.goal, st.setup.on_relations)
         if symbolic_ok:
             # Audit #40: verify each (on a b) goal clause against
             # PyBullet AABBs before declaring success.  Catches
             # post-stack collapses that slipped past the per-action
             # gate (e.g. a tower falling later under a subsequent
             # action's vibration).
-            physics_failures = _verify_goal_physics(
-                goal, env, held_body_id=held_body_id)
-            for pf in physics_failures:
+            st.ending.physics_failures = _verify_goal_physics(
+                st.setup.goal, env, held_body_id=st.hand.held_body_id)
+            for pf in st.ending.physics_failures:
                 print(f"  PHYSICAL_FAILURE (goal): {pf}")
             # #P2 (c) CB#122 (2026-09-19): the stack branch used to leave
             # exit_reason None here, so a symbolic success the physics
             # rejected was filed as "timeout" — the reason holding
             # produced physics_mismatch and stack never did.
-            if physics_failures and exit_reason is None:
-                exit_reason = "physics_mismatch"
-        success = symbolic_ok and not physics_failures
+            if st.ending.physics_failures and st.ending.exit_reason is None:
+                st.ending.exit_reason = "physics_mismatch"
+        st.ending.success = symbolic_ok and not st.ending.physics_failures
 
     world_eye.snapshot(
-        f"final ({'SUCCESS' if success else 'FAILED'}: {exit_reason})",
-        registry=registry, belief=belief, plan_count=plan_count,
-        held=(body_id_to_name.get(held_body_id)
-              if held_body_id is not None else None),
-        with_view=True, save_image=True, on_relations=on_relations,
-        shadow_occluder_map=shadow_occluder_map,
-        init_facts=planner.last_init,
-        extra={"physical_failures": physical_failures,
-               "physics_failures": physics_failures})
+        f"final ({'SUCCESS' if st.ending.success else 'FAILED'}: {st.ending.exit_reason})",
+        registry=st.setup.registry, belief=st.setup.belief, plan_count=st.counts.plan_count,
+        held=(st.setup.body_id_to_name.get(st.hand.held_body_id)
+              if st.hand.held_body_id is not None else None),
+        with_view=True, save_image=True, on_relations=st.setup.on_relations,
+        shadow_occluder_map=st.setup.shadow_occluder_map,
+        init_facts=st.setup.planner.last_init,
+        extra={"physical_failures": st.setup.physical_failures,
+               "physics_failures": st.ending.physics_failures})
 
     # Review round 2 (2026-09-19): a goal object that was seen, then
     # observed gone from its believed region and never seen again ends
     # as target_lost, not as an exhausted search.  M7's rediscovery_giveup
     # is an exhausted search too (only suspended regions left), so it
     # takes the same relabel; the FAILED line still names the suspensions.
-    if (not success and exit_reason in ("all_searched", "rediscovery_giveup")
-            and target_lost_seen):
-        exit_reason = "target_lost"
+    if (not st.ending.success and st.ending.exit_reason in ("all_searched", "rediscovery_giveup")
+            and st.ending.target_lost_seen):
+        st.ending.exit_reason = "target_lost"
     report_run_outcome(
-        success=success,
-        exit_reason=exit_reason,
+        success=st.ending.success,
+        exit_reason=st.ending.exit_reason,
         goal_kind=goal_kind,
-        pick_giveup_objects=pick_giveup_objects,
-        integrity_events=integrity_events,
-        stack_fail_counts=stack_fail_counts,
-        goal=goal,
-        target_name=target_name,
-        on_relations=on_relations,
-        belief=belief,
-        plan_count=len(plan_times),  # C-07: the rounds that called plan()
-        sense_count=sense_count,
-        m8_stats=({"n_observe_actions": observe_count,
-                   "parked": sorted(planner.m8_views.parked),
-                   "view_kin_skips": planner.streams.view_kin_skips,
-                   "per_plan": m8_per_plan,
-                   **({"n_look_actions": look_count,
-                       "look_per_plan": look_per_plan} if look_on else {})}
-                  if planner.m8_views is not None else None),
-        shadows=shadows,
-        blocked_giveup_shadows=blocked_giveup_shadows,
+        pick_giveup_objects=st.strikes.pick_giveup_objects,
+        integrity_events=st.counts.integrity_events,
+        stack_fail_counts=st.strikes.stack_fail_counts,
+        goal=st.setup.goal,
+        target_name=st.setup.target_name,
+        on_relations=st.setup.on_relations,
+        belief=st.setup.belief,
+        plan_count=len(st.counts.plan_times),  # C-07: the rounds that called plan()
+        sense_count=st.counts.sense_count,
+        m8_stats=({"n_observe_actions": st.counts.observe_count,
+                   "parked": sorted(st.setup.planner.m8_views.parked),
+                   "view_kin_skips": st.setup.planner.streams.view_kin_skips,
+                   "per_plan": st.counts.m8_per_plan,
+                   **({"n_look_actions": st.counts.look_count,
+                       "look_per_plan": st.counts.look_per_plan} if st.setup.look_on else {})}
+                  if st.setup.planner.m8_views is not None else None),
+        shadows=st.setup.shadows,
+        blocked_giveup_shadows=st.strikes.blocked_giveup_shadows,
         # M7: the F9 give-up's suspension length (None with --m7 off)
         m7_suspend_s=(execution.M7_SUSPEND_S if execution.M7 else None),
-        plan_times=plan_times,
-        total_plan_time=total_plan_time,
-        physical_failures=physical_failures,
-        physics_failures=physics_failures,
+        plan_times=st.counts.plan_times,
+        total_plan_time=st.counts.total_plan_time,
+        physical_failures=st.setup.physical_failures,
+        physics_failures=st.ending.physics_failures,
         run_config=run_config,
         run_logger=run_logger,
-        registry=registry,
-        last_init=planner.last_init,
-        boxel_counts_per_replan=boxel_counts_per_replan,
+        registry=st.setup.registry,
+        last_init=st.setup.planner.last_init,
+        boxel_counts_per_replan=st.counts.boxel_counts_per_replan,
         # TB-22 (tracks rule 18): the observer's counts (None when nothing
         # watched), the losses the robot noticed, the executor's reports.
         observer_counts=telemetry.run_counts(),
@@ -3474,7 +3491,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     # #P1: nothing to tear down for a held object any more — the grip
     # is a live friction pinch, and env.close() ends the simulation.
     env.close()
-    return success
+    return st.ending.success
 
 
 if __name__ == "__main__":
