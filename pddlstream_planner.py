@@ -925,6 +925,38 @@ class PDDLStreamPlanner:
             if not m8 or (_tbd is not None and _pose_known(_tbd)):
                 init.append(('obj_pose_known', tgt))
 
+        self._facts_boxel_fits(init, target_objects, look_on)
+
+        self._facts_config_and_home(init, current_config)
+        self._facts_m8(init, shadows, target_objects, known_empty_shadows,
+                       current_config, held_obj, m8, look_on, _pose_known)
+        self.last_look_stats = {}
+        if look_on:
+            _look_facts = (self._look_facts_centred
+                           if self.look_mode == 'centred' else self._look_facts)
+            self.last_look_stats = _look_facts(
+                init, target_objects, shadows, held_obj, current_config,
+                _pose_known)
+        self._facts_hand(init, held_obj)
+
+        self._facts_stacking(init, on_relations, stackable_objects, held_obj)
+
+        self._check_home_pseudo_boxel(init)
+
+        if look_on:
+            # The look domain declares what it uses and nothing else; an
+            # emission it does not declare is a bug here, not data.
+            import look_domain
+            declared = set(look_domain.declared_predicates(self.domain_pddl))
+            undeclared = sorted({str(f[0]) for f in init} - declared)
+            if undeclared:
+                raise ValueError(f"look mode: init facts for predicates the "
+                                 f"look domain does not declare: {undeclared}")
+
+        random.shuffle(init)
+        return init
+
+    def _facts_boxel_fits(self, init, target_objects, look_on):
         # Static boxel_fits facts (audit #102): do NOT use a PDDLStream test stream.
         # Adaptive search re-invokes test streams heavily across skeletons; a cheap
         # predicate became a bottleneck.  One pass here matches stream semantics.
@@ -1002,6 +1034,7 @@ class PDDLStreamPlanner:
                             o, bid, self.camera_pos):
                     init.append(('boxel_fits', o, bid))
 
+    def _facts_config_and_home(self, init, current_config):
         init.append(('Config', current_config))
         init.append(('at_config', current_config))
         if self.goal_config is not None:
@@ -1017,6 +1050,9 @@ class PDDLStreamPlanner:
             init.append(('Boxel', HOME_PSEUDO_BOXEL))
             init.append(('config_for_boxel', self.goal_config,
                          HOME_PSEUDO_BOXEL))
+
+    def _facts_m8(self, init, shadows, target_objects, known_empty_shadows,
+                  current_config, held_obj, m8, look_on, _pose_known):
         # M8 C: the observation configurations as static facts, each with
         # its own view pseudo-boxel (not a registry boxel, like "home";
         # compute_kin returns at once on these ids).
@@ -1072,13 +1108,8 @@ class PDDLStreamPlanner:
                   f"{_over_stats.get('over_region_pairs', 0)} over-region folds "
                   f"{_over_stats.get('over_region_s', 0.0):.2f}s; "
                   f"total {self.last_m8_stats['build_s']:.2f}s")
-        self.last_look_stats = {}
-        if look_on:
-            _look_facts = (self._look_facts_centred
-                           if self.look_mode == 'centred' else self._look_facts)
-            self.last_look_stats = _look_facts(
-                init, target_objects, shadows, held_obj, current_config,
-                _pose_known)
+
+    def _facts_hand(self, init, held_obj):
         if held_obj is None:
             init.append(('handempty',))
         else:
@@ -1089,6 +1120,7 @@ class PDDLStreamPlanner:
             # the next place/stack action.
             init.append(('holding', held_obj))
 
+    def _facts_stacking(self, init, on_relations, stackable_objects, held_obj):
         # Stacking facts (audit #30 + #39).
         #   (clear ?o)  now emitted for EVERY object unconditionally,
         #               because pick requires it (audit #39 — prevents
@@ -1125,25 +1157,13 @@ class PDDLStreamPlanner:
             for stacked, support in on_relations.items():
                 init.append(('on', stacked, support))
 
+    def _check_home_pseudo_boxel(self, init):
         if self.goal_config is not None:
             _named = [f for f in init if HOME_PSEUDO_BOXEL in
                       [str(x) for x in f[1:]]]
             assert sorted(f[0] for f in _named) == [
                 'Boxel', 'config_for_boxel'], (
                 f"the home pseudo-boxel appears in other facts: {_named}")
-
-        if look_on:
-            # The look domain declares what it uses and nothing else; an
-            # emission it does not declare is a bug here, not data.
-            import look_domain
-            declared = set(look_domain.declared_predicates(self.domain_pddl))
-            undeclared = sorted({str(f[0]) for f in init} - declared)
-            if undeclared:
-                raise ValueError(f"look mode: init facts for predicates the "
-                                 f"look domain does not declare: {undeclared}")
-
-        random.shuffle(init)
-        return init
 
     def _look_for(self, init, target_objects, shadows, held_obj, pose_known):
         """What a look may hypothesise (both looks): a hidden target in each
