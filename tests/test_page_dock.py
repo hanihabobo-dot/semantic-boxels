@@ -166,9 +166,47 @@ def test_the_launcher_starts_the_holder_for_a_run_with_the_page_and_never_ends_i
     start = code.index('if ($r.Page -and -not $LoosePage) {')
     block = code[start:code.index('if ($r.Cameras) {', start)]
     assert "'tools/page_dock.ps1'" in block and "'-WatchPid', $p.Id" in block
+    # this run's word and the launcher's own ports: the holder takes this run's page and no other
+    assert "'-PageWord', $r.Page, '-PortFrom', $pagePorts[0], '-PortTo', $pagePorts[-1]" in block
     assert '-WindowStyle Hidden' in block and '-PassThru' not in block     # started, not kept, not ended
     assert 'try {' in block and 'catch {' in block                           # a failure never touches the run
     assert code.index('$p = [System.Diagnostics.Process]::Start($psi)') < start
+
+
+def test_the_holder_finds_this_runs_page_as_the_launcher_does_and_names_it_as_the_page_does():
+    """With the run's word the holder asks the page servers for it (the
+    launcher's Find-Page) and takes the window named by that server's port,
+    in the page's own words; its ports are the page's."""
+    from console import gui_page
+    ps = DOCK_PS1.read_text(encoding='utf-8')
+    assert '/state' in ps and '$state.run.token -eq $PageWord' in ps
+    head, tail = re.search(r"\$PageTitle = '([^']*)' \+ \$port \+ '([^']*)'", ps).groups()
+    page = gui_page.Page(None, 0)
+    try:
+        assert page.title == f'{head}{page.port}{tail}'
+    finally:
+        page.close()
+    first = int(re.search(r'\[int\]\$PortFrom = (\d+)', ps).group(1))
+    last = int(re.search(r'\[int\]\$PortTo = (\d+)', ps).group(1))
+    assert (first, last) == (gui_page.DEFAULT_PORT, gui_page.DEFAULT_PORT + gui_page.PORT_TRIES - 1)
+    # the windows open before are listed before that wait, so this run's window counts as new
+    assert ps.index('[PageDock]::Snapshot(') < ps.index('if ($PageWord) {') < ps.index('[PageDock]::Run(')
+
+
+@needs_pwsh
+def test_the_holder_ends_by_itself_when_no_page_gives_the_word_back():
+    """The real script, up to the point where it would look for windows: a
+    run that is gone (exit 2), and no run to watch and no page (exit 3).  It
+    reads the list of windows and touches none."""
+    win = _win(DOCK_PS1)
+    script = ("$me = Join-Path $PSHOME 'pwsh.exe'; "
+              f"& $me -NoProfile -File '{win}' -WatchPid 4194300 -PageWord nosuchword; \"gone=$LASTEXITCODE\"; "
+              f"& $me -NoProfile -File '{win}' -WaitSeconds 1 -PageWord nosuchword -PortFrom 8799 -PortTo 8799; "
+              "\"nopage=$LASTEXITCODE\"")
+    proc = subprocess.run([_PWSH, '-NoProfile', '-NonInteractive', '-Command', script],
+                          capture_output=True, text=True, timeout=300, cwd=str(ROOT))
+    assert proc.returncode == 0, proc.stderr
+    assert 'gone=2' in proc.stdout and 'nopage=3' in proc.stdout, proc.stdout + proc.stderr
 
 
 @needs_pwsh

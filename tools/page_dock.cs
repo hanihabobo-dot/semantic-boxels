@@ -15,7 +15,7 @@
 // It touches two windows that are not its own, and only so: the page's browser window is moved,
 // sized, cut to its page (a window region), shown, minimised and moved in the stacking order;
 // the simulator's window is only read, and moved in the stacking order when the page is clicked.
-// Nothing is sent to either program, and nothing here reaches the run.
+// Nothing is sent to either window (no message, no key, no click), and nothing here reaches the run.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -414,6 +414,17 @@ public static class PageDock
         catch (Exception e) { Note("event " + ev.ToString("X") + ": " + e.Message); }
     }
 
+    static HashSet<long> before;
+
+    /// The simulator windows that are open now, kept as "open before this run's": for a
+    /// caller that has something to wait for before Run (page_dock.ps1 waits for the run's
+    /// page to answer), so that a window which opens during that wait still counts as new.
+    public static int Snapshot(string simTitle, string simProcess)
+    {
+        before = new HashSet<long>(FindSim(simTitle, simProcess));
+        return before.Count;
+    }
+
     /// Wait for the page's window and this run's simulator window, hold them together, end
     /// when one of them or the run (`watchPid`, 0: none) is gone.  Widths are pixels at 100 %
     /// scaling.  Returns 0 after holding, 2 when the run ended before its windows came, 3 when
@@ -433,8 +444,9 @@ public static class PageDock
         {
             // This run's simulator window is one that opens while the holder waits.  One that
             // was open before (another program's, or a window left behind) is taken only when
-            // no new one has come for a while after the page.
-            var before = new HashSet<long>(FindSim(simTitle, simProcess));
+            // no new one has come for a while after the page.  The list of those is taken
+            // here, or earlier by Snapshot when the caller waits for something first.
+            if (before == null) Snapshot(simTitle, simProcess);
             Note("waiting; simulator windows open before: " + before.Count);
             var clock = Stopwatch.StartNew();
             long pageSince = -1;
@@ -486,6 +498,7 @@ public static class PageDock
             if (h2 != IntPtr.Zero) UnhookWinEvent(h2);
             if (!done) { try { Release(); } catch { } }      // an error on the way: the page is not left cut
             if (log != null) { try { log.Dispose(); } catch { } log = null; }
+            before = null;
         }
     }
 }

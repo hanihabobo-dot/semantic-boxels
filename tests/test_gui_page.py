@@ -118,6 +118,26 @@ def test_the_page_is_served_with_its_title(page):
     assert 'http://' not in text and 'https://' not in text
 
 
+def test_the_log_keeps_to_its_newest_line_through_a_resize(page):
+    """Held against the simulator's window the page is resized right after it
+    opens (tools/page_dock.ps1), and the camera pictures change the log's
+    height when they load.  Whether the log follows its newest line is
+    therefore a state the reader's own scrolling sets, used when lines come
+    and when the log's box changes its size; it is not measured when lines
+    come (a log that was at its end before the resize then stayed at the
+    top: the trial of 2026-11-22).  Only the page's text can be read here;
+    that the log does follow was seen in the trial's picture of the page."""
+    text = _get(page, '/')[2].decode('utf-8')
+    assert 'let following = true;' in text
+    assert "$('log').addEventListener('scroll'" in text
+    assert 'following = log.scrollHeight - log.scrollTop - log.clientHeight < 40;' in text
+    assert "new ResizeObserver(() => { if (following) $('log').scrollTop = $('log').scrollHeight; }).observe($('log'));" in text
+    assert 'if (following && c.lines.length) log.scrollTop = log.scrollHeight;' in text
+    assert 'const stick' not in text
+    # and the narrow layout the held page gets
+    assert '@media (max-width: 520px)' in text
+
+
 def test_a_request_under_another_host_name_is_refused(page):
     assert _get(page, '/', host='localhost:%d' % page.port)[0] == 200
     assert _get(page, '/', host='127.0.0.1:%d' % page.port)[0] == 200

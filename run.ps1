@@ -329,11 +329,13 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
     try {
         if ($r.Page -and -not $LoosePage) {
             # The page is held against the simulator's window, the two as one (tools/page_dock.ps1;
-            # Hani, 2026-11-22).  The holder waits for this run's two windows, ends by itself when
-            # the window or the run is gone, and is never ended from here.  A failure to start it
-            # never touches the run: the page then opens as a window of its own.
+            # Hani, 2026-11-22).  The holder waits for this run's two windows (the page by this
+            # run's word, as Find-Page does, so a page left open by another run is never taken),
+            # ends by itself when the window or the run is gone, and is never ended from here.
+            # A failure to start it never touches the run: the page then opens as a window of its own.
             try {
-                $holdArgs = @('-NoProfile', '-File', ('"' + (Join-Path $PSScriptRoot 'tools/page_dock.ps1') + '"'), '-WatchPid', $p.Id)
+                $holdArgs = @('-NoProfile', '-File', ('"' + (Join-Path $PSScriptRoot 'tools/page_dock.ps1') + '"'), '-WatchPid', $p.Id,
+                              '-PageWord', $r.Page, '-PortFrom', $pagePorts[0], '-PortTo', $pagePorts[-1])
                 $null = Start-Process -FilePath (Join-Path $PSHOME 'pwsh.exe') -ArgumentList $holdArgs -WindowStyle Hidden
             } catch {
                 Write-Host "run: the page is not held against the window ($($_.Exception.Message)); it opens as a window of its own" -ForegroundColor Yellow
