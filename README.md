@@ -22,6 +22,21 @@ This opens the PyBullet GUI on the default scene; `--no-gui` runs headless. A he
 python3 -u test_full_pipeline.py --no-gui --scene random-pairs --seed 0 --goal holding --n-occluders 2
 ```
 
+### Linux without Windows
+
+`run.sh` is the same launcher in bash, for a plain Linux machine (it also works inside WSL). It starts the same commands as `run.ps1`, takes the same words and flags, in Linux spelling or in `run.ps1`'s (`--seed 7` and `-Seed 7` both work), and finds the checkout from its own place. Three environment variables tell it about the machine, each with a default: `SB_PYTHON` (the Python that has the packages above; default `.venv/bin/python` in the checkout, then `python3`), `SB_TAMPURA` (the TAMPURA workspace holding `tampura/` and `tampura_environments/`, needed for `run tampura` only; default `~/tampura-work`) and `SB_LOCK` (the lock file that keeps episodes one at a time; default under `$XDG_RUNTIME_DIR` or `/tmp`). It needs `flock` (util-linux) and, to notice a closed GUI window, `xwininfo` (x11-utils).
+
+```bash
+./run.sh                           # the bridge episode on TAMPURA's find_dice, seed 0, in the GUI
+./run.sh tampura --seed 118,102 --gen --headless   # several seeds, one run after another
+./run.sh boxels --seed 3 --headless
+./run.sh boxels --look boxel --eye arm
+./run.sh wumpus --seed 3 --size 10
+./run.sh ps                        # the pipeline processes alive;  ./run.sh kill  ends the ones run started
+./run.sh help                      # the usage header of run.sh;  --dry-run prints the command instead
+```
+
+Two things of `run.ps1` are Windows only: the separate camera window of `-Draw cameras` (the pictures are still saved into the run's `cameras` folder, and the GUI still draws the view volumes) and the sounds of `--music`, `--sfx` and `--voice` (played by Windows PowerShell through WSL; elsewhere the run is silent).
 ### Windows
 
 `run.ps1` starts the pipeline inside WSL in one word, from PowerShell 7 (`pwsh`). Two short pointer scripts, `run.ps1` and `boxels.ps1`, kept outside the repository in a folder on the PATH, call the repository's script, so `run` and `boxels` work from anywhere; without them, `.\run.ps1` and `.\run.ps1 boxels` from the repository root do the same. The paths at the top of `run.ps1` (the checkout as WSL sees it, the Python interpreter) and the TAMPURA workspace path in its `tampura` command are those of the development machine; set them for another one.
