@@ -159,8 +159,16 @@ def test_scenes_without_occluders_declare_no_bound():
 
 
 def test_main_reads_the_declared_size():
-    src = inspect.getsource(tfp.main)
+    # The statement stands in build_world, cut out of main(); scene_config is
+    # a field of the episode state st.
+    src = inspect.getsource(tfp.build_world)
     assert ("max_extent = partition_extent(\n"
-            "        env.objects, getattr(scene_config, 'target_extent', "
+            "        env.objects, getattr(st.opts.scene_config, 'target_extent', "
             "None))") in src
-    assert 'np.max(info.size)' not in src
+    # main() and every function cut out of it (its first parameter is st) are
+    # without a body's own size, as main() was.
+    stages = [f for f in vars(tfp).values() if inspect.isfunction(f)
+              and next(iter(inspect.signature(f).parameters), None) == 'st']
+    assert tfp.build_world in stages
+    for fn in [tfp.main] + stages:
+        assert 'np.max(info.size)' not in inspect.getsource(fn), fn.__name__

@@ -176,7 +176,15 @@ def test_on_and_holding_one_schedule_then_todays_settle(switch, stubbed, caplog)
 
 
 def test_the_move_action_calls_the_stream_with_the_held_body():
-    src = inspect.getsource(tfp.main)
-    assert re.search(r"stream_move_waypoints\(robot_id, traj\.waypoints, gui,\s*"
-                     r"holding=held_body_id is not None\)", src)
-    assert 'move_robot_smooth(' not in src                 # the stream lives in the helper
+    # The move action is do_move, cut out of main(); the names are fields of
+    # the episode state st.
+    src = inspect.getsource(tfp.do_move)
+    assert re.search(r"stream_move_waypoints\(st\.setup\.robot_id, traj\.waypoints, st\.opts\.gui,\s*"
+                     r"holding=st\.hand\.held_body_id is not None\)", src)
+    # The stream lives in the helper: main() and every function cut out of
+    # it (its first parameter is st) are without the call, as main() was.
+    stages = [f for f in vars(tfp).values() if inspect.isfunction(f)
+              and next(iter(inspect.signature(f).parameters), None) == 'st']
+    assert tfp.do_move in stages
+    for fn in [tfp.main] + stages:
+        assert 'move_robot_smooth(' not in inspect.getsource(fn), fn.__name__

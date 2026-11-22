@@ -128,9 +128,13 @@ def test_the_pipeline_parses_the_bridge_argv(value):
 
 
 def test_main_hands_the_value_to_the_planner():
-    src = PIPELINE.read_text(encoding='utf-8')
+    # The statement moved with build_planner to planner_setup.py; the
+    # pipeline calls build_planner once, with the parsed args.
+    src = (REPO / 'planner_setup.py').read_text(encoding='utf-8')
     assert ("planner.corridor_test = getattr(args, 'corridor_test', 'cell+object')"
             in src)
+    assert PIPELINE.read_text(encoding='utf-8').count(
+        'build_planner(st, env, slip_fixes, args)') == 1
 
 
 def test_the_episode_record_carries_the_switches():

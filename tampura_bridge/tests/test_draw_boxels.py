@@ -136,6 +136,20 @@ def _kw(call, name):
     return {k.arg: ast.unparse(k.value) for k in call.keywords}.get(name)
 
 
+def _main_and_its_stages(tree):
+    """main() of test_full_pipeline.py (its tree is given) and the functions
+    cut out of it: those whose first parameter is the episode state st,
+    defined in that file or in a file of the checkout's root that it imports
+    them from by name."""
+    defs = [n for n in tree.body if isinstance(n, ast.FunctionDef)]
+    for imp in tree.body:
+        if isinstance(imp, ast.ImportFrom) and os.path.exists(os.path.join(REPO, f'{imp.module}.py')):
+            names = {a.name for a in imp.names}
+            defs += [n for n in _tree(f'{imp.module}.py').body
+                     if isinstance(n, ast.FunctionDef) and n.name in names]
+    return [n for n in defs if n.name == 'main' or [a.arg for a in n.args.args][:1] == ['st']]
+
+
 def test_the_bridge_asks_main_for_lines_only_and_only_on_request():
     mains = [c for c in _calls(_tree('tampura_bridge', 'policy.py'), 'main')
              if ast.unparse(c.func) == 'test_full_pipeline.main']
@@ -152,7 +166,16 @@ def test_main_builds_a_lines_only_visualizer_from_overlay_bodies():
                         map(ast.unparse, main.args.defaults)))
     # `run boxels` and every other caller keep the phantom overlay
     assert defaults['overlay_bodies'] == 'True'
-    assert [_kw(c, 'phantoms') for c in _calls(main, 'BoxelVisualizer')] == ['overlay_bodies']
+    # The visualizer is built in build_registry, cut out of main(): main()
+    # hands it its own overlay_bodies, and it is the one BoxelVisualizer call
+    # of main() and of the functions cut out of it (first parameter st).
+    cut = _main_and_its_stages(tree)
+    (build,) = [n for n in cut if n.name == 'build_registry']
+    assert [a.arg for a in build.args.args] == ['st', 'env', 'overlay_bodies']
+    assert [ast.unparse(c) for c in _calls(main, 'build_registry')] == [
+        'build_registry(st, env, overlay_bodies)']
+    assert [(fn.name, _kw(c, 'phantoms')) for fn in cut
+            for c in _calls(fn, 'BoxelVisualizer')] == [('build_registry', 'overlay_bodies')]
     assert not [c for c in _calls(tree, 'main') if _kw(c, 'overlay_bodies') is not None]
 
 

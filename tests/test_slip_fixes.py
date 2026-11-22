@@ -92,11 +92,14 @@ def test_register_is_idempotent_and_checks_the_name(registry):
 def test_the_flag_and_the_plumbing():
     import run_logger
     import test_full_pipeline
-    src = inspect.getsource(run_logger)
+    src = inspect.getsource(inspect.getmodule(run_logger.parse_pipeline_args))
     assert "'--slip-fixes'" in src
     main_src = inspect.getsource(test_full_pipeline.main)
     assert re.search(r"slip_fixes\.configure\(getattr\(args, 'slip_fixes', ''\)\)", main_src)
-    assert 'slip_fixes=slip_fixes.spec()' in main_src           # the ledger's domain row
+    # the ledger's domain row is written by build_planner, which main()
+    # calls with the slip_fixes module it configured
+    assert 'build_planner(st, env, slip_fixes, args)' in main_src
+    assert 'slip_fixes=slip_fixes.spec()' in inspect.getsource(test_full_pipeline.build_planner)
     whole = inspect.getsource(test_full_pipeline)
     # The run record carries the effective set (BF#62), not the flag's text.
     assert '"slip_fixes": slip_fixes.resolve(getattr(args, \'slip_fixes\', \'\'))' in whole

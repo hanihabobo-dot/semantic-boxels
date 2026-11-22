@@ -192,12 +192,13 @@ def test_a_lost_target_names_the_suspended_regions(tmp_path, capsys):
 # ----- the ending's relabel at the end of main() (third review) ---------------
 
 def _relabel():
-    """main()'s own relabel statement before report_run_outcome, by ast."""
+    """The relabel statement before report_run_outcome, by ast: a statement
+    of report_episode(), which main() calls at its end."""
     import ast
     src = REPO / 'test_full_pipeline.py'
     tree = ast.parse(src.read_text(encoding='utf-8'))
-    main, = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main']
-    stmt, = [n for n in main.body if isinstance(n, ast.If)
+    report, = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'report_episode']
+    stmt, = [n for n in report.body if isinstance(n, ast.If)
              and 'target_lost_seen' in ast.unparse(n.test)]
     return compile(ast.Module(body=[stmt], type_ignores=[]), str(src), 'exec')
 
@@ -210,9 +211,10 @@ def _relabel():
     ('planner_failed', True, 'planner_failed'),
 ])
 def test_a_target_seen_then_lost_keeps_that_reason(reason, seen, after):
-    names = {'success': False, 'exit_reason': reason, 'target_lost_seen': seen}
+    names = {'st': types.SimpleNamespace(ending=types.SimpleNamespace(
+        success=False, exit_reason=reason, target_lost_seen=seen))}
     exec(_relabel(), names)
-    assert names['exit_reason'] == after
+    assert names['st'].ending.exit_reason == after
 
 
 def test_with_m7_off_the_summary_and_the_lines_are_as_before(tmp_path, capsys):

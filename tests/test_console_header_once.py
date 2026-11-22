@@ -59,7 +59,9 @@ def test_the_header_names_the_slip_fixes():
 
 def test_the_audit_10_comment_is_whole_again():
     # The second call had split this comment after "at the requested".
-    lines = SOURCE.splitlines()
+    # The comment moved whole with its code into build_world of
+    # world_setup.py, which main() calls.
+    lines = (ROOT / 'world_setup.py').read_text(encoding='utf-8').splitlines()
     i = next(k for k, ln in enumerate(lines)
              if ln.rstrip().endswith('free-space dispatch and (re)build '
                                      'the lattice at the requested'))

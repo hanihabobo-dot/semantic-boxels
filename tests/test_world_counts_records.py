@@ -125,15 +125,33 @@ def _calls(node, name):
             and getattr(c.func, 'attr', getattr(c.func, 'id', None)) == name]
 
 
+def _main_and_its_stages():
+    """main() of the pipeline with the functions cut out of it, as one tree:
+    the functions whose first parameter is the episode state st, defined in
+    test_full_pipeline.py or in a file beside it that it imports them from
+    by name.  What a test counted in main() it counts in this tree."""
+    tree = ast.parse((REPO / 'test_full_pipeline.py').read_text(encoding='utf-8'))
+    defs = [n for n in tree.body if isinstance(n, ast.FunctionDef)]
+    for imp in tree.body:
+        if isinstance(imp, ast.ImportFrom) and (REPO / f'{imp.module}.py').exists():
+            names = {a.name for a in imp.names}
+            other = ast.parse((REPO / f'{imp.module}.py').read_text(encoding='utf-8'))
+            defs += [n for n in other.body
+                     if isinstance(n, ast.FunctionDef) and n.name in names]
+    return ast.Module(body=[n for n in defs if n.name == 'main'
+                            or [a.arg for a in n.args.args][:1] == ['st']],
+                      type_ignores=[])
+
+
 def test_the_pipeline_arms_the_counts_where_the_recorder_is_off():
     src = (REPO / 'test_full_pipeline.py').read_text(encoding='utf-8')
-    main = _functions('test_full_pipeline.py')['main']
+    main = _main_and_its_stages()
     armed = [c for c in _calls(main, 'enable')
              if any(k.arg == 'counts_only'
                     and getattr(k.value, 'value', None) is True
                     for k in c.keywords)]
     assert len(armed) == 1
-    assert "elif world_counts.wanted(getattr(args, 'world_counts', 'auto'), gui):" in src
+    assert "elif world_counts.wanted(getattr(args, 'world_counts', 'auto'), st.opts.gui):" in src
     # a run nothing watches drops an observer left armed by an earlier run in
     # the process (its counts are not this run's), and every run starts the
     # robot's own notices at zero
@@ -207,7 +225,7 @@ def test_the_executors_contact_report_is_counted_where_it_is_made():
     assert len(_calls(fn, 'report_collision')) == 1
     # so the pipeline's two calls of it stay plain statements: nothing
     # branches on the report
-    main = _functions('test_full_pipeline.py')['main']
+    main = _main_and_its_stages()
     plain = [n for n in ast.walk(main) if isinstance(n, ast.Expr)
              and isinstance(n.value, ast.Call)
              and getattr(n.value.func, 'id', None) == 'detect_execution_collisions']
