@@ -743,7 +743,7 @@ def _p08_look(out, m, live):
              'universal newlines), the sha of both, the raw bytes as for the three files above (the two look files '
              'are CRLF in a Windows working tree and LF in the index, SPEC section 3: has_crlf says which); '
              'generated_look_<mode>.pddl: the generated text')
-    out.note('look_files.json: look_domain.mode_of for each --look choice (read from run_logger.py\'s syntax tree), '
+    out.note('look_files.json: look_domain.mode_of for each --look choice (read from pipeline_args.py\'s syntax tree), '
              'a value outside them, True, False and None; look_domain.domain_file for each of those strings with '
              'm8_on True and False (paths relative to the checkout)')
     out.note('negative_look.json: the anchors of the look delta are the module constants look_domain.generate '
@@ -1255,7 +1255,7 @@ def declared_o_args():
 def _flag_specs(flags):
     """{flag: {'choices', 'default'}} of the add_argument calls in run_logger.parse_pipeline_args,
     read from its syntax tree; a flag without such a call fails."""
-    tree = ast.parse((REPO / 'run_logger.py').read_text(encoding='utf-8'))
+    tree = ast.parse((REPO / 'pipeline_args.py').read_text(encoding='utf-8'))
     fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'parse_pipeline_args')
     specs = {}
     for node in ast.walk(fn):
@@ -1458,7 +1458,7 @@ def p22_cli(out):
     out.json('cell_argv.json', cells)
     out.note('cli_tag2.json (gate 7, INDEX_PINS P1): flags: the add_argument calls of the five flags added '
              'since refactor-checkpoint-1 (' + ', '.join(TAG2_FLAGS) + '), choices and default read from '
-             'run_logger.py\'s syntax tree; cases: each choice, a value outside the choices, the free text of '
+             'pipeline_args.py\'s syntax tree; cases: each choice, a value outside the choices, the free text of '
              '--eye-start-joints, --eye arm without a look (the parser takes it; main refuses it), and the '
              'declared F and R strings alone; parsed as in cli.json')
     out.note(f'declared: the P4_O_ARGS strings of the F and R arms read by text from {source["path"]} '
@@ -1577,7 +1577,7 @@ def p23_run_config(out):
                                              ensure_ascii=False) for c in er.iterate_matrix(matrix)])
     out.json('cell_run_config.json', cells)
     out.note('run_config_tag2.json (gate 7, INDEX_PINS P1): --no-gui with each choice of the four flags of '
-             + ', '.join(f for f in TAG2_FLAGS if specs[f]['choices']) + ' (read from run_logger.py\'s syntax '
+             + ', '.join(f for f in TAG2_FLAGS if specs[f]['choices']) + ' (read from pipeline_args.py\'s syntax '
              'tree), --eye-start-joints as a list, --look boxel and centred with --eye arm, and the declared F '
              f'and R strings (read by text from {source["path"]}, git blob {source["git_blob_sha1"]}); rows as '
              'in run_config.json. The slice never runs main(), so --eye arm without a look shows the key that '
@@ -1943,11 +1943,12 @@ def _p30_tag2(out, rl, base, events):
 
 
 def _p30_exit_reasons(out, results):
-    """exit_reasons.json: the values main() of test_full_pipeline.py assigns to exit_reason (its
-    nested functions included) and the ones run_logger.report_run_outcome compares it with or
-    assigns, by AST (PLAN rule 3), and the failed cases of results per exit reason as their
-    timing_summary.json writes it (the case's argument when no summary is written).  results is
-    [(file, [(case, arguments, outcome)])].  The lines go to INFO_exit_reason_lines.json."""
+    """exit_reasons.json: the values test_full_pipeline.py assigns to exit_reason (the whole
+    module: main() and the functions cut out of it hold the sites, as st.ending.exit_reason) and
+    the ones run_logger.report_run_outcome compares it with or assigns, by AST (PLAN rule 3), and
+    the failed cases of results per exit reason as their timing_summary.json writes it (the
+    case's argument when no summary is written).  results is [(file, [(case, arguments,
+    outcome)])].  The lines go to INFO_exit_reason_lines.json."""
     def top_def(path, name):
         tree = ast.parse((REPO / path).read_text(encoding='utf-8'))
         found = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name]
@@ -1958,6 +1959,8 @@ def _p30_exit_reasons(out, results):
     def binds(t):
         if isinstance(t, ast.Name):
             return t.id == 'exit_reason'
+        if isinstance(t, ast.Attribute):
+            return t.attr == 'exit_reason'
         if isinstance(t, (ast.Tuple, ast.List)):
             return any(binds(e) for e in t.elts)
         return isinstance(t, ast.Starred) and binds(t.value)
@@ -1970,19 +1973,19 @@ def _p30_exit_reasons(out, results):
                 if not any(binds(t) for t in targets):
                     continue
                 v = n.value
-                if (isinstance(n, ast.Assign) and len(targets) == 1 and isinstance(targets[0], ast.Name)
+                if (isinstance(n, ast.Assign) and len(targets) == 1 and isinstance(targets[0], (ast.Name, ast.Attribute))
                         and isinstance(v, ast.Constant) and isinstance(v.value, str)):
                     assigns.setdefault(v.value, []).append(n.lineno)
                 else:
                     other.append({'line': n.lineno, 'code': ast.unparse(n)})
-            elif isinstance(n, ast.Compare) and isinstance(n.left, ast.Name) and n.left.id == 'exit_reason':
+            elif isinstance(n, ast.Compare) and binds(n.left):
                 for c in n.comparators:
                     for e in (c.elts if isinstance(c, (ast.Tuple, ast.List, ast.Set)) else [c]):
                         if isinstance(e, ast.Constant) and isinstance(e.value, str):
                             compares.setdefault(e.value, []).append(n.lineno)
         return assigns, other, compares
 
-    m_as, m_other, m_cmp = sites(top_def('test_full_pipeline.py', 'main'))
+    m_as, m_other, m_cmp = sites(ast.parse((REPO / 'test_full_pipeline.py').read_text(encoding='utf-8')))
     r_as, r_other, r_cmp = sites(top_def('run_logger.py', 'report_run_outcome'))
     by_reason, success_cases = {}, []
     for file, items in results:
@@ -2020,13 +2023,15 @@ def _p30_exit_reasons(out, results):
         'run_logger.py report_run_outcome compares': lines(r_cmp),
         'run_logger.py report_run_outcome assigns': lines(r_as),
         'run_logger.py report_run_outcome other assignments': sorted(r_other, key=lambda o: o['line'])})
-    out.note('exit_reasons.json: the exit_reason values main() of test_full_pipeline.py assigns (nested '
-             'functions included), compares, and the ones report_run_outcome compares or assigns, by AST and '
+    out.note('exit_reasons.json: the exit_reason values test_full_pipeline.py assigns (the whole module: '
+             'main() and the functions cut out of it, as st.ending.exit_reason), compares, and the ones '
+             'report_run_outcome compares or assigns, by AST and '
              'sorted; the failed cases of report.json and report_tag2.json by the exit_reason their '
              'timing_summary.json writes (the argument when none is written); lines in '
              'INFO_exit_reason_lines.json')
-    out.note('not reached here: the relabel in main() of all_searched and rediscovery_giveup to target_lost '
-             'when target_lost_seen; it is code of main(), which only an episode runs (group episode)')
+    out.note('not reached here: the relabel in report_episode() of test_full_pipeline.py of all_searched and '
+             'rediscovery_giveup to target_lost when target_lost_seen; it is code main() calls, which only an '
+             'episode runs (group episode)')
 
 
 # ----- pin 31: eval matrix -------------------------------------------------
@@ -3625,7 +3630,7 @@ def p01_scene_random_pairs(out):
     from boxel_env import random_pairs_scene
     _set_switches(False)
     _scene_notes(out)
-    out.note('run boxels = random-pairs, --n-occluders 2 (run.ps1:42), --n-extra-distractors 0 (run_logger.py:740)')
+    out.note('run boxels = random-pairs, --n-occluders 2 (run.ps1:42), --n-extra-distractors 0 (pipeline_args.py:105)')
     out.json('state.json', _module_state())
     for s in SCENE_SEEDS:
         out.json(f'rp_3occ_1dist_seed{s}.json', _scene_case(

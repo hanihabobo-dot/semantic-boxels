@@ -1875,19 +1875,95 @@ def _str_arg(call):
     return None
 
 
+# Where the sites stand since main() was cut into functions (the readable
+# migration's lane L1).  The functions cut out of main are the functions of
+# the file whose first parameter is the episode state `st`; a file whose
+# main() holds everything (checkpoint 1, the tag) has none, and everything
+# below reads it as before.  The cut changed three things a site is read by:
+#   exit_reason is the field st.ending.exit_reason;
+#   a break out of main's loops is `return True` in the cut function, and
+#     the statement at its call, `if f(...): break` or `if f(...): return
+#     True`, passes it on.  The site is the return; the passing statement is
+#     none;
+#   a dispatcher branch's body is the call of a cut function, so a site in
+#     that function is in the branch that calls it.
+
+def _targets_exit_reason(node):
+    """An assignment whose target is exit_reason, as a name or as a field."""
+    return isinstance(node, ast.Assign) and any(
+        getattr(t, 'id', None) == 'exit_reason' or getattr(t, 'attr', None) == 'exit_reason'
+        for t in node.targets)
+
+
+def _is_return_true(node):
+    return isinstance(node, ast.Return) and isinstance(node.value, ast.Constant) and node.value.value is True
+
+
+def _site_scope(tree):
+    """(functions, breaks, calls): main and the functions cut out of it, in
+    source order with main first; the ids of the statements that are 'break'
+    sites (every break, and every `return True` of a cut function whose True
+    a passing statement turns into a break, but not the passing statement's
+    own break or return); and per cut function the statements of the other
+    functions that call it."""
+    main = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main')
+    cut = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef) and n is not main
+           and [a.arg for a in n.args.args][:1] == ['st']}
+    functions = [main] + list(cut.values())
+    passed, plumbing, calls = set(), set(), {name: [] for name in cut}
+    for fn in functions:
+        for node in ast.walk(fn):
+            if not isinstance(node, ast.stmt):
+                continue
+            if (isinstance(node, ast.If) and not node.orelse and len(node.body) == 1
+                    and isinstance(node.test, ast.Call) and getattr(node.test.func, 'id', None) in cut
+                    and (isinstance(node.body[0], ast.Break) or _is_return_true(node.body[0]))):
+                passed.add(node.test.func.id)
+                plumbing.add(id(node.body[0]))
+            # the cut functions the statement itself calls (its own
+            # expressions, not the statements nested in it)
+            own = [c for field, value in ast.iter_fields(node)
+                   for v in (value if isinstance(value, list) else [value])
+                   if isinstance(v, ast.AST) and not isinstance(v, (ast.stmt, ast.excepthandler, ast.match_case))
+                   for c in ast.walk(v)]
+            for c in own:
+                if isinstance(c, ast.Call) and getattr(c.func, 'id', None) in cut and c.func.id != fn.name:
+                    calls[c.func.id].append(node)
+    breaks = set()
+    for fn in functions:
+        todo = list(fn.body)
+        while todo:                               # the function's own statements and those of nested ones
+            node = todo.pop()
+            if isinstance(node, ast.Break):
+                breaks.add(id(node))
+            todo.extend(ast.iter_child_nodes(node))
+        if fn.name in passed:
+            todo = list(fn.body)
+            while todo:                           # a nested function's return is not the cut function's
+                node = todo.pop()
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                    continue
+                if _is_return_true(node):
+                    breaks.add(id(node))
+                todo.extend(ast.iter_child_nodes(node))
+    return functions, breaks - plumbing, calls
+
+
 def main_sites(path=TFP):
     """From the source: every break, dispatch_end(...) and exit_reason = '...'
-    inside main (nested functions included), and the dispatcher branches."""
+    inside main (nested functions included) and inside the functions cut out
+    of it, and the dispatcher branches.  A `return True` that stands for a
+    break of main's loops is a break (see above)."""
     tree = ast.parse(Path(path).read_text(encoding='utf-8'))
-    main = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main')
+    functions, breaks, _ = _site_scope(tree)
     sites = {'break': [], 'dispatch_end': [], 'exit_reason': [], 'branch': []}
-    for node in ast.walk(main):
-        if isinstance(node, ast.Break):
+    for node in (n for fn in functions for n in ast.walk(fn)):
+        if id(node) in breaks:
             sites['break'].append({'line': node.lineno})
         elif isinstance(node, ast.Call) and getattr(node.func, 'id', None) == 'dispatch_end':
             sites['dispatch_end'].append({'line': node.lineno, 'status': _str_arg(node)
                                           or ast.unparse(node.args[0]) if node.args else None})
-        elif isinstance(node, ast.Assign) and any(getattr(t, 'id', None) == 'exit_reason' for t in node.targets):
+        elif _targets_exit_reason(node):
             if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 sites['exit_reason'].append({'line': node.lineno, 'value': node.value.value})
         elif isinstance(node, ast.If):
@@ -1950,7 +2026,7 @@ def _statement_site(stmt):
     if (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call)
             and getattr(stmt.value.func, 'id', None) == 'dispatch_end'):
         return f'dispatch_end:{_dispatch_status(stmt.value)}'
-    if (isinstance(stmt, ast.Assign) and any(getattr(t, 'id', None) == 'exit_reason' for t in stmt.targets)
+    if (_targets_exit_reason(stmt)
             and isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str)):
         return f'exit_reason:{stmt.value.value}'
     return None
@@ -1958,20 +2034,31 @@ def _statement_site(stmt):
 
 def anchored_sites(path=TFP):
     """Every site of main_sites(path), with its anchor: [{kind, line, value,
-    branch, ordinal}] in source order; branch is [actions..., ordinal] of
-    the innermost dispatcher branch whose body holds the site (an elif or
-    else part is not its branch's body), or None."""
+    branch, ordinal}]; branch is [actions..., ordinal] of the innermost
+    dispatcher branch whose body holds the site (an elif or else part is
+    not its branch's body), or None.
+
+    A cut function that one statement calls stands where that statement
+    stands: its sites are in the dispatcher branch whose body holds the
+    statement, and they are ordered there, so the ordinals count in the
+    order main reaches the statements, as they did in one main.  A cut
+    function that several statements call (a closure of the old main) or
+    none is in no branch and is ordered by its own lines.  The list comes
+    in that order; for a file whose main holds everything it is the source
+    order."""
     tree = ast.parse(Path(path).read_text(encoding='utf-8'))
-    main = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main')
-    found = []
+    functions, breaks, calls = _site_scope(tree)
+    main, cut = functions[0], {fn.name: fn for fn in functions[1:]}
+    placed_at = {id(stmts[0]): cut[name] for name, stmts in calls.items() if len(stmts) == 1}
+    found, visited = [], set()
 
     def site(node, siblings, index):
-        if isinstance(node, ast.Break):
+        if id(node) in breaks:
             before = [_statement_site(s) for s in (siblings or [])[:index]]
             return 'break', next((v for v in reversed(before) if v), None)
         if isinstance(node, ast.Call) and getattr(node.func, 'id', None) == 'dispatch_end':
             return 'dispatch_end', _dispatch_status(node)
-        if isinstance(node, ast.Assign) and any(getattr(t, 'id', None) == 'exit_reason' for t in node.targets):
+        if _targets_exit_reason(node):
             if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 return 'exit_reason', node.value.value
         actions = _dispatcher_actions(node)
@@ -1979,24 +2066,36 @@ def anchored_sites(path=TFP):
             return 'branch', list(actions)
         return None
 
-    def visit(node, branch, siblings=None, index=None):
+    def visit(node, branch, at, siblings=None, index=None):
         s = site(node, siblings, index)
         if s is not None:
             found.append({'kind': s[0], 'line': node.lineno, 'col': node.col_offset, 'value': s[1],
-                          'branch_node': branch, 'node': node})
+                          'branch_node': branch, 'node': node,
+                          'at': at + ((node.lineno, node.col_offset),)})
         inner = node if _dispatcher_actions(node) is not None else None
         for field, value in ast.iter_fields(node):
             here = inner if (inner is not None and field == 'body') else branch
             if isinstance(value, list):
                 for i, child in enumerate(value):
                     if isinstance(child, ast.AST):
-                        visit(child, here, value, i)
+                        visit(child, here, at, value, i)
             elif isinstance(value, ast.AST):
-                visit(value, here)
+                visit(value, here, at)
+        called = placed_at.get(id(node))
+        if called is not None and called.name not in visited:
+            visit_function(called, branch, at + ((node.lineno, node.col_offset),))
 
-    for i, stmt in enumerate(main.body):
-        visit(stmt, None, main.body, i)
-    found.sort(key=lambda d: (d['line'], d['col']))
+    def visit_function(fn, branch, at):
+        visited.add(fn.name)
+        for i, stmt in enumerate(fn.body):
+            visit(stmt, branch, at, fn.body, i)
+
+    visit_function(main, None, ())
+    placed = {fn.name for fn in placed_at.values()}
+    for fn in [f for f in functions[1:] if f.name not in placed] + functions[1:]:
+        if fn.name not in visited:               # the second round: placed, but by a function not reached
+            visit_function(fn, None, ())
+    found.sort(key=lambda d: d['at'])
     branch_anchor, seen = {}, {}
     for d in found:
         if d['kind'] == 'branch':

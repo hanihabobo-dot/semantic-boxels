@@ -24,20 +24,23 @@ REPO = Path(__file__).resolve().parents[2]
 TFP = REPO / 'test_full_pipeline.py'
 
 # test_full_pipeline.py 2213 to 2214 on the tag (SPEC D8: the look joined
-# the actions that keep the at-home state; read again, not guessed).
-_HOME_OLD = ("            if action_name not in ('sense', 'observe', 'look'):\n"
-             "                at_home_ok = False\n")
-_HOME_NEW = ("            if action_name not in ('sense', 'observe', 'look'):\n"
-             "                pass\n")
+# the actions that keep the at-home state; read again, not guessed).  Since
+# main() was cut into functions the two lines stand in dispatch_step (1656
+# to 1657), and the empty-hand lines below in do_place (2328 to 2333), both
+# at the function's own depth and with the names of the episode state st.
+_HOME_OLD = ("    if action_name not in ('sense', 'observe', 'look'):\n"
+             "        st.arm.at_home_ok = False\n")
+_HOME_NEW = ("    if action_name not in ('sense', 'observe', 'look'):\n"
+             "        pass\n")
 
-_EH_HEAD = ('                    print(f"    empty hand at place entry for {obj_str}; "\n'
-            '                          f"clearing held state and replanning (#P1 F1).")\n')
-_EH_COUNT = ('                    transit_loss_counts[obj_str] = \\\n'
-             '                        transit_loss_counts.get(obj_str, 0) + 1\n')
-_EH_PRINT = ('                    print(f"    transit loss {transit_loss_counts[obj_str]}"\n'
-             '                          f"/3 for {obj_str} (review-fix strike counter)")\n')
-_EH_PRINT_GET = ('                    print(f"    transit loss {transit_loss_counts.get(obj_str, 0)}"\n'
-                 '                          f"/3 for {obj_str} (review-fix strike counter)")\n')
+_EH_HEAD = ('        print(f"    empty hand at place entry for {obj_str}; "\n'
+            '              f"clearing held state and replanning (#P1 F1).")\n')
+_EH_COUNT = ('        st.strikes.transit_loss_counts[obj_str] = \\\n'
+             '            st.strikes.transit_loss_counts.get(obj_str, 0) + 1\n')
+_EH_PRINT = ('        print(f"    transit loss {st.strikes.transit_loss_counts[obj_str]}"\n'
+             '              f"/3 for {obj_str} (review-fix strike counter)")\n')
+_EH_PRINT_GET = ('        print(f"    transit loss {st.strikes.transit_loss_counts.get(obj_str, 0)}"\n'
+                 '              f"/3 for {obj_str} (review-fix strike counter)")\n')
 
 # name: (what, old text, new text, the pins that must turn red)
 PLANTS = {
