@@ -1097,6 +1097,20 @@ def test_ledger_counts_count_the_rows_d3_and_d4_decide_on():
     assert rec.ledger_counts(None) == rec.ledger_counts([])
 
 
+def _execution_and_its_cut_files():
+    """execution.py with the files cut out of it, as one tree, and their
+    names: the files beside it named execution_*.py that it imports names
+    back from.  What a test counted in execution.py it counts in this tree,
+    as it did when the functions of those files stood in execution.py."""
+    names = ['execution.py']
+    tree = ast.parse((REPO / 'execution.py').read_text(encoding='utf-8'))
+    for n in list(tree.body):
+        if isinstance(n, ast.ImportFrom) and (n.module or '').startswith('execution_'):
+            names.append(f'{n.module}.py')
+            tree.body += ast.parse((REPO / names[-1]).read_text(encoding='utf-8')).body
+    return tree, names
+
+
 def test_the_names_the_counts_rest_on_are_the_tag_s():
     """Every name D3's and D4's counts look for is one the tag's code writes:
     the three row kinds among pin 40's ledger_kinds() (read from every
@@ -1136,6 +1150,21 @@ def test_the_names_the_counts_rest_on_are_the_tag_s():
             and isinstance(k.value.values[0], ast.Constant) and isinstance(k.value.values[1], ast.FormattedValue)
             and ast.unparse(k.value.values[1].value) == var]
     assert len(made) == 1 and rec.NONTARGET_REASON == made[0] + outcome
+    # Eight functions of execution.py stand in execution_hand.py and
+    # execution_render.py since they were cut out of it.  The compare under
+    # M7 and the reason made from its outcome are still the only ones when
+    # those two files are read too, as they were counted at the tag.
+    wide, files = _execution_and_its_cut_files()
+    assert {'execution_hand.py', 'execution_render.py'} <= set(files)
+    assert len([cmp for n in ast.walk(wide) if isinstance(n, ast.BoolOp) and isinstance(n.op, ast.And)
+                and any(isinstance(v, ast.Name) and v.id == 'M7' for v in n.values)
+                for cmp in n.values if isinstance(cmp, ast.Compare) and len(cmp.ops) == 1
+                and isinstance(cmp.ops[0], ast.Eq) and isinstance(cmp.comparators[0], ast.Constant)]) == 1
+    assert len([k for n in ast.walk(wide) if isinstance(n, ast.Call) for k in n.keywords
+                if k.arg == 'reason' and isinstance(k.value, ast.JoinedStr) and len(k.value.values) == 2
+                and isinstance(k.value.values[0], ast.Constant)
+                and isinstance(k.value.values[1], ast.FormattedValue)
+                and ast.unparse(k.value.values[1].value) == var]) == 1
     tfp = ast.parse((REPO / 'test_full_pipeline.py').read_text(encoding='utf-8'))
     sense_rows = calls_of(tfp, rec.SENSE_RESULT_KIND)
     assert sense_rows and all(ast.unparse(k.value).endswith('.reason') for n in sense_rows

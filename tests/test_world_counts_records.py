@@ -125,6 +125,20 @@ def _calls(node, name):
             and getattr(c.func, 'attr', getattr(c.func, 'id', None)) == name]
 
 
+def _execution_and_its_cut_files():
+    """execution.py with the files cut out of it, as one tree, and their
+    names: the files beside it named execution_*.py that it imports names
+    back from.  What a test counted in execution.py it counts in this tree,
+    as it did when the functions of those files stood in execution.py."""
+    names = ['execution.py']
+    tree = ast.parse((REPO / 'execution.py').read_text(encoding='utf-8'))
+    for n in list(tree.body):
+        if isinstance(n, ast.ImportFrom) and (n.module or '').startswith('execution_'):
+            names.append(f'{n.module}.py')
+            tree.body += ast.parse((REPO / names[-1]).read_text(encoding='utf-8')).body
+    return tree, names
+
+
 def _main_and_its_stages():
     """main() of the pipeline with the functions cut out of it, as one tree:
     the functions whose first parameter is the episode state st, defined in
@@ -189,6 +203,14 @@ def test_only_the_release_of_a_place_opens_as_placing():
     assert placing == {'_release_and_verify_drop'}
     for c in _calls(fns['_release_and_verify_drop'], 'open_gripper'):
         assert [k.value.value for k in c.keywords if k.arg == 'placing'] == [True]
+    # Eight functions of execution.py stand in execution_hand.py and
+    # execution_render.py since they were cut out of it: it is still the one
+    # function when those two files are read too.
+    wide, files = _execution_and_its_cut_files()
+    assert {'execution_hand.py', 'execution_render.py'} <= set(files)
+    assert {fn.name for fn in ast.walk(wide) if isinstance(fn, ast.FunctionDef)
+            for c in _calls(fn, 'open_gripper')
+            if any(k.arg == 'placing' for k in c.keywords)} == {'_release_and_verify_drop'}
 
 
 def test_the_robots_three_checks_count_what_they_notice():
@@ -206,6 +228,12 @@ def test_the_robots_three_checks_count_what_they_notice():
     tree = ast.parse((REPO / 'execution.py').read_text(encoding='utf-8'))
     counted = sorted(c.args[0].value for c in _calls(tree, 'notice_drop'))
     assert counted == ['carry', 'entry', 'lift']
+    # and no fourth count in the two files cut out of execution.py
+    # (execution_hand.py, execution_render.py)
+    wide, files = _execution_and_its_cut_files()
+    assert {'execution_hand.py', 'execution_render.py'} <= set(files)
+    assert sorted(c.args[0].value for c in _calls(wide, 'notice_drop')) == [
+        'carry', 'entry', 'lift']
 
 
 def test_the_executors_contact_report_is_counted_where_it_is_made():

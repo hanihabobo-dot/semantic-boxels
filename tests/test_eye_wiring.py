@@ -137,9 +137,32 @@ def test_main_reads_the_frame_only_after_the_arm_switch_in_the_same_test():
 
 # ----- 2. execution.py ----------------------------------------------------------------
 
+def _execution_and_its_cut_files():
+    """execution.py with the files cut out of it, as one tree, and their
+    names: the files beside it named execution_*.py that it imports names
+    back from.  What a test counted in execution.py it counts in this tree,
+    as it did when the functions of those files stood in execution.py."""
+    names = ['execution.py']
+    tree = ast.parse((ROOT / 'execution.py').read_text(encoding='utf-8'))
+    for n in list(tree.body):
+        if isinstance(n, ast.ImportFrom) and (n.module or '').startswith('execution_'):
+            names.append(f'{n.module}.py')
+            tree.body += ast.parse((ROOT / names[-1]).read_text(encoding='utf-8')).body
+    return tree, names
+
+
 def test_execution_runs_no_blocker_census_with_the_arm_camera():
     guarded = _under_text(EXECUTION, 'not arm_eye.following(env)')
     calls = _calls(EXECUTION, 'compute_shadow_blockers')
+    assert len(calls) == 3 and all(id(c) in guarded for c in calls)
+    # Eight functions of execution.py stand in execution_hand.py and
+    # execution_render.py since they were cut out of it.  The three calls
+    # above are still all of them, each behind the switch, when those two
+    # files are read too.
+    wide, files = _execution_and_its_cut_files()
+    assert {'execution_hand.py', 'execution_render.py'} <= set(files)
+    guarded = _under_text(wide, 'not arm_eye.following(env)')
+    calls = _calls(wide, 'compute_shadow_blockers')
     assert len(calls) == 3 and all(id(c) in guarded for c in calls)
 
 
