@@ -35,6 +35,124 @@ Layouts: the full view (a terminal of at least BLOCK_MIN_COLS columns and
 BLOCK_MIN_ROWS rows) draws the animated block; a narrower terminal gets a
 one-line status with the same animation; a captured console (not a
 terminal) gets plain text, no animation and no colour.
+
+Where the code is
+-----------------
+The console is four files by job; this one is the first to open.
+
+  console_ui.py         The install (install_early, install, attach, detach),
+                        the event API the pipeline calls (set_context,
+                        set_task, startup, header, on_ledger_event, summary,
+                        say, warn, finish, terminal), the stream classes
+                        (_StderrTee, _TerminalWriter, _ConsoleHandler) and
+                        Console: its set-up, the take-over of the terminal,
+                        another task's words, the lifecycle, say and summary.
+  console_phrases.py    The words.  How a step, a plan and a place are
+                        phrased (describe_step, intention), which lines of
+                        the pipeline's narration the console listens to
+                        (_WARN, _reason_rules, _note_rules and the patterns
+                        below them), and how a step's end reads
+                        (_STATUS_TEXT).
+  console_screen.py     ConsoleScreen, the drawing: glyphs and colours, one
+                        committed line (_emit), the live activity with its
+                        animated block (_start_live to _animate), the banner.
+  console_narration.py  ConsoleNarration, the speaking: what is said for a
+                        ledger row (on_ledger_event, _plan, _step_begin,
+                        _step_end) and for a narration line (narration); the
+                        line kinds warn, note and statement; the header.
+  console_art.py        The sprites of the animated block.
+  console_audio.py      The sound and the voice, when SB_AUDIO or SB_VOICE
+                        asks for them.
+
+Every name of the three files console_phrases, console_screen and
+console_narration is imported back below, so `console_ui.<name>` reads as
+it did when all of it was one file.
+
+A run on the screen
+-------------------
+A recorded run played through this console by
+tools/readable/console_replay.py (the episode rp0).  The terminal is a
+pipe, so there is no colour and no animation; the replay freezes the
+clock, hence "0.0 s"; <RUN> stands for the run's folder.
+
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      ▣  S E M A N T I C   B O X E L S
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ● Starting up… ready  (0.0 s)
+    ● Mission: find the hidden target and pick it up.
+      ⎿ run_2026-11-21_08-50-55 · random-pairs seed 0, 2 occluders, 1 targets, 1 hidden · M8 on, M9 on, M10 on, pick aperture from pose on, grip squeeze 0.5 mm, planner ff-astar2, slip fixes force hold,grasp wrist home,pose radius keep,solver iters
+    ● I see 2 objects on the table and 2 spaces hidden behind them.
+    ● I am after orange_object. It is hidden somewhere I cannot see, so I will have to search.
+      ⎿ (the oracle knows: it is in the space behind green_object)
+    ✻ Thinking… how to get hold of orange_object … 7 steps in 1.3 s
+      ⎿ I will pick up green_object, set it down on a free spot, look behind it for orange_object, then pick up orange_object
+    ● Moving over green_object … done  (0.2 s)
+    ● Picking up green_object …
+      ⎿ I have a firm grip on green_object: its half-width is 29.0 mm, I expected 28.0 mm
+      ⎿ I can see orange_object now (221 px): it is the target and I can pick it directly
+      ⎿ done  (0.7 s)
+    ● Moving over a free spot … done  (0.4 s)
+    ● Setting green_object down on a free spot …
+      ⎿ green_object is where I put it (2088 px)
+      ⎿ done  (1.3 s)
+    ● Moving to the space behind green_object … done  (0.3 s)
+    ● Looking into the space behind green_object for orange_object … found it  (0.3 s)
+    ● Picking up orange_object from the space behind green_object …
+      ⎿ I have a firm grip on orange_object: its half-width is 18.1 mm, I expected 17.0 mm
+      ⎿ done  (0.6 s)
+    ────────────────────────────────────────────
+    ✔ Done. I am holding orange_object.
+      ⎿ found behind green_object · 1 space searched · 1 plan · 7 steps, 7 done · planning 1.3 s · 0.0 s in all
+      ⎿ log and raw stream in <RUN>/run_2026-11-21_08-50-55
+
+The screen map
+--------------
+Element, the method that writes it, and where its input comes from.
+
+  the banner                ConsoleScreen._banner, from Console.__init__
+  "Starting up", "ready"    Console.__init__ starts the activity;
+                            Console.attach or ConsoleNarration.header ends it
+  a start-up note           ConsoleNarration.startup_note, from startup()
+                            (the bridge driver's scene file)
+  "Mission: ..." and the    ConsoleNarration.header, from header(), which
+  run line under it         test_full_pipeline.py calls once with the scene,
+                            the goal and the switches
+  "I see ...", "I am        ConsoleNarration.narration, from the lines the
+  after ..."                pipeline prints (_SCENE, _TARGET_*, _ORACLE_*)
+  "Thinking ..."            ConsoleNarration._start_thinking, from the line
+                            "=== PLAN #n ===" or the ledger's plan row
+  "... N steps in T s" and  ConsoleNarration._plan, from the ledger's plan
+  "I will ..."              row (intention() phrases the actions)
+  a step and how it ended   ConsoleNarration._step_begin and _step_end, from
+                            the ledger's step and step_end rows
+  the notes under a step    ConsoleNarration.narration by _note_rules; the
+                            at_home_test row in on_ledger_event
+  a warning                 ConsoleNarration.warn: a narration line that
+                            _WARN matches, a stderr line that _STDERR_WARN
+                            matches (_StderrTee), an ERROR record of the
+                            logging tree (_ConsoleHandler), a
+                            gate_violation row, warn()
+  the bridge's gate table   Console.say and ConsoleNarration._gate_verdict,
+  and outcome line          from print() inside `with terminal():`
+  the closing verdict and   Console.summary, from summary(), which
+  the numbers under it      run_logger calls after its own prints
+  a crash or an interrupt   Console._excepthook
+  the animated block        ConsoleScreen._draw_live, redrawn by _animate
+                            (on a terminal only)
+
+How a line reaches the screen
+-----------------------------
+  1. The ledger.  run_logger.ledger_event calls on_ledger_event(kind, row)
+     after it has written the row.
+  2. The narration.  RunLogger's stdout tee hands every complete line the
+     pipeline prints to Console.narration; most lines show nothing.
+  3. The event API, called by the entry points and by run_logger: startup,
+     header, summary, say, warn.
+  4. sys.stderr (_StderrTee shows the lines _STDERR_SHOW names) and the
+     root logger (_ConsoleHandler, ERROR and above).
+  5. print() inside `with terminal():` (_TerminalWriter).
+What is shown ends in ConsoleScreen._emit (a committed line) or in the
+live activity (_start_live, _update_live, _end_live).
 """
 import argparse
 import atexit
@@ -450,6 +568,20 @@ def _early_debug_path():
 # ---------------------------------------------------------------------------
 
 class Console(ConsoleScreen, ConsoleNarration):
+    """The installed console.  One object and one lock (`self._lock`); its
+    methods live in three places:
+
+    here              the set-up (`__init__`, `_take_over`, `_art_codes`),
+                      another task's words (`set_task`, `_tw`, `_describe`,
+                      `_set_sprite`), the lifecycle (`attach` to
+                      `_flush_all`), `say` and `summary`
+    ConsoleScreen     everything that draws (console_screen.py)
+    ConsoleNarration  everything that decides the words
+                      (console_narration.py)
+
+    `say` and `summary` stay here because they read `_short_path`, which
+    reads this module's `REPO`."""
+
     def __init__(self, debug_path=None):
         self._in_run_dir = debug_path is not None
         self.debug_path = debug_path
