@@ -6,7 +6,7 @@ event".  Pure functions and two small files: no simulator, no episode.
 """
 import json
 
-import world_counts as wc
+from world import world_counts as wc
 
 DROP = {'object': 'green_object', 'phase': 'move', 't': 12.5,
         'how': 'left the finger pads with no release commanded'}

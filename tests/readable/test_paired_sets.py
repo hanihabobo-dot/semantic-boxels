@@ -292,7 +292,7 @@ def test_declaration_needs_exactly_one_block(tmp_path):
 def test_boxels_argv_is_eval_runners():
     sys.path.insert(0, str(ROOT))
     try:
-        import eval_runner  # no pybullet at import (json, os, world_counts)
+        from evaluation import eval_runner  # no pybullet at import (json, os, world_counts)
     finally:
         sys.path.remove(str(ROOT))
     cell = {"scene": "random-pairs", "seed": 7, "goal": "holding", "baseline": "semantic",

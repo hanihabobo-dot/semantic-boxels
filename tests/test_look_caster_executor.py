@@ -19,11 +19,11 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import look_action  # noqa: E402
-import look_views  # noqa: E402
-from boxel_data import BoxelType  # noqa: E402
-from execution import sense_shadow_from_render  # noqa: E402
-from perception import SENSE_MARGINAL_BLOCKED_FRACTION  # noqa: E402
+from sensing import look_action  # noqa: E402
+from sensing import look_views  # noqa: E402
+from world.boxel_data import BoxelType  # noqa: E402
+from acting.execution import sense_shadow_from_render  # noqa: E402
+from sensing.perception import SENSE_MARGINAL_BLOCKED_FRACTION  # noqa: E402
 from test_look_caster_view import AIM, BACK, EYE, _around, _cell  # noqa: E402
 from test_look_views import _boxel, _render, world  # noqa: E402,F401
 

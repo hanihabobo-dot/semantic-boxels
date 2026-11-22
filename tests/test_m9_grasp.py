@@ -6,10 +6,10 @@ import numpy as np
 import pybullet as p
 import pytest
 
-import pose_belief
-import robot_utils
-import streams
-from boxel_data import BoxelData, BoxelType
+from sensing import pose_belief
+from acting import robot_utils
+from planning import streams
+from world.boxel_data import BoxelData, BoxelType
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def slip_off():
     """BF#62 made the wrist twin rule (grasp_wrist_home) a default; the
     sample_grasp tests here pin the M9 sampler on its own, so every slip
     switch is off for them (the rule has tests/test_slip_grasp_wrist_home.py)."""
-    import slip_fixes
+    from acting import slip_fixes
     saved = slip_fixes.ENABLED
     slip_fixes.configure('none')
     yield

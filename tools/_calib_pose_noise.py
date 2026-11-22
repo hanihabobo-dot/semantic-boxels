@@ -33,9 +33,9 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO not in sys.path:
     sys.path.insert(0, REPO)
 
-import perception        # noqa: E402
-import pose_belief       # noqa: E402
-import robot_utils       # noqa: E402
+from sensing import perception        # noqa: E402
+from sensing import pose_belief       # noqa: E402
+from acting import robot_utils       # noqa: E402
 
 DIE_EXT = (0.0176, 0.0173, 0.0178)
 YAWS_DEG = list(range(0, 90, 5))
@@ -74,7 +74,7 @@ def build_env(n_occ, seed, goal='holding'):
     cfg = tfp.random_pairs_scene(n_occluders=n_occ, extra_distractors=0, seed=seed)
     if goal == 'find-and-tray-stack':
         cfg.enable_tray = True
-    from boxel_env import BoxelTestEnv
+    from world.boxel_env import BoxelTestEnv
     env = BoxelTestEnv(gui=False, scene_config=cfg)
     for _ in range(50):
         env.step_simulation()

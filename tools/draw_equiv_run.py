@@ -69,7 +69,7 @@ def main():
         sys.path.insert(0, repo)
 
     # The console first, as the driver does it, before pybullet's banner.
-    import console_ui
+    from console import console_ui
     console_ui.install_early('__main__', argv=driver_args)
 
     import pybullet

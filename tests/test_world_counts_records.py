@@ -18,9 +18,9 @@ from pathlib import Path
 
 import pytest
 
-import eval_runner as er
-import run_logger
-import world_counts as wc
+from evaluation import eval_runner as er
+from console import run_logger
+from world import world_counts as wc
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / 'tools'))
@@ -262,7 +262,7 @@ def test_the_executors_contact_report_is_counted_where_it_is_made():
 
 def test_a_contact_report_that_names_a_contact_counts_once(monkeypatch):
     pytest.importorskip('pybullet')
-    import robot_utils
+    from acting import robot_utils
 
     class Sim:
         contacts = []

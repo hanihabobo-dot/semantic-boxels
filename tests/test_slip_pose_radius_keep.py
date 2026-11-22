@@ -9,10 +9,10 @@ import math
 import numpy as np
 import pytest
 
-import pose_belief
-import slip_fixes
-from boxel_data import BoxelData, BoxelType
-from perception import ObjectDetection
+from sensing import pose_belief
+from acting import slip_fixes
+from world.boxel_data import BoxelData, BoxelType
+from sensing.perception import ObjectDetection
 
 R = {'wrist': 0.00039, 'eye': 0.00549}
 CUP_AABB = 0.0696          # the cup's registry box side (pose_belief BF#46)

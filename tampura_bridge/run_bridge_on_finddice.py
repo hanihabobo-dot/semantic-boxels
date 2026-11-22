@@ -31,7 +31,7 @@ if REPO not in sys.path:
 # The curated console (console_ui, 2026-10-30): installed only when this
 # file runs as the script at --log-level smart, before pybullet's import
 # banner; the raw stdout and stderr go to the run's console_debug.log.
-import console_ui                                # noqa: E402
+from console import console_ui                                # noqa: E402
 console_ui.install_early(__name__)
 
 from tampura.config import config as tconfig    # noqa: E402
@@ -40,8 +40,8 @@ import tampura_environments                      # noqa: E402,F401
 from tampura_bridge import g13_runtime              # noqa: E402
 from tampura_bridge import gui_panes                 # noqa: E402
 from tampura_bridge import policy as bridge_policy   # noqa: E402
-import slip_fixes                                    # noqa: E402  (BF#59, BF#62)
-import world_counts                                  # noqa: E402  (TB-22, rule 18)
+from acting import slip_fixes                                    # noqa: E402  (BF#59, BF#62)
+from world import world_counts                                  # noqa: E402  (TB-22, rule 18)
 
 
 class _SceneFile(logging.Handler):
@@ -129,7 +129,7 @@ def _save_overview(client, save_dir, target):
     (world_eye.images_wanted(): --save-screenshots on and BOXEL_EYE_IMAGES
     not 0); TinyRenderer, so headless runs make it too; a failure here
     never touches the episode."""
-    import world_eye
+    from world import world_eye
     if not world_eye.images_wanted():
         return []
     import pybullet as p

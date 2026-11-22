@@ -123,7 +123,7 @@ def test_new_sounds_render_cleanly(tmp_path, name, seconds, peak):
     right length, normalized like the other effects (no clipping), ending faded."""
     import struct
     import wave
-    import console_audio
+    from console import console_audio
     assert {'act', 'think', 'startup', 'found', 'warn', 'fail', 'success', 'failure'} <= set(console_audio.PIECES)
     path = str(tmp_path / f'{name}.wav')
     console_audio.PIECES[name]().write(path)
@@ -140,7 +140,7 @@ def test_new_sounds_render_cleanly(tmp_path, name, seconds, peak):
 
 @pytest.fixture
 def logger(tmp_path):
-    from run_logger import RunLogger
+    from console.run_logger import RunLogger
     lg = RunLogger(verbosity='quiet', log_dir=str(tmp_path / 'logs'))
     yield lg
     lg.close()

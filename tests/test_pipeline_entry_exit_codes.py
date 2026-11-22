@@ -147,7 +147,7 @@ if __name__ == '__main__':
     # console is installed, so finish is sys.exit) and Python's own
     # excepthook.  main() raises; the calls made are printed at the end.
     sys.path.insert(0, str(SOURCE_PATH.parent))
-    import console_ui
+    from console import console_ui
     made = []
     try:
         exec(_entry_tail(), _stand_ins(_crash, console_ui, made))

@@ -294,8 +294,8 @@ def test_runs_place_every_anchored_row(fresh, pin_id):
 @in_wsl
 def test_made_tapes_reach_every_rule_kind_and_status():
     sys.path.insert(0, str(REPO))
-    import console_ui
-    import run_logger
+    from console import console_ui
+    from console import run_logger
     cov = cr.coverage([cr.made_tape(n) for n in cr.MADE], cu=console_ui,
                       statuses=run_logger.STEP_END_STATUSES)
     unreached = [r for r in cov['rules_not_reached'] if r not in KNOWN_UNREACHED_RULES]

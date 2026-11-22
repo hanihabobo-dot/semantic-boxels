@@ -23,7 +23,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import perception  # noqa: E402
+from sensing import perception  # noqa: E402
 from tampura_bridge import task_spec  # noqa: E402
 from test_look_centred import _centred_setup, _look  # noqa: E402
 from test_look_correspondence import _Loop, _add_body, m1_calls  # noqa: E402,F401

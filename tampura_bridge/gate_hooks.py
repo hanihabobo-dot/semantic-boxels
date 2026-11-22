@@ -39,7 +39,7 @@ from typing import Callable, Optional
 
 import pybullet
 
-import run_logger
+from console import run_logger
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -313,7 +313,7 @@ def _make_camera(orig):
             camera = 'eye' if matched else None
             robot = _cfg.wrist_robots.get(_client(kwargs))
             if not matched and robot is not None:
-                import robot_utils
+                from acting import robot_utils
                 wv, wp = robot_utils.wrist_camera_matrices(
                     robot_utils.wrist_camera_pose(robot, _client(kwargs)))
                 matched = (_close(view, wv, _cfg.camera_tol)
@@ -528,7 +528,7 @@ def _check_twin(env, held_body_id, registry):
 
 
 def _ee_link():
-    import robot_utils
+    from acting import robot_utils
     return robot_utils.robot_model().ee_link
 
 
@@ -586,9 +586,9 @@ def install(cfg: GateConfig) -> None:
     global _cfg, _orig_plan_code, _planner_cls, _streams_cls
     if _cfg is not None:
         raise RuntimeError('gate hooks already installed')
-    import pddlstream_planner
-    import robot_utils
-    import streams
+    from planning import pddlstream_planner
+    from acting import robot_utils
+    from planning import streams
     _cfg = cfg
     reset_counts()
     set_phase('setup')
@@ -618,14 +618,14 @@ def install(cfg: GateConfig) -> None:
     wrap('getCameraImage', _make_camera(pybullet.getCameraImage))
     _patch_bullet_client()
 
-    _rebind('robot_utils', 'solve_ik', _make_solve_ik(robot_utils.solve_ik))
-    _rebind('robot_utils', 'move_robot_smooth',
+    _rebind('acting.robot_utils', 'solve_ik', _make_solve_ik(robot_utils.solve_ik))
+    _rebind('acting.robot_utils', 'move_robot_smooth',
             _make_move_smooth(robot_utils.move_robot_smooth))
     # BF#2 (g): world_eye and telemetry are pure observers that read the
     # simulator (every body, the hidden die included) and render their own
     # images; they run as the declared write-only set and captures.
-    import telemetry
-    import world_eye
+    from console import telemetry
+    from world import world_eye
     for mod, names in ((world_eye, ('enable', 'snapshot', 'disable')),
                        (telemetry, ('enable', 'tick', 'phase', 'note',
                                     'disable', 'attach_robot',
@@ -633,12 +633,12 @@ def install(cfg: GateConfig) -> None:
         for name in names:
             if hasattr(mod, name):
                 _rebind(mod.__name__, name,
-                        _make_observer(f'{mod.__name__}.{name}',
+                        _make_observer(f'{mod.__name__.rpartition(".")[2]}.{name}',
                                        getattr(mod, name)))
     # G8(c): after every belief-posed sync, each body with an OBJECT boxel
     # sits at its registry centre in the plan twin and every boxel-less
     # body at the park pose.
-    import boxel_env
+    from world import boxel_env
     _patched_attrs.append((boxel_env.BoxelTestEnv, 'sync_to_plan_client',
                            boxel_env.BoxelTestEnv.sync_to_plan_client))
     boxel_env.BoxelTestEnv.sync_to_plan_client = _make_sync_check(
@@ -648,13 +648,13 @@ def install(cfg: GateConfig) -> None:
         physicsClientId=cfg.executing_client)
     # G8(b) asks whether a task body has an OBJECT boxel: the registry
     # main() builds is recorded here as it is created.
-    import boxel_data
+    from world import boxel_data
     _patched_attrs.append((boxel_data.BoxelRegistry, '__init__',
                            boxel_data.BoxelRegistry.__init__))
     boxel_data.BoxelRegistry.__init__ = _make_registry_init(
         boxel_data.BoxelRegistry.__init__)
     for name in ('is_config_collision_free', 'is_path_collision_free'):
-        _rebind('robot_utils', name,
+        _rebind('acting.robot_utils', name,
                 _make_collision_check(name, getattr(robot_utils, name)))
 
     _planner_cls = pddlstream_planner.PDDLStreamPlanner

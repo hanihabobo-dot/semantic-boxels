@@ -20,7 +20,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from eval_runner import run_cell  # noqa: E402
+from evaluation.eval_runner import run_cell  # noqa: E402
 
 CELLS = [
     {

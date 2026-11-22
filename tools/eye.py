@@ -30,7 +30,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from world_eye import render_snapshot  # noqa: E402
+from world.world_eye import render_snapshot  # noqa: E402
 
 
 def resolve_run(arg):

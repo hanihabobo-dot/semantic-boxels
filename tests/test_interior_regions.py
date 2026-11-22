@@ -7,14 +7,14 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-import console_ui
-import execution
-import interior_regions as ir
-from belief import BeliefState
-from boxel_data import BoxelData, BoxelRegistry, BoxelType
-from boxel_types import ObjectInfo
-from perception import ObjectDetection
-from shadow_calculator import ShadowCalculator
+from console import console_ui
+from acting import execution
+from world import interior_regions as ir
+from sensing.belief import BeliefState
+from world.boxel_data import BoxelData, BoxelRegistry, BoxelType
+from world.boxel_types import ObjectInfo
+from sensing.perception import ObjectDetection
+from world.shadow_calculator import ShadowCalculator
 
 CUP = (0.0767, 0.0767, 0.0719)          # e_cups_ud's class box (task_spec)
 CAVITY = (0.056, 0.057, 0.0624)         # its declared cavity

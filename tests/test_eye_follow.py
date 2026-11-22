@@ -35,14 +35,14 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import arm_eye  # noqa: E402
-import execution  # noqa: E402
-import observe_views  # noqa: E402
-import perception  # noqa: E402
-import robot_utils  # noqa: E402
-from belief import BeliefState  # noqa: E402
-from boxel_data import BoxelData, BoxelRegistry, BoxelType  # noqa: E402
-from boxel_env import BoxelTestEnv  # noqa: E402
+from sensing import arm_eye  # noqa: E402
+from acting import execution  # noqa: E402
+from sensing import observe_views  # noqa: E402
+from sensing import perception  # noqa: E402
+from acting import robot_utils  # noqa: E402
+from sensing.belief import BeliefState  # noqa: E402
+from world.boxel_data import BoxelData, BoxelRegistry, BoxelType  # noqa: E402
+from world.boxel_env import BoxelTestEnv  # noqa: E402
 from test_eye_switch import BASE_CAMERA, START as REST, THEIR_HOME  # noqa: E402
 
 # main()'s start configuration with --eye arm when no joints are given

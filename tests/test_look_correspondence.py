@@ -24,14 +24,14 @@ import numpy as np
 import pybullet as p
 import pytest
 
-import look_action
-import look_domain
-import look_views
-import observe_views
-import pose_belief
-import robot_utils
-from belief import BeliefState
-from boxel_data import BoxelType
+from sensing import look_action
+from planning import look_domain
+from sensing import look_views
+from sensing import observe_views
+from sensing import pose_belief
+from acting import robot_utils
+from sensing.belief import BeliefState
+from world.boxel_data import BoxelType
 from test_look_views import (DIE, OCC, _boxel, _box, world)    # noqa: F401  (fixture)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -72,7 +72,7 @@ def _known(bd):
 
 
 def _home():
-    from streams import RobotConfig
+    from planning.streams import RobotConfig
     return RobotConfig(joint_positions=np.array(robot_utils.REST_POSES, dtype=float),
                        name='q_home')
 
@@ -283,7 +283,7 @@ def test_a_failed_check_writes_nothing(world, m1_calls, why):
 # ----- 2. the planner's init in look mode ---------------------------------------
 
 def _planner(world):
-    from pddlstream_planner import PDDLStreamPlanner
+    from planning.pddlstream_planner import PDDLStreamPlanner
     reg = world.reg
     objects = {n: world.env.objects[n].object_id for n in ('occluder', 'die')}
     pl = PDDLStreamPlanner(
@@ -330,7 +330,7 @@ def test_an_undeclared_emission_is_refused(world, monkeypatch):
 def test_look_off_builds_the_tags_init(world):
     """With look_on False the planner reads what it read before: the same
     block of code, no look fact."""
-    from pddlstream_planner import PDDLStreamPlanner
+    from planning.pddlstream_planner import PDDLStreamPlanner
     pl = PDDLStreamPlanner(
         world.reg, robot_id=world.robot, shadow_occluder_map={},
         physics_client=world.cid,

@@ -17,8 +17,8 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 
-import look_domain  # noqa: E402
-import m8_domain  # noqa: E402
+from planning import look_domain  # noqa: E402
+from planning import m8_domain  # noqa: E402
 
 
 def main():

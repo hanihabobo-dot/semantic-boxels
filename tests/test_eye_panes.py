@@ -9,7 +9,7 @@ import inspect
 
 import numpy as np
 
-import world_eye
+from world import world_eye
 
 
 class _Env:

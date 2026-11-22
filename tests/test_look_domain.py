@@ -15,8 +15,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import look_domain  # noqa: E402
-import m8_domain  # noqa: E402
+from planning import look_domain  # noqa: E402
+from planning import m8_domain  # noqa: E402
 
 LOOK_TEXT = look_domain.read(look_domain.GENERATED_FILE)
 STREAM_TEXT = (ROOT / 'pddl' / 'stream.pddl').read_text(encoding='utf-8')

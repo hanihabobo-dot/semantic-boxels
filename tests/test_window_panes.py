@@ -19,9 +19,9 @@ import numpy as np
 import pybullet as p
 import pytest
 
-import boxel_env
-import visualization
-from boxel_env import BoxelTestEnv
+from world import boxel_env
+from console import visualization
+from world.boxel_env import BoxelTestEnv
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

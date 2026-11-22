@@ -9,10 +9,10 @@ import inspect
 
 import pytest
 
-import execution
-import slip_fixes
+from acting import execution
+from acting import slip_fixes
 import test_full_pipeline
-from robot_utils import robot_model
+from acting.robot_utils import robot_model
 
 NAME = 'carry_hold_check'
 ROBOT, BODY = 1, 7

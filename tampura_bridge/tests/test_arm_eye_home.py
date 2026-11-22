@@ -3,7 +3,7 @@
 DEFAULT_ARM_POS.  The tabletop run cannot import tampura_environments, so the
 constant is a literal; this bridge test (their trees importable, as
 test_g6_controls.py) checks it against theirs."""
-import arm_eye
+from sensing import arm_eye
 
 
 def test_the_arm_cameras_tabletop_start_is_their_default_arm_pos():

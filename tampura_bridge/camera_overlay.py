@@ -50,7 +50,7 @@ import time
 import numpy as np
 import pybullet
 
-import run_logger
+from console import run_logger
 
 EYE, WRIST = 'eye', 'wrist'
 # getCameraImage's positional slots (width, height, viewMatrix,
@@ -94,7 +94,7 @@ def _warn(message):
     except Exception:
         pass
     try:
-        import console_ui
+        from console import console_ui
         console_ui.warn(f"camera view: {message}")
     except Exception:
         pass

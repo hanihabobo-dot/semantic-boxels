@@ -9,11 +9,11 @@ import pybullet as p
 import pybullet_data
 import pytest
 
-import pose_belief
-import robot_utils
-import slip_fixes
-import streams
-from boxel_data import BoxelData, BoxelType
+from sensing import pose_belief
+from acting import robot_utils
+from acting import slip_fixes
+from planning import streams
+from world.boxel_data import BoxelData, BoxelType
 
 HOME_Q7 = 0.785          # REST_POSES and their DEFAULT_ARM_POS
 BASE = np.array([0.0, 0.0])

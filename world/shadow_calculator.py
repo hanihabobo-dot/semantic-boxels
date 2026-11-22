@@ -1,0 +1,529 @@
+"""
+Shadow Boxel Calculator.
+
+This module handles the calculation of shadow (occlusion) regions cast by objects.
+It uses PyBullet ray casting to determine shadow extent and handles splitting
+when shadows intersect with other objects.
+"""
+
+import numpy as np
+import pybullet as p
+from typing import List, Optional
+from world.boxel_data import BoxelData, BoxelType
+
+
+# #P1 F21 (2026-09-18): two AABBs intersect only when they overlap by MORE
+# than this on every axis.  A face, edge or corner touch is not an
+# intersection.  Touches are the NORM here, not a corner case: a fragment
+# carved out of one shadow by an object's estimated box ends exactly on
+# that box's faces, and the object's own shadow starts on those same
+# floats (seed 999: green's top-Z remainder above red touched red's near
+# slab on y=0.1125 and z=0.4525 bit-for-bit, and the inclusive test then
+# let the carve delete the slab that contained the target).  1 mm sits
+# above float noise and above the 1e-4 tolerance the retired downstream
+# test used, and well below any object or fragment dimension that matters
+# (MIN_EXTENT is 1 mm half-extent; targets are >= 3 cm).
+AABB_OVERLAP_EPS = 1e-3
+
+
+class ShadowCalculator:
+    """
+    Calculates shadow boxels for objects in the scene.
+    
+    Shadow boxels represent the occluded volume behind an object from
+    the camera's perspective.
+    """
+    
+    def __init__(self, camera_position: np.ndarray, table_surface_height: float,
+                 table_x_range: tuple = (0.0, 1.0),
+                 table_y_range: tuple = (-0.5, 0.5)):
+        """
+        Initialize the shadow calculator.
+        
+        Args:
+            camera_position: [x, y, z] position of the camera
+            table_surface_height: Z height of the table surface
+            table_x_range: (min, max) X bounds of the table surface
+            table_y_range: (min, max) Y bounds of the table surface
+        """
+        self.camera_position = camera_position
+        self.table_surface_height = table_surface_height
+        
+        self.table_x_min, self.table_x_max = table_x_range
+        self.table_y_min, self.table_y_max = table_y_range
+        # Path 9 (PLAN 11.12): the longest side in x and y a returned fragment
+        # may have.  None (the default): the fragments are returned as they
+        # are.  No run mode sets it: the cap was made for a look, which can
+        # only be planned for a region one arm-camera image holds
+        # (observe_views.look_cell_side()); only tests/test_look_cells.py
+        # sets it.
+        self.max_fragment_side: Optional[float] = None
+
+    def _cap_fragments(self, fragments: List[BoxelData]) -> List[BoxelData]:
+        """Cut every fragment longer than max_fragment_side in x or y into
+        equal cells no longer than it (x outer, y inner, so the order and
+        with it the fragments' names replay); z, the type and the parent
+        stay.  With no cap the list itself is returned."""
+        cap = self.max_fragment_side
+        if cap is None:
+            return fragments
+        out: List[BoxelData] = []
+        for fr in fragments:
+            lo = np.asarray(fr.min_corner, dtype=float)
+            hi = np.asarray(fr.max_corner, dtype=float)
+            nx = max(1, int(np.ceil((hi[0] - lo[0]) / cap - 1e-9)))
+            ny = max(1, int(np.ceil((hi[1] - lo[1]) / cap - 1e-9)))
+            if nx == 1 and ny == 1:
+                out.append(fr)
+                continue
+            xs = np.linspace(lo[0], hi[0], nx + 1)
+            ys = np.linspace(lo[1], hi[1], ny + 1)
+            for i in range(nx):
+                for j in range(ny):
+                    out.append(BoxelData(
+                        boxel_type=fr.boxel_type,
+                        min_corner=np.array([xs[i], ys[j], lo[2]]),
+                        max_corner=np.array([xs[i + 1], ys[j + 1], hi[2]]),
+                        created_by_object=fr.created_by_object,
+                        created_by_boxel_id=fr.created_by_boxel_id,
+                        on_surface=fr.on_surface,
+                        surface_z=fr.surface_z,
+                    ))
+        return out
+
+    def calculate_shadow_boxel(self, obj_boxel: BoxelData,
+                               obstacles: List[BoxelData],
+                               physics_client: Optional[int] = None) -> List[BoxelData]:
+        """
+        Calculate the Shadow Boxel(s) cast by an object, accounting for ray casting and obstacles.
+
+        1. Ray Casting: Uses PyBullet rayTestBatch to find shadow extent against table/world.
+        2. AABB Construction: Builds initial shadow volume from hit points; height is
+           an overestimate (at least as tall as object).
+        3. Splitting: Breaks shadow boxels if they intersect with other obstacles.
+
+        Args:
+            obj_boxel: BoxelData of the visible object casting the shadow.
+                ``object_name`` is used to label resulting shadow fragments
+                ("shadow_of_<name>"); ``created_by_object`` is set on each
+                returned shadow.
+            obstacles: BoxelData of other solid boxels that might block the
+                shadow (subtracted from the volume).
+
+        Returns:
+            List[BoxelData]: One or more SHADOW BoxelData representing the
+            shadow volume.  IDs are left empty — the caller registers them.
+        """
+        cam_pos = self.camera_position
+        obj_center = obj_boxel.center
+        obj_extent = obj_boxel.extent
+
+        # audit #103: only an object resting on the support surface casts a
+        # shadow.  One held in the gripper — or left mid-air by a failed /
+        # partial place — sits above the table and has no stable hidden
+        # region behind it, so it must not spawn shadows.  (The +0.01 m
+        # margin matches the on_surface contact tolerance the boxel
+        # producers use.)
+        if obj_center[2] - obj_extent[2] > self.table_surface_height + 0.01:
+            return []
+
+        # Phase 3-B (TAMPURA bridge, P1): optionally target a pybullet client.
+        # None -> rayTestBatch with NO physicsClientId (EXACT path on our env).
+        _pc = {} if physics_client is None else {"physicsClientId": physics_client}
+
+        # --- Step 1: Determine Shadow Start (Back Face) ---
+        # Direction from camera to object center, HORIZONTAL PLANE ONLY
+        # (#P1 F3).  The shadow model is 2.5-D: ray hits always resolve
+        # onto the table surface and the shadow's Z range is the height
+        # overestimate, so "back" means "away from the camera across the
+        # table", never "down".  With the full 3-D direction, a tall
+        # narrow occluder close to the camera had its downward component
+        # dominate — all 4 BOTTOM corners classified as back corners,
+        # the ray hits collapsed onto the occluder's own footprint, and
+        # the object-subtraction inverted the shadow to negative extent
+        # (field report missing_shadow.md: shadow_of_red_object extent.z
+        # = -8.7e-6 m; test_boxel_fits then never holds, so a target
+        # hidden there was structurally unfindable).
+        cam_to_obj = obj_center - cam_pos
+        cam_to_obj[2] = 0.0
+        _horiz_norm = np.linalg.norm(cam_to_obj)
+        if _horiz_norm < 1e-9:
+            # Degenerate: object directly under the camera.  Fall back
+            # to the full 3-D direction (pre-F3 behaviour); the
+            # degenerate-extent guard below still protects the output.
+            cam_to_obj = obj_center - cam_pos
+            _horiz_norm = np.linalg.norm(cam_to_obj)
+        cam_to_obj_norm = cam_to_obj / _horiz_norm
+        
+        # Generate all 8 corners
+        all_corners = [
+            obj_center + np.array([-obj_extent[0], -obj_extent[1], -obj_extent[2]]),
+            obj_center + np.array([ obj_extent[0], -obj_extent[1], -obj_extent[2]]),
+            obj_center + np.array([-obj_extent[0],  obj_extent[1], -obj_extent[2]]),
+            obj_center + np.array([ obj_extent[0],  obj_extent[1], -obj_extent[2]]),
+            obj_center + np.array([-obj_extent[0], -obj_extent[1],  obj_extent[2]]),
+            obj_center + np.array([ obj_extent[0], -obj_extent[1],  obj_extent[2]]),
+            obj_center + np.array([-obj_extent[0],  obj_extent[1],  obj_extent[2]]),
+            obj_center + np.array([ obj_extent[0],  obj_extent[1],  obj_extent[2]])
+        ]
+        
+        # Filter to only back corners (corners that are away from camera relative to center)
+        back_corners = []
+        for corner in all_corners:
+            offset = corner - obj_center
+            dot = np.dot(offset, cam_to_obj_norm)
+            if dot > 0:  # Corner is on the "back" side
+                back_corners.append(corner)
+        
+        # Fallback if no back corners found
+        if len(back_corners) == 0:
+            back_corners = all_corners
+            
+        corners = back_corners
+        
+        # Cast rays from back corners outward along camera-through-corner direction.
+        # (Corner-outward avoids self-intersection with the occluder body.)
+        # 5 m is well beyond the 1 m reachable workspace — ensures rays
+        # always hit the table or ground plane before terminating.
+        max_dist = 5.0  # meters
+        ray_ends = []
+        for corner in corners:
+            direction = corner - cam_pos
+            direction = direction / np.linalg.norm(direction)
+            ray_target = corner + direction * max_dist
+            ray_ends.append(ray_target)
+            
+        # Batch Ray Test
+        # rayTestBatch numThreads=0: let Bullet pick max threads (audit #69).
+        # Safe — shadow construction is sequential w.r.t. stepSimulation.
+        results = p.rayTestBatch(corners, ray_ends, numThreads=0, **_pc)
+        
+        table_z = self.table_surface_height
+        
+        hit_points = []
+        for i, res in enumerate(results):
+            hit_obj_id = res[0]
+            if hit_obj_id != -1:
+                hit_pt = np.array(res[3])
+                # Clamp to table bounds
+                hit_pt[0] = np.clip(hit_pt[0], self.table_x_min, self.table_x_max)
+                hit_pt[1] = np.clip(hit_pt[1], self.table_y_min, self.table_y_max)
+                hit_pt[2] = max(hit_pt[2], table_z)
+                hit_points.append(hit_pt)
+            else:
+                # No hit - project ray to table plane and clamp
+                start = corners[i]
+                direction = ray_ends[i] - start
+                direction = direction / np.linalg.norm(direction)
+                
+                if abs(direction[2]) > 1e-6 and direction[2] < 0:
+                    t = (table_z - start[2]) / direction[2]
+                    if t > 0:
+                        pt_on_plane = start + direction * t
+                    else:
+                        pt_on_plane = np.array([start[0], start[1], table_z])
+                else:
+                    pt_on_plane = np.array([start[0], start[1], table_z])
+                
+                clamped_pt = pt_on_plane.copy()
+                clamped_pt[0] = np.clip(clamped_pt[0], self.table_x_min, self.table_x_max)
+                clamped_pt[1] = np.clip(clamped_pt[1], self.table_y_min, self.table_y_max)
+                clamped_pt[2] = table_z
+                
+                hit_points.append(clamped_pt)
+        
+        # --- Step 2: Construct Initial Shadow AABB ---
+        h_min = np.min(hit_points, axis=0)
+        h_max = np.max(hit_points, axis=0)
+        h_min[2] = max(h_min[2], table_z)
+        
+        o_min = obj_center - obj_extent
+        o_max = obj_center + obj_extent
+        
+        full_min = np.minimum(o_min, h_min)
+        full_max = np.maximum(o_max, h_max)
+        
+        # Clamp shadow bounds to table boundaries
+        full_min[0] = max(full_min[0], self.table_x_min)
+        full_min[1] = max(full_min[1], self.table_y_min)
+        full_min[2] = max(full_min[2], table_z)
+        full_max[0] = min(full_max[0], self.table_x_max)
+        full_max[1] = min(full_max[1], self.table_y_max)
+        
+        # Enforce Height Overestimate
+        full_max[2] = max(full_max[2], o_max[2])
+        
+        # Subtract object from shadow.  Dominant axis in the HORIZONTAL
+        # plane only (#P1 F3): shadows propagate across the table, so
+        # the subtraction must trim a lateral side of the AABB.  With
+        # the Z component included, symmetric back-corner hits let the
+        # downward term win argmax and the subtraction clamped the
+        # shadow's TOP down to the occluder's own base — the inverted-
+        # sliver bug.  Zeroing Z keeps dom_axis in {0, 1}; downstream
+        # _is_downstream reuses this direction and is horizontal for
+        # the same reason.
+        shadow_dir = np.mean(hit_points, axis=0) - obj_center
+        shadow_dir[2] = 0.0
+        dom_axis = int(np.argmax(np.abs(shadow_dir)))
+
+        s_min = full_min.copy()
+        s_max = full_max.copy()
+
+        if shadow_dir[dom_axis] > 0:
+            s_min[dom_axis] = max(s_min[dom_axis], o_max[dom_axis])
+        else:
+            s_max[dom_axis] = min(s_max[dom_axis], o_min[dom_axis])
+
+        # --- Step 2.5: Two-slab lateral tightening (audit #72), now
+        #     CONDITIONAL on intersection (audit #102 direction d) ---
+        # Rays from the 4 back corners diverge outward from the camera, so
+        # s_min/s_max on the perpendicular axes inherits the full hit-point
+        # spread and the shadow AABB overhangs the occluder's back face by
+        # ~7-10 cm on the camera-facing sides (seed 779694423 random-pairs).
+        #
+        # That overhang only MATTERS when it overlaps another shadow or a
+        # visible object.  So keep ONE big shadow AABB per occluder by
+        # default (pre-#72 behaviour — Step 3 below still splits it on any
+        # true obstacle intersection), and apply the #72 option-C carve
+        # only when the overhang actually collides with an obstacle: split
+        # along dom_axis at the midpoint, clamp the near (cube-bordering)
+        # slab to the occluder's perpendicular range so it no longer
+        # overhangs, and keep the far slab's full hit-point range where the
+        # frustum has genuinely widened.  Only the non-Z perpendicular axes
+        # are clamped so table-level cells aren't dropped (the gravity axis
+        # keeps the existing height overestimate).
+        lateral_axes = [a for a in range(3) if a != dom_axis and a != 2]
+
+        # Initial Shadow BoxelData(s) (IDs assigned later by registry).
+        initial_shadows: List[BoxelData] = []
+        if self._overhang_overlaps_obstacle(
+                s_min, s_max, o_min, o_max, lateral_axes, obstacles):
+            mid_depth = 0.5 * (s_min[dom_axis] + s_max[dom_axis])
+
+            near_min = s_min.copy()
+            near_max = s_max.copy()
+            if shadow_dir[dom_axis] > 0:
+                near_max[dom_axis] = mid_depth
+            else:
+                near_min[dom_axis] = mid_depth
+            for pa in lateral_axes:
+                near_min[pa] = max(near_min[pa], o_min[pa])
+                near_max[pa] = min(near_max[pa], o_max[pa])
+
+            far_min = s_min.copy()
+            far_max = s_max.copy()
+            if shadow_dir[dom_axis] > 0:
+                far_min[dom_axis] = mid_depth
+            else:
+                far_max[dom_axis] = mid_depth
+
+            for slab_min, slab_max in [(near_min, near_max), (far_min, far_max)]:
+                if np.any(slab_max - slab_min <= 1e-6):
+                    continue
+                initial_shadows.append(BoxelData(
+                    boxel_type=BoxelType.SHADOW,
+                    min_corner=slab_min.copy(),
+                    max_corner=slab_max.copy(),
+                    created_by_object=obj_boxel.object_name,
+                ))
+        else:
+            # No overhang collision → one big shadow AABB (pre-#72).
+            # #P1 F3 degenerate-extent guard, mirroring the two-slab
+            # carve's check above: an inverted/zero AABB must never be
+            # registered (test_boxel_fits is silently False on negative
+            # extents while blocks_view_at facts still claim the region
+            # occludes — a planner-correctness hole, not a cosmetic
+            # one).  With the horizontal-plane fixes above this should
+            # be unreachable; if it fires, something upstream is wrong
+            # again — warn loudly instead of silently dropping.
+            if np.any(s_max - s_min <= 1e-6):
+                print(f"    WARNING: degenerate shadow AABB for "
+                      f"{obj_boxel.object_name} (extent="
+                      f"{(s_max - s_min).tolist()}) — shadow NOT "
+                      f"registered; occlusion model is missing a region "
+                      f"(#P1 F3 guard, should be unreachable)")
+            else:
+                initial_shadows.append(BoxelData(
+                    boxel_type=BoxelType.SHADOW,
+                    min_corner=s_min.copy(),
+                    max_corner=s_max.copy(),
+                    created_by_object=obj_boxel.object_name,
+                ))
+
+        # --- Step 3: Handle Obstacles (Splitting) ---
+        active_shadows = initial_shadows
+        
+        for obstacle in obstacles:
+            next_active = []
+            for shadow in active_shadows:
+                if self._check_aabb_intersection(shadow, obstacle):
+                    fragments = self._subtract_aabb(shadow, obstacle, shadow_dir)
+                    next_active.extend(fragments)
+                else:
+                    next_active.append(shadow)
+            active_shadows = next_active
+
+        return self._cap_fragments(active_shadows)
+
+    def _check_aabb_intersection(self, b1: BoxelData, b2: BoxelData) -> bool:
+        """True only when the two boxels overlap by more than
+        AABB_OVERLAP_EPS on EVERY axis (#P1 F21: strict, epsilon-guarded).
+
+        The previous inclusive <= / >= test counted a zero-volume face or
+        edge touch as an intersection, which sent touching fragments into
+        _subtract_aabb and (with the downstream drop of the time) deleted
+        whole slabs.
+        """
+        return self._aabbs_overlap(b1.min_corner, b1.max_corner,
+                                   b2.min_corner, b2.max_corner)
+
+    @staticmethod
+    def _aabbs_overlap(a_min, a_max, b_min, b_max,
+                       eps: float = AABB_OVERLAP_EPS) -> bool:
+        """Strict per-axis overlap test shared by every carve decision."""
+        return bool(np.all(np.minimum(a_max, b_max)
+                           - np.maximum(a_min, b_min) > eps))
+
+    def _overhang_overlaps_obstacle(self, s_min: np.ndarray, s_max: np.ndarray,
+                                    o_min: np.ndarray, o_max: np.ndarray,
+                                    lateral_axes: List[int],
+                                    obstacles: List[BoxelData]) -> bool:
+        """
+        True if the shadow's lateral overhang — the part of shadow AABB
+        [s_min, s_max] reaching beyond the occluder footprint [o_min, o_max]
+        on a lateral axis — overlaps any obstacle (another shadow or object).
+
+        audit #102: the #72 two-slab carve only earns its extra boxel when
+        that overhang actually collides with something; otherwise the single
+        AABB is kept and Step 3 still splits it on true obstacle intersection.
+        """
+        for obstacle in obstacles:
+            om = obstacle.min_corner
+            oM = obstacle.max_corner
+            # #P1 F21: same strict overlap test as Step 3 — a face touch
+            # is not a collision here either.
+            if not self._aabbs_overlap(s_min, s_max, om, oM):
+                continue  # obstacle doesn't overlap the shadow at all
+            for pa in lateral_axes:
+                lo = max(s_min[pa], om[pa])
+                hi = min(s_max[pa], oM[pa])
+                if lo < o_min[pa] - 1e-6 or hi > o_max[pa] + 1e-6:
+                    return True  # overlap reaches into the overhang
+        return False
+
+    def _subtract_aabb(self, shadow: BoxelData, obstacle: BoxelData,
+                       direction: np.ndarray) -> List[BoxelData]:
+        """
+        Subtract obstacle from shadow: plain AABB set difference, returned
+        as up to six axis-aligned remainders (left/right of, in front of/
+        behind, below/above the obstacle).
+
+        #P1 F21 (2026-09-18): the remainder BEHIND the obstacle along the
+        shadow direction used to be dropped as "downstream, already
+        accounted for by the obstacle's own shadow".  That premise was
+        only ever true for a table-resting OBJECT obstacle, and since
+        audit #68 the obstacle list also carries the earlier casters'
+        SHADOW fragments, whose wake nobody else covers (seed 999: the
+        far slab's region behind green's fragment was dropped and no
+        fragment claimed it).  It was also applied to every candidate,
+        not just the one behind the obstacle, so a right-X or bottom-Z
+        remainder that merely inherited the shadow's y-range was
+        "downstream" too — with an exact face touch that deleted the
+        slab holding the target.  The cross-shadow carve already
+        de-duplicates overlapping shadows (each later shadow loses what
+        an earlier one claims), so a plain difference keeps coverage
+        exact: union of fragments = union of raw shadows minus solids.
+        ``direction`` is kept in the signature for callers; it no longer
+        influences the result.
+        """
+        s_min = shadow.min_corner.copy()
+        s_max = shadow.max_corner.copy()
+        o_min = obstacle.min_corner
+        o_max = obstacle.max_corner
+
+        fragments: List[BoxelData] = []
+
+        # Split along each axis
+        # 1. Left of Obstacle (Min X)
+        if s_min[0] < o_min[0]:
+            new_max = s_max.copy()
+            new_max[0] = o_min[0]
+            fragments.append(self._create_boxel_from_bounds(s_min, new_max, shadow))
+            s_min[0] = max(s_min[0], o_min[0])
+            
+        # 2. Right of Obstacle (Max X)
+        if s_max[0] > o_max[0]:
+            new_min = s_min.copy()
+            new_min[0] = o_max[0]
+            fragments.append(self._create_boxel_from_bounds(new_min, s_max, shadow))
+            s_max[0] = min(s_max[0], o_max[0])
+            
+        # 3. Front of Obstacle (Min Y)
+        if s_min[1] < o_min[1]:
+            new_max = s_max.copy()
+            new_max[1] = o_min[1]
+            fragments.append(self._create_boxel_from_bounds(s_min, new_max, shadow))
+            s_min[1] = max(s_min[1], o_min[1])
+            
+        # 4. Back of Obstacle (Max Y)
+        if s_max[1] > o_max[1]:
+            new_min = s_min.copy()
+            new_min[1] = o_max[1]
+            fragments.append(self._create_boxel_from_bounds(new_min, s_max, shadow))
+            s_max[1] = min(s_max[1], o_max[1])
+            
+        # 5. Bottom of Obstacle (Min Z)
+        if s_min[2] < o_min[2]:
+            new_max = s_max.copy()
+            new_max[2] = o_min[2]
+            fragments.append(self._create_boxel_from_bounds(s_min, new_max, shadow))
+            s_min[2] = max(s_min[2], o_min[2])
+            
+        # 6. Top of Obstacle (Max Z)
+        if s_max[2] > o_max[2]:
+            new_min = s_min.copy()
+            new_min[2] = o_max[2]
+            fragments.append(self._create_boxel_from_bounds(new_min, s_max, shadow))
+            s_max[2] = min(s_max[2], o_max[2])
+        
+        # Keep every non-degenerate remainder (#P1 F21: no downstream drop;
+        # a remainder thinner than MIN_EXTENT on some axis cannot hold a
+        # target and is the only thing discarded).
+        return [frag for frag in fragments if frag is not None]
+
+    def _create_boxel_from_bounds(self, min_pt: np.ndarray, max_pt: np.ndarray,
+                                  template_boxel: BoxelData) -> "BoxelData | None":
+        """Create a SHADOW BoxelData from min/max bounds (None if degenerate)."""
+        extent = (max_pt - min_pt) / 2.0
+        # 1 mm minimum — reject degenerate slivers from clipping arithmetic.
+        MIN_EXTENT = 0.001
+        if np.any(extent <= 0) or np.any(extent < MIN_EXTENT):
+            return None
+
+        return BoxelData(
+            boxel_type=BoxelType.SHADOW,
+            min_corner=min_pt.copy(),
+            max_corner=max_pt.copy(),
+            created_by_object=template_boxel.created_by_object,
+        )
+
+    def _is_downstream(self, frag: BoxelData, obstacle: BoxelData,
+                       direction: np.ndarray) -> bool:
+        """Check if a fragment is 'behind' the obstacle relative to shadow direction.
+
+        RETIRED by #P1 F21 (2026-09-18): no longer called from
+        _subtract_aabb (see its docstring for why the drop was unsound).
+        Kept per the dead-code policy and for the probes that trace the
+        pre-F21 carve (tools/_probe_seed999_gap.py).
+        """
+        dom_axis = int(np.argmax(np.abs(direction)))
+        sign = np.sign(direction[dom_axis])
+
+        if sign > 0:
+            if frag.min_corner[dom_axis] >= obstacle.max_corner[dom_axis] - 1e-4:
+                return True
+        else:
+            if frag.max_corner[dom_axis] <= obstacle.min_corner[dom_axis] + 1e-4:
+                return True
+
+        return False

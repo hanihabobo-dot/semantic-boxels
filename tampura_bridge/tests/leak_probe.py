@@ -154,7 +154,7 @@ class Probe:
     def install(self):
         orig_install, orig_uninstall = gate_hooks.install, gate_hooks.uninstall
 
-        import boxel_env
+        from world import boxel_env
         snapshots = self.registry = []
 
         def install(cfg):

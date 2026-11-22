@@ -7,10 +7,10 @@ import numpy as np
 import pybullet as p
 import pytest
 
-import perception
-import pose_belief
-from boxel_data import BoxelData, BoxelRegistry, BoxelType
-from perception import ObjectDetection
+from sensing import perception
+from sensing import pose_belief
+from world.boxel_data import BoxelData, BoxelRegistry, BoxelType
+from sensing.perception import ObjectDetection
 
 
 @pytest.fixture
@@ -95,7 +95,7 @@ def test_deadband_zeroes_small_yaws_per_camera(switches_on):
 
 
 def test_refresh_tightens_the_radius_of_an_unchanged_box(switches_on):
-    import execution
+    from acting import execution
     cid = p.connect(p.DIRECT)
     try:
         p.createMultiBody(0, p.createCollisionShape(p.GEOM_PLANE, physicsClientId=cid),

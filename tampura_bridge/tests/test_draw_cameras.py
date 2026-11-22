@@ -15,7 +15,7 @@ import pybullet as p
 import pybullet_data
 import pytest
 
-import run_logger
+from console import run_logger
 from tampura_bridge import camera_overlay
 from tampura_bridge import gate_hooks as gh
 from tampura_bridge import policy
@@ -90,7 +90,7 @@ def test_a_render_the_gate_passes_is_shown_and_one_it_refuses_is_not(w):
 
 
 def test_a_render_at_the_wrist_cameras_pose_passes_the_gate_and_is_shown_as_the_wrist(w):
-    import robot_utils
+    from acting import robot_utils
     wv, wp = robot_utils.wrist_camera_matrices(robot_utils.wrist_camera_pose(w.robot, w.c0))
     with _observed(w) as obs:
         p.getCameraImage(W, H, viewMatrix=wv, projectionMatrix=wp,

@@ -15,12 +15,12 @@ import pybullet as p
 import pybullet_data
 import pytest
 
-import run_logger
-import visualization
-from boxel_data import BoxelData, BoxelRegistry, BoxelType
+from console import run_logger
+from console import visualization
+from world.boxel_data import BoxelData, BoxelRegistry, BoxelType
 from tampura_bridge import gate_hooks as gh
 from tampura_bridge import policy
-from visualization import BoxelVisualizer
+from console.visualization import BoxelVisualizer
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MISSION = ('and', ('holding', 'die'), ('at_config', 'q_home'))

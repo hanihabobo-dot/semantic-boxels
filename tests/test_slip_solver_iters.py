@@ -9,10 +9,10 @@ from types import SimpleNamespace
 import pybullet as p
 import pytest
 
-import boxel_env               # registers 'solver_iters' at import
-import robot_utils
-import slip_fixes
-from boxel_env import BoxelTestEnv
+from world import boxel_env               # registers 'solver_iters' at import
+from acting import robot_utils
+from acting import slip_fixes
+from world.boxel_env import BoxelTestEnv
 
 
 @pytest.fixture

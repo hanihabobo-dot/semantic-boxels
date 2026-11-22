@@ -43,7 +43,7 @@ for _d in (REPO, os.path.join(REPO, 'tools')):
     if _d not in sys.path:
         sys.path.insert(0, _d)
 
-import robot_utils                                   # noqa: E402
+from acting import robot_utils                                   # noqa: E402
 from tampura_bridge import task_spec                 # noqa: E402
 from _probe_b1p2_tampura import top_down, ik_any_seed, LIFT   # noqa: E402
 from _probe_q14_grip import (_make_body, _pads, FORCE, GRASP_MARGIN_FROM_TOP,   # noqa: E402
@@ -206,8 +206,8 @@ def main():
         p.changeDynamics(rb, fj, lateralFriction=task_spec.PAD_LATERAL_FRICTION,
                          physicsClientId=cid)
     home = np.asarray(DEFAULT_ARM_POS, dtype=float)
-    from boxel_data import BoxelRegistry
-    from streams import BoxelStreams
+    from world.boxel_data import BoxelRegistry
+    from planning.streams import BoxelStreams
     st = BoxelStreams(registry=BoxelRegistry(), robot_id=rb, physics_client=cid)
     print(f"carry watch: {a.payload}, squeeze {a.squeeze_mm} mm, {a.trials} trials, "
           f"tilt {a.tilt_deg} deg, cell {cell}, slow x{a.slow}")

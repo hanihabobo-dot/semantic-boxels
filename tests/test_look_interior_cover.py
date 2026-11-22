@@ -9,10 +9,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-import interior_regions
-import look_action
-import look_views
-from boxel_data import BoxelType
+from world import interior_regions
+from sensing import look_action
+from sensing import look_views
+from world.boxel_data import BoxelType
 
 
 def _bd(id_, lo, hi, kind=BoxelType.OBJECT, **kw):

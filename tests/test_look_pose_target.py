@@ -3,7 +3,7 @@ body other than the target) judges its named regions for the MISSION target.
 With the target inside the occluder's shadow the region is found and the
 target registered (a replan follows); the old judging for ?o marked that
 region not_here with the target in it."""
-import look_action
+from sensing import look_action
 from test_look_views import world                                   # noqa: F401
 from test_look_correspondence import _Loop, _look_setup, _add_body, m1_calls   # noqa: F401
 

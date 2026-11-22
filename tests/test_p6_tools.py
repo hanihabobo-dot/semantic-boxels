@@ -23,7 +23,7 @@ REPO = os.path.dirname(HERE)
 for p in (REPO, os.path.join(REPO, 'tools'), os.path.join(REPO, 'tools', 'cluster')):
     if p not in sys.path:
         sys.path.insert(0, p)
-import eval_runner as er_tag  # noqa: E402  (the tag's runner: arm A's)
+from evaluation import eval_runner as er_tag  # noqa: E402  (the tag's runner: arm A's)
 import p6_run  # noqa: E402
 import p6_slots as ps  # noqa: E402
 import p6_smoke_check as sc  # noqa: E402

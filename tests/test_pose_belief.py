@@ -7,10 +7,10 @@ import numpy as np
 import pybullet as p
 import pytest
 
-import perception
-import pose_belief
-import robot_utils
-from perception import ObjectDetection
+from sensing import perception
+from sensing import pose_belief
+from acting import robot_utils
+from sensing.perception import ObjectDetection
 
 
 def rect_points(cx, cy, a, b, yaw, n=40):
@@ -155,7 +155,7 @@ def test_commit_margin_families():
 
 
 def test_boxel_data_pose_defaults():
-    from boxel_data import BoxelData
+    from world.boxel_data import BoxelData
     b = BoxelData(id='x')
     assert b.pose_radius == math.inf and b.yaw == 0.0
     assert not b.yaw_valid and b.body_extents is None

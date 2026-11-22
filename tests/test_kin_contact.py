@@ -10,9 +10,9 @@ import pybullet as p
 import pybullet_data
 import pytest
 
-import robot_utils
-import streams
-from boxel_data import BoxelData, BoxelRegistry, BoxelType
+from acting import robot_utils
+from planning import streams
+from world.boxel_data import BoxelData, BoxelRegistry, BoxelType
 
 BASE = (-0.4, 0.0)
 CUP = (0.0696, 0.0703)                     # footprint side, height (seed 10's d_cups_ud)

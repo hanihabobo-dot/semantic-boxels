@@ -27,10 +27,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pybullet as p                                    # noqa: E402
 
-from belief import BeliefState                          # noqa: E402
-from boxel_data import BoxelData, BoxelType             # noqa: E402
-from boxel_env import BoxelTestEnv                      # noqa: E402
-from execution import sweep_all_fragments               # noqa: E402
+from sensing.belief import BeliefState                          # noqa: E402
+from world.boxel_data import BoxelData, BoxelType             # noqa: E402
+from world.boxel_env import BoxelTestEnv                      # noqa: E402
+from acting.execution import sweep_all_fragments               # noqa: E402
 
 
 def _fragment(fid, min_corner, max_corner, caster):
@@ -83,7 +83,7 @@ def main():
                 return 0
 
         registry = env.registry if hasattr(env, "registry") else None
-        from boxel_data import BoxelRegistry
+        from world.boxel_data import BoxelRegistry
         registry = BoxelRegistry()
         registry.add_boxel(occupied)
         registry.add_boxel(empty)

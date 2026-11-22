@@ -13,11 +13,11 @@ import time
 
 import pybullet as p
 
-import robot_utils
-import telemetry
+from acting import robot_utils
+from console import telemetry
 import test_full_pipeline as tfp
-import world_eye
-from run_logger import RunLogger, parse_pipeline_args
+from world import world_eye
+from console.run_logger import RunLogger, parse_pipeline_args
 from tampura_bridge import gate_hooks
 from tampura_bridge.env_adapter import PoselessObjectInfo, TampuraWorldEnv
 from tampura_bridge.tests.test_b3_parameterisation import (  # noqa: F401

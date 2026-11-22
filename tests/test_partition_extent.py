@@ -20,9 +20,9 @@ import numpy as np
 import pytest
 
 import test_full_pipeline as tfp
-from boxel_env import (default_scene, mixed_shapes_scene, random_pairs_scene,
+from world.boxel_env import (default_scene, mixed_shapes_scene, random_pairs_scene,
                        scalability_scene, stack_scene)
-from boxel_types import ObjectInfo
+from world.boxel_types import ObjectInfo
 
 
 def _info(name, size, occluder, tray=False):

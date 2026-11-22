@@ -37,13 +37,13 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import arm_eye  # noqa: E402
-import observe_views  # noqa: E402
-import robot_utils  # noqa: E402
-import run_logger  # noqa: E402
-import streams  # noqa: E402
-from boxel_data import BoxelType  # noqa: E402
-from boxel_env import BoxelTestEnv  # noqa: E402
+from sensing import arm_eye  # noqa: E402
+from sensing import observe_views  # noqa: E402
+from acting import robot_utils  # noqa: E402
+from console import run_logger  # noqa: E402
+from planning import streams  # noqa: E402
+from world.boxel_data import BoxelType  # noqa: E402
+from world.boxel_env import BoxelTestEnv  # noqa: E402
 from test_look_correspondence import _PWSH, _dry, needs_pwsh  # noqa: E402
 
 # The base's overview camera (boxel_env.BoxelTestEnv.__init__ at 15d5ff4).
@@ -435,9 +435,9 @@ def test_main_starts_the_arm_camera_at_their_home_joints_and_makes_them_q_home(
     returns before planning (stop_before_planning): no episode.  The target
     is named and the oracle phases are off (the bridge's way), so Phase 4
     draws no target at random."""
-    import telemetry
+    from console import telemetry
     import test_full_pipeline as tfp
-    import world_eye
+    from world import world_eye
     assert list(arm_eye.TAMPURA_HOME_JOINTS) == THEIR_HOME
     monkeypatch.chdir(tmp_path)
     placed, homes, seen = [], [], {}
@@ -462,7 +462,7 @@ def test_main_starts_the_arm_camera_at_their_home_joints_and_makes_them_q_home(
     monkeypatch.setattr(streams.BoxelStreams, 'set_home_joints', set_home)
     # main() writes M8-M10 into pose_belief.SWITCHES; a copy keeps that out of later tests
     # (test_pose_writers, test_m9_grasp and test_interior_regions read the module defaults)
-    import pose_belief
+    from sensing import pose_belief
     monkeypatch.setattr(pose_belief, 'SWITCHES', dict(pose_belief.SWITCHES))
     monkeypatch.setattr(tfp, 'args', run_logger.parse_pipeline_args(
         ['--no-gui', '--look', 'boxel', '--eye', 'arm', '--log-level', 'quiet']),

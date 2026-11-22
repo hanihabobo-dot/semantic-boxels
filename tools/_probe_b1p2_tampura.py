@@ -33,8 +33,8 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO not in sys.path:
     sys.path.insert(0, REPO)
 
-import perception                                    # noqa: E402
-import robot_utils                                   # noqa: E402
+from sensing import perception                                    # noqa: E402
+from acting import robot_utils                                   # noqa: E402
 
 CUPS = ('a_cups_ud', 'b_cups_ud', 'c_cups_ud', 'd_cups_ud', 'e_cups_ud')
 # BF#4 (b), collision meshes: height, and the cavity footprint a 16.2 mm
@@ -124,8 +124,8 @@ def ik_any_seed(streams, target, orn):
 # ----- (f) reach ----------------------------------------------------------
 
 def item_f():
-    from boxel_data import BoxelRegistry
-    from streams import BoxelStreams
+    from world.boxel_data import BoxelRegistry
+    from planning.streams import BoxelStreams
     world, robot, client, cid, model = their_empty_world()
     streams = BoxelStreams(registry=BoxelRegistry(), robot_id=robot.body,
                            physics_client=cid)
@@ -196,8 +196,8 @@ def _max_rectangle(grid):
 
 
 def item_e(prev):
-    from boxel_data import BoxelRegistry
-    from streams import BoxelStreams
+    from world.boxel_data import BoxelRegistry
+    from planning.streams import BoxelStreams
     from tampura_environments.panda_utils.panda_env_utils import create_ycb
     world, robot, client, cid, model = their_empty_world()
     eye = d4_eye(robot, client)
@@ -354,8 +354,8 @@ def _coarse_cells(W):
 
 
 def item_h(prev):
-    from boxel_data import BoxelRegistry
-    from streams import BoxelStreams
+    from world.boxel_data import BoxelRegistry
+    from planning.streams import BoxelStreams
     world, robot, client, cid, model = their_empty_world()
     eye = prev['eye']
     home = [p.getJointState(robot.body, j, physicsClientId=cid)[0]
@@ -411,8 +411,8 @@ def _pads_on(rb, body, cid, model):
 
 
 def item_i(prev):
-    from boxel_data import BoxelRegistry
-    from streams import BoxelStreams
+    from world.boxel_data import BoxelRegistry
+    from planning.streams import BoxelStreams
     from tampura_environments.panda_utils.robot import DEFAULT_ARM_POS
     world, robot, client, cid, model = their_empty_world()
     assert cid == 0, 'our motion functions drive the default client'

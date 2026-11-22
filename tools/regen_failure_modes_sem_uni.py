@@ -21,7 +21,7 @@ Run via WSL with the project venv + PYTHONPATH (see audit #282):
 """
 from pathlib import Path
 
-import eval_plotter as ep
+from evaluation import eval_plotter as ep
 
 CSV = Path("eval_results/sweep_full_2026-05-28/aggregated.csv")
 OUT_SIMPLE = CSV.parent / "failure_modes_sem_uni.png"

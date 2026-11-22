@@ -18,10 +18,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import observe_views  # noqa: E402
-import robot_utils  # noqa: E402
-from boxel_data import BoxelData, BoxelType  # noqa: E402
-from shadow_calculator import ShadowCalculator  # noqa: E402
+from sensing import observe_views  # noqa: E402
+from acting import robot_utils  # noqa: E402
+from world.boxel_data import BoxelData, BoxelType  # noqa: E402
+from world.shadow_calculator import ShadowCalculator  # noqa: E402
 from test_look_views import _boxel, world  # noqa: E402,F401
 
 # Seed 0's two regions as the first scan made them (run_2026-11-12_23-37-29).

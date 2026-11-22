@@ -17,7 +17,7 @@ The contact and joint reads run inside gate_hooks.scoring() (G2, G8(b)).
 """
 import pybullet as p
 
-import robot_utils
+from acting import robot_utils
 from tampura_bridge import gate_hooks
 
 SQUEEZE_MIN_N = 0.5     # test_full_pipeline._verify_holding

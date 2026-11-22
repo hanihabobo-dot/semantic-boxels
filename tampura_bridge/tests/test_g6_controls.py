@@ -30,7 +30,7 @@ import numpy as np
 import pybullet as p
 import pytest
 
-import robot_utils
+from acting import robot_utils
 from tampura_bridge import gate_hooks, policy as bridge_policy, scoring, task_spec
 
 REPO = gate_hooks.REPO

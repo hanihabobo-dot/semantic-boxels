@@ -38,10 +38,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import look_views  # noqa: E402
-import robot_utils  # noqa: E402
-from boxel_data import BoxelType  # noqa: E402
-from streams import RobotConfig  # noqa: E402
+from sensing import look_views  # noqa: E402
+from acting import robot_utils  # noqa: E402
+from world.boxel_data import BoxelType  # noqa: E402
+from planning.streams import RobotConfig  # noqa: E402
 from test_look_views import _boxel, _render, world  # noqa: E402,F401
 
 

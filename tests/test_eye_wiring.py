@@ -24,8 +24,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import robot_utils  # noqa: E402
-import run_logger  # noqa: E402
+from acting import robot_utils  # noqa: E402
+from console import run_logger  # noqa: E402
 from test_eye_switch import MAIN, _assigns, _calls, _holder, _under  # noqa: E402
 from test_look_correspondence import (_dry, _home, _planner, needs_pwsh,  # noqa: E402
                                       world)  # noqa: F401  (fixture)

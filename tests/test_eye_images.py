@@ -2,8 +2,8 @@
 eye_<k>_gui.png) are for debugging only.  They are off unless the run says
 --save-screenshots on, and BOXEL_EYE_IMAGES=0 (the cluster job scripts,
 BF#17) vetoes them even then."""
-import run_logger
-import world_eye
+from console import run_logger
+from world import world_eye
 
 
 def test_images_off_by_default(monkeypatch):

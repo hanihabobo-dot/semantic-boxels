@@ -33,14 +33,14 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import look_action  # noqa: E402
-import look_domain  # noqa: E402
-import m8_domain  # noqa: E402
-import observe_views  # noqa: E402
-import robot_utils  # noqa: E402
+from sensing import look_action  # noqa: E402
+from planning import look_domain  # noqa: E402
+from planning import m8_domain  # noqa: E402
+from sensing import observe_views  # noqa: E402
+from acting import robot_utils  # noqa: E402
 from test_look_correspondence import (_Loop, _add_body, _home, _known,  # noqa: E402,F401
                                       m1_calls)
-from boxel_data import BoxelType  # noqa: E402
+from world.boxel_data import BoxelType  # noqa: E402
 from test_look_views import _boxel, world  # noqa: E402,F401  (world is a fixture)
 
 CENTRED_TEXT = look_domain.read(look_domain.CENTRED_FILE)
@@ -213,7 +213,7 @@ def test_a_look_says_nothing_about_other_regions(tmp_path, monkeypatch):
 # ----- 3. the planner's init in centred mode --------------------------------------
 
 def _planner(world, mode='centred'):
-    from pddlstream_planner import PDDLStreamPlanner
+    from planning.pddlstream_planner import PDDLStreamPlanner
     reg = world.reg
     objects = {n: world.env.objects[n].object_id for n in ('occluder', 'die')}
     pl = PDDLStreamPlanner(
@@ -417,7 +417,7 @@ def test_a_failed_check_writes_nothing(world, m1_calls, why):
     elif why == 'region':
         h = 'shadow_gone'
     elif why == 'arm':
-        import robot_utils
+        from acting import robot_utils
         world.views._set_arm(np.array(robot_utils.REST_POSES, dtype=float))
     before = loop.snapshot()
     res = _look(loop, ('blue', h, q), [h], held=held)
@@ -713,7 +713,7 @@ def test_a_tall_region_has_no_straight_view_but_a_look_at_view(world, side):
     """The second smoke (seed 0): no straight view over the tall shadow is within the
     arm's reach (frame at 0.20 and 0.30 m up, no_ik above).  A camera 0.15 to 0.35 m out
     toward the robot, aimed at the centre, holds all of it."""
-    from perception import project_points_to_pixels
+    from sensing.perception import project_points_to_pixels
     tall = _tall_region(world, side)
     assert _configs(world, tall, observe_views.CENTRED_REGION_STANDOFFS) == []
     cands = observe_views.look_candidates(observe_views.CENTRED_REGION_STANDOFFS,

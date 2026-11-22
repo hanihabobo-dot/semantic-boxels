@@ -92,9 +92,9 @@ def main(argv=None):
     out.mkdir(parents=True, exist_ok=True)
     import numpy as np
     import pybullet as pb
-    import robot_utils
-    from boxel_data import BoxelType
-    from boxel_env import random_pairs_scene, stack_scene
+    from acting import robot_utils
+    from world.boxel_data import BoxelType
+    from world.boxel_env import random_pairs_scene, stack_scene
     po._set_switches(False)
 
     cfg = random_pairs_scene(n_occluders=3, extra_distractors=1, seed=0)

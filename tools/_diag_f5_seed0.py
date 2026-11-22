@@ -21,10 +21,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np
 import pybullet as p
 
-from boxel_env import BoxelTestEnv, random_pairs_scene
-from boxel_data import BoxelType
-from execution import sense_shadow_from_render
-from perception import grid_would_hit, sense_ray_slices
+from world.boxel_env import BoxelTestEnv, random_pairs_scene
+from world.boxel_data import BoxelType
+from acting.execution import sense_shadow_from_render
+from sensing.perception import grid_would_hit, sense_ray_slices
 
 SEEDS = [0, 3, 999]
 

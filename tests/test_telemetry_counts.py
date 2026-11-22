@@ -12,7 +12,7 @@ import json
 import pybullet
 import pytest
 
-import telemetry
+from console import telemetry
 
 ROBOT, TABLE, BOX, CUP = 0, 99, 5, 6
 PADS = (9, 10)

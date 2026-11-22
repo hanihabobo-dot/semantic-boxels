@@ -9,11 +9,11 @@ import pybullet as p
 import pybullet_data
 import pytest
 
-import look_views
-import observe_views
-import pose_belief
-import robot_utils
-from boxel_data import BoxelData, BoxelRegistry, BoxelType
+from sensing import look_views
+from sensing import observe_views
+from sensing import pose_belief
+from acting import robot_utils
+from world.boxel_data import BoxelData, BoxelRegistry, BoxelType
 
 OCC = dict(centre=(0.10, 0.0), half=(0.05, 0.05, 0.075))
 DIE = dict(centre=(0.30, 0.15), half=(0.0088, 0.0088, 0.0089))
@@ -77,7 +77,7 @@ def world():
 
 
 def _home():
-    from streams import RobotConfig
+    from planning.streams import RobotConfig
     return RobotConfig(joint_positions=np.array(robot_utils.REST_POSES, dtype=float),
                        name='q_home')
 

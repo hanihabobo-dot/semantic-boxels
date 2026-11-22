@@ -306,7 +306,7 @@ def test_m8_three_arg_sense_and_observe_pass_g3_g5(tmp_path):
 
 
 def test_g10_on_the_run_checks_the_loaded_domain(tmp_path):
-    import m8_domain
+    from planning import m8_domain
     live = m8_domain.read(m8_domain.LIVE_FILE)
     rows = clean()
     rows.insert(1, {'kind': 'domain', 'file': 'domain_pddlstream_m8.pddl',

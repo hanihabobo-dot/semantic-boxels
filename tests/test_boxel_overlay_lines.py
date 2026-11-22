@@ -10,9 +10,9 @@ import pybullet as p
 import pybullet_data
 import pytest
 
-import visualization
-from boxel_data import BoxelData, BoxelRegistry, BoxelType
-from visualization import BoxelVisualizer
+from console import visualization
+from world.boxel_data import BoxelData, BoxelRegistry, BoxelType
+from console.visualization import BoxelVisualizer
 
 HALF = (0.05, 0.05, 0.05)
 W, H = 64, 48

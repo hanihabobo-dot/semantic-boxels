@@ -32,10 +32,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pybullet as p                                    # noqa: E402
 
-from boxel_data import BoxelData, BoxelType             # noqa: E402
-from boxel_env import BoxelTestEnv                      # noqa: E402
-from execution import sense_shadow_from_render          # noqa: E402
-from visualization import BoxelVisualizer, _PHANTOM_HOME  # noqa: E402
+from world.boxel_data import BoxelData, BoxelType             # noqa: E402
+from world.boxel_env import BoxelTestEnv                      # noqa: E402
+from acting.execution import sense_shadow_from_render          # noqa: E402
+from console.visualization import BoxelVisualizer, _PHANTOM_HOME  # noqa: E402
 
 
 def _raw_render(env):

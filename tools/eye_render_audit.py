@@ -41,8 +41,8 @@ if str(ROOT) not in sys.path:
 import numpy as np          # noqa: E402
 import pybullet             # noqa: E402
 
-import arm_eye              # noqa: E402
-import robot_utils          # noqa: E402
+from sensing import arm_eye              # noqa: E402
+from acting import robot_utils          # noqa: E402
 from tampura_bridge import gate_hooks   # noqa: E402
 
 # G20's tolerance (tampura_bridge/gate_hooks.py, GateConfig.camera_tol).
@@ -137,7 +137,7 @@ class RenderLog:
 def watch_envs(log):
     """main() builds its env inside: every BoxelTestEnv built while this is
     on gives its robots to ``log``.  Returns the undo."""
-    import boxel_env
+    from world import boxel_env
     cls = boxel_env.BoxelTestEnv
     real = cls.__init__
 
@@ -155,10 +155,10 @@ def run_episode(argv):
     scene.  Left out: the pre-flight probe (it builds an env of its own) and
     the run_config record (main() reads it only for its log and the run
     summary)."""
-    import run_logger
-    import telemetry
+    from console import run_logger
+    from console import telemetry
     import test_full_pipeline as pipeline
-    import world_eye
+    from world import world_eye
     args = run_logger.parse_pipeline_args(argv)
     pipeline.args = args
     random.seed(args.seed)

@@ -206,7 +206,7 @@ def check_arm_o(env, policy, b0, schema_name, execute_fn):
         fails.append(f'registrations: classes of ours in their registries {foreign}')
     if 'step' in vars(env):
         fails.append("the env has an instance attribute 'step'")
-    from boxel_env import BoxelTestEnv
+    from world.boxel_env import BoxelTestEnv
     from tampura_bridge.env_adapter import TampuraWorldEnv
     if TampuraWorldEnv.sync_to_plan_client is not BoxelTestEnv.sync_to_plan_client:
         fails.append('TampuraWorldEnv overrides sync_to_plan_client')

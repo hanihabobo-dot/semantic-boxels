@@ -1084,7 +1084,7 @@ def coverage(tapes, cu=None, statuses=None):
     ledger kinds, end statuses, sense reasons and observe statuses fed."""
     if cu is None:
         sys.path.insert(0, str(REPO))
-        import console_ui as cu
+        from console import console_ui as cu
     texts = []
     kinds, ends, senses, observes, methods = Counter(), Counter(), Counter(), Counter(), Counter()
     for t in tapes:
@@ -1307,7 +1307,7 @@ def child_main(tape_path, root):
     _time.strftime = lambda fmt, *t: FROZEN_STAMP
     if str(REPO) not in sys.path:
         sys.path.insert(0, str(REPO))
-    import console_ui
+    from console import console_ui
     tape = json.loads(Path(tape_path).read_text(encoding='utf-8'))
     calls = tape['calls']
     console_ui.install()                                    # as install_early does

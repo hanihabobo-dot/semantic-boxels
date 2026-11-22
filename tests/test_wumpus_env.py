@@ -134,7 +134,7 @@ def test_perceive_equals_truth_everywhere(seed):
 
 
 def test_registry_types_follow_perception():
-    from boxel_data import BoxelType
+    from world.boxel_data import BoxelType
     env = WumpusEnv(WumpusWorld.random(5, 0))
     try:
         assert env.registry.get_boxel('p1-1').boxel_type == BoxelType.SHADOW

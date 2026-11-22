@@ -23,8 +23,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import look_views  # noqa: E402
-from boxel_data import BoxelType  # noqa: E402
+from sensing import look_views  # noqa: E402
+from world.boxel_data import BoxelType  # noqa: E402
 from test_look_views import OCC, _boxel, _render, world  # noqa: E402,F401
 
 # The camera of test_a_body_in_front_is_a_blocker_not_a_loss: on the robot's

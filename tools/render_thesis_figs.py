@@ -64,14 +64,14 @@ if _REPO_ROOT not in sys.path:
 
 import pybullet as p  # noqa: E402  (after sys.path fix)
 
-from boxel_env import (BoxelTestEnv,
+from world.boxel_env import (BoxelTestEnv,
                        default_scene, mixed_shapes_scene,
                        scalability_scene, stack_scene,
                        random_pairs_scene)
-from boxel_data import BoxelRegistry
-from cell_merger import merge_free_space_cells
-from visualization import BoxelVisualizer
-from run_logger import parse_pipeline_args
+from world.boxel_data import BoxelRegistry
+from world.cell_merger import merge_free_space_cells
+from console.visualization import BoxelVisualizer
+from console.run_logger import parse_pipeline_args
 
 
 # ----------------------------------------------------------------------

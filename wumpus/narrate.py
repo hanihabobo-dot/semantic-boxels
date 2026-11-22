@@ -23,8 +23,8 @@ Words, sprites and sound for these rows are wumpus/console_words.py's.
 """
 import time
 
-import console_ui
-import run_logger
+from console import console_ui
+from console import run_logger
 
 _S = {'plan': 0, 'step': 0, 'plans': 0, 'cur': None, 'plan_times': [], 'task': None,
       'cells': None, 'size': None}

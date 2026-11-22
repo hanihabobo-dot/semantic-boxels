@@ -17,8 +17,8 @@ import pybullet as p
 import pybullet_data
 import pytest
 
-import robot_utils
-import slip_fixes
+from acting import robot_utils
+from acting import slip_fixes
 
 HOME = [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]     # hand down, as DEFAULT_ARM_POS
 DIE = 0.0178                                             # the die's side (BRIEF.md 1)
@@ -200,7 +200,7 @@ def test_d9_setup_without_the_switch_creates_no_gear(registry, panda):
 
 
 def test_our_world_gets_the_gear_at_load_and_after_reset(registry):
-    from boxel_env import BoxelTestEnv, random_pairs_scene
+    from world.boxel_env import BoxelTestEnv, random_pairs_scene
     registry.ENABLED = frozenset({'force_hold', 'solver_iters'})
     prev = robot_utils.robot_model()
     env = BoxelTestEnv(gui=False, scene_config=random_pairs_scene(seed=1))

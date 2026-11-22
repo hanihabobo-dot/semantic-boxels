@@ -469,12 +469,12 @@ def _load_tool(name):
 def p04_free_space(out):
     import types
     import numpy as np
-    import boxel_env
-    from boxel_data import BoxelData, BoxelType, BoxelRegistry
-    from free_space import FreeSpaceGenerator, split_free_boxel
-    from cell_merger import merge_free_space_cells
-    from uniform_grid import UniformGridGenerator
-    from reboxelize import reboxelize_free_space
+    from world import boxel_env
+    from world.boxel_data import BoxelData, BoxelType, BoxelRegistry
+    from world.free_space import FreeSpaceGenerator, split_free_boxel
+    from world.cell_merger import merge_free_space_cells
+    from world.uniform_grid import UniformGridGenerator
+    from world.reboxelize import reboxelize_free_space
     Env = boxel_env.BoxelTestEnv
     XR, YR = Env._SAFE_TABLE_X_RANGE, Env._SAFE_TABLE_Y_RANGE
     z = TABLE_Z
@@ -591,8 +591,8 @@ def p04_free_space(out):
 @pin('low', 'p05_registry', 'R5: BoxelRegistry ids, refusal, update_after_place, to_dict, ledger rows')
 def p05_registry(out):
     import numpy as np
-    import boxel_data
-    from boxel_data import BoxelData, BoxelType, BoxelRegistry
+    from world import boxel_data
+    from world.boxel_data import BoxelData, BoxelType, BoxelRegistry
     calls = []
     boxel_data.ledger_belief = lambda region, op, status=None: calls.append([region, op, status])
     out.note('boxel_data.ledger_belief replaced by a recorder (test-level stub, the name imported at '
@@ -652,7 +652,7 @@ def p05_registry(out):
 
 @pin('low', 'p08_domain', 'R8: m8_domain.generate, file shas, anchors, G10 helpers')
 def p08_domain(out):
-    import m8_domain as m
+    from planning import m8_domain as m
     live = m.read(m.LIVE_FILE)
     gen_file = m.read(m.GENERATED_FILE)
     stream = m.read(m.STREAM_LIVE_FILE)
@@ -693,7 +693,7 @@ def p08_domain(out):
 
 def _p08_look(out, m, live):
     """Gate 7 (INDEX_PINS P2): the two generated look domain files, as pin 8 keeps the M8 file."""
-    import look_domain as look
+    from planning import look_domain as look
     shas = {}
     for mode in look.MODES:
         path = look.GENERATED_FILES[mode]
@@ -757,7 +757,7 @@ def _p08_look(out, m, live):
 
 @pin('low', 'p11_sense_slices', 'R11: perception.sense_ray_slices on 20 AABBs')
 def p11_sense_slices(out):
-    from perception import sense_ray_slices
+    from sensing.perception import sense_ray_slices
     z = TABLE_Z
     boxes = [
         ('standard', (0.3, -0.05, z), (0.4, 0.05, z + 0.1)),
@@ -806,8 +806,8 @@ def p11_sense_slices(out):
 def p12_interceptors(out):
     import numpy as np
     import pybullet as pb
-    import robot_utils
-    from perception import project_points_to_pixels, first_surface_interceptors
+    from acting import robot_utils
+    from sensing.perception import project_points_to_pixels, first_surface_interceptors
     eye, target, up = [0.1, -0.8, 0.7], [0.1, 0.0, 0.5], [0, 0, 1]
     view = pb.computeViewMatrix(cameraEyePosition=eye, cameraTargetPosition=target, cameraUpVector=up)
     proj = pb.computeProjectionMatrixFOV(fov=60.0, aspect=640 / 480, nearVal=0.01, farVal=5.0)
@@ -866,10 +866,10 @@ def p12_interceptors(out):
 def p17_pose_belief(out):
     import math
     import numpy as np
-    import pose_belief as pb
-    import slip_fixes
-    from boxel_data import BoxelData, BoxelType
-    from perception import ObjectDetection
+    from sensing import pose_belief as pb
+    from acting import slip_fixes
+    from world.boxel_data import BoxelData, BoxelType
+    from sensing.perception import ObjectDetection
     AABB, TOP = 0.0696, 0.051
     C0 = np.array([0.50, 0.10])
     WY = math.radians(5.0)
@@ -976,7 +976,7 @@ def p17_pose_belief(out):
 
 @pin('low', 'p18_belief', 'R18: belief.BeliefState scripted sequence with ledger rows recorded')
 def p18_belief(out):
-    import belief as bmod
+    from sensing import belief as bmod
     calls = []
     bmod.ledger_belief = lambda region, op, status=None: calls.append([region, op, status])
     out.note('belief.ledger_belief replaced by a recorder (the name imported at belief.py:14)')
@@ -1016,7 +1016,7 @@ def p18_belief(out):
 
 @pin('low', 'p19_slip_fixes', 'R19: slip_fixes parse, resolve, configure, register in a process that imports only it')
 def p19_slip_fixes(out):
-    import slip_fixes as sf
+    from acting import slip_fixes as sf
     out.note('the child process imports slip_fixes alone (KNOWN empty at start, as the module itself '
              'knows the four defaults); configure results written sorted (a frozenset)')
     res = {'KNOWN_at_import': list(sf.KNOWN), 'DEFAULT_ON_sorted': sorted(sf.DEFAULT_ON),
@@ -1092,7 +1092,7 @@ def _pddl_init_facts(text):
 @pin('low', 'p20_world_eye', 'R20: render_snapshot of a stored eye.jsonl, WorldEye._symbolic and _view')
 def p20_world_eye(out):
     import numpy as np
-    import world_eye
+    from world import world_eye
     recs = _read_jsonl(REPO / BF45_RUN / 'eye.jsonl')
     out.note(f'records: {BF45_RUN}/eye.jsonl ({len(recs)} records, tracked in git)')
     for label, kw in (('default', {}), ('no_view', {'view': False}), ('no_facts', {'facts': False}),
@@ -1343,7 +1343,7 @@ def driver_config(driver_argv):
     read from its files), as pin 23 runs its slice of the __main__ block."""
     import argparse as argparse_mod
     import types
-    import slip_fixes
+    from acting import slip_fixes
     body = next(n for n in ast.parse((REPO / DRIVER).read_text(encoding='utf-8')).body
                 if isinstance(n, ast.FunctionDef) and n.name == 'main').body
     texts = [ast.unparse(s) for s in body]
@@ -1421,7 +1421,7 @@ def _bridge_configs():
 
 @pin('low', 'p22_cli', 'R22: run_logger.parse_pipeline_args over an argv corpus (vars, errors, --help)')
 def p22_cli(out):
-    import run_logger as rl
+    from console import run_logger as rl
     out.note('sys.argv is patched to [test_full_pipeline.py] + the list (or the driver\'s own argv for '
              'policy_call); random.seed(12345) before each case (the auto seed draws from the global stream); '
              'COLUMNS=80; vars() written with keys sorted; errors as SystemExit code plus stderr')
@@ -1431,7 +1431,7 @@ def p22_cli(out):
     out.json('cli.json', res)
     out.text('help.txt', next(r['stdout'] for r in res if r['case'] == 'help'))
     # Gate 7: the tag's flags, the F and R strings, the bridge's argv, the eval cells.
-    import eval_runner as er
+    from evaluation import eval_runner as er
     specs = _flag_specs(TAG2_FLAGS)
     declared, source = declared_o_args()
     cases = [{'case': name, 'argv': argv, 'sys_argv_rest': sys_rest, **_parse_case(rl, argv, sys_rest)}
@@ -1532,7 +1532,7 @@ def _run_config_case(rl, tfp, code, name, argv):
 
 @pin('low', 'p23_run_config', 'R23: the __main__ run_config dict for an argv corpus (AST slice executed)')
 def p23_run_config(out):
-    import run_logger as rl
+    from console import run_logger as rl
     import test_full_pipeline as tfp
     src = (REPO / 'test_full_pipeline.py').read_text(encoding='utf-8')
     tree = ast.parse(src)
@@ -1559,7 +1559,7 @@ def p23_run_config(out):
     out.json('run_config.json', res)
     # Gate 7: the tag's flags and the F and R strings (INDEX_PINS P1), the eval cells (REVIEW item 2).
     import shlex
-    import eval_runner as er
+    from evaluation import eval_runner as er
     specs = _flag_specs(TAG2_FLAGS)
     declared, source = declared_o_args()
     tag2 = [(f'{flag[2:].replace("-", "_")}_{c}', ['--no-gui', flag, c])
@@ -1657,7 +1657,7 @@ def p25_carry(out):
 
 @pin('low', 'p26_console_pure', 'R26: console_ui pure text functions over real ledger rows and hand cases')
 def p26_console_pure(out):
-    import console_ui as cu
+    from console import console_ui as cu
     rows = _read_jsonl(REPO / BF45_RUN / 'ledger.jsonl')
     steps = [r for r in rows if r.get('kind') == 'step']
     plans = [r for r in rows if r.get('kind') == 'plan']
@@ -1745,7 +1745,7 @@ def p28_sprites(out):
 
 @pin('low', 'p29_audio', 'R29: console_audio.PIECES synthesized, sha256 of each WAV', timeout=1500)
 def p29_audio(out):
-    import console_audio as ca
+    from console import console_audio as ca
     res = {'RATE': ca.RATE, 'pieces': {}}
     for name, make in ca.PIECES.items():
         mix = make()
@@ -1763,8 +1763,8 @@ def p29_audio(out):
 def p30_report(out):
     import types
     import numpy as np
-    import run_logger as rl
-    from boxel_data import BoxelData, BoxelType, BoxelRegistry
+    from console import run_logger as rl
+    from world.boxel_data import BoxelData, BoxelType, BoxelRegistry
 
     def belief(found=None, unknown=(), parked=()):
         return types.SimpleNamespace(target_found_in=found, get_unknown_shadows=lambda: list(unknown),
@@ -1852,7 +1852,7 @@ def _p30_tag2(out, rl, base, events):
     release_suspended(), mark_sensed(), mark_unresolved() and remove_shadow() brought to each
     case's state at fixed times.  Returns [(case, arguments, outcome)]."""
     import types
-    from belief import BeliefState
+    from sensing.belief import BeliefState
 
     def S(sid, bodies, now):
         return ('suspend', (sid,), {'bodies': bodies, 'now': now, 'seconds': 120.0})
@@ -2040,7 +2040,7 @@ def _p30_exit_reasons(out, results):
 def p31_eval_matrix(out):
     import subprocess as sp
     import types
-    import eval_runner as er
+    from evaluation import eval_runner as er
     out.note('argv[0] (sys.executable) dropped; presets of more than 100 cells written as count, sha256 '
              'of the lines and the first and last 20 lines (one compact JSON [tag, argv] per line)')
     res = {}
@@ -2809,7 +2809,7 @@ def _follow_arm_standin():
     first.  arm_eye.start_camera, the one pybullet reader on that path, is replaced for the call by
     a stand-in that returns a camera named by its arguments; restored afterwards."""
     import types
-    import arm_eye
+    from sensing import arm_eye
 
     class StandInEnv:
         def _view_and_projection_matrices(self):
@@ -3381,15 +3381,15 @@ def _disconnect_all():
 
 
 def _set_switches(on):
-    import pose_belief
+    from sensing import pose_belief
     for k in SWITCH_NAMES:
         pose_belief.SWITCHES[k] = bool(on)
 
 
 def _module_state():
-    import pose_belief
-    import robot_utils
-    import slip_fixes
+    from sensing import pose_belief
+    from acting import robot_utils
+    from acting import slip_fixes
     return {'slip_fixes': slip_fixes.spec(), 'switches': dict(pose_belief.SWITCHES),
             'grip_squeeze': robot_utils.GRIP_SQUEEZE,
             'robot_model_is_pybullet_data': robot_utils.robot_model() == robot_utils.PANDA_PYBULLET_DATA}
@@ -3413,7 +3413,7 @@ def _py_rng_digest():
 def _make_env(cfg):
     """BoxelTestEnv(gui=False, scene_config=cfg) on clients 0 and 1; returns
     (env, the constructor's printed text)."""
-    from boxel_env import BoxelTestEnv
+    from world.boxel_env import BoxelTestEnv
     live = _live_clients()
     if live:
         raise RuntimeError(f'clients still connected before a scene build: {live}')
@@ -3431,9 +3431,9 @@ def _first_registry(env):
     steps, the observation, free space, merge, surface tags, the registry and
     record_initial_detections.  Returns (obs, registry, effective_cell)."""
     import numpy as np
-    from boxel_data import BoxelRegistry
-    from cell_merger import merge_free_space_cells
-    from execution import record_initial_detections
+    from world.boxel_data import BoxelRegistry
+    from world.cell_merger import merge_free_space_cells
+    from acting.execution import record_initial_detections
     max_extent = 0.0
     for name, info in env.objects.items():
         if name in STATIC_NAMES:
@@ -3496,9 +3496,9 @@ def _targets_of(env):
 
 
 def _env_constants(env):
-    import pose_belief
-    import robot_utils
-    import slip_fixes
+    from sensing import pose_belief
+    from acting import robot_utils
+    from acting import slip_fixes
     pb = _pb()
     rid = env.objects['robot'].object_id
     model = robot_utils.robot_model()
@@ -3609,7 +3609,7 @@ def _scene_notes(out):
 @pin('world', 'p01_scene_presets', 'R1: default (tray off/on), mixed, stack n=3 and scalability 3/4/1 at seeds 0,1,7,13,999',
      timeout=1800)
 def p01_scene_presets(out):
-    from boxel_env import default_scene, mixed_shapes_scene, stack_scene, scalability_scene
+    from world.boxel_env import default_scene, mixed_shapes_scene, stack_scene, scalability_scene
     _set_switches(False)
     _scene_notes(out)
     out.json('state.json', _module_state())
@@ -3627,7 +3627,7 @@ def p01_scene_presets(out):
 @pin('world', 'p01_scene_random_pairs', 'R1: random-pairs 3 occ + 1 distractor, the bridge form, run boxels (2 occ, seeds 0-19), tray',
      timeout=2400)
 def p01_scene_random_pairs(out):
-    from boxel_env import random_pairs_scene
+    from world.boxel_env import random_pairs_scene
     _set_switches(False)
     _scene_notes(out)
     out.note('run boxels = random-pairs, --n-occluders 2 (run.ps1:42), --n-extra-distractors 0 (pipeline_args.py:105)')
@@ -3651,7 +3651,7 @@ def p01_scene_random_pairs(out):
 @pin('world', 'p01_scene_failures', 'R1: placement scans (which seeds raise, with the exact RuntimeError text)',
      timeout=2400)
 def p01_scene_failures(out):
-    from boxel_env import random_pairs_scene, scalability_scene, stack_scene
+    from world.boxel_env import random_pairs_scene, scalability_scene, stack_scene
     _set_switches(False)
     out.note('scan: each seed built once; ok rows carry only the object names (the full records are the '
              'other p01 pins), failing rows the exception type and text and the clients left connected')
@@ -3747,7 +3747,7 @@ def p01b_find_dice_scenes(out):
 # ----- pin 2: first observation and boxels ---------------------------------
 
 def _first_observation_cases():
-    from boxel_env import default_scene, stack_scene, scalability_scene, random_pairs_scene
+    from world.boxel_env import default_scene, stack_scene, scalability_scene, random_pairs_scene
     cases = [('default', default_scene, False),
              ('stack3_seed0', lambda: stack_scene(n_objects=3, seed=0), False),
              ('scalability_3_4_1_seed0', lambda: scalability_scene(n_occluders=3, n_targets=4, n_hidden=1, seed=0), False),
@@ -3817,8 +3817,8 @@ def p02_first_observation(out):
 def p03_shadow_geometry(out):
     import numpy as np
     import pybullet_data
-    from boxel_data import BoxelData, BoxelType
-    from shadow_calculator import ShadowCalculator
+    from world.boxel_data import BoxelData, BoxelType
+    from world.shadow_calculator import ShadowCalculator
     pb = _pb()
     if _live_clients():
         raise RuntimeError('a client is connected')
@@ -3885,8 +3885,8 @@ def p03_shadow_geometry(out):
 @pin('world', 'p06_twin_sync', 'R6: sync_to_plan_client without and with the registry, held body, moved arm (tray scene)')
 def p06_twin_sync(out):
     import numpy as np
-    import robot_utils
-    from boxel_env import random_pairs_scene
+    from acting import robot_utils
+    from world.boxel_env import random_pairs_scene
     pb = _pb()
     _set_switches(False)
     cfg = random_pairs_scene(n_occluders=3, extra_distractors=1, seed=0)
@@ -3946,10 +3946,10 @@ def p06_twin_sync(out):
 
 def _build_planner(env, registry, m8_on, sense_gate='off', corridor='cell+object'):
     """The planner as main builds it (test_full_pipeline.py:1215-1392)."""
-    import m8_domain
-    from boxel_data import BoxelType
-    from execution import compute_shadow_blockers, pick_contact_floor
-    from pddlstream_planner import PDDLStreamPlanner
+    from planning import m8_domain
+    from world.boxel_data import BoxelType
+    from acting.execution import compute_shadow_blockers, pick_contact_floor
+    from planning.pddlstream_planner import PDDLStreamPlanner
     shadows = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.SHADOW]
     occluders = [b.id for b in registry.boxels.values() if b.boxel_type == BoxelType.OBJECT]
     som = compute_shadow_blockers(env.camera_position, registry, shadows, occluders, env)
@@ -4014,9 +4014,9 @@ def _facts_block(calls, universe):
 @pin('world', 'p07_init_facts', 'R7: _build_init through export_problem_pddl and create_problem, M8 x sense_gate x corridor, later states',
      timeout=2400)
 def p07_init_facts(out):
-    import observe_views
-    from boxel_data import BoxelType
-    from boxel_env import random_pairs_scene, stack_scene
+    from sensing import observe_views
+    from world.boxel_data import BoxelType
+    from world.boxel_env import random_pairs_scene, stack_scene
     out.note('per case a fresh planner (names carry counters, streams.py:306-310), built as main does; '
              'sync_to_plan_client(registry) before the export and again before create_problem; '
              'random.seed(7) before the export, random.seed(8) before create_problem; with M8 on, '
@@ -4133,11 +4133,11 @@ def p07_init_facts(out):
      timeout=1800)
 def p09_streams(out):
     import numpy as np
-    import slip_fixes
-    from boxel_data import BoxelData, BoxelType
-    from boxel_env import default_scene
-    from execution import pick_contact_floor
-    from streams import BoxelStreams
+    from acting import slip_fixes
+    from world.boxel_data import BoxelData, BoxelType
+    from world.boxel_env import default_scene
+    from acting.execution import pick_contact_floor
+    from planning.streams import BoxelStreams
     out.note('default_scene, switches off and on (M9 grasps need the fitted pose that '
              'record_initial_detections writes with the switches on); hand boxels added to the registry: '
              'hand_rect (3 x 6 cm), hand_wide (9 x 9 cm), hand_far_free (a free box 1.0 m from the base); '
@@ -4229,9 +4229,9 @@ def p09_ik_tables(out):
     import types
     import numpy as np
     import pybullet_data
-    import execution
-    import observe_views
-    import robot_utils
+    from acting import execution
+    from sensing import observe_views
+    from acting import robot_utils
     pb = _pb()
     if _live_clients():
         raise RuntimeError('a client is connected')
@@ -4319,8 +4319,8 @@ def p09_ik_tables(out):
 @pin('world', 'p10_move_steps', 'R10: move_robot_smooth stepSimulation count per case (default scene)')
 def p10_move_steps(out):
     import numpy as np
-    import robot_utils
-    from boxel_env import default_scene
+    from acting import robot_utils
+    from world.boxel_env import default_scene
     pb = _pb()
     _set_switches(False)
     env, _ = _make_env(default_scene())
@@ -4407,13 +4407,13 @@ def _load_fixture():
 
 
 def _fixture_registry(fixture):
-    from boxel_data import BoxelRegistry
+    from world.boxel_data import BoxelRegistry
     return BoxelRegistry.load_from_json(str(_fixture_dir() / fixture['registry_file']))
 
 
 def _depth_m(depth_buffer, meta):
     import types
-    from boxel_env import BoxelTestEnv
+    from world.boxel_env import BoxelTestEnv
     ns = types.SimpleNamespace(far_plane=meta['far_plane'], near_plane=meta['near_plane'])
     return BoxelTestEnv._depth_buffer_to_meters(ns, depth_buffer)
 
@@ -4435,7 +4435,7 @@ def _det_rec(d):
 @pin('world', 'p13_detections', 'R13: detect_objects_from_render and _rest_on_support on the stored renders')
 def p13_detections(out):
     import numpy as np
-    from perception import ObjectDetection, _rest_on_support, detect_objects_from_render
+    from sensing.perception import ObjectDetection, _rest_on_support, detect_objects_from_render
     fixture, renders = _load_fixture()
     _fixture_note(out, fixture)
     out.note('per render: min_pixels default and 200; for A also without no_footprint_completion (the tray grown '
@@ -4487,8 +4487,8 @@ def _sense_inputs(renders, name, registry):
 @pin('world', 'p14_sense_render', 'R14: sense_shadow_from_render on the stored renders (A, A2, C) for every fragment')
 def p14_sense_render(out):
     import numpy as np
-    from boxel_data import BoxelType
-    from execution import sense_shadow_from_render
+    from world.boxel_data import BoxelType
+    from acting.execution import sense_shadow_from_render
     fixture, renders = _load_fixture()
     _fixture_note(out, fixture)
     registry = _fixture_registry(fixture)
@@ -4530,8 +4530,8 @@ def p14_sense_render(out):
 def p15_shadow_blockers(out):
     import copy
     import types
-    from boxel_data import BoxelType
-    from execution import compute_shadow_blockers
+    from world.boxel_data import BoxelType
+    from acting.execution import compute_shadow_blockers
     fixture, renders = _load_fixture()
     _fixture_note(out, fixture)
     base = _fixture_registry(fixture)
@@ -4569,8 +4569,8 @@ def p15_shadow_blockers(out):
 def p16_fragment_render(out):
     import copy
     import numpy as np
-    from boxel_data import BoxelData, BoxelType
-    from execution import _fragment_renders_empty, _shrink_shadow_fragment, sense_shadow_from_render
+    from world.boxel_data import BoxelData, BoxelType
+    from acting.execution import _fragment_renders_empty, _shrink_shadow_fragment, sense_shadow_from_render
     fixture, renders = _load_fixture()
     _fixture_note(out, fixture)
     base = _fixture_registry(fixture)
@@ -4666,11 +4666,11 @@ class _CallRecorder:
      timeout=1200)
 def p21_pick_record(out):
     import numpy as np
-    import robot_utils
-    import execution
-    from boxel_env import default_scene
-    from execution import pick_contact_floor
-    from streams import BoxelStreams
+    from acting import robot_utils
+    from acting import execution
+    from world.boxel_env import default_scene
+    from acting.execution import pick_contact_floor
+    from planning.streams import BoxelStreams
     pb = _pb()
     _set_switches(True)
     robot_utils.GRIP_SQUEEZE = 0.5 / 1000.0
@@ -4729,7 +4729,7 @@ def p21_pick_record(out):
 def p35_bridge_pure(out):
     import types
     from tampura_bridge import env_adapter, task_spec
-    from pddlstream_planner import search_options_from
+    from planning.pddlstream_planner import search_options_from
     os.environ.pop('BRIDGE_SCENE_MANIFEST', None)
     bg = _load_tool('bridge_gates')
     out.note('bridge_gates loaded by path with BRIDGE_SCENE_MANIFEST removed from the environment (R S-g); '

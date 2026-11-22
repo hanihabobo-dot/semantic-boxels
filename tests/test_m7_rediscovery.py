@@ -23,15 +23,15 @@ import numpy as np
 import pybullet as p
 import pytest
 
-import execution
-import interior_regions
-import perception
-import pose_belief
-import run_logger
-import slip_fixes
-from belief import BeliefState
-from boxel_data import BoxelData, BoxelRegistry, BoxelType
-from shadow_calculator import ShadowCalculator
+from acting import execution
+from world import interior_regions
+from sensing import perception
+from sensing import pose_belief
+from console import run_logger
+from acting import slip_fixes
+from sensing.belief import BeliefState
+from world.boxel_data import BoxelData, BoxelRegistry, BoxelType
+from world.shadow_calculator import ShadowCalculator
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _spec = importlib.util.spec_from_file_location(

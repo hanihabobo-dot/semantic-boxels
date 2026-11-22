@@ -43,8 +43,8 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO not in sys.path:
     sys.path.insert(0, REPO)
 
-import perception                                    # noqa: E402
-import robot_utils                                   # noqa: E402
+from sensing import perception                                    # noqa: E402
+from acting import robot_utils                                   # noqa: E402
 from tampura_bridge import task_spec                 # noqa: E402
 from tampura_bridge.env_adapter import symbol_names  # noqa: E402
 

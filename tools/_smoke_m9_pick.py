@@ -22,12 +22,12 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 sys.path.insert(0, os.path.join(REPO, 'tools'))
 
-import perception                      # noqa: E402
-import pose_belief                     # noqa: E402
-import robot_utils                     # noqa: E402
-import streams                         # noqa: E402
-from boxel_data import BoxelData, BoxelType   # noqa: E402
-from boxel_types import ObjectInfo     # noqa: E402
+from sensing import perception                      # noqa: E402
+from sensing import pose_belief                     # noqa: E402
+from acting import robot_utils                     # noqa: E402
+from planning import streams                         # noqa: E402
+from world.boxel_data import BoxelData, BoxelType   # noqa: E402
+from world.boxel_types import ObjectInfo     # noqa: E402
 from _calib_pose_noise import build_env, mat_to_quat   # noqa: E402
 
 DIE = (0.0176, 0.0173, 0.0178)
@@ -114,7 +114,7 @@ def main():
                     break
             for j, v in zip(robot_utils.robot_model().arm_joints, qa):
                 p.resetJointState(robot, j, v, physicsClientId=cid)
-            from execution import execute_pick
+            from acting.execution import execute_pick
             held, _cfg = execute_pick(robot, env, 'die', bd.center.copy(), grasp,
                                       streams.RobotConfig(joint_positions=np.array(qa)),
                                       False, obj_aabb=(bd.min_corner.copy(), bd.max_corner.copy()),

@@ -7,7 +7,7 @@ import re
 
 import pytest
 
-import slip_fixes
+from acting import slip_fixes
 
 FOUR = {'solver_iters', 'force_hold', 'pose_radius_keep', 'grasp_wrist_home'}
 
@@ -90,7 +90,7 @@ def test_register_is_idempotent_and_checks_the_name(registry):
 
 
 def test_the_flag_and_the_plumbing():
-    import run_logger
+    from console import run_logger
     import test_full_pipeline
     src = inspect.getsource(inspect.getmodule(run_logger.parse_pipeline_args))
     assert "'--slip-fixes'" in src

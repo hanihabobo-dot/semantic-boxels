@@ -9,10 +9,10 @@ import pybullet as p
 import pybullet_data
 import pytest
 
-import m8_domain
-import observe_views
-import pose_belief
-from boxel_data import BoxelData, BoxelRegistry, BoxelType
+from planning import m8_domain
+from sensing import observe_views
+from sensing import pose_belief
+from world.boxel_data import BoxelData, BoxelRegistry, BoxelType
 
 HALF = (0.0088, 0.0088, 0.0089)          # a die-class box
 BOX_XY = (0.15, 0.05)
@@ -93,7 +93,7 @@ def test_look_configs_pass_and_a_removed_pair_stays_removed(world):
 
 
 def test_wrist_observe_reposes_the_target_and_leaves_regions(world):
-    import execution
+    from acting import execution
     views = observe_views.ObserveViews(world.env, (-0.4, 0.0))
     views.last_stats = {'twin_render_s': 0.0, 'twin_renders': 0, 'look_ik': 0}
     reg = BoxelRegistry()
@@ -126,7 +126,7 @@ def test_wrist_observe_reposes_the_target_and_leaves_regions(world):
 
 
 def test_observe_that_does_not_see_the_target_goes_to_the_lost_path(world):
-    import execution
+    from acting import execution
     views = observe_views.ObserveViews(world.env, (-0.4, 0.0))
     views.last_stats = {'twin_render_s': 0.0, 'twin_renders': 0, 'look_ik': 0}
     reg = BoxelRegistry()

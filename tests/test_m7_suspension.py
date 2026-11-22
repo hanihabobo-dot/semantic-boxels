@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
-import console_ui
-import run_logger
-from belief import BeliefState
+from console import console_ui
+from console import run_logger
+from sensing.belief import BeliefState
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / 'tools'))

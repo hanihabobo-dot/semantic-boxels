@@ -17,10 +17,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import arm_eye  # noqa: E402
-import observe_views  # noqa: E402
-import robot_utils  # noqa: E402
-from boxel_data import BoxelData, BoxelType  # noqa: E402
+from sensing import arm_eye  # noqa: E402
+from sensing import observe_views  # noqa: E402
+from acting import robot_utils  # noqa: E402
+from world.boxel_data import BoxelData, BoxelType  # noqa: E402
 from test_look_views import world  # noqa: E402,F401
 
 W, H = robot_utils.WRIST_CAMERA_WIDTH, robot_utils.WRIST_CAMERA_HEIGHT

@@ -23,7 +23,7 @@ captured console), counted in `paced` so wall times can be corrected.
 import re
 import time
 
-from console_ui import _mark, _plural, _secs, _short_path
+from console.console_ui import _mark, _plural, _secs, _short_path
 
 _CELL = re.compile(r'\bp(\d+)-(\d+)\b')
 

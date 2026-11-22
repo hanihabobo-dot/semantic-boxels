@@ -1,0 +1,1591 @@
+#!/usr/bin/env python3
+"""
+Real PDDLStream Planner Integration for Semantic Boxel TAMP.
+
+This module provides the interface between our Boxel TAMP system and
+the actual PDDLStream solver with FastDownward backend.
+
+Usage (from WSL):
+    source wsl_env/bin/activate
+    export PYTHONPATH=/path/to/pddlstream_lib
+    python3 pddlstream_planner.py
+
+PDDLStream path is added to sys.path via the hardcoded PDDLSTREAM_PATH constant below.
+"""
+
+import sys
+import os
+import time
+
+# Add pddlstream to path (for WSL)
+PDDLSTREAM_PATH = os.environ.get(
+    'PDDLSTREAM_PATH',
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'pddlstream_lib')
+)
+if PDDLSTREAM_PATH not in sys.path:
+    sys.path.insert(0, PDDLSTREAM_PATH)
+
+import random
+import re
+import numpy as np
+from typing import List, Tuple, Optional, Dict, Any, Union
+
+from pddlstream.algorithms.meta import solve
+from pddlstream.language.constants import PDDLProblem, print_solution
+from pddlstream.language.generator import from_gen_fn, from_fn
+from pddlstream.utils import read
+
+from world.boxel_data import BoxelRegistry, BoxelType
+from sensing.perception import (sense_ray_slices, segment_aabb_hit_mask,
+                        SENSE_MARGINAL_BLOCKED_FRACTION)
+from planning.streams import (BoxelStreams, RobotConfig, Trajectory, Grasp,
+                     NOMINAL_HIDDEN_EXTENTS, HOME_PSEUDO_BOXEL)
+from acting.robot_utils import REST_POSES, robot_model
+from sensing import pose_belief
+from sensing.observe_views import (VIEW_PREFIX, CENTRED_REGION_MAX_CONFIGS,
+                           CENTRED_REGION_OFFSETS, CENTRED_REGION_STANDOFFS,
+                           explain_notes)
+
+
+# F7 remedy 3 (2026-09-19): pddlstream solve() search_sample_ratio (its
+# default is 1).  See the comment at the solve() call in plan().
+SEARCH_SAMPLE_RATIO = 0.25
+
+# F11 (2026-08-22): prospective per-object placement-blocking tolerance.
+# The census lists a placed blocker at SENSE_MARGINAL_BLOCKED_FRACTION
+# (0.05), but forbidding placements prospectively at that same margin
+# (the reverted 335ddc1) declared so much of the table corridor-blocking
+# under the shallow camera that no-gate planning time doubled and the
+# gated eval arm collapsed.  This looser threshold forbids only
+# EGREGIOUS placements: > 1/7 of a slice's rays means the virtual box
+# would blind more than one full row of the 7x7 coarse sense grid —
+# it stands IN the corridor, not grazing its edge.  Measured over the
+# 20 A/B eval seeds (tools/_probe_f11_volume.py): the edge-graze
+# cluster sits at 5/49-7/49 (0.102/0.122/0.143) and drops sharply
+# above 1/7; at 0.15 the median seed gains 3 triples (max 21) vs a
+# median 7 (max 49) at the census margin.  Placements in the marginal
+# band (0.05, 0.15] stay allowed and the rare census re-block is
+# handled by replanning, as before the F11 fix.  0.15 rather than the
+# exact 1/7 so a one-row hit (7/49) never flips on a float ulp.
+PLACEMENT_EGREGIOUS_BLOCKED_FRACTION = 0.15
+
+
+def over_region_facts(streams, views, targets, shadows, fits):
+    """BF#52, the fold.  For every (target, shadow region) pair the sense
+    may ground on (``fits``), the target's first pick configuration over
+    the region (sample_grasp's first grasp, compute_kin_solution's first
+    configuration: exactly what the streams would yield for the pick) and,
+    when the eye's view of the region stays clear with the arm there
+    (views.sense_view_test, the executor's own render rule in the twin),
+    the static facts that let a plan move there, sense and pick without
+    moving: (Grasp g) (valid_grasp t g) (Config q) (kin_solution t r g q)
+    (config_for_boxel q r) (sense_view q r).  A region the arm blocks
+    from there gets nothing and the plan returns to a C1 spot as before.
+    Static facts, not a test stream: a stream let the search try every IK
+    branch over a blocked region at a search round each (PAPER_AUDIT
+    BF#52, Hani's seed-10 runs of 2026-10-30).  Back on the branch after
+    BF#57 for Hani's own test (--sense-over-region off turns it off)."""
+    facts: List[Tuple] = []
+    stats: Dict[str, Any] = {'over_region_pairs': 0, 'over_region_pass': 0,
+                             'over_region_renders': 0, 'over_region_s': 0.0}
+    t0 = time.perf_counter()
+    r0 = int(views.test_stats.get('renders', 0))
+    for t in targets:
+        grasp = None
+        declared = False
+        for r in shadows:
+            if r is None or not fits(t, r.id):
+                continue
+            stats['over_region_pairs'] += 1
+            if grasp is None:
+                grasp = next((g[0] for g in streams.sample_grasp(t)), None)
+                if grasp is None:
+                    break
+            q = next((c[0] for c in streams.compute_kin_solution(t, r.id, grasp)),
+                     None)
+            if q is None or not views.sense_view_test(q, r):
+                continue
+            stats['over_region_pass'] += 1
+            if not declared:
+                facts += [('Grasp', grasp), ('valid_grasp', t, grasp)]
+                declared = True
+            facts += [('Config', q), ('kin_solution', t, r.id, grasp, q),
+                      ('config_for_boxel', q, r.id), ('sense_view', q, r.id)]
+    stats['over_region_renders'] = int(views.test_stats.get('renders', 0)) - r0
+    stats['over_region_s'] = time.perf_counter() - t0
+    return facts, stats
+
+
+def search_options_from(effort_weight: str, initial_complexity: int) -> Dict[str, Any]:
+    """BF#53: pddlstream solve() keyword arguments from the two CLI
+    settings (run_logger's --search-effort-weight, a number or 'off', and
+    --search-initial-complexity); 'off' and 0 leave pddlstream's own."""
+    opts: Dict[str, Any] = {}
+    if str(effort_weight) != 'off':
+        opts['effort_weight'] = float(effort_weight)
+    if int(initial_complexity):
+        opts['initial_complexity'] = int(initial_complexity)
+    return opts
+
+
+def read_pddl_file(filename: str) -> str:
+    """Read PDDL file content."""
+    pddl_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'pddl')
+    filepath = os.path.join(pddl_dir, filename)
+    with open(filepath, 'r') as f:
+        return f.read()
+
+
+class _StdoutTee:
+    """Duplicate writes to the wrapped stream into a buffer.
+
+    F7 (2026-08-22): PDDLStream's adaptive solver PRINTS its per-round
+    skeleton lines and the final ``Summary: {... skeletons: N ...}`` but
+    returns only (plan, cost, certificate) — there is no API for "were
+    action skeletons found before binding failed", and patching the
+    sibling ../pddlstream_lib checkout would leave this repo depending
+    on an untracked library divergence.  plan() therefore tees stdout
+    around solve() and reads the solver's own lines back.  Delegation
+    via __getattr__ keeps RunLogger's own stdout wrapper working
+    underneath (FastDownward subprocess output bypasses sys.stdout and
+    is not captured — the skeleton/summary lines are Python prints).
+    """
+
+    def __init__(self, stream):
+        self._stream = stream
+        self.chunks = []
+
+    def write(self, s):
+        self._stream.write(s)
+        self.chunks.append(s)
+
+    def flush(self):
+        self._stream.flush()
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+
+class PDDLStreamPlanner:
+    """
+    Real PDDLStream planner for Semantic Boxel TAMP.
+    
+    Uses PDDLStream with FastDownward for planning with continuous
+    stream sampling for IK and motion planning.
+    """
+    
+    def __init__(self, registry: BoxelRegistry, robot_id: int = None,
+                 shadow_occluder_map: Dict[str, str] = None,
+                 physics_client: int = None,
+                 object_body_ids: Dict[str, int] = None,
+                 support_body_ids: frozenset = None,
+                 camera_pos: 'np.ndarray' = None,
+                 tray_name: Optional[str] = None,
+                 domain_file: Optional[str] = None):
+        """
+        Initialize the planner.
+
+        Args:
+            registry: BoxelRegistry with scene boxels
+            robot_id: PyBullet robot body ID (required for IK).
+            shadow_occluder_map: Dict mapping shadow_id -> list of blocker
+                object boxel IDs.  Includes ALL objects that block the
+                camera's LOS to each shadow (audit #78).
+            physics_client: PyBullet physics client ID (0 if default)
+            object_body_ids: Mapping from object/boxel identifiers to
+                PyBullet body IDs.  Passed to BoxelStreams so that
+                compute_kin and plan_motion can exclude grasped objects
+                from collision checks.
+            support_body_ids: Body IDs of support surfaces (table, ground
+                plane) ignored during pick/place endpoint checks.
+            camera_pos: Fixed camera position [x, y, z].  Used to compute
+                blocks_view_at facts for placement positions (audit #5).
+            tray_name: Fixed-base tray support name (audit #49), or None.
+                When set, _build_init emits (Obj <tray>) + (is_tray
+                <tray>); (clear <tray>) and (on_table <tray>) fall out
+                of the existing clear / on_table loop.
+            domain_file: Path of the PDDL domain to plan with (#P4
+                B3(c)); None reads pddl/domain_pddlstream.pddl as before.
+        """
+        self.registry = registry
+        self.robot_id = robot_id
+        self.shadow_occluder_map = shadow_occluder_map or {}
+        self.camera_pos = camera_pos
+        self.tray_name = tray_name
+        # F6 (2026-09-19): what (boxel_fits ?o ?shadow) means for sense.
+        # 'off'    — emitted for every (object, fragment) pair: sense grounds
+        #            on any view-clear fragment (a0e536b's behaviour);
+        # 'strict' — emitted only where a target-class box can rest fully
+        #            occluded inside the fragment (dense hideability test).
+        # Set from the --sense-gate CLI flag by the pipeline.
+        self.sense_gate = 'off'
+        # F32 (2026-09-19): how placement-blocking corridor facts are
+        # tested — 'cell+object' (the F11 default: the cell's AABB at the
+        # census margin plus per-object virtual boxes at the looser
+        # margin) or 'object' (virtual boxes only: exactly what the
+        # census will see).  Set from --corridor-test.
+        self.corridor_test = 'cell+object'
+        # F7 remedy 3 (2026-09-19): the sampling-to-search budget ratio
+        # handed to pddlstream's solve() (see SEARCH_SAMPLE_RATIO and the
+        # comment at the call site).  A flag so the ratio can be A/B'd
+        # against the library default on the same code.
+        self.search_sample_ratio = SEARCH_SAMPLE_RATIO
+
+        self.streams = BoxelStreams(
+            registry, robot_id=robot_id, physics_client=physics_client,
+            object_body_ids=object_body_ids,
+            support_body_ids=support_body_ids,
+        )
+        self.home_config = self.streams.home_config
+        # #P4 B3(d), D7 (iii): with a declared goal configuration (main()
+        # sets this to home_config), _build_init emits (Config q_home),
+        # (Boxel home) and (config_for_boxel q_home home), so a move can
+        # reach q_home from any configuration.  None: no such facts.
+        self.goal_config: Optional[RobotConfig] = None
+        # M8 (PLAN_P4_POSE_GRASP_SAMPLERS.md C): the observation
+        # configurations' static facts (observe_views.ObserveViews, set by
+        # main() when M8 is on), and what the last _build_init emitted.
+        self.m8_views = None
+        self.last_m8_stats: Dict[str, Any] = {}
+        # BF#52: the fold (over_region_facts) is offered unless main()'s
+        # --sense-over-region off; it needs m8_views.
+        self.sense_over_region = True
+        # Path 9 (--look on): _build_init emits the look domain's facts
+        # (look_views.LookViews, set by main() after the first export, like
+        # m8_views) in place of the sense and observe facts.
+        self.look_on = False
+        self.look_mode = 'off'           # 'boxel' or 'centred' when look_on
+        self.look_views = None
+        self.last_look_stats: Dict[str, Any] = {}
+        # BF#53: further pddlstream solve() keyword arguments from main()'s
+        # --search-effort-weight and --search-initial-complexity (see
+        # run_logger); empty is pddlstream's own default for each.
+        self.search_options: Dict[str, Any] = {}
+
+        # Load PDDL files (use PDDLStream-compatible untyped domain)
+        if domain_file is None:
+            self.domain_pddl = read_pddl_file('domain_pddlstream.pddl')
+        else:
+            with open(domain_file, 'r') as f:
+                self.domain_pddl = f.read()
+        self.stream_pddl = read_pddl_file('stream.pddl')
+
+        # Audit #73 step 1(b): cache the most recent _build_init output
+        # so the run logger can dump n_init_state_facts + per-predicate
+        # counts at end-of-run.  Updated by create_problem (and
+        # export_problem_pddl) on every call.
+        self.last_init: Optional[List[Tuple]] = None
+
+    def _get_stream_map(self) -> Dict[str, Any]:
+        """
+        Create the stream map connecting stream names to BoxelStreams generators.
+        
+        Each entry wraps a BoxelStreams method via PDDLStream's from_gen_fn.
+        The streams produce real geometric objects (RobotConfig, Grasp,
+        Trajectory) instead of placeholder strings.
+
+        Returns:
+            Dict mapping stream names to generator functions
+        """
+        return {
+            'sample-grasp': from_gen_fn(self.streams.sample_grasp),
+            'plan-motion': from_gen_fn(self.streams.plan_motion),
+            'compute-kin': from_gen_fn(self.streams.compute_kin_solution),
+            'compute-stack-kin': from_gen_fn(self.streams.compute_stack_kin_solution),
+        }
+    
+    def create_problem(self,
+                       target_objects: List[str],
+                       goal: Tuple,
+                       current_config: 'Union[RobotConfig, str]' = None,
+                       known_empty_shadows: List[str] = None,
+                       moved_occluders: Dict[str, str] = None,
+                       observed_clear_regions: Optional[List[str]] = None,
+                       visible_target_locations: Optional[Dict[str, str]] = None,
+                       on_relations: Optional[Dict[str, str]] = None,
+                       stackable_objects: Optional[List[str]] = None,
+                       held_obj: Optional[str] = None) -> PDDLProblem:
+        """
+        Create a PDDLStream problem from current state.
+        
+        Args:
+            target_objects: Objects to reason about
+            goal: Goal as a tuple, e.g. ('holding', 'blue_object').
+                  Passed directly to PDDLStream — must match domain predicates.
+            current_config: Current robot config (RobotConfig preferred;
+                string accepted for backward compat, wrapped automatically)
+            known_empty_shadows: Shadows we've already checked (not containing target)
+            moved_occluders: Dict mapping occluder_id -> destination_boxel_id
+            observed_clear_regions: Regions explicitly observed clear; see
+                _build_init() docstring (audit #67).
+            visible_target_locations: Dict mapping target_name -> boxel_id for
+                targets that are visible from the camera and do not require
+                sensing.  Adds obj_at_boxel so pick is directly plannable.
+            on_relations: Dict mapping stacked_obj -> support_obj for known
+                stack relations (audit #30).  Only meaningful when
+                ``stackable_objects`` is also supplied — else holding-goal
+                runs would still pay the grounding cost of (on)
+                facts they never use.
+            stackable_objects: List of object/boxel IDs the planner may use
+                as cubes for stacking.  When None (the typical holding-goal
+                case), no (on ...) facts are emitted into init.  NOTE
+                (audit #39): (clear ?o) is now emitted for every Obj
+                unconditionally because pick requires it, irrespective
+                of stackable_objects.
+
+        Returns:
+            PDDLProblem for PDDLStream solver
+        """
+        if current_config is None:
+            current_config = self.home_config
+        init = self._build_init(target_objects, current_config,
+                                known_empty_shadows, moved_occluders,
+                                observed_clear_regions,
+                                visible_target_locations,
+                                on_relations,
+                                stackable_objects,
+                                held_obj)
+        self.last_init = init
+
+        constant_map = {}
+        stream_map = self._get_stream_map()
+        
+        return PDDLProblem(
+            self.domain_pddl,
+            constant_map,
+            self.stream_pddl,
+            stream_map,
+            init,
+            goal
+        )
+    
+    def export_problem_pddl(self,
+                            target_objects: List[str],
+                            goal: Tuple,
+                            current_config: 'Union[RobotConfig, str]' = None,
+                            known_empty_shadows: List[str] = None,
+                            moved_occluders: Dict[str, str] = None,
+                            filepath: str = "pddl/problem_debug.pddl",
+                            visible_target_locations: Optional[Dict[str, str]] = None) -> str:
+        """
+        Export the programmatically-built problem to a standalone PDDL file.
+
+        Useful for debugging: inspect exactly what init state and goal the
+        planner receives, without running PDDLStream. The output file matches
+        domain_pddlstream.pddl's untyped format.
+
+        Note: stream-certified predicates (kin_solution, motion, valid_grasp, etc.)
+        are populated at runtime by PDDLStream streams and will NOT appear in
+        this file. The problem is therefore not solvable by a plain PDDL
+        planner — it's a snapshot of the static init state for inspection.
+
+        Args:
+            target_objects: Objects to reason about
+            goal: Goal as a tuple, e.g. ('holding', 'blue_object')
+            current_config: Current robot config (RobotConfig preferred)
+            known_empty_shadows: Shadows already checked (empty)
+            moved_occluders: Dict mapping occluder_id -> destination_boxel_id
+            filepath: Output path (default: pddl/problem_debug.pddl)
+            visible_target_locations: Dict mapping target_name -> boxel_id for
+                visible targets (see _build_init docstring).
+
+        Returns:
+            The filepath written to
+        """
+        if current_config is None:
+            current_config = self.home_config
+        known_empty_shadows = known_empty_shadows or []
+        moved_occluders = moved_occluders or {}
+
+        init = self._build_init(target_objects, current_config,
+                                known_empty_shadows, moved_occluders,
+                                visible_target_locations=visible_target_locations)
+
+        objects = set()
+        for fact in init:
+            for arg in fact[1:]:
+                objects.add(str(arg))
+
+        def format_fact(fact):
+            if len(fact) == 1:
+                return f"    ({fact[0]})"
+            return f"    ({' '.join(str(a) for a in fact)})"
+
+        def format_goal(g):
+            if isinstance(g, str):
+                return f"({g})"
+            if g[0] == 'and':
+                inner = ' '.join(format_goal(sub) for sub in g[1:])
+                return f"(and {inner})"
+            return f"({' '.join(str(a) for a in g)})"
+
+        lines = [
+            ";; Auto-generated problem file from PDDLStreamPlanner.export_problem_pddl()",
+            ";; Static init state only — stream-certified facts are NOT included.",
+            "",
+            "(define (problem boxel-tamp-debug)",
+            "  (:domain boxel-tamp)",
+            "",
+            "  (:objects",
+        ]
+        for obj in sorted(objects):
+            lines.append(f"    {obj}")
+        lines.append("  )")
+        lines.append("")
+        lines.append("  (:init")
+        for fact in sorted(init, key=lambda f: (str(f[0]),) + tuple(str(a) for a in f[1:])):
+            lines.append(format_fact(fact))
+        lines.append("  )")
+        lines.append("")
+        lines.append(f"  (:goal {format_goal(goal)})")
+        lines.append(")")
+        lines.append("")
+
+        # BF#54: an absolute filepath is written where it says; a relative
+        # one under this module's directory as before (the code tree, which
+        # is a read-only snapshot on the cluster: main() passes the run
+        # directory).
+        output_path = (filepath if os.path.isabs(filepath)
+                       else os.path.join(os.path.dirname(os.path.dirname(__file__)), filepath))
+        with open(output_path, 'w') as f:
+            f.write('\n'.join(lines))
+
+        return output_path
+
+    # F31: a placement hides a known body when at least this fraction of
+    # the camera rays to the body's sample points (a 3 x 3 x 3 lattice
+    # over its box) pass through the placed object's box.  Half the rays
+    # is "mostly hidden" — the 22-12-06 evidence cut 88 % of the pixels;
+    # from this camera the low points go first, so the top face (the
+    # surface the estimate is anchored to) is still seen below this.
+    # A grazed corner is not a hidden body.
+    PLACEMENT_HIDES_MIN_FRACTION = 0.5
+
+    # F12: a fragment counts as marginally blocked — sensable as it is at
+    # cost 3 (sense_partial) — when the census's worst-slice blocked
+    # fraction is at most this.  Half the rays clear means the sense
+    # observes half the fragment; less than that is a relocation job.
+    SENSE_PARTIAL_MAX_BLOCKED = 0.5
+
+    def _compute_placement_hides(self, held_obj=None):
+        """F31 (2026-09-19): the set of (object, free cell) pairs where
+        the object's estimated box, placed at the cell (footprint centred
+        on the cell, bottom on the cell floor — what the camera would
+        then see), would intercept at least PLACEMENT_HIDES_MIN_FRACTION
+        of the camera rays to another registered object's sample points
+        (a 3 x 3 x 3 lattice over its box).  The fact makes :action
+        place_hiding (cost 3) the only way to use that cell for that
+        object — the planner prefers a placement that keeps every known
+        body in view, and still has one when the table is crowded.
+        Pure belief geometry: registry boxes and the camera pose.  The
+        tray is never the hidden body nor the placed one.  Objects with
+        identical estimated extents share one virtual-box test per cell,
+        as in the F11 egregious test.
+        """
+        cam = np.asarray(self.camera_pos, dtype=float)
+        free_boxels = [b for b in self.registry.boxels.values()
+                       if b.boxel_type == BoxelType.FREE_SPACE]
+        known = []
+        ext_classes: Dict[Tuple, List[str]] = {}
+        for b in self.registry.boxels.values():
+            if b.boxel_type != BoxelType.OBJECT or b.id == self.tray_name:
+                continue
+            bmin = np.asarray(b.min_corner, dtype=float)
+            bmax = np.asarray(b.max_corner, dtype=float)
+            _g = [np.linspace(bmin[k], bmax[k], 3) for k in range(3)]
+            pts = np.array([[x, y, z] for x in _g[0] for y in _g[1] for z in _g[2]])
+            # Review round 3 (2026-09-20), corrected by round 4 the same
+            # day: the two halves of this loop need OPPOSITE treatment of
+            # the held object.  Its POSITION is the stale pick-time box
+            # (the same staleness the location facts drop for in
+            # _build_init; refresh_object_aabbs never re-poses a held
+            # body), so it is not a body the camera can lose sight of and
+            # it must not enter `known` — protecting a position it has
+            # already left made OTHER objects' placements cost 2 instead
+            # of 1 at cells that hide nothing.  Its EXTENTS, on the other
+            # hand, are unchanged by being carried, and `ext_classes` is
+            # keyed on extents alone: that is the side that decides where
+            # IT may be placed.  Round 3 excluded it from both, which
+            # silently disabled F31 on the only action it constrains —
+            # place and place_hiding both require (holding ?o), so the
+            # placed object is ALWAYS the held one.
+            if held_obj is None or b.id != held_obj:
+                known.append((b.id, pts))
+            key = tuple(int(v) for v in np.round((bmax - bmin) * 1000.0))
+            ext_classes.setdefault(key, []).append(b.id)
+        hides = set()
+        for fb in free_boxels:
+            cx, cy = float(fb.center[0]), float(fb.center[1])
+            floor_z = float(fb.min_corner[2])
+            for key, members in ext_classes.items():
+                ext = np.asarray(key, dtype=float) / 1000.0
+                vmin = np.array([cx - ext[0] / 2.0, cy - ext[1] / 2.0, floor_z])
+                vmax = np.array([cx + ext[0] / 2.0, cy + ext[1] / 2.0,
+                                 floor_z + ext[2]])
+                for tid, pts in known:
+                    hit = segment_aabb_hit_mask(cam, pts, vmin, vmax)
+                    if (float(np.count_nonzero(hit)) / len(pts)
+                            < self.PLACEMENT_HIDES_MIN_FRACTION):
+                        continue
+                    for obj_id in members:
+                        if obj_id != tid:
+                            hides.add((obj_id, fb.id))
+        return hides
+
+    def _compute_placement_view_blocks(self, shadow_ids, free_boxels,
+                                       object_extents):
+        """
+        Prospective placement-blocking geometry for the blocks_view_at
+        init facts, two criteria per (free_boxel, shadow):
+
+        1. PAIR criterion (unchanged): the free boxel's own AABB
+           intercepts more than the census margin of some slice's rays.
+
+        F5 alignment (2026-08-21, the previously deferred "placement-
+        blocking slice alignment"): endpoints and tolerance are the SAME
+        shared sense grid the live sense and compute_shadow_blockers use
+        (perception.sense_ray_slices + SENSE_MARGINAL_BLOCKED_FRACTION).
+        The old 5x5 mid-height grid missed low blockers entirely: a
+        ~13 cm block placed at a free boxel passes UNDER the shadow's
+        mid-height rays but clips the dense low slice, so the planner
+        placed occluders into corridors the census then flagged blocked
+        (seed 0: orange placed at free_005 immediately listed as a
+        blocker of shadow_of_red, forcing a re-pick the binding layer
+        cannot deliver — F7).  A free boxel blocks a shadow iff, on
+        ANY slice, it would intercept MORE than the marginal fraction of
+        that slice's rays — exactly the census's listing criterion.
+
+        2. F11 EGREGIOUS per-object criterion (2026-08-22): the cell's
+           AABB under-approximates the blocking volume of an object
+           TALLER or WIDER than the cell — a 13 cm occluder placed in a
+           short cell blocks low slice rays the cell itself does not
+           (user GUI run 12-09-28: orange judged corridor-safe at
+           free_005, immediately census-listed as a blocker of
+           shadow_of_red, F7 relocate-again death).  For each object
+           extent class, a virtual box with the object's estimated
+           extents (footprint centred on the cell, bottom on the cell
+           floor — what the census will later see) is tested at the
+           LOOSER PLACEMENT_EGREGIOUS_BLOCKED_FRACTION: testing at the
+           census margin itself (reverted 335ddc1) over-constrained the
+           fact set (see the constant's comment).  Skipped when the
+           virtual box fits inside the cell AABB (the pair test is then
+           a superset) and when the pair already fired (the caller
+           expands pair facts over every object).
+
+        Args:
+            shadow_ids: shadow boxel ids to protect.
+            free_boxels: candidate FREE_SPACE BoxelData.
+            object_extents: dict obj_boxel_id -> full extents (3-array)
+                from the object's registry boxel (perception estimate).
+
+        Returns:
+            (pairs, egregious): pairs is the set of (free_boxel_id,
+            shadow_id) where the cell AABB blocks the view; egregious is
+            the set of extra (obj_id, free_boxel_id, shadow_id) triples
+            where only the placed object's own volume blocks it.
+        """
+        cam = np.asarray(self.camera_pos, dtype=float)
+        blocking = set()
+        egregious = set()
+
+        # Objects with identical estimated extents (mm-quantized) share
+        # one virtual-box test per (cell, shadow).  The tray is excluded:
+        # it is unpickable by design (audit #49 — no obj_at_boxel fact),
+        # so a blocks_view_at(tray, free_X, S) volume triple can never
+        # fire; without the filter its wide flat extents dominated the
+        # egregious set (7 dead triples in the first tray-goal smoke).
+        ext_classes: Dict[Tuple, List[str]] = {}
+        for obj_id, ext in object_extents.items():
+            if obj_id == self.tray_name:
+                continue
+            key = tuple(int(v) for v in
+                        np.round(np.asarray(ext, dtype=float) * 1000.0))
+            ext_classes.setdefault(key, []).append(obj_id)
+
+        for shadow_id in shadow_ids:
+            sb = self.registry.get_boxel(shadow_id)
+            if sb is None:
+                continue
+            slices, _ = sense_ray_slices(sb.min_corner, sb.max_corner)
+
+            # F32 (2026-09-19): with --corridor-test object the PAIR
+            # criterion (the cell's own AABB) is skipped and every object
+            # class is tested as the virtual box the census will see —
+            # a coarse merged cell blocks a corridor its centre placement
+            # would not, and on a crowded table that leaves no admissible
+            # cell at all (seed 13 / 119 plan 3 after the F7 fix).
+            _object_only = (getattr(self, 'corridor_test', 'cell+object')
+                            == 'object')
+            for fb in free_boxels:
+                fmin = np.asarray(fb.min_corner, dtype=float)
+                fmax = np.asarray(fb.max_corner, dtype=float)
+                pair_blocked = False
+                if not _object_only:
+                    for sl in slices:
+                        hits = segment_aabb_hit_mask(cam, sl.points, fmin, fmax)
+                        if (float(np.count_nonzero(hits)) / len(sl.points)
+                                > SENSE_MARGINAL_BLOCKED_FRACTION):
+                            blocking.add((fb.id, shadow_id))
+                            pair_blocked = True
+                            break
+                if pair_blocked:
+                    continue
+                cx, cy = float(fb.center[0]), float(fb.center[1])
+                floor_z = float(fb.min_corner[2])
+                for key, members in ext_classes.items():
+                    ext = np.asarray(key, dtype=float) / 1000.0
+                    vmin = np.array([cx - ext[0] / 2.0,
+                                     cy - ext[1] / 2.0, floor_z])
+                    vmax = np.array([cx + ext[0] / 2.0,
+                                     cy + ext[1] / 2.0,
+                                     floor_z + ext[2]])
+                    if (not _object_only
+                            and np.all(vmin >= fmin - 1e-9)
+                            and np.all(vmax <= fmax + 1e-9)):
+                        continue
+                    for sl in slices:
+                        hits = segment_aabb_hit_mask(
+                            cam, sl.points, vmin, vmax)
+                        if (float(np.count_nonzero(hits)) / len(sl.points)
+                                > PLACEMENT_EGREGIOUS_BLOCKED_FRACTION):
+                            for obj_id in members:
+                                egregious.add((obj_id, fb.id, shadow_id))
+                            break
+
+        return blocking, egregious
+
+    def _build_init(self,
+                    target_objects: List[str],
+                    current_config: 'Union[RobotConfig, str]' = None,
+                    known_empty_shadows: List[str] = None,
+                    moved_occluders: Dict[str, str] = None,
+                    observed_clear_regions: Optional[List[str]] = None,
+                    visible_target_locations: Optional[Dict[str, str]] = None,
+                    on_relations: Optional[Dict[str, str]] = None,
+                    stackable_objects: Optional[List[str]] = None,
+                    held_obj: Optional[str] = None) -> List[Tuple]:
+        """
+        Build the init state as a list of fact tuples.
+
+        Shared by create_problem() and export_problem_pddl() to guarantee
+        they produce identical init states.
+
+        Args:
+            target_objects: Objects to reason about
+            current_config: Current robot config (RobotConfig or string)
+            known_empty_shadows: Shadows already checked (empty)
+            moved_occluders: Dict mapping occluder_id -> destination_boxel_id
+                for occluders that have been moved aside
+            observed_clear_regions: Boxel IDs that the robot has directly
+                observed to NOT contain the target.  If ``None`` (default),
+                ALL object and free-space boxels are treated as observed-clear
+                — this is correct for the current scenario where a fixed
+                overhead camera sees the entire table and any non-hidden
+                target would be visible (audit #67).
+                Supply an explicit set when extending to scenarios with
+                limited sensor coverage where the robot has not yet
+                observed all regions.
+            visible_target_locations: Dict mapping target_name -> boxel_id for
+                targets whose position is already known (camera-visible, no
+                sensing required).  Adds ``obj_at_boxel`` and
+                ``obj_at_boxel_KIF`` so the pick action's preconditions are
+                directly satisfiable without a prior sense action.
+
+        Returns:
+            List of fact tuples for the init state
+        """
+        if current_config is None:
+            current_config = self.home_config
+        known_empty_shadows = known_empty_shadows or []
+        moved_occluders = moved_occluders or {}
+        visible_target_locations = visible_target_locations or {}
+
+        init = []
+        shadows = []
+        m8 = pose_belief.SWITCHES['M8']
+        look_on = bool(self.look_on)
+
+        def _pose_known(bd) -> bool:
+            return pose_belief.pose_known(
+                bd, robot_model().finger_limits[0][1],
+                self.streams.GRASP_MAX_SPAN, self.streams.GRASP_SQUARE_TOL)
+
+        # The builders run in this order and each appends to init.  The order
+        # is behaviour: the shuffle at the end permutes the list it is given,
+        # so another order of appends gives another shuffled list.
+        self._facts_registry(init, shadows, target_objects,
+                             known_empty_shadows, observed_clear_regions,
+                             held_obj, m8, look_on, _pose_known)
+
+        self._facts_view_blocking(init, shadows, look_on)
+
+        self._facts_placement_hides(init, held_obj)
+
+        self._facts_targets_and_tray(init, target_objects,
+                                     visible_target_locations, m8, look_on,
+                                     _pose_known)
+
+        self._facts_boxel_fits(init, target_objects, look_on)
+
+        self._facts_config_and_home(init, current_config)
+        self._facts_m8(init, shadows, target_objects, known_empty_shadows,
+                       current_config, held_obj, m8, look_on, _pose_known)
+        self.last_look_stats = {}
+        if look_on:
+            _look_facts = (self._look_facts_centred
+                           if self.look_mode == 'centred' else self._look_facts)
+            self.last_look_stats = _look_facts(
+                init, target_objects, shadows, held_obj, current_config,
+                _pose_known)
+        self._facts_hand(init, held_obj)
+
+        self._facts_stacking(init, on_relations, stackable_objects, held_obj)
+
+        self._check_home_pseudo_boxel(init)
+
+        if look_on:
+            # The look domain declares what it uses and nothing else; an
+            # emission it does not declare is a bug here, not data.
+            from planning import look_domain
+            declared = set(look_domain.declared_predicates(self.domain_pddl))
+            undeclared = sorted({str(f[0]) for f in init} - declared)
+            if undeclared:
+                raise ValueError(f"look mode: init facts for predicates the "
+                                 f"look domain does not declare: {undeclared}")
+
+        random.shuffle(init)
+        return init
+
+    def _facts_registry(self, init, shadows, target_objects,
+                        known_empty_shadows, observed_clear_regions, held_obj,
+                        m8, look_on, _pose_known):
+        # Appends the facts of every registry boxel by its kind; fills shadows.
+        for boxel in self.registry.boxels.values():
+            init.append(('Boxel', boxel.id))
+
+            if boxel.boxel_type == BoxelType.SHADOW:
+                if not look_on:
+                    init.append(('is_shadow', boxel.id))
+                shadows.append(boxel.id)
+
+                if boxel.id in known_empty_shadows:
+                    for obj in target_objects:
+                        init.append(('obj_at_boxel_KIF', obj, boxel.id))
+
+            elif boxel.boxel_type == BoxelType.OBJECT:
+                if not look_on:
+                    init.append(('is_object', boxel.id))
+                init.append(('Obj', boxel.id))
+                # F7 ROOT CAUSE (2026-09-19, analyst over four binding-death
+                # logs): an object relocated in an EARLIER plan used to be
+                # located at the free cell it was placed in
+                # (belief.occluders_moved[o] = free_XXX), with ('Boxel',
+                # free_XXX) asserted here — but update_after_place removes
+                # that cell from the registry and re-poses the object's OWN
+                # boxel to the placed pose.  FastDownward then grounded
+                # pick(o, free_XXX, ...) and compute_kin(o, free_XXX, g)
+                # found no such boxel and returned silently: the skeleton
+                # could never bind, and PDDLStream spun its sampling budget
+                # on the dead binding (the "silent re-pick binding death",
+                # 15 -> 45 -> 140 s of search per iteration).  Every
+                # registered object is where its own boxel says it is; the
+                # moved record stays a belief annotation only.  Review
+                # round 2: the HELD object is the exception — (holding o)
+                # is its state, its boxel is the stale pick-time box, and a
+                # location fact there re-pinned it as the blocker of its
+                # own fragment for a whole plan.
+                if boxel.id != held_obj:
+                    init.append(('obj_at_boxel', boxel.id, boxel.id))
+                    init.append(('obj_at_boxel_KIF', boxel.id, boxel.id))
+                    # M8 B: pick commits only within the margin.
+                    if m8 and _pose_known(boxel):
+                        init.append(('obj_pose_known', boxel.id))
+
+                # KIF for target objects: only emit "known not here" if this
+                # region has been observed clear.  When observed_clear_regions
+                # is None, the fixed overhead camera covers the entire table,
+                # so all visible boxels are observed (audit #67).
+                if observed_clear_regions is None or boxel.id in observed_clear_regions:
+                    for obj in target_objects:
+                        init.append(('obj_at_boxel_KIF', obj, boxel.id))
+
+            elif boxel.boxel_type == BoxelType.FREE_SPACE:
+                init.append(('is_free_space', boxel.id))
+                if boxel.on_surface is not None:
+                    init.append(('on_surface', boxel.id))
+                if observed_clear_regions is None or boxel.id in observed_clear_regions:
+                    for obj in target_objects:
+                        init.append(('obj_at_boxel_KIF', obj, boxel.id))
+
+        # #P1 F20 follow-up (2026-09-18): an object that has its own OBJECT
+        # boxel has a KNOWN location, so whether it is in any shadow
+        # fragment is known too (it is not).  Emitting the Know-If for
+        # every (registered object, fragment) pair collapses the belief
+        # properly: a re-detected target no longer leaves sense(t, F)
+        # groundable beside obj_at_boxel(t, t), and no object with a
+        # known pose can be "searched for" in a fragment.  Objects
+        # without a boxel (the hidden target) get nothing here.
+        for boxel in self.registry.boxels.values():
+            if boxel.boxel_type == BoxelType.OBJECT:
+                for shadow_id in shadows:
+                    init.append(('obj_at_boxel_KIF', boxel.id, shadow_id))
+
+    def _facts_view_blocking(self, init, shadows, look_on):
+        # Appends blocks_view_at and marginally_blocked (occluders, placements).
+        # Geometric facts: blocks_view_at(occ, occ_current_boxel, shadow).
+        # shadow_occluder_map comes from compute_shadow_blockers' census
+        # over the registry, so a listed blocker blocks the shadow from
+        # wherever it CURRENTLY stands.  The fact is keyed to the
+        # occluder's own OBJECT boxel — the same key obj_at_boxel uses
+        # above, which is what the derived blocks_view needs (F7 root
+        # cause, 2026-09-19: both used to switch to the consumed free
+        # cell of a relocated occluder, a boxel the registry no longer
+        # held; the 2026-08-20 fix that introduced that keying was
+        # itself repairing a mismatch between the two — they must always
+        # agree, and now both are the object's own boxel).
+        #
+        # shadow_occluder_map is Dict[shadow_id, List[blocker_ids]] — includes
+        # ALL objects that block the camera's LOS to each shadow, not just the
+        # creating occluder (audit #78).
+        if look_on:
+            pass        # look mode: what hides a view is named per configuration below
+        elif self.shadow_occluder_map:
+            for shadow_id, blocker_ids in self.shadow_occluder_map.items():
+                if isinstance(blocker_ids, str):
+                    blocker_ids = [blocker_ids]
+                for occluder_id in blocker_ids:
+                    init.append(('blocks_view_at', occluder_id,
+                                 occluder_id, shadow_id))
+                # F12 (2026-09-19): (marginally_blocked ?region) names a
+                # blocked fragment whose worst slice is still mostly
+                # observable (census blocked fraction at most
+                # SENSE_PARTIAL_MAX_BLOCKED).  Diagnostic only: the cost-3
+                # sense_partial action that consumed it was withdrawn the
+                # same day (a grazed fragment cannot be shrunk by sensing;
+                # the planner preferred it to every relocation and parked
+                # all fragments on strikes) — see PAPER_AUDIT F12 / F32.
+                _sb = self.registry.get_boxel(shadow_id)
+                _frac = float(getattr(_sb, 'blocked_fraction', 1.0) or 0.0) \
+                    if _sb is not None else 1.0
+                if blocker_ids and _frac <= self.SENSE_PARTIAL_MAX_BLOCKED:
+                    init.append(('marginally_blocked', shadow_id))
+        else:
+            for shadow_id in shadows:
+                shadow_boxel = self.registry.get_boxel(shadow_id)
+                if shadow_boxel and shadow_boxel.created_by_boxel_id:
+                    occ_id = shadow_boxel.created_by_boxel_id
+                    init.append(('blocks_view_at', occ_id, occ_id,
+                                 shadow_id))
+
+        # Placement-blocking facts (audit #5): for each free-space boxel,
+        # check whether it lies in the camera→shadow line of sight.  Emitted
+        # as blocks_view_at(obj, free_boxel, shadow) so that the existing
+        # derived predicates (blocks_view / view_blocked / view_clear)
+        # automatically prevent placements that re-block a cleared corridor.
+        # F11: the pair criterion is complemented by per-object egregious
+        # triples — placements whose OWN volume (taller/wider than the
+        # cell) would blind the corridor even though the cell AABB does
+        # not (see _compute_placement_view_blocks).
+        if self.camera_pos is not None and shadows and not look_on:
+            free_boxels = [
+                b for b in self.registry.boxels.values()
+                if b.boxel_type == BoxelType.FREE_SPACE
+            ]
+            object_extents = {
+                b.id: (np.asarray(b.max_corner, dtype=float)
+                       - np.asarray(b.min_corner, dtype=float))
+                for b in self.registry.boxels.values()
+                if b.boxel_type == BoxelType.OBJECT
+            }
+            placement_blocks, egregious_triples = \
+                self._compute_placement_view_blocks(
+                    shadows, free_boxels, object_extents)
+            obj_boxel_ids = list(object_extents.keys())
+            for (free_id, shadow_id) in placement_blocks:
+                for obj_id in obj_boxel_ids:
+                    init.append(('blocks_view_at', obj_id, free_id, shadow_id))
+            # F11 triples: sorted for deterministic membership (the
+            # whole init list is seed-shuffled before returning, so
+            # position carries no meaning — only the fact SET does).
+            for (obj_id, free_id, shadow_id) in sorted(egregious_triples):
+                init.append(('blocks_view_at', obj_id, free_id, shadow_id))
+            # Stashed for plan()'s [#76-diag] block (_build_init runs for
+            # both create_problem and export_problem_pddl — printing here
+            # would double every line).
+            self._last_egregious_triples = sorted(egregious_triples)
+
+    def _facts_placement_hides(self, init, held_obj):
+        # Appends placement_hides: a placement that would hide a known body.
+        # F31 (2026-09-19): a placement must not hide a KNOWN body from
+        # the camera.  The facts above protect the sense corridors to
+        # shadow fragments only; nothing kept the planner from standing
+        # an occluder between the camera and a registered object (user
+        # GUI run 22-12-06: orange at free_017 cut blue from 507 to 62
+        # px; red at free_005 stood on the ray to purple).  A hidden
+        # known body cannot be re-posed by any refresh, cannot be re-
+        # detected, and may be the next target.  Static per-(object,
+        # cell) facts; :action place requires (not (placement_hides)).
+        if self.camera_pos is not None:
+            hides = self._compute_placement_hides(held_obj)
+            for (obj_id, free_id) in sorted(hides):
+                init.append(('placement_hides', obj_id, free_id))
+            self._last_placement_hides = sorted(hides)
+
+    def _facts_targets_and_tray(self, init, target_objects,
+                                visible_target_locations, m8, look_on,
+                                _pose_known):
+        # Appends Obj per target, the tray's facts and the visible targets.
+        for obj in target_objects:
+            init.append(('Obj', obj))
+
+        # audit #49 — tray as a stackable support.  No obj_at_boxel
+        # emitted, so pick's (obj_at_boxel ?o ?b) precondition is
+        # unsatisfiable for the tray => implicitly unpickable.
+        # (clear tray) and (on_table tray) emerge from the all_obj_ids
+        # loop further down.  (Boxel tray) is required so the move
+        # action's (Boxel ?b) precondition is satisfied when the
+        # destination is the tray (compute-stack-kin certifies
+        # (config_for_boxel ?q tray)).
+        if self.tray_name is not None:
+            init.append(('Obj', self.tray_name))
+            init.append(('Boxel', self.tray_name))
+            if not look_on:
+                init.append(('is_tray', self.tray_name))
+
+        for tgt, boxel_id in visible_target_locations.items():
+            init.append(('obj_at_boxel', tgt, boxel_id))
+            init.append(('obj_at_boxel_KIF', tgt, boxel_id))
+            # M8 B: the same gate as every registered object.
+            _tbd = self.registry.get_boxel(tgt)
+            if not m8 or (_tbd is not None and _pose_known(_tbd)):
+                init.append(('obj_pose_known', tgt))
+
+    def _facts_boxel_fits(self, init, target_objects, look_on):
+        # Appends boxel_fits: which object fits which free cell or shadow.
+        # Static boxel_fits facts (audit #102): do NOT use a PDDLStream test stream.
+        # Adaptive search re-invokes test streams heavily across skeletons; a cheap
+        # predicate became a bottleneck.  One pass here matches stream semantics.
+        obj_ids = []
+        for boxel in self.registry.boxels.values():
+            if boxel.boxel_type == BoxelType.OBJECT:
+                obj_ids.append(boxel.id)
+        for obj in target_objects:
+            if obj not in obj_ids:
+                obj_ids.append(obj)
+        # Containment candidates (audit #62): boxel_fits now gates BOTH
+        # :action place (free-space destination) and :action sense
+        # (shadow region that could hide ?o).  Same predicate, both
+        # preconditions.  OBJECT boxels are excluded — not valid place
+        # destinations (is_free_space false) and not valid sense regions
+        # (view_clear only derives over shadows).
+        #
+        # SHADOW branch (audit #62 refinement): the AABB extent check
+        # would over-emit because shadow_calculator subtracts the
+        # occluder only along the dominant axis (audit #72 lateral
+        # overhang).  test_target_can_hide_in_shadow adds a camera-ray
+        # visibility check + stable-resting-pose check on top of the
+        # extent test — only emit if a target placement exists where
+        # all 8 of its AABB corners are actually occluded from the
+        # camera AND the target rests stably on the table.
+        # #P3(c) placement-candidate reach gate (2026-08-21): a free
+        # boxel whose centre lies beyond REACH_LIMIT_M horizontal from
+        # the robot base is NEVER offered as a place destination — the
+        # place EE target is boxel.center + a vertical grasp offset, so
+        # compute_kin's pre-IK gate would reject it anyway, but only
+        # AFTER FastDownward committed a plan to it and burned a full
+        # search round (~40-60 s post-F3) on the doomed skeleton
+        # (observed: GUI run 22-01-06, free_008 at 0.802 m, one wasted
+        # 99 s round).  Gating the FACT keeps unreachable placements out
+        # of the search space entirely.  SHADOW fits stay un-gated:
+        # (boxel_fits target shadow) encodes hideability for sense —
+        # a target can hide beyond arm reach; reach is a pick concern,
+        # enforced by the kin stream when a pick is actually planned.
+        free_ids = [
+            b.id for b in self.registry.boxels.values()
+            if b.boxel_type == BoxelType.FREE_SPACE
+            and float(np.linalg.norm(
+                np.asarray(b.center[:2], dtype=float)
+                - self.streams._robot_base_xy)) <= self.streams.reach_limit_m
+        ]
+        shadow_ids = [
+            b.id for b in self.registry.boxels.values()
+            if b.boxel_type == BoxelType.SHADOW
+        ]
+        # #P3(c) height-aware half (2026-09-19): the place EE target is
+        # the object's centre at the cell + the lowest admissible grasp
+        # offset, and the reach envelope shrinks with height
+        # (streams.ee_reachable); a cell only the flat limit admits is
+        # not offered for THAT object.
+        _offsets = sorted(self.streams._GRASP_Z_OFFSETS)
+        for o in obj_ids:
+            _obd = self.registry.get_boxel(o)
+            _half_h = (float(_obd.extent[2]) if _obd is not None
+                       else float(NOMINAL_HIDDEN_EXTENTS[2]) / 2.0)
+            _z_off = next((z for z in _offsets if z >= _half_h + 0.01),
+                          _offsets[-1])
+            for bid in free_ids:
+                _b = self.registry.get_boxel(bid)
+                # The same target compute_kin will test: cell centre +
+                # the vertical grasp offset (review 2026-09-19: an
+                # earlier draft used the resting height instead).
+                _ee = np.asarray(_b.center, dtype=float) + np.array([0.0, 0.0, _z_off])
+                if not self.streams.ee_reachable(_ee):
+                    continue
+                if self.streams.test_boxel_fits(o, bid):
+                    init.append(('boxel_fits', o, bid))
+            for bid in ([] if look_on else shadow_ids):
+                if self.sense_gate == 'off' or \
+                        self.streams.test_target_can_hide_in_shadow(
+                            o, bid, self.camera_pos):
+                    init.append(('boxel_fits', o, bid))
+
+    def _facts_config_and_home(self, init, current_config):
+        # Appends Config and at_config, and the home pseudo-boxel's facts.
+        init.append(('Config', current_config))
+        init.append(('at_config', current_config))
+        if self.goal_config is not None:
+            # #P4 B3(d), D7 (iii): the goal configuration and its home
+            # pseudo-boxel, so move (config_for_boxel ?q2 ?b) can reach
+            # it.  "home" is not a registry boxel, so no registry loop
+            # above named it; asserted below once init is complete.
+            if self.registry.get_boxel(HOME_PSEUDO_BOXEL) is not None:
+                raise ValueError(f"a registry boxel is named "
+                                 f"{HOME_PSEUDO_BOXEL!r}")
+            if current_config != self.goal_config:
+                init.append(('Config', self.goal_config))
+            init.append(('Boxel', HOME_PSEUDO_BOXEL))
+            init.append(('config_for_boxel', self.goal_config,
+                         HOME_PSEUDO_BOXEL))
+
+    def _facts_m8(self, init, shadows, target_objects, known_empty_shadows,
+                  current_config, held_obj, m8, look_on, _pose_known):
+        # Appends M8's view facts and the over-region facts; prints its line.
+        # M8 C: the observation configurations as static facts, each with
+        # its own view pseudo-boxel (not a registry boxel, like "home";
+        # compute_kin returns at once on these ids).
+        self.streams.view_boxel_ids = frozenset()
+        self.last_m8_stats = {}
+        if m8 and self.m8_views is not None and not look_on:
+            _clash = [b for b in self.registry.boxels if str(b).startswith(VIEW_PREFIX)]
+            if _clash:
+                raise ValueError(f"registry boxels carry the view prefix: {_clash}")
+            _sense = [self.registry.get_boxel(s) for s in shadows
+                      if s not in known_empty_shadows]
+            _look = [b for b in self.registry.boxels.values()
+                     if b.boxel_type == BoxelType.OBJECT and b.id != held_obj
+                     and b.id not in self.streams.ungraspable_objects
+                     and not _pose_known(b)
+                     and pose_belief.believed_margin(
+                         b, robot_model().finger_limits[0][1],
+                         self.streams.GRASP_MAX_SPAN,
+                         self.streams.GRASP_SQUARE_TOL) is not None]
+            _declared = [current_config] + (
+                [self.goal_config] if self.goal_config is not None else [])
+            _t0 = time.perf_counter()
+            _facts, _views = self.m8_views.init_facts(
+                current_config, self.home_config, _sense, _look, _declared)
+            init.extend(_facts)
+            self.streams.view_boxel_ids = frozenset(_views)
+            # BF#52: the fold.  For each (target, region) pair the sense may
+            # ground on, the target's first pick configuration over the
+            # region and, when the eye's view stays clear with the arm
+            # there, the static facts that let the plan move there, sense
+            # and pick without moving (over_region_facts).
+            _over_stats: Dict[str, Any] = {}
+            if self.sense_over_region:
+                _fits = {(f[1], f[2]) for f in init if f[0] == 'boxel_fits'}
+                _over_facts, _over_stats = over_region_facts(
+                    self.streams, self.m8_views, list(target_objects), _sense,
+                    lambda t, r: (t, r) in _fits)
+                init.extend(_over_facts)
+            self.last_m8_stats = dict(self.m8_views.last_stats,
+                                      build_s=time.perf_counter() - _t0,
+                                      look_objects=[b.id for b in _look],
+                                      sense_regions=len(_sense),
+                                      fallback=list(self.m8_views.last_fallback),
+                                      **_over_stats)
+            print(f"  [M8] init: {self.last_m8_stats['sense_view']} sense_view, "
+                  f"{self.last_m8_stats['look_config']} look_config facts "
+                  f"(pose unknown: {self.last_m8_stats['look_objects']}), "
+                  f"{len(_views)} view boxels, "
+                  f"{self.last_m8_stats['sense_fallback']} shadows on the "
+                  f"current-config fallback; {self.last_m8_stats['twin_renders']} "
+                  f"twin renders {self.last_m8_stats['twin_render_s']:.2f}s; "
+                  f"{_over_stats.get('over_region_pass', 0)}/"
+                  f"{_over_stats.get('over_region_pairs', 0)} over-region folds "
+                  f"{_over_stats.get('over_region_s', 0.0):.2f}s; "
+                  f"total {self.last_m8_stats['build_s']:.2f}s")
+
+    def _facts_hand(self, init, held_obj):
+        # Appends handempty or holding.
+        if held_obj is None:
+            init.append(('handempty',))
+        else:
+            # audit #58 — when the action loop broke mid-plan with the
+            # gripper still holding ?o, replan from (holding ?o) instead
+            # of dropping the cube.  sample-grasp re-fires on (Obj ?o)
+            # to certify a fresh (Grasp ?g) + (valid_grasp ?o ?g) for
+            # the next place/stack action.
+            init.append(('holding', held_obj))
+
+    def _facts_stacking(self, init, on_relations, stackable_objects, held_obj):
+        # Appends clear, on_table, on.  Set loop: order by PYTHONHASHSEED=0 (run.ps1).
+        # Stacking facts (audit #30 + #39).
+        #   (clear ?o)  now emitted for EVERY object unconditionally,
+        #               because pick requires it (audit #39 — prevents
+        #               silent tower collapse when picking a stack-base).
+        #               Holding-goal runs pay one atom per Obj of extra
+        #               grounding cost, far cheaper than the
+        #               :conditional-effects penalty debated in #30.
+        #   (on ?o ?x)  still emitted ONLY when the caller supplied
+        #               stackable_objects + on_relations (i.e. an
+        #               explicit stack run).  Holding goals see no (on).
+        on_relations = on_relations or {}
+        supports_with_obj_on_top = set(on_relations.values())
+
+        # Clear candidates = every Obj already in init (dedup across the
+        # OBJECT-boxel loop above and the target_objects loop).  Using a
+        # set to avoid duplicate (clear X) atoms when a target also has
+        # an OBJECT boxel registered.  init contains tuples of varying
+        # arity (e.g. ('handempty',), ('blocks_view_at', o, b, r)), so
+        # we filter by first element length-safely rather than
+        # destructuring.
+        all_obj_ids = {fact[1] for fact in init
+                       if len(fact) == 2 and fact[0] == 'Obj'}
+        stacked_objs = set(on_relations.keys())
+        for obj_id in all_obj_ids:
+            if obj_id not in supports_with_obj_on_top:
+                init.append(('clear', obj_id))
+            # audit #41: a cube not stacked on another cube is
+            # table-resting at planning time — unless it is the held one
+            # (audit #58 replans while holding; review round 2).
+            if obj_id not in stacked_objs and obj_id != held_obj:
+                init.append(('on_table', obj_id))
+
+        if stackable_objects is not None:
+            for stacked, support in on_relations.items():
+                init.append(('on', stacked, support))
+
+    def _check_home_pseudo_boxel(self, init):
+        # Appends nothing: the assert other files cite as "asserted in _build_init".
+        if self.goal_config is not None:
+            _named = [f for f in init if HOME_PSEUDO_BOXEL in
+                      [str(x) for x in f[1:]]]
+            assert sorted(f[0] for f in _named) == [
+                'Boxel', 'config_for_boxel'], (
+                f"the home pseudo-boxel appears in other facts: {_named}")
+
+    def _look_for(self, init, target_objects, shadows, held_obj, pose_known):
+        """What a look may hypothesise (both looks): a hidden target in each
+        fragment that can hide it (the sense gate's test) and not already
+        known empty, and a registered body whose pose is not known at its own
+        boxel.  Returns (look_for pairs, the bodies of the pose looks)."""
+        reg = self.registry
+        kif = {(str(f[1]), str(f[2])) for f in init
+               if len(f) == 3 and f[0] == 'obj_at_boxel_KIF'}
+        hidden = [o for o in target_objects
+                  if reg.get_boxel(o) is None
+                  or reg.get_boxel(o).boxel_type != BoxelType.OBJECT]
+        look_for = []
+        for o in hidden:
+            for sid in shadows:
+                if (o, sid) in kif:
+                    continue
+                if self.sense_gate == 'off' or \
+                        self.streams.test_target_can_hide_in_shadow(
+                            o, sid, self.camera_pos):
+                    look_for.append((o, sid))
+        parked = self.m8_views.parked
+        posed = [b for b in reg.boxels.values()
+                 if b.boxel_type == BoxelType.OBJECT and b.id != held_obj
+                 and b.id not in self.streams.ungraspable_objects
+                 and b.id not in parked
+                 and not pose_known(b)
+                 and pose_belief.believed_margin(
+                     b, robot_model().finger_limits[0][1],
+                     self.streams.GRASP_MAX_SPAN,
+                     self.streams.GRASP_SQUARE_TOL) is not None]
+        return look_for, posed
+
+    def _look_facts_centred(self, init, target_objects, shadows, held_obj,
+                            current_config, pose_known) -> Dict[str, Any]:
+        """Path 9, --look centred: the facts of the object-centred look
+        (look_domain.LOOK_SECTION_CENTRED).  look_for as in the boxel look.
+        The camera is aimed at the centre of what the look is about, ?h: the
+        fragment's box for a search look, the object's box for a pose look.
+        An object's look is the tag's own observe rule (ObserveViews.
+        look_configs): straight down over the centre.  A region's look also
+        tries poses at a horizontal offset from the centre (look_candidates)
+        and keeps the first few.  The twin certifies, for every one, that all
+        of ?h is in view and unblocked from the configuration.  Nothing here
+        asks the boxel model about any other region, any other body, or free
+        space.  Appends to ``init``; returns the stats."""
+        if self.m8_views is None:
+            raise ValueError("--look centred needs planner.m8_views (main() sets it)")
+        t0 = time.perf_counter()
+        reg = self.registry
+        look_for, posed = self._look_for(init, target_objects, shadows,
+                                         held_obj, pose_known)
+        regions = sorted({s for _, s in look_for})
+        centres = sorted(set(regions) | {b.id for b in posed})
+        declared = [current_config] + (
+            [self.goal_config] if self.goal_config is not None else [])
+        facts, views = self.m8_views.init_facts(
+            current_config, self.home_config, [],
+            [reg.get_boxel(c) for c in centres], declared,
+            standoffs={s: CENTRED_REGION_STANDOFFS for s in regions},
+            offsets={s: CENTRED_REGION_OFFSETS for s in regions},
+            max_configs={s: CENTRED_REGION_MAX_CONFIGS for s in regions})
+        self.streams.view_boxel_ids = frozenset(views)
+        with_view = set()
+        for f in facts:
+            if f[0] == 'look_config':
+                with_view.add(str(f[2]))
+            if f[0] != 'is_view':               # the centred domain does not declare it
+                init.append(f)
+        init.extend(('look_for', o, s) for o, s in look_for)
+        init.extend(('look_for', b.id, b.id) for b in posed)
+        no_view = sorted(set(centres) - with_view)
+        stats = dict(self.m8_views.last_stats, regions=regions,
+                     pose_looks=[b.id for b in posed],
+                     look_for=len(look_for) + len(posed), no_view=no_view,
+                     build_s=time.perf_counter() - t0)
+        print(f"  [look] init (centred): {len(regions)} regions {regions}, "
+              f"{len(posed)} pose looks {stats['pose_looks']}, "
+              f"{stats['look_config']} look_config; no view: {no_view}; "
+              f"{stats['twin_renders']} twin renders "
+              f"{stats['twin_render_s']:.2f}s, {stats['look_ik']} IK, total "
+              f"{stats['build_s']:.2f}s")
+        for c in no_view:                       # why: the verdicts of the poses tried
+            why = explain_notes(self.m8_views.last_look_notes.get(c, []))
+            print(f"  [look] no view of {c}: {why or 'no pose was tried (parked)'}")
+        return stats
+
+    def _look_facts(self, init, target_objects, shadows, held_obj,
+                    current_config, pose_known) -> Dict[str, Any]:
+        """Path 9, --look boxel: the facts of the look action (look_domain.
+        LOOK_SECTION).  look_for names what a look may hypothesise (_look_for).
+        look_views.LookViews turns those regions and
+        bodies into certified viewpoints (free-space boxels) with the static
+        facts that go with them: Config, config_for_boxel, reveals,
+        blocks_look_at.  Appends to ``init``; returns the stats."""
+        if self.look_views is None or self.m8_views is None:
+            raise ValueError("--look boxel needs planner.look_views (main() sets it)")
+        reg = self.registry
+        look_for, posed = self._look_for(init, target_objects, shadows,
+                                         held_obj, pose_known)
+        regions = [reg.get_boxel(s) for s in sorted({s for _, s in look_for})]
+        ext_classes: Dict[Tuple, List[str]] = {}
+        for b in reg.boxels.values():
+            if b.boxel_type != BoxelType.OBJECT or b.id == self.tray_name:
+                continue
+            key = tuple(int(v) for v in np.round(
+                (np.asarray(b.max_corner, dtype=float)
+                 - np.asarray(b.min_corner, dtype=float)) * 1000.0))
+            ext_classes.setdefault(key, []).append(b.id)
+        cells = [b for b in reg.boxels.values()
+                 if b.boxel_type == BoxelType.FREE_SPACE
+                 and b.on_surface is not None
+                 and float(np.linalg.norm(
+                     np.asarray(b.center[:2], dtype=float)
+                     - self.streams._robot_base_xy)) <= self.streams.reach_limit_m]
+        facts, stats = self.look_views.facts(
+            reg, regions, posed, current_config, ext_classes, cells)
+        init.extend(facts)
+        init.extend(('look_for', o, s) for o, s in look_for)
+        init.extend(('look_for', b.id, b.id) for b in posed)
+        stats = dict(stats, regions=[b.id for b in regions],
+                     pose_looks=[b.id for b in posed],
+                     look_for=len(look_for) + len(posed))
+        print(f"  [look] init: {len(regions)} regions {stats['regions']}, "
+              f"{len(posed)} pose looks {stats['pose_looks']}, "
+              f"{stats['certified']} viewpoints, "
+              f"{sum(1 for f in facts if f[0] == 'reveals')} reveals, "
+              f"{sum(1 for f in facts if f[0] == 'blocks_look_at')} blocks_look_at "
+              f"({stats['placement_facts']} placement); no view: "
+              f"{stats['no_view']}; {stats['twin_renders']} twin renders "
+              f"{stats['twin_render_s']:.2f}s, {stats['look_ik']} IK "
+              f"({stats['ik_fail']} failed, {stats['collide']} in collision, "
+              f"{stats['unreachable']} unreachable), total "
+              f"{stats['build_s']:.2f}s")
+        return stats
+
+    def plan(self,
+             target_objects: List[str],
+             goal: Tuple,
+             current_config: 'Union[RobotConfig, str]' = None,
+             known_empty_shadows: List[str] = None,
+             moved_occluders: Dict[str, str] = None,
+             max_time: float = 30.0,
+             verbose: bool = True,
+             observed_clear_regions: Optional[List[str]] = None,
+             visible_target_locations: Optional[Dict[str, str]] = None,
+             on_relations: Optional[Dict[str, str]] = None,
+             stackable_objects: Optional[List[str]] = None,
+             unit_costs: bool = False,
+             held_obj: Optional[str] = None,
+             planner: str = 'ff-astar2') -> Optional[List[Tuple]]:
+        """
+        Generate a plan using PDDLStream.
+
+        Args:
+            target_objects: Objects to reason about
+            goal: Goal as a tuple, e.g. ('holding', 'blue_object')
+            current_config: Current robot config (RobotConfig preferred)
+            known_empty_shadows: Shadows already checked (empty)
+            moved_occluders: Dict mapping occluder_id -> destination_boxel_id
+            max_time: Maximum planning time in seconds
+            verbose: Print planning info
+            observed_clear_regions: Regions explicitly observed clear; see
+                _build_init() docstring (audit #67).
+            visible_target_locations: Dict mapping target_name -> boxel_id for
+                visible targets (see _build_init docstring).
+            on_relations: Known stack relations (see create_problem docstring).
+            stackable_objects: Stack participants (see create_problem
+                docstring).  Leave None for holding-goal runs.
+            unit_costs: If True, override the domain's numeric
+                ``(increase (total-cost) ...)`` effects and treat every
+                action as cost 1 (PDDLStream solve(unit_costs=...)
+                kwarg).  False keeps the domain costs (stack=2,
+                others=1; see THESIS_NOTES §17).
+            planner: FastDownward search configuration name from
+                pddlstream.algorithms.downward.SEARCH_OPTIONS, run for
+                every action-plan search inside the adaptive algorithm
+                (F30, 2026-09-18).  PDDLStream's own default is
+                'ff-astar2' — eager weighted A* with the FF heuristic
+                doubled, f = g + 2h — under which the domain's action
+                costs barely order the plans (the GUI run 22-12-06 opened
+                with a 10-action plan that placed red twice while a
+                7-action plan existed).  'ff-astar1' is the same search
+                with w = 1, f = g + h: it removed that detour but its
+                extra expansions are not free — seed 13 planned 12 -> 103 s
+                and seed 999 (4-15 s at w = 2) hit a 900 s cap in its
+                fourth plan — so the default stays 'ff-astar2' and its
+                detours are executed as planned: the loop acts on the plan
+                the planner returned and nothing edits it in between (a
+                post-planning rewrite of the plan was tried and withdrawn
+                the same day on the user's directive).  'dijkstra' is blind and
+                cost-optimal.  Every call returns the FIRST plan under the
+                bound (success_cost stays INF): cheaper-first, not
+                certified optimal.
+
+        Returns:
+            List of action tuples, or None if planning fails
+        """
+        if current_config is None:
+            current_config = self.home_config
+        problem = self.create_problem(target_objects, goal, current_config,
+                                      known_empty_shadows, moved_occluders,
+                                      observed_clear_regions,
+                                      visible_target_locations,
+                                      on_relations,
+                                      stackable_objects,
+                                      held_obj=held_obj)
+
+        if verbose:
+            print(f"\n--- PDDLStream Planning ---")
+            print(f"Goal: {goal}")
+            print(f"Max time: {max_time}s")
+            print(f"Unit costs: {unit_costs}")
+            print(f"Search: {planner}")
+
+        # Audit #76 diagnostic — summarise init facts by predicate so we
+        # can see at a glance which atoms PDDLStream has to work with.
+        # Tagged [#76-diag] so the smart_filter passes it through
+        # unchanged (matches the existing #60-diag convention).
+        # (smart_filter.py was deleted in the readable migration, phase P1, 22 Nov 2026.)
+        init_by_pred: Dict[str, int] = {}
+        boxel_fits_by_obj: Dict[str, int] = {}
+        view_clear_shadows: List[str] = []
+        unknown_shadows: List[str] = []
+        for fact in problem.init:
+            if isinstance(fact, tuple) and fact:
+                pred = str(fact[0])
+                if pred == 'boxel_fits' and len(fact) >= 2:
+                    boxel_fits_by_obj[str(fact[1])] = \
+                        boxel_fits_by_obj.get(str(fact[1]), 0) + 1
+            elif isinstance(fact, str):
+                pred = fact
+            else:
+                pred = '<unknown>'
+            init_by_pred[pred] = init_by_pred.get(pred, 0) + 1
+        # Per-shadow view-clear count: how many of the unknown shadows
+        # currently have at least one object blocking them?  A shadow with
+        # zero blockers is immediately sense-able; one with many requires
+        # relocating blockers first.
+        shadow_ids = [str(f[1]) for f in problem.init
+                       if isinstance(f, tuple) and len(f) == 2
+                       and f[0] == 'is_shadow']
+        known_KIF_pairs = {(str(f[1]), str(f[2])) for f in problem.init
+                           if isinstance(f, tuple) and len(f) == 3
+                           and f[0] == 'obj_at_boxel_KIF'}
+        blocked_by_count: Dict[str, int] = {}
+        for f in problem.init:
+            if isinstance(f, tuple) and len(f) == 4 and f[0] == 'blocks_view_at':
+                obj_id, b_id, region = str(f[1]), str(f[2]), str(f[3])
+                # Only count if obj is currently AT b_id (i.e. the
+                # blocks_view_at would actually fire as blocks_view).
+                if (obj_id, b_id) in {(str(f2[1]), str(f2[2]))
+                                       for f2 in problem.init
+                                       if isinstance(f2, tuple)
+                                       and len(f2) == 3
+                                       and f2[0] == 'obj_at_boxel'}:
+                    blocked_by_count[region] = blocked_by_count.get(region, 0) + 1
+        for sid in shadow_ids:
+            n_blockers = blocked_by_count.get(sid, 0)
+            if n_blockers == 0:
+                view_clear_shadows.append(sid)
+            unknown_shadows.append(f"{sid}(blockers={n_blockers})")
+        ordered = dict(sorted(init_by_pred.items(), key=lambda x: -x[1]))
+        print(f"  [#76-diag] init facts: {sum(init_by_pred.values())} total, "
+              f"by predicate: {ordered}")
+        print(f"  [#76-diag] goal: {goal}")
+        print(f"  [#76-diag] held_obj={held_obj}, max_time={max_time}s, "
+              f"verbose={verbose}")
+        print(f"  [#76-diag] boxel_fits per obj: "
+              f"{dict(sorted(boxel_fits_by_obj.items()))}")
+        print(f"  [#76-diag] shadows ({len(shadow_ids)} total, "
+              f"{len(view_clear_shadows)} view-clear NOW): "
+              f"{unknown_shadows}")
+        # Per target, count how many view-clear unknown shadows accept it
+        # (boxel_fits AND view_clear AND NOT obj_at_boxel_KIF).  If 0, the
+        # planner can't ground a sense for that target → infeasibility.
+        kif_set = {(str(f[1]), str(f[2])) for f in problem.init
+                   if isinstance(f, tuple) and len(f) == 3
+                   and f[0] == 'obj_at_boxel_KIF'}
+        boxel_fits_pairs = {(str(f[1]), str(f[2])) for f in problem.init
+                            if isinstance(f, tuple) and len(f) == 3
+                            and f[0] == 'boxel_fits'}
+        obj_ids_in_init = sorted({str(f[1]) for f in problem.init
+                                   if isinstance(f, tuple) and len(f) == 2
+                                   and f[0] == 'Obj'})
+        sense_options_per_obj: Dict[str, List[str]] = {}
+        obj_at_boxel_per_obj: Dict[str, List[str]] = {}
+        for obj in obj_ids_in_init:
+            sense_options_per_obj[obj] = [
+                s for s in shadow_ids
+                if (obj, s) in boxel_fits_pairs
+                and s in view_clear_shadows
+                and (obj, s) not in kif_set
+            ]
+            obj_at_boxel_per_obj[obj] = [
+                str(f[2]) for f in problem.init
+                if isinstance(f, tuple) and len(f) == 3
+                and f[0] == 'obj_at_boxel'
+                and str(f[1]) == obj
+            ]
+        print(f"  [#76-diag] sense_options per obj (view-clear AND fits AND "
+              f"not-KIF): {sense_options_per_obj}")
+        print(f"  [#76-diag] obj_at_boxel per obj: {obj_at_boxel_per_obj}")
+        egregious = getattr(self, '_last_egregious_triples', [])
+        if egregious:
+            print(f"  [F11-diag] {len(egregious)} egregious per-object "
+                  f"placement-blocking triple(s) beyond the cell "
+                  f"criterion: {egregious}")
+        _hides = getattr(self, '_last_placement_hides', [])
+        if _hides:
+            _by_obj: Dict[str, int] = {}
+            for o, _b in _hides:
+                _by_obj[o] = _by_obj.get(o, 0) + 1
+            print(f"  [F31-diag] {len(_hides)} (object, cell) placement(s) "
+                  f"would hide a known body from the camera — withheld "
+                  f"from place: {_by_obj}")
+        _plan_start_t = time.perf_counter()
+
+        # F7 (2026-08-22): reset the binding-death record so a stale
+        # value from the previous replan can never leak into this
+        # call's no-plan classification.
+        self.last_no_plan_binding_death = None
+
+        # Call PDDLStream solver — through a stdout tee (see _StdoutTee:
+        # the solver prints skeleton/summary lines it does not return).
+        _tee = _StdoutTee(sys.stdout)
+        sys.stdout = _tee
+        try:
+            solution = solve(
+                problem,
+                algorithm='adaptive',  # Best for TAMP problems
+                max_time=max_time,
+                unit_costs=unit_costs,
+                planner=planner,       # F30: search weight is a CLI choice
+                verbose=verbose,
+                # F7 remedy 3 (2026-09-19): pddlstream's adaptive loop
+                # allocates search_sample_ratio x search_time of sampling
+                # per iteration and its timed_process busy-waits that
+                # whole budget on STANDBY bindings (skeleton.py
+                # process_root re-pushes them), so a skeleton that can
+                # never bind doubles the wall clock every iteration
+                # (10-29-51 plan 4: ~100 of 164 s; the 2026-09-19 tray
+                # smoke: a 900 s cap in plan 6).  A quarter of the
+                # default keeps every binding's one call per iteration
+                # (greedily_process + process_complexity) and cuts the
+                # spin fourfold.
+                search_sample_ratio=self.search_sample_ratio,
+                # BF#53: effort_weight makes the optimistic search pay for
+                # a stream result's effort, an unrefined (shared) object's
+                # search overhead above all, so it prefers the refined
+                # objects of the previous attempt instead of a fresh
+                # alternative (seed 10's first call: 13 attempts without
+                # it); initial_complexity skips the levels no pick can be
+                # planned at (grasp, kin, motion: three).
+                **self.search_options,
+            )
+        finally:
+            sys.stdout = _tee._stream
+
+        plan, cost, certificate = solution
+        _plan_elapsed = time.perf_counter() - _plan_start_t
+        _plan_outcome = 'plan_found' if plan is not None else 'no_plan'
+        print(f"  [#76-diag] outcome={_plan_outcome}, "
+              f"elapsed={_plan_elapsed:.3f}s, "
+              f"plan_len={len(plan) if plan else 0}, cost={cost}")
+
+        if verbose:
+            print_solution(solution)
+
+        if plan is None:
+            # F7 binding-death disclosure: a no-plan where FastDownward
+            # DID find action skeletons but stream binding never
+            # delivered values (sample_time ~0) is a distinct failure
+            # class — the silent re-pick binding death (runs 11-49-53
+            # PLAN #7, 15-25-23 PLAN #4, 12-09-28 plan #3, 15-25-35
+            # plan #3).  "Skeletons existed" must never be silent.
+            captured = ''.join(_tee.chunks)
+            skeleton_lines = [
+                ln for ln in captured.splitlines()
+                if ln.startswith('Stream plan (')
+                and not ln.rstrip().endswith((': None', ': False'))
+            ]
+            summary_m = None
+            for summary_m in re.finditer(r'Summary: \{([^}]*)\}',
+                                         captured):
+                pass
+            summary_txt = summary_m.group(1) if summary_m else ''
+            sk_m = re.search(r'skeletons: (\d+)', summary_txt)
+            st_m = re.search(r'sample_time: ([\d.]+)', summary_txt)
+            n_skeletons = (int(sk_m.group(1)) if sk_m
+                           else len(skeleton_lines))
+            if n_skeletons > 0:
+                sample_t = float(st_m.group(1)) if st_m else -1.0
+                last_skeleton = (skeleton_lines[-1].strip()
+                                 if skeleton_lines else '<not captured>')
+                self.last_no_plan_binding_death = {
+                    'skeletons': n_skeletons,
+                    'sample_time': sample_t,
+                    'last_skeleton': last_skeleton,
+                }
+                print(f"  [F7-diag] no plan BUT {n_skeletons} action "
+                      f"skeleton(s) were found — stream binding failed "
+                      f"to deliver values (sample_time="
+                      f"{sample_t:.3f}s).  Last skeleton: "
+                      f"{last_skeleton}")
+            return None
+        
+        # Convert plan to our action format
+        actions = []
+        for action in plan:
+            action_name = action.name
+            action_args = action.args
+            actions.append((action_name,) + tuple(action_args))
+
+        return actions

@@ -1,0 +1,1849 @@
+"""
+PDDLStream Streams for Semantic Boxel TAMP.
+
+This module implements the geometric reasoning streams that generate and test
+continuous parameters for the symbolic planner. Streams interface with PyBullet
+for inverse kinematics and motion planning.
+
+Sensing uses the fixed scene camera (not the robot's end-effector), so there
+is no sensing_config stream.
+
+Streams:
+    - sample_grasp: Generate grasp poses for an object
+    - plan_motion: Plan collision-free trajectory between configs
+    - compute_kin_solution: Compute IK for pick/place
+    - compute_stack_kin_solution: Compute IK for stacking on a support (audit #30)
+"""
+
+import logging
+import random
+import numpy as np
+import pybullet as p
+from typing import List, Tuple, Optional, Generator, Iterator
+from dataclasses import dataclass, field
+
+logger = logging.getLogger('streams')
+
+# #P3(c) shared reach limit (2026-08-21): maximum horizontal distance
+# from the Panda base at which a top-down pick/place EE target is
+# considered reachable.  Used by compute_kin_solution's pre-IK gate AND
+# by _build_init's placement-candidate filter in pddlstream_planner —
+# one constant, or the symbolic layer proposes placements the kin
+# stream then rejects, wasting a full FastDownward round (~40-60 s
+# post-F3) per doomed candidate (observed: GUI run 22-01-06 committed
+# to free_008 at 0.802 m after a 99 s search, then lost the round to
+# the pre-IK gate).  0.80 m sits above every IK solution ever certified
+# in this setup (the F4 reach-margin stack case is at 0.61 m) and below
+# every observed 8-seed IK failure (0.886-1.02 m).
+REACH_LIMIT_M = 0.80
+
+# #P3(c) height-aware reach (2026-09-19): the flat 0.80 m limit admits
+# targets the arm cannot reach at approach height — seed 5 plan 5 of the
+# first step-(4) A/B burned a 900 s cap on cells 0.69 m out at z 0.57.
+# tools/_probe_reach_envelope.py measured the top-down IK envelope on
+# an empty table (342 XY targets x 6 heights x 2 yaws, the real 8-seed
+# FK-gated IK): the boundary is a sphere of radius ~0.823 m centred at
+# WORLD z 0.066 m (reach 0.765 m at 4.5 cm above the table, 0.743 at
+# 10 cm, 0.711 at 16 cm, 0.680 at 20 cm, 0.652 at 24.5 cm, 0.604 at
+# 30 cm; the fit reproduces every row within 3 mm).  The Panda's base
+# frame as PyBullet reports it sits at z 0.05, so the centre is 0.016 m
+# above it — a first cut wrote 0.066 above the base, 5 cm too high, and
+# let a 0.83 m cell through that IK then failed by 11-13 mm at every
+# seed (the seed-119 binding death right after the F7 fix).  The gate
+# uses R = 0.815 (8 mm inside the measured boundary) AND the flat limit.
+# The centre is a WORLD height (the base is fixed at a known pose): it
+# does not depend on which frame PyBullet reports for the base link.
+REACH_SPHERE_CENTER_Z_WORLD = 0.066
+REACH_SPHERE_R_M = 0.815
+
+# #P1 step (2d): nominal size prior for objects the robot has not yet
+# observed (pre-sense hidden targets — no registry boxel, no perception
+# estimate).  TASK knowledge, not perception: the robot knows what CLASS
+# of object it is searching for (3-4 cm target cubes across all scenes),
+# not the instance's true dimensions — the previous p.getAABB fallback
+# leaked exactly those.  0.04 m is the class upper bound, so fits
+# reasoning is conservative: anything that fits the largest possible
+# target fits the real one.
+NOMINAL_HIDDEN_EXTENTS = np.array([0.04, 0.04, 0.04])
+# F6 (2026-09-19): the class LOWER bound (targets draw half-extents in
+# [0.015, 0.020] -> 3-4 cm cubes) for the HIDEABILITY question "could any
+# sought-class instance hide in this fragment".  The upper bound above
+# stays the PLACE question "will my object always fit".  With the upper
+# bound the strict sense gate rejected the fragment the target actually
+# sat in on 6 of 78 hidden targets (tools/_probe_f6_gate.py): the carve
+# leaves 2.9-4.0 cm wide slivers next to a caster, and a 3.5 cm cube in
+# one is hidden while a 4 cm box would not fit.
+NOMINAL_HIDDEN_EXTENTS_MIN = np.array([0.03, 0.03, 0.03])
+
+# #P4 B3(d), D7 (iii): the boxel name a declared goal configuration is
+# certified for, (config_for_boxel q_home home).  Not a registry boxel.
+HOME_PSEUDO_BOXEL = 'home'
+
+from world.boxel_data import BoxelRegistry, BoxelData, BoxelType
+from sensing import pose_belief
+from acting import slip_fixes
+from acting.robot_utils import (robot_model,
+                         JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH, JOINT_RANGES,
+                         REST_POSES, RenderingLock, IK_ORN_TOL_DEG,
+                         quat_angle_deg, PATH_CHECK_MAX_STEP_RAD,
+                         is_config_collision_free, is_path_collision_free,
+                         solve_ik)
+
+
+def _prefer_wrist_home(obj_id, obj_boxel, candidates, base_xy, q7_home):
+    """BF#59 grasp_wrist_home: each (grasp yaw, span) of sample_grasp's
+    candidates becomes (the member of {yaw, yaw + pi} whose joint 7 is
+    nearer ``q7_home``, span).  The pinch is the same pinch with the pads
+    swapped, so the span, the count and the order are unchanged; the kin
+    stream certifies the chosen orientation as it certifies today's.
+    Today's yaw puts the wrist half a turn from home, and the carry home
+    unwinds it by 168 to 199 deg while it holds the die (the
+    planned waypoints of every recorded die carry); the twin needs a median
+    22 deg, and in grasp_geometry's real-pick probe it held 55 of 56
+    near-face grips under today's carry against 32 (reviews/carry_motion.md).
+    The home joint 7 is read at call time, so set_home_joints (their
+    DEFAULT_ARM_POS in the bridge, REST_POSES in our scenes) is the
+    reference; the base is the planner's own robot (proprioception)."""
+    # The lines go to the run log at DEBUG like sample_grasp's own per-grasp
+    # lines (the run_*.log the eval reads), not to the console.
+    if obj_boxel is None:
+        logger.debug("grasp_wrist_home: %s has no believed box, so no bearing "
+                     "to choose from: today's yaws kept", obj_id)
+        return candidates
+    target = np.asarray(obj_boxel.center, dtype=float)[:2]
+    out = []
+    for yaw, span in candidates:
+        chosen, info = pose_belief.wrist_home_twin(yaw, target, base_xy, q7_home)
+        logger.debug("grasp_wrist_home: %s yaw %.1f deg (joint 7 %+.2f rad, "
+                     "%.0f deg from home) or twin %.1f deg (joint 7 %+.2f rad, "
+                     "%.0f deg from home): %s", obj_id,
+                     np.degrees(info['yaw']), info['q7'], np.degrees(info['d']),
+                     np.degrees(info['twin_yaw']), info['twin_q7'],
+                     np.degrees(info['twin_d']),
+                     "twin" if info['twin'] else "today's")
+        out.append((chosen, span))
+    return out
+
+
+# =============================================================================
+# PDDL Atom Data Types
+# =============================================================================
+# These three dataclasses are the continuous objects that flow between streams
+# and into the PDDL plan.  PDDLStream requires them to be hashable and
+# comparable, so all three use name-based __hash__/__eq__ — this lets them
+# serve as dictionary keys and PDDL atoms inside the planner.
+
+@dataclass
+class RobotConfig:
+    """
+    Robot configuration (joint angles for Franka Panda).
+
+    Represents a 7-DOF arm configuration.  The ``ignored_body_ids`` field
+    carries PyBullet body IDs that should be excluded from collision checks
+    when planning motion TO this config (e.g. the grasped object at a pick
+    pose).  This field is set by ``compute_kin_solution`` and read by
+    ``plan_motion``.
+    """
+    joint_positions: np.ndarray  # 7 DOF
+    name: str = ""
+    is_heuristic: bool = False
+    ignored_body_ids: frozenset = field(default_factory=frozenset)
+    # held_body_ids is the SUBSET of ignored_body_ids that is physically
+    # attached to the EE during motion to/from this config (audit #58
+    # follow-up).  When non-empty on either endpoint, plan_motion uses
+    # the union as the held set; otherwise it falls back to the legacy
+    # intersection-on-ignored heuristic (correct for pick/place where
+    # ignored == held, broken for stack where ignored = held + support).
+    held_body_ids: frozenset = field(default_factory=frozenset)
+    grasp_ee_offset: np.ndarray = None
+    
+    def __hash__(self):
+        return hash(self.name)
+    
+    def __eq__(self, other):
+        if not isinstance(other, RobotConfig):
+            return NotImplemented
+        return self.name == other.name
+    
+    def __repr__(self):
+        return self.name if self.name else f"RobotConfig({self.joint_positions})"
+
+
+@dataclass 
+class Trajectory:
+    """
+    Motion trajectory as sequence of configurations.
+
+    Produced by ``plan_motion``.  Contains an ordered list of RobotConfig
+    waypoints forming a collision-free path in joint space.  During
+    execution, the robot follows these waypoints sequentially.
+    """
+    waypoints: List[RobotConfig]
+    name: str = ""
+    
+    def __hash__(self):
+        return hash(self.name)
+    
+    def __eq__(self, other):
+        if not isinstance(other, Trajectory):
+            return NotImplemented
+        return self.name == other.name
+    
+    def __repr__(self):
+        return self.name if self.name else f"Trajectory({len(self.waypoints)} waypoints)"
+
+
+@dataclass
+class Grasp:
+    """
+    Grasp transformation relative to object frame.
+
+    Produced by ``sample_grasp``.  ``position`` is a [x, y, z] offset
+    added to the boxel center to get the world-frame EE target (always
+    [0, 0, z]: straight above the centre).  ``orientation`` is a
+    [x, y, z, w] quaternion for the EE: top-down (pitch pi) at yaw 0 or
+    yaw pi/2, which selects the pinch axis (world y or world x,
+    robot_utils.pinch_axis).  No side grasps or angled approaches.
+    """
+    position: np.ndarray   # [x, y, z] offset from boxel center
+    orientation: np.ndarray  # [x, y, z, w] quaternion
+    name: str = ""
+    
+    def __hash__(self):
+        return hash(self.name)
+    
+    def __eq__(self, other):
+        if not isinstance(other, Grasp):
+            return NotImplemented
+        return self.name == other.name
+    
+    def __repr__(self):
+        return self.name if self.name else f"Grasp({self.position})"
+
+
+class BoxelStreams:
+    """
+    PDDLStream-compatible streams for Semantic Boxel TAMP.
+
+    These are generator functions that yield tuples of output values.
+    PDDLStream calls them lazily during planning.
+
+    Stream call order during planning:
+      1. sample_grasp(obj)          -> "how to grab this object?"
+      2. compute_kin_solution(obj, boxel, grasp) -> "what joint angles reach it?"
+         (or compute_stack_kin_solution(obj, on_obj, grasp) for stack actions)
+      3. plan_motion(q1, q2)        -> "collision-free path between configs?"
+
+    The ignored_body_ids field threads through all three: compute_kin_solution
+    attaches the grasped object's body ID to each config, and plan_motion
+    reads it to exclude that body from collision checks.
+    """
+    
+    def __init__(self, registry: BoxelRegistry, robot_id: int = None,
+                 physics_client: int = None, object_body_ids: dict = None,
+                 support_body_ids: frozenset = None):
+        """
+        Initialize streams with environment context.
+
+        Args:
+            registry: BoxelRegistry containing all boxels
+            robot_id: PyBullet body ID of the robot (required for IK).
+                Must be provided; without it compute_kin_solution yields
+                nothing and plan_motion falls back to linear interpolation.
+            physics_client: PyBullet physics client ID (0 if using default)
+            object_body_ids: Mapping from object/boxel identifiers to PyBullet
+                body IDs. Used to exclude the grasped object from collision
+                checks in compute_kin and plan_motion. Keys should include
+                both object names ("red_object") and boxel IDs ("obj_003").
+            support_body_ids: Body IDs of support surfaces (table, ground
+                plane).  Ignored during all collision checks for pick/place
+                motions (both endpoint validation and RRT path planning)
+                because the Panda is mounted on the table and its lower arm
+                links overlap the table's collision geometry in PyBullet.
+                Not ignored for pure transit motions with no grasped object.
+        """
+        # -- Environment context (all PyBullet-specific) --------------------------
+        self.registry = registry            # Boxel grid world representation
+        self.robot_id = robot_id            # PyBullet body ID of the Panda
+        self.physics_client = physics_client if physics_client is not None else 0
+        # Maps object names ("red_block") and boxel IDs ("obj_003") to PyBullet
+        # body IDs.  Used by compute_kin_solution to build ignored_body_ids for
+        # collision exclusion during motion planning.
+        self.object_body_ids = object_body_ids or {}
+        # Table/ground plane body IDs.  Ignored during pick/place collision
+        # checks because the Panda is mounted on the table — its lower arm
+        # links physically overlap the table geometry in PyBullet, causing
+        # false-positive collisions on nearly every config.
+        self.support_body_ids = support_body_ids or frozenset()
+        
+        if self.robot_id is None:
+            raise ValueError(
+                "BoxelStreams requires robot_id for kinematically valid IK. "
+                "Heuristic IK fallback has been removed (audit #80)."
+            )
+        # #P3(c) reach gates: the Panda's base is fixed, cache its XY
+        # once (proprioception, not scene perception).  Shared by the
+        # pre-IK gate below AND _build_init's placement-candidate gate
+        # (same REACH_LIMIT_M so the planner never proposes what the
+        # kin stream would reject).
+        base_pos, _ = p.getBasePositionAndOrientation(
+            self.robot_id, physicsClientId=self.physics_client)
+        self._robot_base_xy = np.asarray(base_pos[:2], dtype=float)
+        self._reach_center = np.array([float(base_pos[0]), float(base_pos[1]),
+                                       REACH_SPHERE_CENTER_Z_WORLD])
+        self.reach_limit_m = REACH_LIMIT_M
+        self.reach_sphere_r_m = REACH_SPHERE_R_M
+
+        # Home configuration — the Panda's neutral rest pose, used as the
+        # default start/end for transit motions.  #P4 B3(d), D7 (ii): a
+        # task may declare other home joints (set_home_joints); the symbol
+        # stays q_home.
+        self.home_config = RobotConfig(
+            joint_positions=np.array(REST_POSES),
+            name="q_home"
+        )
+        
+        # Monotonic counters for unique, human-readable naming of PDDL atoms.
+        # Names like "q_kin_red_block_7" or "traj_3" appear in logs and plans.
+        self._config_counter = 0
+        self._traj_counter = 0
+        self._grasp_counter = 0
+
+        # #P1 F2: objects the dispatcher gave up on after 3 failed pick
+        # attempts (mirror of the audit-#21 sense giveup).  sample_grasp
+        # yields nothing for them, so the planner can no longer ground a
+        # pick and is forced onto a different branch — or honestly
+        # reports no plan.  Persistent across replans (one BoxelStreams
+        # instance per PDDLStreamPlanner, which lives for the episode).
+        self.ungraspable_objects: set = set()
+        # M8 C0: the view pseudo-boxels of the current init (set by
+        # _build_init) and how many compute-kin calls they turned away.
+        self.view_boxel_ids: frozenset = frozenset()
+        self.view_kin_skips = 0
+        # BF#45: approach configs compute_kin_solution turned away because
+        # the executor's contact pose below them had no IK.
+        self.contact_ik_rejects = 0
+        # BF#65 2(c): compute-kin calls that aimed at a region's reachable
+        # part because its centre was out of reach, and the (object, region,
+        # aim) triples already printed.
+        self.region_aim_shifts = 0
+        self._region_aim_logged: set = set()
+        # F18 (2026-09-20): the resolution of every path collision check,
+        # in radians of the largest-moving joint between samples.
+        # DEFAULT 0 = the fixed RRT_EDGE_CHECKS count, because that is
+        # what measured best: over 43 runs per arm on two goal types,
+        # resolution OFF gave 5 bystander events and none above 50 mm,
+        # resolution ON gave 12 with five shoves of 106 to 187 mm, at
+        # identical success and planning time.  The finer check is
+        # sounder on paper — 8 samples cannot certify a 63 cm sweep —
+        # and it is one flag away (--path-check-step, recommended value
+        # PATH_CHECK_MAX_STEP_RAD), but it has not been shown to reduce
+        # what it was built to reduce.  The smoother fix below is the
+        # half that moved the number, and it is unconditional.
+        self.path_check_step: float = 0.0
+        # F18: the residual measurement below costs an extra strict check
+        # per interior segment of every trajectory the stream yields, and
+        # most yielded trajectories are never executed, so it is OFF
+        # unless --path-check-diag asks for the number.
+        self.path_check_diag: bool = False
+        
+        # IK solver parameters (PyBullet's iterative Jacobian-based IK).
+        # 100 iterations is the PyBullet recommended default; convergence
+        # threshold 1e-4 m balances precision vs speed (empirically tuned —
+        # tighter values rarely improve the solution but slow planning).
+        self.ik_max_iterations = 100
+        self.ik_residual_threshold = 1e-4
+    
+    IK_NUM_SEEDS = 8
+
+    # Seed perturbations for multi-start IK (radians, added to REST_POSES).
+    # First row is zero (start from rest); rows 2-3 are uniform ±0.4 rad
+    # pushes; rows 4-8 are hand-tuned pseudo-random perturbations chosen
+    # to spread the 7-DOF null-space exploration.  Magnitudes stay within
+    # ±0.8 rad so that clipped seeds remain well inside joint limits.
+    # Empirically, 8 seeds resolve >95% of reachable targets on the first
+    # planning call; increasing beyond 8 showed diminishing returns.
+    _IK_SEED_OFFSETS = [
+        [0, 0, 0, 0, 0, 0, 0],
+        [0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
+        [-0.4, -0.4, -0.4, -0.4, -0.4, -0.4, -0.4],
+        [0.8, -0.3, 0.5, -0.6, 0.3, 0.7, -0.2],
+        [-0.6, 0.5, -0.3, 0.8, -0.5, -0.2, 0.6],
+        [0.2, -0.7, 0.6, 0.3, -0.8, 0.4, -0.5],
+        [-0.3, 0.6, -0.8, -0.2, 0.7, -0.5, 0.3],
+        [0.5, 0.2, -0.5, 0.7, 0.2, -0.6, 0.4],
+    ]
+
+    def _pybullet_ik(self, ee_pos: np.ndarray,
+                     ee_orn: np.ndarray,
+                     seed: list = None) -> Optional[RobotConfig]:
+        """
+        Compute IK using PyBullet's null-space calculateInverseKinematics.
+
+        Saves the robot's current joint state, resets joints to *seed*
+        (defaulting to REST_POSES), runs IK with null-space parameters,
+        then restores the original state.  Different seeds steer the
+        iterative solver into different local minima, producing arm
+        configurations that may avoid obstacles the default solution hits.
+
+        Args:
+            ee_pos: Desired end-effector position.
+            ee_orn: Desired end-effector orientation (quaternion).
+            seed:   7-element list of joint angles used as the IK starting
+                    point.  ``None`` → REST_POSES.
+
+        Returns:
+            RobotConfig if valid solution found, None otherwise.
+        """
+        if seed is None:
+            seed = REST_POSES
+        saved_joints = None
+        pc = self.physics_client
+        rm = robot_model()
+        # RenderingLock suppresses OpenGL buffer swaps — without it, the
+        # thousands of resetJointState calls during planning cause visible
+        # scene flickering.  Nestable: inner locks are no-ops.
+        with RenderingLock(pc):
+            try:
+                # 1. Save current joint state (restored in finally block)
+                saved_joints = [
+                    p.getJointState(self.robot_id, i,
+                                    physicsClientId=pc)[0]
+                    for i in rm.arm_joints
+                ]
+
+                # 2. Reset joints to seed — this steers the iterative IK
+                #    solver toward a specific local minimum.  Different seeds
+                #    produce different arm configs (elbow-up vs elbow-down etc.)
+                for i, angle in zip(rm.arm_joints, seed):
+                    p.resetJointState(self.robot_id, i, angle,
+                                      physicsClientId=pc)
+
+                # 3. Run PyBullet's null-space IK.  The null-space parameters
+                #    (lowerLimits, upperLimits, jointRanges, restPoses) bias
+                #    the solver toward the seed when multiple solutions exist.
+                joint_positions = p.calculateInverseKinematics(
+                    bodyUniqueId=self.robot_id,
+                    endEffectorLinkIndex=rm.ee_link,
+                    targetPosition=ee_pos.tolist(),
+                    targetOrientation=ee_orn.tolist(),
+                    lowerLimits=JOINT_LIMITS_LOW.tolist(),
+                    upperLimits=JOINT_LIMITS_HIGH.tolist(),
+                    jointRanges=JOINT_RANGES.tolist(),
+                    restPoses=list(seed),
+                    maxNumIterations=self.ik_max_iterations,
+                    residualThreshold=self.ik_residual_threshold,
+                    physicsClientId=pc
+                )
+
+                # 4. Validate: PyBullet returns ALL joint positions (arm +
+                #    fingers + fixed joints); we only need the first 7 (arm).
+                if joint_positions is None or len(joint_positions) < 7:
+                    return None
+
+                arm_joints = np.array(joint_positions[:7])
+
+                # 5. Joint-limit check with 0.1 rad (~5.7deg) tolerance.
+                #    PyBullet's iterative solver can slightly overshoot;
+                #    solutions within tolerance are clipped, beyond → rejected.
+                if np.any(arm_joints < JOINT_LIMITS_LOW - 0.1) or \
+                   np.any(arm_joints > JOINT_LIMITS_HIGH + 0.1):
+                    return None
+
+                arm_joints = np.clip(arm_joints, JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
+
+                # 6. FK verification (#P1, 2026-08-20) — the planning twin
+                #    of robot_utils.solve_ik's gate.  Clipping (and reach-
+                #    edge convergence failures) can leave a solution whose
+                #    actual EE pose is centimetres off target.  Execution
+                #    now rejects such configs (>10 mm), so certifying them
+                #    here would livelock the replan loop: the planner keeps
+                #    emitting a kin solution execution keeps refusing
+                #    (observed on random-pairs seed 3, place contact).
+                #    Rejecting at the stream makes the sampler draw a
+                #    different boxel/grasp instead.  The model state is
+                #    restored by the finally block regardless.
+                #    #P1 F4: before the gate decides, refine up to 2 extra
+                #    rounds with the solver re-seeded from its own output.
+                #    PyBullet's iterative IK routinely stalls 15-25 mm
+                #    short near the workspace boundary (level-4 stack
+                #    approach); restarts recover convergence when the
+                #    pose is actually reachable.
+                fk_err = None
+                orn_err = None
+                for refine_round in range(3):
+                    for i, angle in zip(rm.arm_joints, arm_joints):
+                        p.resetJointState(self.robot_id, i, angle,
+                                          physicsClientId=pc)
+                    # computeForwardKinematics=True is mandatory — without
+                    # it getLinkState can return the transform cached from
+                    # the last simulation step, decoupling fk_err from the
+                    # candidate solution (see robot_utils.solve_ik's gate).
+                    fk_state = p.getLinkState(self.robot_id, rm.ee_link,
+                                              computeForwardKinematics=True,
+                                              physicsClientId=pc)
+                    fk_err = float(np.linalg.norm(
+                        np.asarray(fk_state[0]) - np.asarray(ee_pos, dtype=float)))
+                    # #P1 step (4): the orientation must hold too — a
+                    # yawed grasp pinches along a chosen axis.
+                    orn_err = quat_angle_deg(fk_state[1], ee_orn)
+                    if fk_err <= 0.010 and orn_err <= IK_ORN_TOL_DEG:
+                        return RobotConfig(joint_positions=arm_joints)
+                    if refine_round == 2:
+                        break  # last candidate already checked — done
+                    refined = p.calculateInverseKinematics(
+                        bodyUniqueId=self.robot_id,
+                        endEffectorLinkIndex=rm.ee_link,
+                        targetPosition=ee_pos.tolist(),
+                        targetOrientation=ee_orn.tolist(),
+                        lowerLimits=JOINT_LIMITS_LOW.tolist(),
+                        upperLimits=JOINT_LIMITS_HIGH.tolist(),
+                        jointRanges=JOINT_RANGES.tolist(),
+                        restPoses=arm_joints.tolist(),
+                        maxNumIterations=self.ik_max_iterations,
+                        residualThreshold=self.ik_residual_threshold,
+                        physicsClientId=pc
+                    )
+                    if refined is None or len(refined) < 7:
+                        break
+                    cand = np.array(refined[:7])
+                    if np.any(cand < JOINT_LIMITS_LOW - 0.1) or \
+                       np.any(cand > JOINT_LIMITS_HIGH + 0.1):
+                        break
+                    arm_joints = np.clip(cand, JOINT_LIMITS_LOW,
+                                         JOINT_LIMITS_HIGH)
+                logger.debug("_pybullet_ik: rejected solution with FK "
+                             "error %.1f mm / orientation error %.1f deg "
+                             "after refinement for target %s",
+                             (fk_err or 0.0) * 1000, (orn_err or 0.0),
+                             ee_pos.tolist())
+                return None
+
+            except Exception as e:
+                logger.error("IK failed for pos=%s: %s", ee_pos.tolist(), e)
+                return None
+
+            finally:
+                # Always restore original joint state so IK calls don't
+                # mutate the simulation — critical for deterministic planning.
+                if saved_joints is not None:
+                    for i, angle in zip(rm.arm_joints, saved_joints):
+                        p.resetJointState(self.robot_id, i, angle,
+                                          physicsClientId=pc)
+
+    def set_reach(self, limit_m: float, sphere_center_z_world: float,
+                  sphere_r_m: float) -> None:
+        """Replace the reach envelope (#P4 B3(d)): the flat horizontal
+        limit and the sphere about a WORLD height above the base XY.  The
+        defaults are REACH_LIMIT_M and REACH_SPHERE_* (our Panda on our
+        table); another robot mounting declares its own, measured with
+        tools/_probe_reach_envelope.py."""
+        self.reach_limit_m = float(limit_m)
+        self.reach_sphere_r_m = float(sphere_r_m)
+        self._reach_center = np.array([self._robot_base_xy[0],
+                                       self._robot_base_xy[1],
+                                       float(sphere_center_z_world)])
+
+    def set_home_joints(self, joints) -> None:
+        """Give the home configuration (symbol q_home) the task's declared
+        home joints (#P4 B3(d), D7 (ii)); the default is REST_POSES.  The
+        planner's home_config is this same object."""
+        self.home_config.joint_positions = np.array(
+            [float(v) for v in joints])
+
+    def ee_reachable(self, target_pos) -> bool:
+        """#P3(c): can the top-down end effector reach ``target_pos``?
+
+        The measured envelope (REACH_SPHERE_*) and the flat horizontal
+        limit; design-time robot-model knowledge, no scene reads.  Shared
+        by the kin streams' pre-IK gates and _build_init's placement-
+        candidate filter so the planner never proposes what the streams
+        would reject.
+        """
+        t = np.asarray(target_pos, dtype=float)
+        if float(np.linalg.norm(t[:2] - self._robot_base_xy)) > self.reach_limit_m:
+            return False
+        return float(np.linalg.norm(t - self._reach_center)) <= self.reach_sphere_r_m
+
+    def _ik_seeds(self):
+        """Yield IK seed configurations: REST_POSES first, then perturbations."""
+        rest = np.array(REST_POSES)
+        for offset in self._IK_SEED_OFFSETS[:self.IK_NUM_SEEDS]:
+            seed = rest + np.array(offset)
+            seed = np.clip(seed, JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
+            yield seed.tolist()
+    
+    def _resolve_body_id(self, obj_id) -> Optional[int]:
+        """
+        Look up the PyBullet body ID for an object or boxel identifier.
+
+        Handles both direct object names (e.g. "blue_object") and boxel IDs
+        (e.g. "obj_003") by falling back to the boxel's object_name.
+        """
+        key = str(obj_id)
+        if key in self.object_body_ids:
+            return self.object_body_ids[key]
+        boxel = self.registry.get_boxel(key)
+        if boxel and boxel.object_name and boxel.object_name in self.object_body_ids:
+            return self.object_body_ids[boxel.object_name]
+        return None
+
+    # =========================================================================
+    # Boxel fitness (place precondition) — used from pddlstream_planner init
+    # =========================================================================
+    # True pairs are emitted as static (boxel_fits ?o ?b) in _build_init, not via
+    # a PDDLStream test stream (adaptive search would re-test combinatorially).
+
+    def test_boxel_fits(self, obj_id: str, boxel_id: str) -> bool:
+        """
+        Whether a boxel is large enough to contain an object.
+
+        Used for two preconditions (audit #62):
+          - :action place — destination free-space boxel must contain ?o.
+          - :action sense — shadow region must be large enough to hide ?o.
+
+        Compares axis-aligned extents (max_corner - min_corner) of both
+        boxels.  Returns True iff the dest extent >= the obj extent on
+        all three axes.
+
+        Pre-sense targets lack OBJECT registry boxels; they use the
+        NOMINAL_HIDDEN_EXTENTS class prior (#P1 step (2d), 2026-08-21 —
+        the previous p.getAABB fallback leaked the hidden instance's
+        true size into planner facts).
+
+        Args:
+            obj_id: Boxel ID of the object being placed / sensed for
+            boxel_id: Boxel ID of the candidate destination / region
+
+        Returns:
+            True if the boxel can contain the object, False otherwise
+        """
+        dest_boxel = self.registry.get_boxel(boxel_id)
+        if dest_boxel is None:
+            return False
+        obj_boxel = self.registry.get_boxel(obj_id)
+        if obj_boxel is not None:
+            obj_extents = obj_boxel.max_corner - obj_boxel.min_corner
+        else:
+            obj_extents = NOMINAL_HIDDEN_EXTENTS
+        dest_extents = dest_boxel.max_corner - dest_boxel.min_corner
+        return bool(np.all(dest_extents >= obj_extents))
+
+    # =========================================================================
+    # Shadow hideability (sense precondition refinement) — audit #62
+    # =========================================================================
+    # Two-stage filter on top of test_boxel_fits.  The AABB extent check
+    # over-emits because shadow_calculator subtracts the occluder only along
+    # the dominant axis (audit #72 lateral overhang): the shadow's AABB
+    # extends into camera-visible space.  This adds a camera-ray visibility
+    # check — only emit (boxel_fits ?o ?shadow) for sense if a target
+    # placement exists where all 8 of its AABB corners are occluded.
+    #
+    # Stability: target must rest on the table (the only horizontal support
+    # in our scenes).  Lifted shadow fragments produced by _subtract_aabb's
+    # "top of obstacle" cut are rejected.  table_z is recovered from the
+    # registry via min over SHADOW boxel z_min values (shadow_calculator
+    # clamps every shadow to table_z).
+
+    # F6 (2026-09-19): candidate resting positions are sampled every
+    # HIDE_GRID_SPACING along x and y inside the fragment (capped per
+    # axis); the 3 x 3 grid of the audit-#62 test missed the actual
+    # hiding spot on 3 of 20 seeds (the a0e536b false-negative trap).
+    HIDE_GRID_SPACING = 0.01
+    HIDE_GRID_MAX_PER_AXIS = 12
+
+    def test_target_can_hide_in_shadow(self, obj_id: str, shadow_id: str,
+                                       camera_pos: 'Optional[np.ndarray]' = None,
+                                       n_grid: Optional[int] = None) -> bool:
+        """
+        Whether a target can be physically hidden, fully occluded, inside a
+        shadow region (audit #62 refinement).
+
+        Two-stage filter:
+          1. AABB extent (test_boxel_fits) — cheap pre-screen.
+          2. Visibility raycast — cast camera rays to the 8 corners of the
+             target's AABB at a small grid of candidate placements; return
+             True iff at least one placement has all 8 corners occluded.
+
+        Stability: target is pinned to rest on the table.  Lifted shadow
+        fragments (z_min noticeably above table_z) are rejected — a cube
+        has exactly one stable axis-aligned resting orientation.
+
+        With camera_pos=None, stage 2 is skipped (AABB-only fallback —
+        preserves the behaviour of plain test_boxel_fits).
+
+        Args:
+            obj_id: target object / boxel ID
+            shadow_id: shadow boxel ID to test as hiding region
+            camera_pos: fixed-scene camera position; if None, skip raycast
+            n_grid: per-axis grid resolution for candidate placements;
+                None (default, F6) samples every HIDE_GRID_SPACING up to
+                HIDE_GRID_MAX_PER_AXIS per axis (up to 144 candidates x
+                8 corners per pair), an int forces that many per axis
+
+        Returns:
+            True iff target physically fits, stably and fully occluded,
+            somewhere inside the shadow.
+        """
+        shadow = self.registry.get_boxel(shadow_id)
+        if shadow is None:
+            return False
+
+        obj_boxel = self.registry.get_boxel(obj_id)
+        if obj_boxel is not None:
+            obj_full = np.asarray(obj_boxel.max_corner - obj_boxel.min_corner,
+                                  dtype=float)
+        else:
+            # #P1 step (2d): class prior, not the hidden instance's true
+            # size.  F6: the class LOWER bound here — "could any instance
+            # of the sought class hide in this fragment" (see
+            # NOMINAL_HIDDEN_EXTENTS_MIN); the upper bound is for place.
+            obj_full = np.asarray(NOMINAL_HIDDEN_EXTENTS_MIN, dtype=float)
+        # Stage 1: extent pre-screen with the same bound.
+        shadow_full = np.asarray(shadow.max_corner - shadow.min_corner, dtype=float)
+        if not bool(np.all(shadow_full >= obj_full)):
+            return False
+        if camera_pos is None:
+            return True
+        obj_extent = obj_full / 2.0
+        hx, hy, hz = float(obj_extent[0]), float(obj_extent[1]), float(obj_extent[2])
+
+        # Stable resting pose: target must rest on the table (the only
+        # horizontal support in our scenes), not float inside a shadow
+        # fragment lifted above an obstacle by shadow_calculator's
+        # _subtract_aabb "top of obstacle" cut.  shadow_calculator clamps
+        # every shadow's z_min to table_z, so the min over registered
+        # SHADOW boxels recovers table_z without plumbing it through the
+        # API.  Lifted fragments are rejected.
+        table_z = min(
+            (float(b.min_corner[2]) for b in self.registry.boxels.values()
+             if b.boxel_type == BoxelType.SHADOW),
+            default=float(shadow.min_corner[2]),
+        )
+        if float(shadow.min_corner[2]) > table_z + 1e-3:
+            return False
+
+        cx_min = float(shadow.min_corner[0]) + hx
+        cx_max = float(shadow.max_corner[0]) - hx
+        cy_min = float(shadow.min_corner[1]) + hy
+        cy_max = float(shadow.max_corner[1]) - hy
+        if cx_min > cx_max or cy_min > cy_max:
+            return False
+
+        cz = table_z + hz
+
+        def _axis(lo, hi):
+            if hi <= lo:
+                return np.array([lo])
+            if n_grid is not None:
+                return np.linspace(lo, hi, n_grid)
+            n = int(np.ceil((hi - lo) / self.HIDE_GRID_SPACING)) + 1
+            return np.linspace(lo, hi, min(max(n, 2), self.HIDE_GRID_MAX_PER_AXIS))
+        xs = _axis(cx_min, cx_max)
+        ys = _axis(cy_min, cy_max)
+
+        corners: list = []
+        starts: list = []
+        for cx in xs:
+            for cy in ys:
+                starts.append(len(corners))
+                for sx in (-1, 1):
+                    for sy in (-1, 1):
+                        for sz in (-1, 1):
+                            corners.append([cx + sx * hx,
+                                            cy + sy * hy,
+                                            cz + sz * hz])
+
+        cam = (camera_pos.tolist() if isinstance(camera_pos, np.ndarray)
+               else list(camera_pos))
+        # rayTestBatch numThreads=0: let Bullet pick max threads (audit #69).
+        # Safe — plan_client is DIRECT mode, no concurrent stepSimulation.
+        results = p.rayTestBatch(
+            [cam] * len(corners), corners,
+            physicsClientId=self.physics_client,
+            numThreads=0,
+        )
+        occluded = [r[0] != -1 and r[2] < 0.999 for r in results]
+        return any(all(occluded[s:s + 8]) for s in starts)
+
+    # =========================================================================
+    # STREAM 1: Sample Grasp
+    # =========================================================================
+    # Called first during planning: "how can I grab this object?"
+    #
+    # Fixed top-down grasp clearance above the object center (m).
+    # 0.10 m: the planner certifies an approach pose 10 cm above the
+    # object centre.  Execution then lowers to contact via solve_ik
+    # seeded from the planner's q (audit #37/#38) so the contact pose
+    # stays in the same IK branch the planner validated.
+    #
+    # The 2 cm experiment (briefly tried in the original #37/#38 fix)
+    # was reverted on 2026-04-29: a 2 cm clearance parked the wrist
+    # inside the camera→shadow ray path, so any move→sense sequence
+    # had the arm itself blocking the view and sense_shadow_raycasting
+    # always returned still_blocked.  IK seeding (the actual #37/#38
+    # win) is independent of this offset and is retained.
+    #
+    # #P1 F4: 0.06 m added as a lower alternative.  The level-4 stack
+    # approach at +0.10 (z≈0.60 at 0.61 m horizontal) sits at the
+    # Panda's reach margin where IK converges no closer than ~18 mm
+    # and the 10 mm FK gate rejects every seed — deterministic no-plan
+    # (field report stale_shadow_drop.md).  A 6 cm clearance keeps the
+    # wrist out of the camera cone (the reverted experiment was 2 cm)
+    # while giving the sampler a reachable option when 0.10 fails.
+    _GRASP_Z_OFFSETS = [0.10, 0.06]
+    # #P1 step (4): widest pinch span a top-down grasp is offered for.
+    # The Panda opens 0.04 m per finger; 2 mm of descent clearance on
+    # each side is the minimum the friction grasp has worked with.
+    GRASP_MAX_SPAN = 0.076
+    # Footprints whose two extents differ by no more than this are
+    # square for the sampler: one yaw, not two.
+    GRASP_SQUARE_TOL = 0.005
+
+    def sample_grasp(self, obj_id: str) -> Iterator[Tuple[Grasp]]:
+        """
+        Generate top-down grasp poses for an object over its ESTIMATED box.
+
+        #P1 step (4) (2026-09-18): one grasp per (pinch axis, approach
+        altitude) that fits — yaw 0 / yaw pi/2 select the pinch axis,
+        the box's extent along it must be within GRASP_MAX_SPAN, and the
+        altitude must clear the box top (altitude gate).  #P1
+        (2026-08-20): execution grasps by pad friction (the constraint
+        weld is gone), so grip security DOES depend on precise lateral
+        centering at the contact pose — the FK-verified IK gates
+        (solve_ik / _pybullet_ik, position and orientation) and
+        execute_pick's tactile grip verification enforce it.  The
+        contact-pose IK is seeded from the planner's q (audit #37/#38)
+        so it stays in the same IK branch.
+
+        PDDLStream declaration (see pddl/stream.pddl):
+            (:stream sample-grasp
+              :inputs (?o)
+              :domain (Obj ?o)
+              :outputs (?g)
+              :certified (and (Grasp ?g) (valid_grasp ?o ?g)))
+
+        Args:
+            obj_id: ID of the object to grasp
+
+        Yields:
+            Tuples of (grasp,) for the object — one per Z offset.
+        """
+        # #P1 F2: pick 3-strike giveup — after the dispatcher's strike
+        # counter trips, stop offering grasps so the planner changes
+        # course or honestly reports no plan instead of looping until an
+        # external kill (field report pick_giveup.md: 8 identical
+        # misses, run killed by the user).
+        if str(obj_id) in self.ungraspable_objects:
+            logger.info("sample_grasp: %s marked ungraspable after "
+                        "repeated pick failures — no grasp offered "
+                        "(#P1 F2 giveup)", obj_id)
+            return
+
+        # #P1 step (4) (2026-09-18): the sampler reads the object's
+        # ESTIMATED box (registry boxel: perception's estimate, rigid-
+        # size tracked) — a pre-sense object without a boxel gets the
+        # class prior NOMINAL_HIDDEN_EXTENTS — and offers every top-down
+        # grasp whose pinch fits the Panda's opening:
+        #   yaw 0    pinches along world y (span = the box's y extent),
+        #   yaw pi/2 pinches along world x (span = the box's x extent)
+        # (robot_utils.pinch_axis, measured by tools/_probe_f24_xy.py).
+        # A span wider than GRASP_MAX_SPAN cannot be closed on, so that
+        # yaw is not offered; for a rectangular footprint the shorter
+        # span comes first (more descent clearance on each side), then
+        # the other; a square footprint gets yaw 0 only.  A box that grew
+        # because the object yawed on the table can exceed the span on
+        # both axes and get no grasp at all — honest, and the case the
+        # F2 giveup covers; a principal-axis yaw from the segmentation
+        # is the follow-up if it matters.
+        obj_boxel = self.registry.get_boxel(str(obj_id))
+        if obj_boxel is not None:
+            ext = (np.asarray(obj_boxel.max_corner, dtype=float)
+                   - np.asarray(obj_boxel.min_corner, dtype=float))
+        else:
+            ext = np.asarray(NOMINAL_HIDDEN_EXTENTS, dtype=float)
+        half_height = float(ext[2]) / 2.0
+        # A near-square footprint (within GRASP_SQUARE_TOL) gets the
+        # wrist-neutral yaw 0 only: the second yaw would pinch the same
+        # span and only multiply the planner's grasp facts — the first
+        # A/B of this sampler (seed 5, plan 5) showed what that costs:
+        # every extra grasp per object is another doomed compute-kin
+        # candidate at every far cell, and FastDownward's searches grew
+        # past 30 s each until the 900 s cap.  A rectangular footprint
+        # gets both yaws, the shorter span first.
+        # M9 (PLAN_P4_POSE_GRASP_SAMPLERS.md D): an object with a valid
+        # fitted yaw gets its grasps at that yaw, spans from its fused
+        # extents; else the AABB candidates below exactly.
+        if pose_belief.uses_fitted_pose(obj_boxel):
+            candidates = pose_belief.fitted_grasp_candidates(
+                obj_boxel.yaw, obj_boxel.body_extents, self.GRASP_SQUARE_TOL,
+                aabb_ext=ext)
+        elif abs(float(ext[0]) - float(ext[1])) <= self.GRASP_SQUARE_TOL:
+            candidates = [(0.0, max(float(ext[0]), float(ext[1])))]
+        else:
+            candidates = sorted([(0.0, float(ext[1])),
+                                 (np.pi / 2.0, float(ext[0]))],
+                                key=lambda c: c[1])
+        # BF#59 grasp_wrist_home (default off): of each candidate yaw and
+        # its pad-swapped twin, the one whose wrist is nearer home; the
+        # same candidates, spans and order otherwise (pose_belief.
+        # wrist_home_twin has the why and the numbers).
+        if slip_fixes.on('grasp_wrist_home'):
+            candidates = _prefer_wrist_home(
+                obj_id, obj_boxel, candidates, self._robot_base_xy,
+                float(self.home_config.joint_positions[6]))
+
+        # Z offsets: the validated 0.10 m and the F4 0.06 m (comments at
+        # _GRASP_Z_OFFSETS), deterministic order — no shuffle.  (A third,
+        # higher altitude for tall objects was tried on 2026-09-19 and
+        # withdrawn the same day: at the reach margin it never bound and
+        # it multiplied the search, see above.)
+        offsets = list(self._GRASP_Z_OFFSETS)
+        # #P1 step (2) altitude gate: a z-offset at or below the object's
+        # top parks the grasp frame INSIDE the block — the approach swing
+        # then plows the open fingers through its top (seed 0 field
+        # observation: the F4 0.06 m offset bound for a 12.6 cm occluder,
+        # grasp point 8 mm below the top, and the move clipped the block;
+        # the kin stream cannot catch it because the pick target is
+        # ignored_body there).  Gate on the estimated half-height; a
+        # pre-sense object without a boxel keeps every offset.
+        min_z_offset = half_height + 0.01 if obj_boxel is not None else None
+        offered = 0
+        for yaw, span in candidates:
+            if span > self.GRASP_MAX_SPAN:
+                logger.debug("sample_grasp: %s yaw=%.2f skipped — pinch "
+                             "span %.3f m exceeds %.3f m (#P1 step 4)",
+                             obj_id, yaw, span, self.GRASP_MAX_SPAN)
+                continue
+            orn = np.array(p.getQuaternionFromEuler([0, np.pi, yaw]))
+            for z in offsets:
+                if min_z_offset is not None and z < min_z_offset:
+                    logger.debug("sample_grasp: %s skipping z=%.2f — below "
+                                 "half-height %.3f + 1 cm clearance (#P1 "
+                                 "altitude gate)", obj_id, z,
+                                 min_z_offset - 0.01)
+                    continue
+                self._grasp_counter += 1
+                grasp = Grasp(
+                    position=np.array([0, 0, z]),
+                    orientation=orn,
+                    name=f"grasp_{obj_id}_{self._grasp_counter}"
+                )
+                logger.debug("sample_grasp: %s -> %s (yaw=%.2f span=%.3f "
+                             "z=%.2f)", obj_id, grasp.name, yaw, span, z)
+                offered += 1
+                yield (grasp,)
+        if offered == 0:
+            logger.info("sample_grasp: %s — no top-down grasp fits: box "
+                        "%.3f x %.3f m, pinch limit %.3f m (#P1 step 4)",
+                        obj_id, float(ext[0]), float(ext[1]),
+                        self.GRASP_MAX_SPAN)
+    
+    # =========================================================================
+    # STREAM 3: Plan Motion (RRT-Connect with shortcut smoothing)
+    # =========================================================================
+    # Called last during planning: "can the robot move between these configs
+    # without hitting anything?"
+    #
+    # RRT-Connect parameters (Kuffner & LaValle, 2000).
+    # MAX_ITERATIONS and STEP_SIZE follow standard practice for 7-DOF arms;
+    # GOAL_BIAS 5% is the canonical value.  EDGE_CHECKS, CONNECT_ATTEMPTS,
+    # and SMOOTH_ATTEMPTS were empirically tuned on the tabletop scenario
+    # (2-4 objects, table-mounted Panda) — higher values improved solution
+    # quality marginally while increasing planning time significantly.
+    RRT_MAX_ITERATIONS = 2000    # sufficient for tabletop clutter
+    RRT_STEP_SIZE = 0.2          # max joint displacement per extend (rad)
+    RRT_GOAL_BIAS = 0.05         # probability of sampling the goal
+    RRT_EDGE_CHECKS = 8          # collision samples per edge
+    RRT_CONNECT_ATTEMPTS = 50    # max extends for the connect phase
+    SMOOTH_ATTEMPTS = 75         # shortcut smoothing iterations
+
+    def plan_motion(self, q1: RobotConfig, q2: RobotConfig) -> Iterator[Tuple[Trajectory]]:
+        """
+        Plan collision-free motion between two configurations.
+
+        Collision checks respect ``ignored_body_ids`` carried by each
+        config (set by ``compute_kin_solution`` for pick/place poses).
+        This prevents the grasped object from blocking its own pick
+        motion.
+
+        Strategy:
+          1. If no robot is loaded (heuristic mode), fall back to linear
+             interpolation — there is no physics to check against.
+          2. Verify both endpoints are collision-free.
+          3. Try the direct linear path (fast path — most moves are simple
+             reaches that don't collide with anything).
+          4. If the direct path collides, run bidirectional RRT-Connect.
+          5. Smooth the RRT path with random shortcutting.
+
+        PDDLStream declaration (see pddl/stream.pddl)::
+
+            (:stream plan-motion
+              :inputs (?q1 ?q2)
+              :domain (and (Config ?q1) (Config ?q2))
+              :outputs (?t)
+              :certified (and (Trajectory ?t) (motion ?q1 ?q2 ?t)))
+
+        Args:
+            q1: Start configuration.
+            q2: Goal configuration.
+
+        Yields:
+            Tuples of ``(trajectory,)`` connecting *q1* to *q2*.
+            Yields nothing if no collision-free path is found.
+        """
+        # --- Step 0: No-robot fallback (should not happen in production) ------
+        if self.robot_id is None:
+            yield (self._linear_trajectory(q1, q2),)
+            return
+
+        pc = self.physics_client
+
+        # --- Step 1: Build ignored-bodies sets --------------------------------
+        # Union of both endpoints' ignored bodies.  When moving from home
+        # (ignored={}) to a pick config (ignored={obj}), this ignores the
+        # grasped object for the entire path — which is necessary because
+        # the pick endpoint places the gripper AT the object.  Without the
+        # union, intermediate configs near the goal would be rejected for
+        # colliding with the object and RRT could never connect to it.
+        # A decomposed transit+approach architecture could restrict the
+        # ignore set to the approach phase only, but the current single-
+        # motion design requires the union.
+        base_ignored = q1.ignored_body_ids | q2.ignored_body_ids
+        is_pick_place = bool(q1.ignored_body_ids or q2.ignored_body_ids)
+
+        # Held-body inference (audit #58 follow-up):
+        #   • If either endpoint explicitly declares held_body_ids
+        #     (compute_stack_kin sets {held_cube} — distinct from the
+        #     {held_cube, support} set it puts in ignored_body_ids),
+        #     use the union.  This avoids misclassifying the support
+        #     cube as held when both endpoints are stack configs on
+        #     the same support — a regression that surfaced after
+        #     #58 began carrying current_config across replans.
+        #   • Otherwise fall back to the legacy intersection on
+        #     ignored_body_ids: bodies ignored by BOTH endpoints are
+        #     genuinely held throughout (correct for pick/place where
+        #     ignored == {held cube}; held cube appears at both
+        #     endpoints, pick/place targets at only one).
+        if q1.held_body_ids or q2.held_body_ids:
+            held_body_ids = q1.held_body_ids | q2.held_body_ids
+        else:
+            held_body_ids = q1.ignored_body_ids & q2.ignored_body_ids
+
+        # grasp_ee_offset describes where the held body sits relative to the
+        # EE (e.g. [0, 0, 0.10] = 10 cm below EE for a top-down grasp at the
+        # current _GRASP_Z_OFFSETS).
+        # Without this, the planning-time checker places the held body AT the
+        # EE, which is too high and misses collisions at the real object height.
+        held_body_ee_offset = None
+        if held_body_ids:
+            for q in (q1, q2):
+                if q.grasp_ee_offset is not None:
+                    held_body_ee_offset = q.grasp_ee_offset
+                    break
+
+        # For pick/place, also ignore support surfaces (table) because the
+        # Panda is mounted ON the table — its lower arm links overlap the
+        # table's collision geometry in PyBullet, producing false positives
+        # on nearly every intermediate config.  Not needed for pure transit.
+        endpoint_ignored = base_ignored | self.support_body_ids if is_pick_place else base_ignored
+        path_ignored = base_ignored | self.support_body_ids if is_pick_place else base_ignored
+
+        logger.debug("plan_motion: %s -> %s  endpoint_ignored=%s "
+                      "path_ignored=%s gripper_relax=%s held=%s",
+                      q1, q2,
+                      sorted(endpoint_ignored) if endpoint_ignored else '{}',
+                      sorted(path_ignored) if path_ignored != endpoint_ignored else '=',
+                      is_pick_place,
+                      sorted(held_body_ids) if held_body_ids else '{}')
+
+        # --- Step 2: Validate endpoints are collision-free --------------------
+        # If either config is already in collision, no point trying to plan.
+        # allow_gripper_collisions=True for pick/place lets the gripper enter
+        # cluttered space (it must touch the object at the pick pose).
+        if not is_config_collision_free(self.robot_id, q1.joint_positions,
+                                        pc, endpoint_ignored,
+                                        allow_gripper_collisions=is_pick_place,
+                                        held_body_ids=held_body_ids,
+                                        held_body_ee_offset=held_body_ee_offset):
+            logger.warning("plan_motion: start config %s in collision "
+                           "(ignored=%s)", q1, sorted(endpoint_ignored))
+            return
+        if not is_config_collision_free(self.robot_id, q2.joint_positions,
+                                        pc, endpoint_ignored,
+                                        allow_gripper_collisions=is_pick_place,
+                                        held_body_ids=held_body_ids,
+                                        held_body_ee_offset=held_body_ee_offset):
+            logger.warning("plan_motion: goal config %s in collision "
+                           "(ignored=%s)", q2, sorted(endpoint_ignored))
+            return
+
+        # --- Step 3: Try direct linear path (fast path) -----------------------
+        # Most tabletop moves are simple reaches that don't collide with
+        # anything.  Check 8 evenly-spaced configs along the straight line;
+        # if all clear, yield a 10-waypoint linear trajectory immediately.
+        # strict_gripper_interior (2026-08-21): the gripper-collision
+        # relaxation is legitimate AT the cluttered endpoints, but
+        # certifying the whole transit with relaxed fingers let the open
+        # gripper sweep through tall occluders mid-path (field: orange
+        # knocked over by a side push on a "direct path clear"
+        # trajectory).  Interior samples now check the fingers strictly;
+        # blocked paths fall through to RRT, which routes around/over.
+        if is_path_collision_free(self.robot_id, q1.joint_positions,
+                                  q2.joint_positions, pc,
+                                  n_checks=self.RRT_EDGE_CHECKS,
+                                  ignored_bodies=path_ignored,
+                                  allow_gripper_collisions=is_pick_place,
+                                  held_body_ids=held_body_ids,
+                                  held_body_ee_offset=held_body_ee_offset,
+                                  strict_gripper_interior=is_pick_place,
+                                  max_step_rad=self.path_check_step):
+            logger.info("plan_motion: direct path clear — linear trajectory")
+            yield (self._linear_trajectory(q1, q2),)
+            return
+
+        # --- Step 4: RRT-Connect (direct path blocked) ------------------------
+        # Bidirectional RRT-Connect: grow two trees (from start and goal),
+        # extend toward random samples, try to connect them.
+        logger.info("plan_motion: direct path blocked — running RRT-Connect")
+        path = self._rrt_connect(q1.joint_positions, q2.joint_positions,
+                                 path_ignored,
+                                 allow_gripper_collisions=is_pick_place,
+                                 held_body_ids=held_body_ids,
+                                 held_body_ee_offset=held_body_ee_offset)
+
+        if path is None:
+            logger.warning("plan_motion: RRT-Connect failed (%d iters)",
+                           self.RRT_MAX_ITERATIONS)
+            return
+
+        # --- Step 5: Smooth the RRT path with random shortcutting -------------
+        # RRT paths are jagged; random shortcutting picks two non-adjacent
+        # waypoints 75 times and removes everything between them if the
+        # direct edge is collision-free.
+        smoothed = self._smooth_path(path, path_ignored,
+                                     allow_gripper_collisions=is_pick_place,
+                                     held_body_ids=held_body_ids,
+                                     held_body_ee_offset=held_body_ee_offset)
+        logger.info("plan_motion: RRT path %d wps -> smoothed %d wps",
+                     len(path), len(smoothed))
+
+        # F18 (2026-09-20): state plainly whether the path that is about
+        # to be EXECUTED passes the direct check's own rule on every
+        # segment.  The tree was grown with the relaxed gripper rule
+        # applied per edge (an RRT edge is a 0.2 rad step, so "the first
+        # and last 20 % of the path" has no meaning inside one), which
+        # leaves the interior waypoints of an unsmoothed path certified
+        # more permissively than the direct path ever was.  This does
+        # not reject the path — at a pick or place the fingers genuinely
+        # sit in clutter and rejecting would strand the planner — it
+        # makes the residual countable instead of invisible.
+        if self.path_check_diag and is_pick_place and len(smoothed) > 2:
+            # Whether a segment may relax the fingers is decided by where
+            # it sits along the WHOLE path, not within itself: the first
+            # and last fifth of the joint-space distance is the clutter
+            # the endpoints legitimately reach into, the rest is transit.
+            _steps = [float(np.max(np.abs(smoothed[k + 1] - smoothed[k])))
+                      for k in range(len(smoothed) - 1)]
+            _total = sum(_steps) or 1.0
+            _weak, _acc = [], 0.0
+            for k, _d in enumerate(_steps):
+                _mid = (_acc + 0.5 * _d) / _total
+                _acc += _d
+                if _mid < 0.2 or _mid > 0.8:
+                    continue           # an endpoint segment: relaxation is fine
+                if not is_path_collision_free(
+                        self.robot_id, smoothed[k], smoothed[k + 1], pc,
+                        self.RRT_EDGE_CHECKS,
+                        ignored_bodies=path_ignored,
+                        allow_gripper_collisions=False,
+                        held_body_ids=held_body_ids,
+                        held_body_ee_offset=held_body_ee_offset,
+                        max_step_rad=self.path_check_step):
+                    _weak.append(k)
+            if _weak:
+                logger.info(
+                    "plan_motion: [F18] %d of %d interior segment(s) of the "
+                    "executed path pass only with the gripper relaxed "
+                    "(segments %s)", len(_weak), len(_steps), _weak)
+
+        # Wrap the joint-space waypoints into RobotConfig objects
+        waypoints = []
+        for i, joints in enumerate(smoothed):
+            waypoints.append(RobotConfig(
+                joint_positions=joints,
+                name=f"{q1.name}_to_{q2.name}_rrt{i}"
+            ))
+
+        self._traj_counter += 1
+        traj = Trajectory(waypoints=waypoints,
+                          name=f"traj_{self._traj_counter}")
+        yield (traj,)
+
+    # ----- helpers -----------------------------------------------------------
+
+    def _linear_trajectory(self, q1: RobotConfig, q2: RobotConfig,
+                           n_waypoints: int = 10) -> Trajectory:
+        """Build a linearly-interpolated trajectory (no collision check)."""
+        waypoints = []
+        for t in np.linspace(0, 1, n_waypoints):
+            waypoints.append(RobotConfig(
+                joint_positions=(1 - t) * q1.joint_positions
+                                + t * q2.joint_positions,
+                name=f"{q1.name}_to_{q2.name}_wp{int(t * 10)}"
+            ))
+        self._traj_counter += 1
+        return Trajectory(waypoints=waypoints,
+                          name=f"traj_{self._traj_counter}")
+
+    # ----- RRT-Connect helpers ------------------------------------------------
+    # These implement the core RRT-Connect algorithm (Kuffner & LaValle, 2000):
+    #   _random_config  — sample a random point in C-space
+    #   _nearest         — find closest tree node (brute-force L2)
+    #   _steer           — take a bounded step toward a target config
+    #   _try_connect     — greedily extend a tree until it reaches the target
+    #   _trace_path      — walk parent pointers to reconstruct the path
+    #   _rrt_connect     — the main bidirectional loop
+
+    def _random_config(self) -> np.ndarray:
+        """Sample a uniform random configuration within joint limits."""
+        return np.random.uniform(JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH)
+
+    def _nearest(self, nodes: List[np.ndarray], q: np.ndarray) -> int:
+        """Return the index of the node closest to *q* (L2 in joint space)."""
+        best_idx, best_dist = 0, np.inf
+        for i, n in enumerate(nodes):
+            d = np.linalg.norm(n - q)
+            if d < best_dist:
+                best_idx, best_dist = i, d
+        return best_idx
+
+    def _steer(self, q_near: np.ndarray, q_target: np.ndarray,
+               max_step: float) -> np.ndarray:
+        """
+        Move from *q_near* toward *q_target*, limiting the maximum
+        per-joint displacement to *max_step* radians.
+        """
+        diff = q_target - q_near
+        max_diff = np.max(np.abs(diff))
+        if max_diff <= max_step:
+            return q_target.copy()
+        return q_near + diff * (max_step / max_diff)
+
+    def _try_connect(self, nodes: List[np.ndarray],
+                     parents: List[int],
+                     q_target: np.ndarray,
+                     ignored_bodies: frozenset = frozenset(),
+                     allow_gripper_collisions: bool = False,
+                     held_body_ids: frozenset = frozenset(),
+                     held_body_ee_offset=None) -> Optional[int]:
+        """
+        Greedily extend a tree toward *q_target* until it either reaches
+        the target or hits a collision.  Returns the connecting node index,
+        or ``None`` on failure.
+        """
+        cur_idx = self._nearest(nodes, q_target)
+        pc = self.physics_client
+        for _ in range(self.RRT_CONNECT_ATTEMPTS):
+            q_cur = nodes[cur_idx]
+            q_new = self._steer(q_cur, q_target, self.RRT_STEP_SIZE)
+            if not is_path_collision_free(self.robot_id, q_cur, q_new, pc,
+                                          self.RRT_EDGE_CHECKS,
+                                          ignored_bodies=ignored_bodies,
+                                          allow_gripper_collisions=allow_gripper_collisions,
+                                          held_body_ids=held_body_ids,
+                                          held_body_ee_offset=held_body_ee_offset,
+                                          max_step_rad=self.path_check_step):
+                return None
+            new_idx = len(nodes)
+            nodes.append(q_new)
+            parents.append(cur_idx)
+            cur_idx = new_idx
+            if np.allclose(q_new, q_target, atol=1e-3):
+                return new_idx
+        return None
+
+    def _trace_path(self, nodes: List[np.ndarray],
+                    parents: List[int], idx: int) -> List[np.ndarray]:
+        """Walk parent pointers back to the root and return the path."""
+        path = []
+        while idx != -1:
+            path.append(nodes[idx])
+            idx = parents[idx]
+        path.reverse()
+        return path
+
+    def _rrt_connect(self, q_start: np.ndarray,
+                     q_goal: np.ndarray,
+                     ignored_bodies: frozenset = frozenset(),
+                     allow_gripper_collisions: bool = False,
+                     held_body_ids: frozenset = frozenset(),
+                     held_body_ee_offset=None
+                     ) -> Optional[List[np.ndarray]]:
+        """
+        Bidirectional RRT-Connect (Kuffner & LaValle, 2000).
+
+        Grows two trees — one from *q_start*, one from *q_goal* — and
+        alternately extends them toward random samples.  When one tree
+        successfully connects to a new node of the other tree, the two
+        half-paths are spliced into a complete trajectory.
+
+        Returns:
+            List of joint-space waypoints from start to goal, or ``None``.
+        """
+        # Two trees: A grows from start, B grows from goal.
+        # Each tree is a list of joint configs with parallel parent indices.
+        # Parent of root is -1 (sentinel).
+        nodes_a: List[np.ndarray] = [q_start.copy()]
+        parents_a: List[int] = [-1]
+        nodes_b: List[np.ndarray] = [q_goal.copy()]
+        parents_b: List[int] = [-1]
+
+        # Track whether trees have been swapped (needed to orient the
+        # final path correctly: start → goal, not goal → start).
+        swapped = False
+        pc = self.physics_client
+
+        for iteration in range(self.RRT_MAX_ITERATIONS):
+            if iteration > 0 and iteration % 500 == 0:
+                logger.debug("RRT-Connect: iter %d/%d  tree_a=%d  tree_b=%d",
+                             iteration, self.RRT_MAX_ITERATIONS,
+                             len(nodes_a), len(nodes_b))
+
+            # Sample: 5% of the time aim at the other tree's root (goal bias)
+            # to speed convergence; otherwise sample uniformly in C-space.
+            if random.random() < self.RRT_GOAL_BIAS:
+                q_rand = nodes_b[0].copy()
+            else:
+                q_rand = self._random_config()
+
+            # Extend tree A toward the sample by one bounded step
+            near_idx = self._nearest(nodes_a, q_rand)
+            q_new = self._steer(nodes_a[near_idx], q_rand, self.RRT_STEP_SIZE)
+
+            # If the edge is in collision, skip and swap trees for balance
+            if not is_path_collision_free(self.robot_id,
+                                          nodes_a[near_idx], q_new, pc,
+                                          self.RRT_EDGE_CHECKS,
+                                          ignored_bodies=ignored_bodies,
+                                          allow_gripper_collisions=allow_gripper_collisions,
+                                          held_body_ids=held_body_ids,
+                                          held_body_ee_offset=held_body_ee_offset,
+                                          max_step_rad=self.path_check_step):
+                nodes_a, nodes_b = nodes_b, nodes_a
+                parents_a, parents_b = parents_b, parents_a
+                swapped = not swapped
+                continue
+
+            # Add the new node to tree A
+            new_idx_a = len(nodes_a)
+            nodes_a.append(q_new)
+            parents_a.append(near_idx)
+
+            # Try to greedily connect tree B to this new node.
+            # If successful, splice the two half-paths into a full trajectory.
+            connect_idx = self._try_connect(nodes_b, parents_b, q_new,
+                                            ignored_bodies,
+                                            allow_gripper_collisions,
+                                            held_body_ids,
+                                            held_body_ee_offset)
+            if connect_idx is not None:
+                path_a = self._trace_path(nodes_a, parents_a, new_idx_a)
+                path_b = self._trace_path(nodes_b, parents_b, connect_idx)
+                # Orient correctly: path must go start → goal regardless
+                # of which tree is currently "A".
+                if swapped:
+                    path_a.reverse()
+                    full = path_b + path_a[1:]
+                else:
+                    path_b.reverse()
+                    full = path_a + path_b[1:]
+                return full
+
+            # Swap trees each iteration so both grow at similar rates
+            nodes_a, nodes_b = nodes_b, nodes_a
+            parents_a, parents_b = parents_b, parents_a
+            swapped = not swapped
+
+        return None
+
+    # ----- Shortcut smoothing ------------------------------------------------
+
+    def _smooth_path(self, path: List[np.ndarray],
+                     ignored_bodies: frozenset = frozenset(),
+                     allow_gripper_collisions: bool = False,
+                     held_body_ids: frozenset = frozenset(),
+                     held_body_ee_offset=None
+                     ) -> List[np.ndarray]:
+        """
+        Random shortcut smoothing: pick two non-adjacent waypoints and
+        replace the segment between them with a direct edge if that edge
+        is collision-free.
+        """
+        if len(path) <= 2:
+            return list(path)
+        smoothed = list(path)
+        pc = self.physics_client
+        for _ in range(self.SMOOTH_ATTEMPTS):
+            if len(smoothed) <= 2:
+                break
+            i = random.randint(0, len(smoothed) - 3)
+            j = random.randint(i + 2, len(smoothed) - 1)
+            # F18 (2026-09-20): the shortcut is certified under EXACTLY
+            # the rule the direct path had to pass — including
+            # strict_gripper_interior.  Without it the smoother was a
+            # second, more permissive gate on the same geometry: the
+            # seed-343879192 tray transit went "direct path blocked —
+            # running RRT-Connect" and then "RRT path 12 wps -> smoothed
+            # 2 wps", i.e. the smoother handed back the very straight
+            # line the direct check had just rejected, and the cargo
+            # swept a bystander flat along it.  A shortcut that cannot
+            # pass the direct check's rule is not a shortcut.
+            if is_path_collision_free(self.robot_id, smoothed[i], smoothed[j],
+                                      pc, self.RRT_EDGE_CHECKS,
+                                      ignored_bodies=ignored_bodies,
+                                      allow_gripper_collisions=allow_gripper_collisions,
+                                      held_body_ids=held_body_ids,
+                                      held_body_ee_offset=held_body_ee_offset,
+                                      strict_gripper_interior=allow_gripper_collisions,
+                                      max_step_rad=self.path_check_step):
+                smoothed = smoothed[:i + 1] + smoothed[j:]
+        return smoothed
+    
+    # BF#45 (2026-10-30): the contact pose the executor lowers to from the
+    # certified approach config.  execute_pick stops the fingers
+    # CONTACT_TOP_CLEARANCE below the object's top and never lower than
+    # contact_floor above the surface (execution._FINGER_TIP_DEPTH, or the
+    # task's own floor, D8); execute_place releases the object's bottom on
+    # the surface, which puts the end effector at the same height.  The
+    # planner sets contact_floor and surface_z_default from the scene.
+    CONTACT_TOP_CLEARANCE = 0.005
+    contact_floor = 0.035
+    surface_z_default = 0.0
+
+    # BF#65 2(c) (2026-11-12): a pick out of a region whose centre the arm
+    # cannot reach aims at the region's reachable part.  The grid over the
+    # region's footprint that finds that part, per axis.
+    REGION_AIM_GRID = 9
+
+    def region_reach_aim(self, obj_id: str, boxel: BoxelData,
+                         grasp: Grasp) -> Optional[np.ndarray]:
+        """BF#65 2(c): the xy inside a SHADOW region that a pick of
+        ``obj_id`` out of it aims at when the region's centre is out of
+        reach, or None when no part of the region is in reach (or the boxel
+        is no region).
+
+        The hidden object may lie anywhere in the region, so the centre is
+        only one hypothesis of where the pick will go; a region that
+        straddles the reach limit (a shadow behind an object near the limit)
+        has a reachable part even when its centre is outside, and the plan
+        through it must bind (BF#65 (c): scenes 128 and 135 ended with no
+        plan that binds).  The aim is the centroid of the reachable points
+        of a REGION_AIM_GRID lattice over the footprint, inset by half the
+        object's footprint where the region is wider than the object (the
+        hypothesised object lies inside the region).  For an object without
+        a boxel that footprint is the class LOWER bound
+        (NOMINAL_HIDDEN_EXTENTS_MIN): the question is F6's, "could an
+        instance that hides in this region be reached", and the smallest
+        instance can lie that close to the region's face (with the upper
+        bound scene 128's reachable strip was missed by 1 mm, BF#65's A/B
+        round 1).  The reachable part of
+        a box at one height is convex (a disc and a sphere cut it), so the
+        centroid is reachable; if rounding says otherwise the reachable
+        lattice point nearest to it is taken.  Called only after the centre
+        failed ee_reachable: where the centre is reachable nothing changes.
+        Place destinations (FREE_SPACE) and known objects (OBJECT) are never
+        re-aimed: the executor places at the cell's centre and picks at the
+        object's own box."""
+        if boxel.boxel_type != BoxelType.SHADOW:
+            return None
+        lo = np.asarray(boxel.min_corner, dtype=float)[:2]
+        hi = np.asarray(boxel.max_corner, dtype=float)[:2]
+        obj_boxel = self.registry.get_boxel(str(obj_id))
+        half = (np.asarray(obj_boxel.extent, dtype=float)[:2]
+                if obj_boxel is not None
+                else np.asarray(NOMINAL_HIDDEN_EXTENTS_MIN, dtype=float)[:2] / 2.0)
+        inset = np.minimum(half, (hi - lo) / 2.0)
+        xs = np.linspace(lo[0] + inset[0], hi[0] - inset[0], self.REGION_AIM_GRID)
+        ys = np.linspace(lo[1] + inset[1], hi[1] - inset[1], self.REGION_AIM_GRID)
+        z = float(boxel.center[2]) + float(grasp.position[2])
+        off = np.asarray(grasp.position, dtype=float)[:2]
+
+        def _ok(xy) -> bool:
+            return self.ee_reachable(np.array([xy[0] + off[0], xy[1] + off[1], z]))
+
+        reachable = np.array([[x, y] for x in xs for y in ys if _ok((x, y))])
+        if len(reachable) == 0:
+            return None
+        aim = reachable.mean(axis=0)
+        if not _ok(aim):
+            aim = reachable[int(np.argmin(np.linalg.norm(reachable - aim, axis=1)))]
+        return aim
+
+    def contact_target(self, obj_id: str, boxel: BoxelData, grasp: Grasp,
+                       aim_xy: Optional[np.ndarray] = None) -> np.ndarray:
+        """The end-effector position execute_pick / execute_place lowers to
+        for (obj, boxel, grasp): the boxel's centre plus the grasp's xy, at
+        the object's top minus CONTACT_TOP_CLEARANCE or contact_floor above
+        the surface, whichever is higher.  At a pick (the object's own
+        boxel) the top is the registry box's; at a place or a pick out of
+        a region it is the destination's surface plus the object's height
+        (a pre-sense target without a box takes the class prior
+        NOMINAL_HIDDEN_EXTENTS).  The surface is the destination boxel's
+        surface_z, else the object's, else surface_z_default.  ``aim_xy``
+        (BF#65 2(c)) replaces the boxel centre's xy when the kin stream
+        aimed at a region's reachable part (region_reach_aim)."""
+        obj_boxel = self.registry.get_boxel(str(obj_id))
+        surface = getattr(boxel, 'surface_z', None)
+        if surface is None and obj_boxel is not None:
+            surface = getattr(obj_boxel, 'surface_z', None)
+        if surface is None:
+            surface = self.surface_z_default
+        surface = float(surface)
+        if obj_boxel is not None and obj_boxel.id == boxel.id:
+            top = float(obj_boxel.max_corner[2])
+        elif obj_boxel is not None:
+            top = surface + float(obj_boxel.max_corner[2] - obj_boxel.min_corner[2])
+        else:
+            top = surface + float(NOMINAL_HIDDEN_EXTENTS[2])
+        contact_z = max(top - self.CONTACT_TOP_CLEARANCE, surface + self.contact_floor)
+        cx, cy = ((float(boxel.center[0]), float(boxel.center[1]))
+                  if aim_xy is None else (float(aim_xy[0]), float(aim_xy[1])))
+        return np.array([cx + float(grasp.position[0]),
+                         cy + float(grasp.position[1]),
+                         contact_z])
+
+    # =========================================================================
+    # STREAM 2: Compute IK for Pick/Place
+    # =========================================================================
+    # Called second during planning: "what joint angles get the arm to this
+    # grasp at this boxel?"
+    #
+    def compute_kin_solution(self, obj_id: str, boxel_id: str,
+                             grasp: Grasp) -> Iterator[Tuple[RobotConfig]]:
+        """
+        Compute IK solutions for picking object from boxel with grasp.
+
+        Tries multiple IK seeds to produce diverse arm configurations.
+        Each successful config carries ``ignored_body_ids`` containing the
+        PyBullet body ID of the grasped object.  ``plan_motion()`` uses this
+        to exclude the grasped body from collision checks — necessary because
+        the gripper must be in contact with the object at the pick pose.
+
+        Collision validation is deliberately NOT done here.  In a TAMP plan,
+        earlier actions may relocate objects that currently block the target
+        boxel.  Checking collisions against the static planning-time world
+        would reject configs that are valid at execution time (e.g. picking
+        a target from a shadow after the occluder has been moved).
+        ``plan_motion()`` handles collision checking with the union of
+        ignored bodies from both endpoints, which naturally covers objects
+        moved earlier in the plan.
+
+        PDDLStream declaration (see pddl/stream.pddl):
+            (:stream compute-kin
+              :inputs (?o ?b ?g)
+              :domain (and (Obj ?o) (Boxel ?b) (valid_grasp ?o ?g))
+              :outputs (?q)
+              :certified (and (Config ?q) (kin_solution ?o ?b ?g ?q)
+                              (config_for_boxel ?q ?b)))
+
+        Args:
+            obj_id: Object to grasp
+            boxel_id: Boxel containing object
+            grasp: Grasp to use
+
+        Yields:
+            Tuples of (config,) for grasping — one per successful IK seed.
+        """
+        # #P4 B3(d): the goal configuration's pseudo-boxel holds no object
+        # and admits no placement; nothing is picked from or placed there.
+        if boxel_id == HOME_PSEUDO_BOXEL:
+            return
+        # M8 C0: nor are the observation configurations' view boxels.
+        if boxel_id in self.view_boxel_ids:
+            self.view_kin_skips += 1
+            return
+
+        # --- Look up the boxel's 3D center from the grid registry ---------------
+        boxel = self.registry.get_boxel(boxel_id)
+        if boxel is None:
+            # F7 (2026-09-19): never silent — a fact named a boxel the
+            # registry does not hold, which is a planner-side inconsistency
+            # (the moved-occluder facts were exactly this until today).
+            logger.warning("compute_kin: %s at %s — no such boxel in the "
+                           "registry; the init facts name a region that "
+                           "does not exist (F7 class), no kin possible",
+                           obj_id, boxel_id)
+            print(f"  [F7] compute_kin({obj_id}, {boxel_id}): boxel not in "
+                  f"the registry — the init facts are inconsistent")
+            return
+
+        # --- Compute the world-frame EE target pose ---------------------------
+        # grasp.position is a relative offset (e.g. [0, 0, 0.05] = 5 cm above
+        # the boxel center).  Adding it to boxel.center gives the absolute
+        # position the end-effector must reach.
+        target_pos = boxel.center + grasp.position
+        ee_orn = grasp.orientation
+
+        # #P3(c) pre-IK reach gate (2026-08-21): free-space PLACEMENT
+        # candidates span the whole table, but the Panda cannot reach
+        # beyond ~0.8 m horizontally from its base — pybullet IK on such
+        # targets fails all 8 seeds only after a full refinement loop
+        # each, and the adaptive sampler burns an entire escalation round
+        # per doomed (object, boxel) pair (observed on seed 0: free_004
+        # at 1.02 m ate three rounds, plan #1 took 17 min; user field
+        # runs 16-23-24 / 16-24-28 were killed in the same swamp).
+        # Reject the geometrically impossible target BEFORE the IK loop.
+        # 0.80 m sits above every IK solution ever certified in this
+        # setup (the F4 reach-margin stack case is at 0.61 m) and below
+        # every observed burn (0.886-1.02 m), so this changes wall-clock
+        # only, never the reachable plan space.
+        #
+        # BF#65 2(c) (2026-11-12): a SHADOW region is where a hidden object
+        # MAY lie, and its centre is only one hypothesis; when the centre
+        # is out of reach and a part of the region is not, the pick out of
+        # it aims at that part (region_reach_aim) instead of failing, so a
+        # plan through a region that straddles the reach limit binds.  A
+        # reachable centre takes the branch below never: nothing changes
+        # for it.  aim_xy stays None unless the aim moved.
+        aim_xy = None
+        if not self.ee_reachable(target_pos):
+            aim_xy = self.region_reach_aim(obj_id, boxel, grasp)
+            if aim_xy is None:
+                logger.debug("compute_kin: %s at %s rejected pre-IK — target "
+                             "%s outside the reach envelope (#P3(c))",
+                             obj_id, boxel_id, np.round(target_pos, 3).tolist())
+                return
+            _centre_xy = np.asarray(boxel.center, dtype=float)[:2]
+            target_pos = np.array([aim_xy[0] + grasp.position[0],
+                                   aim_xy[1] + grasp.position[1],
+                                   target_pos[2]])
+            self.region_aim_shifts += 1
+            _key = (str(obj_id), str(boxel_id), tuple(np.round(aim_xy, 3)))
+            if _key not in self._region_aim_logged:
+                self._region_aim_logged.add(_key)
+                print(f"  [BF#65] compute_kin({obj_id}, {boxel_id}): the "
+                      f"region's centre is out of reach "
+                      f"({float(np.linalg.norm(_centre_xy - self._robot_base_xy)):.3f} m "
+                      f"from the base); aiming at its reachable part "
+                      f"[{aim_xy[0]:.3f}, {aim_xy[1]:.3f}] "
+                      f"({float(np.linalg.norm(aim_xy - self._robot_base_xy)):.3f} m)")
+
+        # --- Resolve the grasped object's PyBullet body ID --------------------
+        # This body must be EXCLUDED from collision checks in plan_motion(),
+        # because the gripper will intentionally be in contact with it at the
+        # pick pose.  The frozenset travels with the config through the plan.
+        body_id = self._resolve_body_id(obj_id)
+        ignored = frozenset({body_id}) if body_id is not None else frozenset()
+
+        if self.robot_id is None:
+            logger.warning("compute_kin: no robot_id — cannot compute IK "
+                           "for %s at %s", obj_id, boxel_id)
+            return
+
+        # --- Multi-seed IK loop -----------------------------------------------
+        # Try 8 different IK seeds (see _IK_SEED_OFFSETS) to get diverse arm
+        # configurations.  Different seeds steer PyBullet's iterative solver
+        # into different local minima (elbow-up, elbow-down, etc.).
+        seen = set()     # dedup by rounded joint angles
+        yielded = 0
+        for seed_idx, seed in enumerate(self._ik_seeds()):
+            config = self._pybullet_ik(target_pos, ee_orn, seed=seed)
+            if config is None:
+                continue
+
+            # Deduplicate: round to 3 decimal places (0.001 rad ≈ 0.06 deg)
+            # to avoid yielding configs that differ only by floating-point noise.
+            sig = tuple(np.round(config.joint_positions, 3))
+            if sig in seen:
+                continue
+            seen.add(sig)
+
+            # BF#45: the executor lowers from this config to the contact pose
+            # with solve_ik seeded here (execute_pick / execute_place, audit
+            # #37/#38).  A config whose contact that solver cannot reach is
+            # not certified, so the planner never commits to a pick or place
+            # the arm then aborts with the occluder already in hand (seed 10
+            # on 1747173593: "IK failed for place contact" at free_006 after
+            # the pick, replanned to another cell).
+            contact = self.contact_target(obj_id, boxel, grasp, aim_xy=aim_xy)
+            if solve_ik(self.robot_id, contact, ee_orn, self.physics_client,
+                        seed=config.joint_positions) is None:
+                self.contact_ik_rejects += 1
+                logger.debug("compute_kin: %s at %s seed %d rejected: the approach "
+                             "%s has IK, its contact %s has none (BF#45)",
+                             obj_id, boxel_id, seed_idx,
+                             np.round(target_pos, 3).tolist(),
+                             np.round(contact, 3).tolist())
+                continue
+
+            # Attach the ignored-body set so plan_motion knows to skip this
+            # object during collision checks for the entire motion to/from
+            # this config.
+            config.ignored_body_ids = ignored
+            config.grasp_ee_offset = grasp.position
+            self._config_counter += 1
+            config.name = f"q_kin_{obj_id}_{self._config_counter}"
+            logger.debug("compute_kin: %s at %s -> %s  "
+                         "ee_target=%s ignored_body=%s seed=%d",
+                         obj_id, boxel_id, config.name,
+                         target_pos.tolist(), body_id, seed_idx)
+            yield (config,)
+            yielded += 1
+
+        # If no seed produced a valid IK solution, log for diagnostics.
+        # The generator simply ends with no outputs, telling PDDLStream
+        # this (obj, boxel, grasp) combination has no feasible pick config.
+        if yielded == 0:
+            logger.debug("compute_kin: all %d IK seeds failed for %s at %s "
+                         "(target_pos=%s)", self.IK_NUM_SEEDS, obj_id,
+                         boxel_id, target_pos.tolist())
+
+    # =========================================================================
+    # STREAM 4: Compute IK for Stack  (audit #30; lazy-collision fix in #55)
+    # =========================================================================
+    # Like compute_kin_solution but the EE target is derived from
+    # ?on_obj's CURRENT AABB rather than a precomputed boxel center,
+    # so a stack built across a multi-step plan keeps targeting the
+    # running stack height rather than the support's spawn pose.
+    #
+    # ignored_body_ids includes BOTH the held cube AND the support cube
+    # (audit #55).  Mirrors compute_kin_solution's lazy-collision pattern
+    # (see L843-851) and extends it to the support: an earlier action
+    # may have relocated ?on_obj (picked + stacked elsewhere), but at
+    # planning time the plan-client world still shows ?on_obj at its
+    # initial pose.  Without ignoring ?on_obj, plan_motion would reject
+    # trajectories that pass through where ?on_obj statically sits.
+    # execute_stack reads ?on_obj's LIVE AABB at runtime and re-solves
+    # IK seeded with the planner's config, so the IK target being
+    # "above initial pose" at planning time is recovered to "above
+    # current pose" at execution.  Full symbolic pose-threading
+    # (Path C) was prototyped on branch audit-55-pose-aware-stack —
+    # functionally correct but slow under PDDLStream's exogenous-
+    # axiom compilation; revisit if a future goal mode needs precise
+    # pre-execution arm-routing.
+    #
+    # Compared to the pre-#55 implementation, the diffs are: (1) the
+    # ignored-set extension to include the support cube body, and
+    # (2) a PyBullet-AABB fallback for held cube half-height when no
+    # registry boxel exists (hidden targets pre-sense).  IK seed loop,
+    # dedup, and target-pose derivation are unchanged.
+    def compute_stack_kin_solution(self, obj_id: str, on_obj_id: str,
+                                   grasp: Grasp) -> Iterator[Tuple[RobotConfig]]:
+        """
+        IK to release the held ``obj_id`` on top of ``on_obj_id``.
+
+        Pose derivation (#P1 step (2d), 2026-08-21): read ``on_obj_id``'s
+        REGISTRY boxel — the perception-estimated current pose, kept
+        fresh by refresh_object_aabbs — and compute the EE z so the held
+        object's bottom face rests on the support's top face:
+
+            ee_target.xy = on_obj_top.xy + grasp.position[:2]
+            ee_target.z  = on_obj_top.z + held_half_height + grasp.position[2]
+
+        ``held_half_height`` prefers the held object's registry boxel;
+        a pre-sense hidden target without one uses the
+        NOMINAL_HIDDEN_EXTENTS class prior.  A support with NO registry
+        boxel yields nothing (pose never observed — the audit-#55 live
+        p.getAABB read leaked its true position here).
+
+        ``ignored_body_ids`` on the yielded config includes BOTH the held
+        cube AND the support cube (audit #55).  See the section comment
+        above for the lazy-collision rationale: at planning time the
+        support may symbolically be elsewhere (e.g. on the tray after a
+        prior stack action) while the plan-client world still places it
+        at its initial pose.  execute_stack salvages this at runtime via
+        a fresh IK against the support's live AABB.
+
+        Certifies (Config ?q), (stack_kin ?o ?on_obj ?g ?q), and
+        (config_for_boxel ?q ?on_obj) — the last so the preceding move
+        action can deliver the arm to the support's OBJECT boxel.
+        """
+        # Body-id lookups (audit #55): since step (2d) both are needed
+        # ONLY for the ignored-set construction — the pose/size reads
+        # come from the registry / the nominal prior.
+        held_body_id = self._resolve_body_id(obj_id)
+        support_body_id = self._resolve_body_id(on_obj_id)
+
+        # Held cube half-height: prefer the registry boxel (perception
+        # estimate); a hidden target without a boxel uses the
+        # NOMINAL_HIDDEN_EXTENTS class prior (#P1 step (2d) — the audit
+        # #55 live-AABB fallback leaked the hidden instance's true
+        # z-extent into stream sampling).
+        held_boxel = self.registry.get_boxel(obj_id)
+        if held_boxel is not None:
+            held_half_height = float(held_boxel.extent[2])
+        else:
+            held_half_height = float(NOMINAL_HIDDEN_EXTENTS[2]) / 2.0
+
+        # Support pose: the registry boxel IS the current belief — since
+        # step (2c) refresh_object_aabbs keeps it posed from fresh
+        # renders, so the pre-(2d) preference for the LIVE p.getAABB is
+        # both redundant and a ground-truth leak (for a pre-discovery
+        # support it leaked the true POSITION into the kin target).  No
+        # boxel -> no kin: the robot cannot aim a stack at an object
+        # whose pose it has never observed; the optimistic skeleton
+        # simply fails to bind, matching reality.
+        on_boxel = self.registry.get_boxel(on_obj_id)
+        if on_boxel is None:
+            return
+        top_z = float(on_boxel.max_corner[2])
+        cx, cy, _ = on_boxel.center.tolist()
+
+        target_obj_pos = np.array([cx, cy, top_z + held_half_height])
+        target_pos = target_obj_pos + grasp.position
+        ee_orn = grasp.orientation
+        # #P3(c) (2026-09-19): the same pre-IK reach gate as compute_kin —
+        # this stream had none, so a tower at the reach margin ate full
+        # 8-seed IK rounds per grasp before failing.
+        if not self.ee_reachable(target_pos):
+            logger.debug("compute_stack_kin: %s on %s rejected pre-IK — "
+                         "target %s outside the reach envelope (#P3(c))",
+                         obj_id, on_obj_id, np.round(target_pos, 3).tolist())
+            return
+
+        # audit #55 — ignore BOTH held cube AND support cube; see section
+        # comment above for the lazy-collision rationale.
+        ignored = frozenset(
+            bid for bid in (held_body_id, support_body_id) if bid is not None
+        )
+
+        if self.robot_id is None:
+            logger.warning("compute_stack_kin: no robot_id — cannot compute IK "
+                           "for %s on %s", obj_id, on_obj_id)
+            return
+
+        seen = set()
+        yielded = 0
+        for seed_idx, seed in enumerate(self._ik_seeds()):
+            config = self._pybullet_ik(target_pos, ee_orn, seed=seed)
+            if config is None:
+                continue
+            sig = tuple(np.round(config.joint_positions, 3))
+            if sig in seen:
+                continue
+            seen.add(sig)
+            config.ignored_body_ids = ignored
+            # audit #58 follow-up — explicitly declare ONLY the held cube
+            # as attached to the EE during motion.  The support cube is in
+            # ignored_body_ids (lazy-collision hack) but is NOT held; without
+            # this distinction plan_motion's intersection-on-ignored heuristic
+            # mis-attributes the support to the gripper when both endpoints
+            # are stack configs on the same support, producing spurious
+            # collision rejections and pathological replan slowness.
+            if held_body_id is not None:
+                config.held_body_ids = frozenset({held_body_id})
+            config.grasp_ee_offset = grasp.position
+            self._config_counter += 1
+            config.name = f"q_stack_{obj_id}_on_{on_obj_id}_{self._config_counter}"
+            logger.debug("compute_stack_kin: %s on %s -> %s "
+                         "ee_target=%s seed=%d",
+                         obj_id, on_obj_id, config.name,
+                         target_pos.tolist(), seed_idx)
+            yield (config,)
+            yielded += 1
+
+        if yielded == 0:
+            logger.debug("compute_stack_kin: all %d seeds failed for %s on %s "
+                         "(target_pos=%s)", self.IK_NUM_SEEDS, obj_id,
+                         on_obj_id, target_pos.tolist())

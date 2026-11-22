@@ -76,32 +76,32 @@ except ImportError:
 # The curated console (console_ui, 2026-10-30): installed only when this
 # file runs as the script at --log-level smart, before pybullet's import
 # banner, so the terminal shows the curated lines and nothing else.
-import console_ui
+from console import console_ui
 console_ui.install_early(__name__)
 import pybullet as p
 
-from boxel_env import (BoxelTestEnv, SceneConfig,
+from world.boxel_env import (BoxelTestEnv, SceneConfig,
                        default_scene, mixed_shapes_scene,
                        scalability_scene, stack_scene,
                        random_pairs_scene)
-import telemetry          # #P1 F17 world telemetry
-import world_eye          # textual world/belief/camera snapshots (2026-09-18)
-from boxel_data import BoxelRegistry, BoxelType
-from cell_merger import merge_free_space_cells
-from perception import grid_would_hit
-from pddlstream_planner import PDDLStreamPlanner, search_options_from
-from streams import RobotConfig
-from robot_utils import (move_robot_smooth, hold_at_config,
+from console import telemetry          # #P1 F17 world telemetry
+from world import world_eye          # textual world/belief/camera snapshots (2026-09-18)
+from world.boxel_data import BoxelRegistry, BoxelType
+from world.cell_merger import merge_free_space_cells
+from sensing.perception import grid_would_hit
+from planning.pddlstream_planner import PDDLStreamPlanner, search_options_from
+from planning.streams import RobotConfig
+from acting.robot_utils import (move_robot_smooth, hold_at_config,
                          detect_execution_collisions,
                          robot_model, arm_joint_positions)
-from run_logger import (RunLogger, parse_pipeline_args, report_run_outcome,
+from console.run_logger import (RunLogger, parse_pipeline_args, report_run_outcome,
                         dispatch_begin, dispatch_end, ledger_event,
                         ledger_plan, provenance)
-from visualization import BoxelVisualizer
+from console.visualization import BoxelVisualizer
 
-from belief import BeliefState
-from reboxelize import reboxelize_free_space
-from execution import (audit_robot_held_state,
+from sensing.belief import BeliefState
+from world.reboxelize import reboxelize_free_space
+from acting.execution import (audit_robot_held_state,
                        compute_shadow_blockers,
                        refresh_object_aabbs,
                        retire_lost_objects,
@@ -112,22 +112,22 @@ from execution import (audit_robot_held_state,
                        record_initial_detections, handle_observe_action,
                        pick_contact_floor)
 # BF#59 carry_hold_check: the move's hold postcondition (execution.py).
-from execution import carry_hold_begin, carry_hold_end
-import pose_belief
-import world_counts       # TB-22: the run's drop and collision record
-import m8_domain
-import observe_views
-import look_domain
-import look_views
-from look_action import handle_look_action
-import arm_eye
-import streams
-from streams import HOME_PSEUDO_BOXEL
+from acting.execution import carry_hold_begin, carry_hold_end
+from sensing import pose_belief
+from world import world_counts       # TB-22: the run's drop and collision record
+from planning import m8_domain
+from sensing import observe_views
+from planning import look_domain
+from sensing import look_views
+from sensing.look_action import handle_look_action
+from sensing import arm_eye
+from planning import streams
+from planning.streams import HOME_PSEUDO_BOXEL
 import logging
 import math
-import robot_utils
-import slip_fixes
-import interior_regions   # BF#65 option 1 (D6, M2): the region under a cover
+from acting import robot_utils
+from acting import slip_fixes
+from world import interior_regions   # BF#65 option 1 (D6, M2): the region under a cover
 
 # BF#59 carry_trapezoid (proposals/carry_motion.md 2.2, with loss_dynamics'
 # carry_accel_limit merged into it by both reviews; STATE.md candidate 5).
@@ -175,9 +175,9 @@ CARRY_TRAP_COLLINEAR_COS = 0.9999
 _TODAY_PAIR_STEPS = 30
 
 from episode_state import EpisodeState, EpisodeOptions, EARLY_FALSE
-from world_setup import partition_extent, build_world, first_observation, build_registry
-from planner_setup import build_planner, export_initial_problem, arm_observe_views
-from episode_goals import goal_satisfied, build_stack_goal
+from world.world_setup import partition_extent, build_world, first_observation, build_registry
+from planning.planner_setup import build_planner, export_initial_problem, arm_observe_views
+from planning.episode_goals import goal_satisfied, build_stack_goal
 
 
 def carry_trapezoid_schedule(points, vmax=None, amax=None, dt=None):
@@ -3044,7 +3044,7 @@ def main(gui=True, run_logger=None, scene_config=None,
         pose_belief.SWITCHES[_key] = getattr(args, _flag, 'on') == 'on'
     # GF10 (BF#38): the pick close's squeeze, set every run so a previous
     # main() in the same process does not carry over.
-    import robot_utils
+    from acting import robot_utils
     robot_utils.GRIP_SQUEEZE = float(getattr(args, 'grip_squeeze_mm', '0.5')) / 1000.0
     # BF#50: the eye images are saved only when this run asks for them.
     world_eye.SAVE_IMAGES = getattr(args, 'save_screenshots', 'off') == 'on'
@@ -3052,7 +3052,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     # BF#59: the die-slip campaign's switches (run_logger's --slip-fixes),
     # set every run; every fix registered itself at its module's import,
     # so an unknown name is refused here, before anything runs.
-    import slip_fixes
+    from acting import slip_fixes
     slip_fixes.configure(getattr(args, 'slip_fixes', ''))
     # BF#65 option 1 (D6, model tweak M2): the hiding region under a cover
     # whose class declares a cavity (interior_regions.py), off unless the
@@ -3060,7 +3060,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     # previous run's "seen under a cover" records.
     interior_regions.configure(getattr(args, 'interior_regions', 'off'))
     # M7 (TB-46): a rediscovery keeps the still-hidden fragments; set every run.
-    import execution
+    from acting import execution
     execution.M7 = getattr(args, 'm7', 'on') == 'on'
     check_domain_matches_switches(st)
     # The curated console's header (a no-op without console_ui installed).

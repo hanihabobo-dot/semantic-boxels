@@ -21,9 +21,9 @@ import numpy as np
 import pybullet as p
 import pytest
 
-import robot_utils
-from boxel_data import BoxelData, BoxelType
-from shadow_calculator import ShadowCalculator
+from acting import robot_utils
+from world.boxel_data import BoxelData, BoxelType
+from world.shadow_calculator import ShadowCalculator
 from tampura_bridge import env_adapter, task_spec
 
 # Seed 118 (BF#63's generated scenes): the eye as logged

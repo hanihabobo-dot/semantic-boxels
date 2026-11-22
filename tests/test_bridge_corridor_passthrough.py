@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-import run_logger
+from console import run_logger
 
 REPO = Path(__file__).resolve().parent.parent
 DRIVER = REPO / 'tampura_bridge' / 'run_bridge_on_finddice.py'

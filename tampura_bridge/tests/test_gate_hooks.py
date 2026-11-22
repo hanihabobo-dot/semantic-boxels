@@ -13,7 +13,7 @@ import pybullet as p
 import pybullet_data
 import pytest
 
-import run_logger
+from console import run_logger
 from tampura_bridge import gate_hooks as gh
 
 MISSION = ('and', ('holding', 'die'), ('at_config', 'q_home'))
@@ -137,7 +137,7 @@ def test_motor_command_outside_a_dispatched_action_trips_g3(w):
 # ----- G14: the executor's IK on the executing robot ---------------------
 
 def test_solve_ik_is_exempt_inside_a_dispatch_and_net_zero(w):
-    import robot_utils
+    from acting import robot_utils
     arm = [p.getJointState(w.robot, j, physicsClientId=w.c0)[0]
            for j in range(7)]
     run_logger.dispatch_begin(1, 1, 'pick', ['known'])
@@ -151,7 +151,7 @@ def test_solve_ik_is_exempt_inside_a_dispatch_and_net_zero(w):
 
 
 def test_solve_ik_outside_a_dispatch_trips_g14(w):
-    import robot_utils
+    from acting import robot_utils
     _trips('G14', robot_utils.solve_ik, w.robot, np.array([0.45, 0.0, 0.3]),
            physics_client=w.c0)
 
@@ -164,7 +164,7 @@ def test_arm_reset_outside_solve_ik_trips_g14_even_in_a_dispatch(w):
 
 def test_collision_probe_on_the_executing_client_trips_g14(w):
     # Whether or not the probe swallows the exception, the counter holds.
-    import robot_utils
+    from acting import robot_utils
     try:
         robot_utils.is_config_collision_free(w.robot, [0.0] * 7,
                                              physics_client=w.c0)
@@ -237,7 +237,7 @@ def test_renders_must_use_the_declared_eye(w):
 def test_wrist_render_passes_only_at_the_robots_fk_pose(w):
     # M8 C2: a declared wrist robot may render its own camera, at the
     # pose its forward kinematics gives, and nowhere else.
-    import robot_utils
+    from acting import robot_utils
     cam = robot_utils.wrist_camera_pose(w.robot, w.c0)
     view, proj = robot_utils.wrist_camera_matrices(cam)
     _trips('G20', p.getCameraImage, 32, 24, view, proj, physicsClientId=w.c0)
@@ -254,8 +254,8 @@ def test_wrist_render_passes_only_at_the_robots_fk_pose(w):
 # ----- G10 and G11(ii): planner identity, goal pin, call path ------------
 
 def _bare_planner(cls=None):
-    import pddlstream_planner as pp
-    import streams
+    from planning import pddlstream_planner as pp
+    from planning import streams
     cls = cls or pp.PDDLStreamPlanner
     planner = cls.__new__(cls)
     planner.streams = streams.BoxelStreams.__new__(streams.BoxelStreams)
@@ -276,7 +276,7 @@ def test_goal_and_target_pin_g10(w):
 
 
 def test_planner_subclass_and_domain_swap_trip_g10(w):
-    import pddlstream_planner as pp
+    from planning import pddlstream_planner as pp
 
     class Sub(pp.PDDLStreamPlanner):
         pass
@@ -288,7 +288,7 @@ def test_planner_subclass_and_domain_swap_trip_g10(w):
 
 
 def test_solve_outside_plan_trips_g11(w):
-    import pddlstream_planner as pp
+    from planning import pddlstream_planner as pp
     _trips('G11', pp.solve, None)
 
 

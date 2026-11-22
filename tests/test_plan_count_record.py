@@ -29,8 +29,8 @@ import types
 import typing
 from pathlib import Path
 
-import interior_regions
-from belief import BeliefState
+from world import interior_regions
+from sensing.belief import BeliefState
 
 SOURCE_PATH = Path(__file__).resolve().parents[1] / 'test_full_pipeline.py'
 TARGET = 'green_object'

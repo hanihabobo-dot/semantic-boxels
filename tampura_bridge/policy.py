@@ -32,14 +32,14 @@ from typing import Optional
 import numpy as np
 import pybullet as p
 
-import look_domain
-import m8_domain
-import robot_utils
-import slip_fixes
-import telemetry
+from planning import look_domain
+from planning import m8_domain
+from acting import robot_utils
+from acting import slip_fixes
+from console import telemetry
 import test_full_pipeline
-import world_eye
-from run_logger import RunLogger, ledger_event, parse_pipeline_args
+from world import world_eye
+from console.run_logger import RunLogger, ledger_event, parse_pipeline_args
 from tampura_bridge import camera_overlay, gate_hooks, scoring, task_spec
 from tampura_bridge.env_adapter import TampuraWorldEnv, symbol_names
 

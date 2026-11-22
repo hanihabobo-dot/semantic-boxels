@@ -20,7 +20,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import console_ui                                       # noqa: E402
+from console import console_ui                                       # noqa: E402
 console_ui.install_early(__name__)
 
 from wumpus import narrate                              # noqa: E402
@@ -206,7 +206,7 @@ def main(argv=None):
     ap.add_argument('--log-level', default='smart', choices=['smart', 'normal', 'quiet', 'verbose'])
     ap.add_argument('--log-dir', default='logs')
     a = ap.parse_args(argv)
-    from run_logger import RunLogger
+    from console.run_logger import RunLogger
     world = WumpusWorld.random(a.size, a.seed)
     logger = RunLogger(verbosity=a.log_level, log_dir=a.log_dir)
     code = 1

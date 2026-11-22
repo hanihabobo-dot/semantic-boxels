@@ -60,7 +60,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import episode_metrics  # noqa: E402
 sys.path.append(os.path.dirname(HERE))   # the snapshot's root, last on the path
-import world_counts  # noqa: E402  (TB-22: drops, collisions, clean success)
+from world import world_counts  # noqa: E402  (TB-22: drops, collisions, clean success)
 
 # The metrics summarised per arm (tools/episode_metrics.py's names).
 MEDIANS = ('wall_s', 'planning_s', 'planning_first_s', 'exec_s', 'plan_calls',

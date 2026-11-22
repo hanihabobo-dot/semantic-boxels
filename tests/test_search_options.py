@@ -3,7 +3,7 @@ pddlstream solve() keyword arguments ('off' and 0 leave pddlstream's own),
 and plan() hands them to solve()."""
 import inspect
 
-import pddlstream_planner
+from planning import pddlstream_planner
 
 
 def test_the_settings_become_solve_arguments():

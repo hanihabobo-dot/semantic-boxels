@@ -23,8 +23,8 @@ from collections import Counter
 import numpy as np
 from pybullet_utils import bullet_client
 
-from boxel_env import BoxelTestEnv
-from boxel_types import ObjectInfo
+from world.boxel_env import BoxelTestEnv
+from world.boxel_types import ObjectInfo
 from tampura_bridge import gate_hooks, task_spec
 
 

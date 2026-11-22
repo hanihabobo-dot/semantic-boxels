@@ -29,9 +29,9 @@ import numpy as np
 import pybullet as p
 import pybullet_data
 
-import perception
-import robot_utils
-from boxel_data import BoxelData, BoxelRegistry, BoxelType
+from sensing import perception
+from acting import robot_utils
+from world.boxel_data import BoxelData, BoxelRegistry, BoxelType
 
 from wumpus.incidents import CONTACT_M, DISTURB_M, OFF_PEDESTAL_M
 from wumpus.world import WumpusWorld, cell_ij, cell_name

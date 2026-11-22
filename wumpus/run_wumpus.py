@@ -22,7 +22,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import console_ui                                          # noqa: E402
+from console import console_ui                                          # noqa: E402
 console_ui.install_early(__name__)     # before pybullet's import banner, like the other entry points
 
 from wumpus.world import WumpusWorld, parse_hidden_file   # noqa: E402
@@ -119,7 +119,7 @@ def main(argv=None):
     else:
         world = WumpusWorld.random(a.size, a.seed)
 
-    from run_logger import RunLogger
+    from console.run_logger import RunLogger
     logger = RunLogger(verbosity=a.log_level, log_dir=a.log_dir)
     try:
         return _episode(a, world, logger)

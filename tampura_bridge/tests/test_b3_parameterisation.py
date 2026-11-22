@@ -16,13 +16,13 @@ import pybullet as p
 import pybullet_data
 import pytest
 
-import robot_utils
-import telemetry
+from acting import robot_utils
+from console import telemetry
 import test_full_pipeline as tfp
-import world_eye
-from boxel_env import BoxelTestEnv, random_pairs_scene
-from boxel_types import ObjectInfo
-from run_logger import RunLogger, parse_pipeline_args
+from world import world_eye
+from world.boxel_env import BoxelTestEnv, random_pairs_scene
+from world.boxel_types import ObjectInfo
+from console.run_logger import RunLogger, parse_pipeline_args
 
 THEIR_PANDA = ('/root/tampura-work/tampura_environments/models/srl/'
                'franka_panda/panda.urdf')
@@ -232,7 +232,7 @@ def test_adopted_stop_before_planning(world, tmp_path, monkeypatch):
         return orig_obs()
     monkeypatch.setattr(env, 'get_camera_observation', first_render)
 
-    import pddlstream_planner
+    from planning import pddlstream_planner
     plan_calls = []
     orig_plan = pddlstream_planner.PDDLStreamPlanner.plan
     monkeypatch.setattr(pddlstream_planner.PDDLStreamPlanner, 'plan',

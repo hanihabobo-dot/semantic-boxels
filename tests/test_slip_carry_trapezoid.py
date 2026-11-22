@@ -13,9 +13,9 @@ import types
 import numpy as np
 import pytest
 
-import slip_fixes
+from acting import slip_fixes
 import test_full_pipeline as tfp
-import robot_utils
+from acting import robot_utils
 
 DT = robot_utils.SIM_TIMESTEP
 VMAX = robot_utils.JOINT_VELOCITY_LIMITS

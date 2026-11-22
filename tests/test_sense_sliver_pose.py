@@ -13,12 +13,12 @@ import numpy as np
 import pybullet as p
 import pytest
 
-import execution
-import perception
-import pose_belief
-import slip_fixes
-from belief import BeliefState
-from boxel_data import BoxelData, BoxelRegistry, BoxelType
+from acting import execution
+from sensing import perception
+from sensing import pose_belief
+from acting import slip_fixes
+from sensing.belief import BeliefState
+from world.boxel_data import BoxelData, BoxelRegistry, BoxelType
 
 W, H = 64, 48
 NEAR, FAR = 0.02, 5.0

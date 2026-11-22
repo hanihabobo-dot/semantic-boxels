@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-import eval_runner as er
+from evaluation import eval_runner as er
 
 HOLD = {'scene': 'random-pairs', 'n_occluders': 2, 'seed': 0,
         'goal': 'holding', 'unit_costs': True, 'baseline': 'semantic',

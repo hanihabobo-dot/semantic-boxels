@@ -59,7 +59,7 @@ for _d in (REPO, os.path.join(REPO, 'tools')):
     if _d not in sys.path:
         sys.path.insert(0, _d)
 
-import robot_utils                                   # noqa: E402
+from acting import robot_utils                                   # noqa: E402
 from tampura_bridge import task_spec                 # noqa: E402
 from _probe_b1p2_tampura import (their_empty_world, top_down, ik_any_seed,   # noqa: E402
                                  _coarse_cells, LIFT)
@@ -203,8 +203,8 @@ def main():
     home = np.asarray(DEFAULT_ARM_POS, dtype=float)
     W = {'x': list(task_spec.WINDOW_X), 'y': list(task_spec.WINDOW_Y)}
     cells = _coarse_cells(W)[:a.cells]
-    from boxel_data import BoxelRegistry
-    from streams import BoxelStreams
+    from world.boxel_data import BoxelRegistry
+    from planning.streams import BoxelStreams
     st = BoxelStreams(registry=BoxelRegistry(), robot_id=rb, physics_client=cid)
     rows, t0 = [], time.time()
     for payload in a.payloads.split(','):

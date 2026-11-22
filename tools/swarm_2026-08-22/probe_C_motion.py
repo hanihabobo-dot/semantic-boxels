@@ -37,13 +37,13 @@ sys.path.insert(0, REPO_ROOT)
 import numpy as np
 import pybullet as p
 
-from boxel_env import BoxelTestEnv, random_pairs_scene
-from boxel_data import BoxelRegistry
-from cell_merger import merge_free_space_cells
-from streams import BoxelStreams, Grasp, RobotConfig
-from robot_utils import (JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH, ARM_JOINT_INDICES,
+from world.boxel_env import BoxelTestEnv, random_pairs_scene
+from world.boxel_data import BoxelRegistry
+from world.cell_merger import merge_free_space_cells
+from planning.streams import BoxelStreams, Grasp, RobotConfig
+from acting.robot_utils import (JOINT_LIMITS_LOW, JOINT_LIMITS_HIGH, ARM_JOINT_INDICES,
                          REST_POSES, move_robot_smooth)
-from execution import execute_pick
+from acting.execution import execute_pick
 
 SIM_DT = 1.0 / 240.0          # confirmed: no setTimeStep/setPhysicsEngineParameter
                                # call anywhere in the repo -> pybullet default 240 Hz
@@ -273,7 +273,7 @@ def main():
 
     # Sanity: confirm this transit is indeed RRT territory (matches
     # log lines 139-140 "direct path blocked -> RRT-Connect").
-    from robot_utils import is_path_collision_free
+    from acting.robot_utils import is_path_collision_free
     direct_ok = is_path_collision_free(
         streams.robot_id, q1_runtime.joint_positions, q_place.joint_positions,
         streams.physics_client, n_checks=streams.RRT_EDGE_CHECKS,

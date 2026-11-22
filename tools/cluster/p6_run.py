@@ -152,7 +152,7 @@ def main(argv=None):
     sys.path.insert(0, code)          # this commit's own eval_runner, before anything else
     if TOOLS not in sys.path:
         sys.path.append(TOOLS)
-    import eval_runner as er
+    from evaluation import eval_runner as er
     import memwatch
     import p6_slots as ps
 

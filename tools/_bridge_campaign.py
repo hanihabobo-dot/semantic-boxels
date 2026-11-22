@@ -54,7 +54,7 @@ STOP_RULE_COUNT = 3         # P4.6 HARNESS STOP RULE
 PER_RUN_GATES = ('G13', 'G19')
 HERE = os.path.abspath(__file__)
 sys.path.append(os.path.dirname(os.path.dirname(HERE)))   # the snapshot's root, last
-import world_counts  # noqa: E402  (TB-22: drops, collisions, clean success)
+from world import world_counts  # noqa: E402  (TB-22: drops, collisions, clean success)
 
 # Their RolloutHistory is read in THEIR venv with nothing of ours on the
 # path (G6's convention); the reader prints one JSON line.  The pickle is

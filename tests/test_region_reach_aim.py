@@ -8,9 +8,9 @@ import pybullet as p
 import pybullet_data
 import pytest
 
-import robot_utils
-import streams
-from boxel_data import BoxelData, BoxelRegistry, BoxelType
+from acting import robot_utils
+from planning import streams
+from world.boxel_data import BoxelData, BoxelRegistry, BoxelType
 
 BASE = (-0.4, 0.0)
 TOP_DOWN = np.array(p.getQuaternionFromEuler([0, np.pi, 0]))

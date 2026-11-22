@@ -43,8 +43,8 @@ sys.path.insert(0, _REPO_ROOT)
 import numpy as np
 import pybullet as p
 
-from boxel_env import BoxelTestEnv, random_pairs_scene
-from perception import (DETECTION_MIN_PIXELS, SENSE_MARGINAL_BLOCKED_FRACTION,
+from world.boxel_env import BoxelTestEnv, random_pairs_scene
+from sensing.perception import (DETECTION_MIN_PIXELS, SENSE_MARGINAL_BLOCKED_FRACTION,
                         first_surface_interceptors, sense_ray_slices)
 
 DUMP_PATH = os.path.join(os.path.dirname(__file__), "probe_A_dump.txt")
@@ -455,8 +455,8 @@ def main():
     # F15-diag interceptor name+pixel-count string the real code would
     # have printed, for any state where the guard actually fires.
     # ------------------------------------------------------------------
-    from execution import sense_shadow_from_render
-    from boxel_data import BoxelData, BoxelType
+    from acting.execution import sense_shadow_from_render
+    from world.boxel_data import BoxelData, BoxelType
 
     def real_sense(tag, frag_min, frag_max, occluder_ids, orange_pos=None,
                    hide_orange=False):
@@ -574,7 +574,7 @@ def main():
     # ORIGINAL AABB (boxel_data.json orange_object corners) at every
     # reconstructed state.
     # ------------------------------------------------------------------
-    from perception import first_surface_interceptors as _fsi, sense_ray_slices as _srs
+    from sensing.perception import first_surface_interceptors as _fsi, sense_ray_slices as _srs
     ORANGE_OWN_MIN = np.array([0.13282831545758614, 0.13767994520604762, 0.325])
     ORANGE_OWN_MAX = np.array([0.18704286899097097, 0.19189449873943246, 0.4584766931587999])
 

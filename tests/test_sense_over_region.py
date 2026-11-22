@@ -12,11 +12,11 @@ import pybullet as p
 import pybullet_data
 import pytest
 
-import observe_views
-import pddlstream_planner
-import robot_utils
-import streams
-from boxel_data import BoxelData, BoxelRegistry, BoxelType
+from sensing import observe_views
+from planning import pddlstream_planner
+from acting import robot_utils
+from planning import streams
+from world.boxel_data import BoxelData, BoxelRegistry, BoxelType
 
 BASE = (-0.4, 0.0)
 REGION = (0.20, 0.0)                      # the shadow's centre on the table, 0.6 m out
