@@ -1794,308 +1794,7 @@ def dispatch_step(st, env, i, action):
                 st.setup.target_name, "picked")
 
     elif action_name in ('place', 'place_hiding'):
-        # F31: place_hiding is the same placement at cost 3 (it
-        # would hide a known body from the camera); executed
-        # exactly as place.
-        # PLACE: approach above destination → lower to contact →
-        # open gripper (motor-driven, #P1) → settle → retreat.
-        # After placing, we refresh all object positions from the
-        # simulator so subsequent actions and replans use up-to-date
-        # geometry.
-        obj, boxel_id, grasp, config = params
-        obj_str = str(obj)
-        boxel_id_str = str(boxel_id)
-        print(f"    Placing {obj_str} at {boxel_id_str}...")
-
-        # Resolve destination: prefer boxel center (for free-space
-        # targets); fall back to the object's recorded position
-        # (for placing onto another object's boxel).
-        if boxel_id_str in st.setup.boxel_centers:
-            place_pos = st.setup.boxel_centers[boxel_id_str]
-        elif st.setup.registry.get_boxel(boxel_id_str) is not None:
-            # #P1 WP2b: the registry estimate, not the spawn-time
-            # simulator position boxel_to_pybullet carries.
-            place_pos = np.asarray(
-                st.setup.registry.get_boxel(boxel_id_str).center, dtype=float)
-        else:
-            print(f"    ERROR: Cannot resolve position for boxel '{boxel_id_str}'")
-            dispatch_end('stale_precondition')
-            return True
-        # #P4 B0 gate G4: the commanded destination against the
-        # planned boxel's registry centre.
-        _planned_bd = st.setup.registry.get_boxel(boxel_id_str)
-        ledger_event(
-            'place_target', boxel=boxel_id_str,
-            target_xy=np.asarray(place_pos, dtype=float)[:2],
-            boxel_center_xy=(np.asarray(_planned_bd.center, dtype=float)[:2]
-                             if _planned_bd is not None else None))
-
-        try:
-            # #P1 WP2b: the held object's estimated box (registry,
-            # rigid size; it survives the pick) gives the release
-            # height — no simulator read.
-            _held_bd = st.setup.registry.get_boxel(obj_str)
-            if _held_bd is None:
-                print(f"    ERROR: no registry estimate for the held "
-                      f"{obj_str} — cannot size the release; "
-                      f"replanning (#P1 WP2b)")
-                dispatch_end('stale_precondition')
-                return True
-            place_result = execute_place(
-                st.setup.robot_id, env, obj_str, place_pos, grasp, config,
-                st.hand.held_body_id, st.opts.gui,
-                held_aabb=(np.asarray(_held_bd.min_corner, dtype=float).copy(),
-                           np.asarray(_held_bd.max_corner, dtype=float).copy()))
-        except EmptyHandError:
-            # #P1 F1(c): the held object was not in the gripper at
-            # place entry (transport slip / residual phantom hold).
-            # The audit-#79 fingers_open classifier below would
-            # misfile this as "IK failure, grip intact" and leave
-            # held state set — clear it explicitly, refresh OBJECT
-            # boxels from live PyBullet, and replan.
-            print(f"    empty hand at place entry for {obj_str}; "
-                  f"clearing held state and replanning (#P1 F1).")
-            st.strikes.transit_loss_counts[obj_str] = \
-                st.strikes.transit_loss_counts.get(obj_str, 0) + 1
-            print(f"    transit loss {st.strikes.transit_loss_counts[obj_str]}"
-                  f"/3 for {obj_str} (review-fix strike counter)")
-            if (st.strikes.transit_loss_counts[obj_str] >= 3
-                    and obj_str not in st.strikes.pick_giveup_objects):
-                print(f"    ERROR: {obj_str} lost in transit "
-                      f"{st.strikes.transit_loss_counts[obj_str]} times — "
-                      f"giving up on grasping it (#P1 F2 giveup, "
-                      f"transit edition).")
-                st.strikes.pick_giveup_objects.add(obj_str)
-                st.setup.planner.streams.ungraspable_objects.add(obj_str)
-                st.strikes.pick_giveup_marked_at[obj_str] = st.counts.plan_count
-            st.hand.held_body_id = None
-            st.hand.held_object_boxel_id = None
-            audit_robot_held_state(
-                env, st.setup.robot_id, expected_held_body_id=None,
-                tag=f"post-empty-hand-place:{obj_str}")
-            env.update_object_positions()
-            # M8 A: lost in transit, its pose is unknown.
-            pose_belief.mark_pose_unknown(st.setup.registry.get_boxel(obj_str))
-            # #P1 step (3c): a transit-slipped object that fell
-            # somewhere visible is re-posed by the refresh; one
-            # that fell OFF the table (or out of view) leaves
-            # its believed region rendering empty — retire it
-            # instead of re-picking a stale fiction.
-            _lost = refresh_object_aabbs(env, st.setup.registry, viz=st.setup.viz,
-                                         check_lost=True)
-            if _lost:
-                retire_lost_objects(
-                    _lost, st.setup.registry, st.setup.viz, st.setup.shadows,
-                    st.setup.shadow_occluder_map, st.setup.boxel_centers,
-                    st.setup.occluders, st.setup.belief, env=env)
-            dispatch_end('empty_hand')
-            return True
-        if place_result is None:
-            # audit #79 (#P1 rework) — distinguish IK failure
-            # (fingers still closed on the object, grip intact)
-            # from drop-verify failure (the release path ran:
-            # open_gripper drove the fingers to max open).
-            # Leaving stale held state in the dispatcher would
-            # make the next planner.plan() build init from
-            # (holding ?o) for an object the gripper already
-            # let go of.  The finger joints are the probe now:
-            # ≥ 0.035 per finger means the release ran.
-            fingers_open = all(
-                p.getJointState(st.setup.robot_id, fj)[0] >= 0.035
-                for fj in robot_model().finger_joints)
-            if fingers_open:
-                print(f"    drop-verify failed for {obj_str}; "
-                      f"clearing held state and replanning "
-                      f"(audit #79).")
-                st.hand.held_body_id = None
-                st.hand.held_object_boxel_id = None
-                # Audit #82: before yielding control to the next
-                # planner.plan() with (handempty) in init, log
-                # whether physics agrees.  A ghost cube here means
-                # the next pick starts while we're still friction-
-                # pinned to a previous cube — the "two cubes" bug.
-                audit_robot_held_state(
-                    env, st.setup.robot_id, expected_held_body_id=None,
-                    tag=f"post-clear-place:{obj_str}")
-                # Audit #83: drop-verify failed, so the cube
-                # may have fallen off the gripper somewhere
-                # other than its OBJECT boxel.  Refresh every
-                # OBJECT AABB from live PyBullet so the next
-                # planner.plan() sees the actual location and
-                # doesn't re-pick from the stale boxel in an
-                # infinite cascade.
-                # M8 A: the released object is loose at a pose
-                # nothing observed yet; a complete detection in
-                # the refresh sets it again.
-                pose_belief.mark_pose_unknown(st.setup.registry.get_boxel(obj_str))
-                refresh_object_aabbs(env, st.setup.registry, viz=st.setup.viz)
-            else:
-                print(f"    IK failure during place — replanning (audit #82)")
-            dispatch_end('place_failure')
-            return True
-        st.arm.current_config = place_result
-        st.hand.held_body_id = None
-        st.hand.held_object_boxel_id = None
-        # Review fix: a delivered place proves transport works —
-        # clear the object's transit-loss strikes.
-        st.strikes.transit_loss_counts.pop(obj_str, None)
-
-        # Refresh positions after the physics settle step inside
-        # execute_place — objects may have shifted slightly.
-        env.update_object_positions()
-        # (boxel_to_pybullet carried simulator positions here
-        # until #P1 WP2c; the registry is the pose source now.)
-
-        # --- Re-boxelize free space after placement ---
-        # Re-run the full octree + merge pipeline (same as the
-        # initial scan in Phase 2) using the current obstacles.
-        # The previous approach of splitting the consumed boxel and
-        # trying to merge fragments failed because the CellMerger
-        # requires exact face alignment — split fragments have edges
-        # shaped by the object AABB which never align with the
-        # octree-grid edges of existing free boxels.  Re-running
-        # the octree produces fine cells that merge naturally.
-        consumed_free = st.setup.registry.get_boxel(boxel_id_str)
-        if (consumed_free is not None
-                and consumed_free.boxel_type == BoxelType.FREE_SPACE):
-            placed_name = (st.setup.boxel_to_pybullet[obj_str]['name']
-                           if obj_str in st.setup.boxel_to_pybullet
-                           else obj_str)
-            if placed_name in env.objects:
-                # #P1 step (3): the post-place carve reads the
-                # placed object's RENDER estimate (rigid-size:
-                # per-axis max of known and estimated extents,
-                # XY centred on the estimate, z top-anchored —
-                # the refresh_object_aabbs formula), not
-                # p.getAABB.  When the arm occludes the
-                # just-placed object, its known-size box is
-                # re-posed at the consumed cell (the plan's
-                # intended placement); the next observation
-                # corrects it.
-                _pdets, _, _pbuf, _pseg = env.detect_objects()
-                _det = _pdets.get(placed_name)
-                _prender = (env._depth_buffer_to_meters(_pbuf), _pseg,
-                            *env._view_and_projection_matrices())
-                _frame_cut = False
-                if (_det is not None and st.setup.eye == 'arm'
-                        and not arm_eye.in_frame(
-                            _prender[2], (_det.est_min, _det.est_max))):
-                    # Path 9, --eye arm: a detection the frame cuts
-                    # is a partial view; the placed body's box is
-                    # the commanded placement.
-                    print(f"    [eye] {placed_name} not wholly in the "
-                          f"post-place image: its box is the commanded "
-                          f"placement")
-                    _det = None
-                    _frame_cut = True
-                _commanded = _det is None
-                _prev_bd = st.setup.registry.get_boxel(obj_str)
-                _prev_ext = (
-                    np.asarray(_prev_bd.max_corner, dtype=float)
-                    - np.asarray(_prev_bd.min_corner, dtype=float)
-                    if _prev_bd is not None else None)
-                if _det is not None:
-                    _est_ext = _det.est_max - _det.est_min
-                    _canon = (np.maximum(_prev_ext, _est_ext)
-                              if _prev_ext is not None else _est_ext)
-                    _cxy = (_det.est_min[:2] + _det.est_max[:2]) / 2.0
-                    aabb_max = np.array([_cxy[0] + _canon[0] / 2.0,
-                                         _cxy[1] + _canon[1] / 2.0,
-                                         _det.est_max[2]])
-                    aabb_min = aabb_max - _canon
-                elif _prev_ext is not None:
-                    _cc = np.asarray(consumed_free.center,
-                                     dtype=float)
-                    aabb_min = np.array([
-                        _cc[0] - _prev_ext[0] / 2.0,
-                        _cc[1] - _prev_ext[1] / 2.0,
-                        env.table_surface_height])
-                    aabb_max = aabb_min + _prev_ext
-                    if not _frame_cut:      # a frame cut is not an occlusion
-                        print(f"    [perception] {placed_name} occluded "
-                              f"in the post-place render — carving its "
-                              f"known-size box at the destination cell")
-                else:
-                    aabb_min = aabb_max = None
-                    print(f"    WARNING: {placed_name} has neither "
-                          f"a detection nor a prior boxel — "
-                          f"post-place carve skipped")
-
-            if placed_name in env.objects and aabb_min is not None:
-                st.setup.registry.update_after_place(
-                    free_boxel_id=boxel_id_str,
-                    object_boxel_id=obj_str,
-                    placed_min=aabb_min,
-                    placed_max=aabb_max,
-                    table_surface_height=env.table_surface_height,
-                )
-                # M8 A: an observed placement takes the formula (if
-                # complete); the occluded fallback is the commanded
-                # cell, PLACE_POSE_TOL.
-                _placed_bd = st.setup.registry.get_boxel(obj_str)
-                if _commanded:
-                    pose_belief.mark_pose_commanded(_placed_bd)
-                elif _placed_bd is not None:
-                    pose_belief.record_detection(
-                        _placed_bd, _det, 'eye',
-                        detection_complete(env, aabb_min, aabb_max,
-                                           _det, _prender),
-                        rigid_ext=_prev_ext)
-
-                if st.setup.viz is not None:
-                    st.setup.viz.remove_boxel_viz(boxel_id_str)
-                    moved_bd = st.setup.registry.get_boxel(obj_str)
-                    if moved_bd is not None:
-                        st.setup.viz.remove_boxel_viz(obj_str)
-                        st.setup.viz.draw_boxel_data(moved_bd)
-
-        # Rebuild shadow_occluder_map from current physics state so
-        # blocks_view_at facts reflect the relocated occluder's new
-        # position on the next replan (audit #73, #24 fixed).
-        # Path 9, --eye arm: no census (see Phase 3).
-        if st.setup.eye != 'arm':
-            st.setup.shadow_occluder_map = compute_shadow_blockers(
-                env.camera_position, st.setup.registry, st.setup.shadows, st.setup.occluders, env
-            )
-            st.setup.planner.shadow_occluder_map = st.setup.shadow_occluder_map
-
-        # Record the relocation in belief state so the planner
-        # knows this occluder is no longer blocking its original
-        # shadow — it will emit the correct obj_at_boxel facts.
-        #
-        # NOTE (audit #44 — accepted simplification): Free-space
-        # boxels are now split after placement (above), but shadow
-        # AABBs still describe the pre-relocation geometry.  This
-        # is functionally safe because:
-        # (a) sense_shadow_from_render detects the target by its
-        #     seg-mask id — any grid endpoint whose pixel shows the
-        #     target works regardless of whether the AABB is
-        #     perfectly aligned.
-        # (b) The occluder has been physically removed from the shadow
-        #     region (picked up and placed elsewhere), so rays through
-        #     the old AABB pass through empty space.
-        # (c) shadow_occluder_map is refreshed after every place action
-        #     (audit #73; #24 fixed) so blocks_view_at facts are current.
-        # Full shadow recomputation would require re-running the camera
-        # observation pipeline, which is a separate concern (audit #4).
-        if obj_str in st.setup.boxel_to_pybullet:
-            placed_obj_name = st.setup.boxel_to_pybullet[obj_str]['name']
-            st.setup.belief.mark_occluder_moved(obj_str, boxel_id_str)
-            print(f"    *** {placed_obj_name} PLACED at {boxel_id_str}! ***")
-        else:
-            print(f"    *** {obj_str} PLACED at {boxel_id_str}! ***")
-        # World eye: what the camera (and the user) sees right
-        # after a placement — the moment a placed body can hide
-        # another (F31).
-        world_eye.snapshot(
-            f"plan#{st.counts.plan_count} after place({obj_str}, {boxel_id_str})",
-            registry=st.setup.registry, belief=st.setup.belief, plan_count=st.counts.plan_count,
-            save_image=True, on_relations=st.setup.on_relations,
-            shadow_occluder_map=st.setup.shadow_occluder_map)
-        # #P2 (a): bystanders after the place (the placed object's
-        # own belief was just refreshed by the carve above).
-        if _integrity_after(st, env, f"plan#{st.counts.plan_count} place({obj_str})"):
-            dispatch_end('integrity_replan')
+        if do_place(st, env, params):
             return True
 
     elif action_name == 'stack':
@@ -2105,6 +1804,312 @@ def dispatch_step(st, env, i, action):
     dispatch_end('ok')
     if st.opts.gui:
         env.refresh_debug_camera_views()
+
+
+def do_place(st, env, params):
+    # F31: place_hiding is the same placement at cost 3 (it
+    # would hide a known body from the camera); executed
+    # exactly as place.
+    # PLACE: approach above destination → lower to contact →
+    # open gripper (motor-driven, #P1) → settle → retreat.
+    # After placing, we refresh all object positions from the
+    # simulator so subsequent actions and replans use up-to-date
+    # geometry.
+    obj, boxel_id, grasp, config = params
+    obj_str = str(obj)
+    boxel_id_str = str(boxel_id)
+    print(f"    Placing {obj_str} at {boxel_id_str}...")
+
+    # Resolve destination: prefer boxel center (for free-space
+    # targets); fall back to the object's recorded position
+    # (for placing onto another object's boxel).
+    if boxel_id_str in st.setup.boxel_centers:
+        place_pos = st.setup.boxel_centers[boxel_id_str]
+    elif st.setup.registry.get_boxel(boxel_id_str) is not None:
+        # #P1 WP2b: the registry estimate, not the spawn-time
+        # simulator position boxel_to_pybullet carries.
+        place_pos = np.asarray(
+            st.setup.registry.get_boxel(boxel_id_str).center, dtype=float)
+    else:
+        print(f"    ERROR: Cannot resolve position for boxel '{boxel_id_str}'")
+        dispatch_end('stale_precondition')
+        return True
+    # #P4 B0 gate G4: the commanded destination against the
+    # planned boxel's registry centre.
+    _planned_bd = st.setup.registry.get_boxel(boxel_id_str)
+    ledger_event(
+        'place_target', boxel=boxel_id_str,
+        target_xy=np.asarray(place_pos, dtype=float)[:2],
+        boxel_center_xy=(np.asarray(_planned_bd.center, dtype=float)[:2]
+                         if _planned_bd is not None else None))
+
+    try:
+        # #P1 WP2b: the held object's estimated box (registry,
+        # rigid size; it survives the pick) gives the release
+        # height — no simulator read.
+        _held_bd = st.setup.registry.get_boxel(obj_str)
+        if _held_bd is None:
+            print(f"    ERROR: no registry estimate for the held "
+                  f"{obj_str} — cannot size the release; "
+                  f"replanning (#P1 WP2b)")
+            dispatch_end('stale_precondition')
+            return True
+        place_result = execute_place(
+            st.setup.robot_id, env, obj_str, place_pos, grasp, config,
+            st.hand.held_body_id, st.opts.gui,
+            held_aabb=(np.asarray(_held_bd.min_corner, dtype=float).copy(),
+                       np.asarray(_held_bd.max_corner, dtype=float).copy()))
+    except EmptyHandError:
+        # #P1 F1(c): the held object was not in the gripper at
+        # place entry (transport slip / residual phantom hold).
+        # The audit-#79 fingers_open classifier below would
+        # misfile this as "IK failure, grip intact" and leave
+        # held state set — clear it explicitly, refresh OBJECT
+        # boxels from live PyBullet, and replan.
+        print(f"    empty hand at place entry for {obj_str}; "
+              f"clearing held state and replanning (#P1 F1).")
+        st.strikes.transit_loss_counts[obj_str] = \
+            st.strikes.transit_loss_counts.get(obj_str, 0) + 1
+        print(f"    transit loss {st.strikes.transit_loss_counts[obj_str]}"
+              f"/3 for {obj_str} (review-fix strike counter)")
+        if (st.strikes.transit_loss_counts[obj_str] >= 3
+                and obj_str not in st.strikes.pick_giveup_objects):
+            print(f"    ERROR: {obj_str} lost in transit "
+                  f"{st.strikes.transit_loss_counts[obj_str]} times — "
+                  f"giving up on grasping it (#P1 F2 giveup, "
+                  f"transit edition).")
+            st.strikes.pick_giveup_objects.add(obj_str)
+            st.setup.planner.streams.ungraspable_objects.add(obj_str)
+            st.strikes.pick_giveup_marked_at[obj_str] = st.counts.plan_count
+        st.hand.held_body_id = None
+        st.hand.held_object_boxel_id = None
+        audit_robot_held_state(
+            env, st.setup.robot_id, expected_held_body_id=None,
+            tag=f"post-empty-hand-place:{obj_str}")
+        env.update_object_positions()
+        # M8 A: lost in transit, its pose is unknown.
+        pose_belief.mark_pose_unknown(st.setup.registry.get_boxel(obj_str))
+        # #P1 step (3c): a transit-slipped object that fell
+        # somewhere visible is re-posed by the refresh; one
+        # that fell OFF the table (or out of view) leaves
+        # its believed region rendering empty — retire it
+        # instead of re-picking a stale fiction.
+        _lost = refresh_object_aabbs(env, st.setup.registry, viz=st.setup.viz,
+                                     check_lost=True)
+        if _lost:
+            retire_lost_objects(
+                _lost, st.setup.registry, st.setup.viz, st.setup.shadows,
+                st.setup.shadow_occluder_map, st.setup.boxel_centers,
+                st.setup.occluders, st.setup.belief, env=env)
+        dispatch_end('empty_hand')
+        return True
+    if place_result is None:
+        # audit #79 (#P1 rework) — distinguish IK failure
+        # (fingers still closed on the object, grip intact)
+        # from drop-verify failure (the release path ran:
+        # open_gripper drove the fingers to max open).
+        # Leaving stale held state in the dispatcher would
+        # make the next planner.plan() build init from
+        # (holding ?o) for an object the gripper already
+        # let go of.  The finger joints are the probe now:
+        # ≥ 0.035 per finger means the release ran.
+        fingers_open = all(
+            p.getJointState(st.setup.robot_id, fj)[0] >= 0.035
+            for fj in robot_model().finger_joints)
+        if fingers_open:
+            print(f"    drop-verify failed for {obj_str}; "
+                  f"clearing held state and replanning "
+                  f"(audit #79).")
+            st.hand.held_body_id = None
+            st.hand.held_object_boxel_id = None
+            # Audit #82: before yielding control to the next
+            # planner.plan() with (handempty) in init, log
+            # whether physics agrees.  A ghost cube here means
+            # the next pick starts while we're still friction-
+            # pinned to a previous cube — the "two cubes" bug.
+            audit_robot_held_state(
+                env, st.setup.robot_id, expected_held_body_id=None,
+                tag=f"post-clear-place:{obj_str}")
+            # Audit #83: drop-verify failed, so the cube
+            # may have fallen off the gripper somewhere
+            # other than its OBJECT boxel.  Refresh every
+            # OBJECT AABB from live PyBullet so the next
+            # planner.plan() sees the actual location and
+            # doesn't re-pick from the stale boxel in an
+            # infinite cascade.
+            # M8 A: the released object is loose at a pose
+            # nothing observed yet; a complete detection in
+            # the refresh sets it again.
+            pose_belief.mark_pose_unknown(st.setup.registry.get_boxel(obj_str))
+            refresh_object_aabbs(env, st.setup.registry, viz=st.setup.viz)
+        else:
+            print(f"    IK failure during place — replanning (audit #82)")
+        dispatch_end('place_failure')
+        return True
+    st.arm.current_config = place_result
+    st.hand.held_body_id = None
+    st.hand.held_object_boxel_id = None
+    # Review fix: a delivered place proves transport works —
+    # clear the object's transit-loss strikes.
+    st.strikes.transit_loss_counts.pop(obj_str, None)
+
+    # Refresh positions after the physics settle step inside
+    # execute_place — objects may have shifted slightly.
+    env.update_object_positions()
+    # (boxel_to_pybullet carried simulator positions here
+    # until #P1 WP2c; the registry is the pose source now.)
+
+    # --- Re-boxelize free space after placement ---
+    # Re-run the full octree + merge pipeline (same as the
+    # initial scan in Phase 2) using the current obstacles.
+    # The previous approach of splitting the consumed boxel and
+    # trying to merge fragments failed because the CellMerger
+    # requires exact face alignment — split fragments have edges
+    # shaped by the object AABB which never align with the
+    # octree-grid edges of existing free boxels.  Re-running
+    # the octree produces fine cells that merge naturally.
+    consumed_free = st.setup.registry.get_boxel(boxel_id_str)
+    if (consumed_free is not None
+            and consumed_free.boxel_type == BoxelType.FREE_SPACE):
+        placed_name = (st.setup.boxel_to_pybullet[obj_str]['name']
+                       if obj_str in st.setup.boxel_to_pybullet
+                       else obj_str)
+        if placed_name in env.objects:
+            # #P1 step (3): the post-place carve reads the
+            # placed object's RENDER estimate (rigid-size:
+            # per-axis max of known and estimated extents,
+            # XY centred on the estimate, z top-anchored —
+            # the refresh_object_aabbs formula), not
+            # p.getAABB.  When the arm occludes the
+            # just-placed object, its known-size box is
+            # re-posed at the consumed cell (the plan's
+            # intended placement); the next observation
+            # corrects it.
+            _pdets, _, _pbuf, _pseg = env.detect_objects()
+            _det = _pdets.get(placed_name)
+            _prender = (env._depth_buffer_to_meters(_pbuf), _pseg,
+                        *env._view_and_projection_matrices())
+            _frame_cut = False
+            if (_det is not None and st.setup.eye == 'arm'
+                    and not arm_eye.in_frame(
+                        _prender[2], (_det.est_min, _det.est_max))):
+                # Path 9, --eye arm: a detection the frame cuts
+                # is a partial view; the placed body's box is
+                # the commanded placement.
+                print(f"    [eye] {placed_name} not wholly in the "
+                      f"post-place image: its box is the commanded "
+                      f"placement")
+                _det = None
+                _frame_cut = True
+            _commanded = _det is None
+            _prev_bd = st.setup.registry.get_boxel(obj_str)
+            _prev_ext = (
+                np.asarray(_prev_bd.max_corner, dtype=float)
+                - np.asarray(_prev_bd.min_corner, dtype=float)
+                if _prev_bd is not None else None)
+            if _det is not None:
+                _est_ext = _det.est_max - _det.est_min
+                _canon = (np.maximum(_prev_ext, _est_ext)
+                          if _prev_ext is not None else _est_ext)
+                _cxy = (_det.est_min[:2] + _det.est_max[:2]) / 2.0
+                aabb_max = np.array([_cxy[0] + _canon[0] / 2.0,
+                                     _cxy[1] + _canon[1] / 2.0,
+                                     _det.est_max[2]])
+                aabb_min = aabb_max - _canon
+            elif _prev_ext is not None:
+                _cc = np.asarray(consumed_free.center,
+                                 dtype=float)
+                aabb_min = np.array([
+                    _cc[0] - _prev_ext[0] / 2.0,
+                    _cc[1] - _prev_ext[1] / 2.0,
+                    env.table_surface_height])
+                aabb_max = aabb_min + _prev_ext
+                if not _frame_cut:      # a frame cut is not an occlusion
+                    print(f"    [perception] {placed_name} occluded "
+                          f"in the post-place render — carving its "
+                          f"known-size box at the destination cell")
+            else:
+                aabb_min = aabb_max = None
+                print(f"    WARNING: {placed_name} has neither "
+                      f"a detection nor a prior boxel — "
+                      f"post-place carve skipped")
+
+        if placed_name in env.objects and aabb_min is not None:
+            st.setup.registry.update_after_place(
+                free_boxel_id=boxel_id_str,
+                object_boxel_id=obj_str,
+                placed_min=aabb_min,
+                placed_max=aabb_max,
+                table_surface_height=env.table_surface_height,
+            )
+            # M8 A: an observed placement takes the formula (if
+            # complete); the occluded fallback is the commanded
+            # cell, PLACE_POSE_TOL.
+            _placed_bd = st.setup.registry.get_boxel(obj_str)
+            if _commanded:
+                pose_belief.mark_pose_commanded(_placed_bd)
+            elif _placed_bd is not None:
+                pose_belief.record_detection(
+                    _placed_bd, _det, 'eye',
+                    detection_complete(env, aabb_min, aabb_max,
+                                       _det, _prender),
+                    rigid_ext=_prev_ext)
+
+            if st.setup.viz is not None:
+                st.setup.viz.remove_boxel_viz(boxel_id_str)
+                moved_bd = st.setup.registry.get_boxel(obj_str)
+                if moved_bd is not None:
+                    st.setup.viz.remove_boxel_viz(obj_str)
+                    st.setup.viz.draw_boxel_data(moved_bd)
+
+    # Rebuild shadow_occluder_map from current physics state so
+    # blocks_view_at facts reflect the relocated occluder's new
+    # position on the next replan (audit #73, #24 fixed).
+    # Path 9, --eye arm: no census (see Phase 3).
+    if st.setup.eye != 'arm':
+        st.setup.shadow_occluder_map = compute_shadow_blockers(
+            env.camera_position, st.setup.registry, st.setup.shadows, st.setup.occluders, env
+        )
+        st.setup.planner.shadow_occluder_map = st.setup.shadow_occluder_map
+
+    # Record the relocation in belief state so the planner
+    # knows this occluder is no longer blocking its original
+    # shadow — it will emit the correct obj_at_boxel facts.
+    #
+    # NOTE (audit #44 — accepted simplification): Free-space
+    # boxels are now split after placement (above), but shadow
+    # AABBs still describe the pre-relocation geometry.  This
+    # is functionally safe because:
+    # (a) sense_shadow_from_render detects the target by its
+    #     seg-mask id — any grid endpoint whose pixel shows the
+    #     target works regardless of whether the AABB is
+    #     perfectly aligned.
+    # (b) The occluder has been physically removed from the shadow
+    #     region (picked up and placed elsewhere), so rays through
+    #     the old AABB pass through empty space.
+    # (c) shadow_occluder_map is refreshed after every place action
+    #     (audit #73; #24 fixed) so blocks_view_at facts are current.
+    # Full shadow recomputation would require re-running the camera
+    # observation pipeline, which is a separate concern (audit #4).
+    if obj_str in st.setup.boxel_to_pybullet:
+        placed_obj_name = st.setup.boxel_to_pybullet[obj_str]['name']
+        st.setup.belief.mark_occluder_moved(obj_str, boxel_id_str)
+        print(f"    *** {placed_obj_name} PLACED at {boxel_id_str}! ***")
+    else:
+        print(f"    *** {obj_str} PLACED at {boxel_id_str}! ***")
+    # World eye: what the camera (and the user) sees right
+    # after a placement — the moment a placed body can hide
+    # another (F31).
+    world_eye.snapshot(
+        f"plan#{st.counts.plan_count} after place({obj_str}, {boxel_id_str})",
+        registry=st.setup.registry, belief=st.setup.belief, plan_count=st.counts.plan_count,
+        save_image=True, on_relations=st.setup.on_relations,
+        shadow_occluder_map=st.setup.shadow_occluder_map)
+    # #P2 (a): bystanders after the place (the placed object's
+    # own belief was just refreshed by the carve above).
+    if _integrity_after(st, env, f"plan#{st.counts.plan_count} place({obj_str})"):
+        dispatch_end('integrity_replan')
+        return True
 
 
 def do_stack(st, env, params):
