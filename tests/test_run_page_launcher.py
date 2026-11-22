@@ -190,6 +190,29 @@ def test_the_ports_are_asked_no_more_once_the_window_has_stood_without_a_page():
     assert '$pageWord = $null' in loop[stop:loop.index('if ($pageWord) {')]
 
 
+def test_nothing_is_written_to_the_console_while_the_run_draws_in_it():
+    """The run's console redraws its live rows ten times a second by going up
+    from where the cursor stands and clearing to the end of the screen
+    (console_screen.py).  A line the launcher writes in between is wiped at
+    once and leaves stale rows of the block above it (review r4, post-review
+    finding A).  So the launcher's loop writes nothing: what it has to say
+    there (the page was not held, the camera window ended at once) is kept
+    and said in the finally, after the run."""
+    ps = RUN_PS1.read_text(encoding='utf-8')
+    start = ps.index('while (-not $p.HasExited) {')
+    loop = ps[start:ps.index('} finally {', start)]
+    for writer in ('Write-Host', '[Console]::', 'Write-Output', 'Write-Warning', 'Write-Error'):
+        assert writer not in loop, writer
+    assert loop.count('$late.Add(') == 2
+    assert 'the camera window ended at once' in loop and 'the page was not held against the window' in loop
+    closing = ps[ps.index('} finally {', start):ps.index('$code = $p.ExitCode', start)]
+    assert 'foreach ($line in $late) { [Console]::Out.WriteLine(' in closing
+    # the console's way of redrawing, which this rests on
+    screen = (ROOT / 'console' / 'console_screen.py').read_text(encoding='utf-8')
+    assert "\\033[{live['drawn']}A\\033[1G\\033[J" in screen
+    assert re.search(r'^FRAME_S = 0\.1\b', screen, re.M)
+
+
 def _function(name):
     """One function of run.ps1 as text, with the checkout's folder in place of
     $PSScriptRoot (which a function typed into a shell does not have)."""

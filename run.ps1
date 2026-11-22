@@ -397,10 +397,11 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
             Start-Sleep -Milliseconds 700
             if ($viewerAt -and ((Get-Date) - $viewerAt).TotalSeconds -ge 6) {
                 # a window that died after it started would otherwise be missing without a word
+                # (said after the run, see $late)
                 $viewerAt = $null
                 if ($viewer.HasExited) {
-                    Write-Host ("run: the camera window ended at once (exit code $($viewer.ExitCode)); to see why, run: " +
-                                "pwsh -NoProfile -File tools/camera_view.ps1 -Dir '$($r.Cameras)'") -ForegroundColor Yellow
+                    $late.Add("run: the camera window ended at once (exit code $($viewer.ExitCode)); to see why, run: " +
+                              "pwsh -NoProfile -File tools/camera_view.ps1 -Dir '$($r.Cameras)'")
                 }
             }
             if ($holder -and $holder.HasExited) {
