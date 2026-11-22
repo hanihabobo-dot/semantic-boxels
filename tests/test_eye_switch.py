@@ -326,13 +326,14 @@ def _holder(node):
 
 
 def _runs_before_in_main(first, second):
-    """main() calls both functions once, each as a statement of its own body
+    """Both functions are called once in the whole tree MAIN (main() and the
+    functions cut out of it), each by a statement of main()'s own body
     (under no branch and no loop), the first before the second."""
     (main,) = [f for f in MAIN.body if f.name == 'main']
     at = {s.value.func.id: i for i, s in enumerate(main.body)
           if isinstance(s, ast.Expr) and isinstance(s.value, ast.Call)
           and isinstance(s.value.func, ast.Name)}
-    called = [c.func.id for c in ast.walk(main)
+    called = [c.func.id for c in ast.walk(MAIN)
               if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)]
     return (called.count(first.name) == called.count(second.name) == 1
             and first.name in at and second.name in at
