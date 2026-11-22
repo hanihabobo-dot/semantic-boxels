@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 
 import robot_utils  # noqa: E402
 import run_logger  # noqa: E402
-from test_eye_switch import MAIN, _assigns, _calls, _under  # noqa: E402
+from test_eye_switch import MAIN, _assigns, _calls, _holder, _under  # noqa: E402
 from test_look_correspondence import (_dry, _home, _planner, needs_pwsh,  # noqa: E402
                                       world)  # noqa: F401  (fixture)
 
@@ -55,34 +55,72 @@ def _test_holding(tree, call):
 
 
 # ----- 1. main() --------------------------------------------------------------------
+#
+# MAIN is main() with the functions cut out of it (test_eye_switch); the eye
+# is the episode state's st.setup.eye.  Where a test compared the lines of
+# statements that now stand in two functions, the lines are compared inside
+# one function and the order of the functions is read from main()'s body.
+
+def _main_statement_reaching(fn):
+    """The index of the one statement of main()'s body that reaches the
+    function: it calls it, or it calls a function cut out of main() that
+    does.  Two functions reached by two statements run in the order of the
+    statements, the first time each runs."""
+    by_name = {f.name: f for f in MAIN.body}
+
+    def reached(node, seen):
+        for c in ast.walk(node):
+            if isinstance(c, ast.Call) and isinstance(c.func, ast.Name) \
+                    and c.func.id in by_name and c.func.id not in seen:
+                seen.add(c.func.id)
+                reached(by_name[c.func.id], seen)
+        return seen
+
+    (at,) = [i for i, s in enumerate(by_name['main'].body) if fn.name in reached(s, set())]
+    return at
+
 
 def test_main_follows_the_arm_from_the_start_view_on():
-    arm = _under(MAIN, "eye == 'arm'")
+    arm = _under(MAIN, "st.setup.eye == 'arm'")
     (follow,) = _calls(MAIN, 'follow_arm')
     (start,) = _calls(MAIN, 'use_start_view')
     (after,) = _calls(MAIN, 'after_settle')
     (first,) = _calls(MAIN, 'get_camera_observation')
     assert id(follow) in arm
     assert [ast.unparse(a) for a in follow.args] == ['env'] and not follow.keywords
-    assert start.lineno < follow.lineno < after.lineno < first.lineno
+    # The start view, the follow and the settle hook stand in one function,
+    # in that order; the first render's function runs after it in main().
+    assert _holder(start) is _holder(follow) is _holder(after)
+    assert start.lineno < follow.lineno < after.lineno
+    assert _main_statement_reaching(_holder(after)) < _main_statement_reaching(_holder(first))
 
 
 def test_with_the_arm_camera_the_planner_gets_no_camera():
     (call,) = _calls(MAIN, 'PDDLStreamPlanner')
     assert {k.arg: ast.unparse(k.value) for k in call.keywords}['camera_pos'] == \
         'planner_camera_pos'
-    arm = _under(MAIN, "eye == 'arm'")
+    arm = _under(MAIN, "st.setup.eye == 'arm'")
     got = {ast.unparse(a.value): id(a) in arm for a in _assigns(MAIN, 'planner_camera_pos')}
     assert got == {'env.camera_position': False, 'None': True}
+    # planner_camera_pos is a local name: its assignments stand in the
+    # function that makes the planner.
+    assert all(_holder(a) is _holder(call) for a in _assigns(MAIN, 'planner_camera_pos'))
 
 
 def test_main_runs_no_blocker_census_with_the_arm_camera():
-    fixed = _under(MAIN, "eye != 'arm'")
+    fixed = _under(MAIN, "st.setup.eye != 'arm'")
     calls = _calls(MAIN, 'compute_shadow_blockers')
     assert len(calls) == 2 and all(id(c) in fixed for c in calls)
-    (empty,) = [a for a in _assigns(MAIN, 'shadow_occluder_map')
+    (empty,) = [a for a in _assigns(MAIN, 'st.setup.shadow_occluder_map')
                 if ast.unparse(a.value) == '{}']
-    assert empty.lineno < min(c.lineno for c in calls)
+    # The empty map is set before either census: before the one in its own
+    # function by its line, before the other because main() reaches that
+    # one's function by a later statement.
+    here = [c for c in calls if _holder(c) is _holder(empty)]
+    later = [c for c in calls if _holder(c) is not _holder(empty)]
+    assert all(empty.lineno < c.lineno for c in here)
+    assert all(_main_statement_reaching(_holder(empty)) < _main_statement_reaching(_holder(c))
+               for c in later)
 
 
 def test_main_reads_the_frame_only_after_the_arm_switch_in_the_same_test():
@@ -94,7 +132,7 @@ def test_main_reads_the_frame_only_after_the_arm_switch_in_the_same_test():
         parts = [ast.unparse(v) for v in test.values]
         holds = [i for i, v in enumerate(test.values)
                  if id(call) in {id(n) for n in ast.walk(v)}]
-        assert parts.index("eye == 'arm'") < holds[0]
+        assert parts.index("st.setup.eye == 'arm'") < holds[0]
 
 
 # ----- 2. execution.py ----------------------------------------------------------------
