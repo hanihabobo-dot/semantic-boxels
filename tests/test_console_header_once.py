@@ -8,7 +8,9 @@ split it in two and lacked the slip-fixes text, so every run printed
 The check reads the source (ast), so it starts no episode: one
 console_ui.header call in the whole module, inside main(), on main's
 straight path (no loop and no branch around it), and it carries the
-slip-fixes text.
+slip-fixes text.  Since main() was cut into functions the "one call" is
+also counted over the files the module imports names from (world_setup.py,
+planner_setup.py and episode_goals.py hold functions cut out of main()).
 """
 import ast
 from pathlib import Path
@@ -37,9 +39,33 @@ def _main():
     return mains[0]
 
 
+def _module_and_the_files_it_imports_from():
+    """The module's tree and, by file name, the tree of every file beside it
+    that it imports names from (``from X import ...``): the rule of the
+    other tests' tree of main() and the functions cut out of it, without the
+    limit to functions that take the episode state, because this test
+    counted over the whole module."""
+    trees = {'test_full_pipeline.py': TREE}
+    for n in TREE.body:
+        if isinstance(n, ast.ImportFrom) and (ROOT / f'{n.module}.py').exists():
+            trees[f'{n.module}.py'] = ast.parse(
+                (ROOT / f'{n.module}.py').read_text(encoding='utf-8'))
+    return trees
+
+
 def test_one_header_call_in_the_module():
     calls = _header_calls(TREE)
     assert len(calls) == 1, [c.lineno for c in calls]
+    # main() was cut into functions and some of them stand in world_setup.py,
+    # planner_setup.py and episode_goals.py, outside the module: a second
+    # header call there would print the header twice all the same.  The
+    # count runs over the module and every file it imports names from, the
+    # three among them.
+    trees = _module_and_the_files_it_imports_from()
+    assert {'world_setup.py', 'planner_setup.py', 'episode_goals.py'} <= set(trees)
+    everywhere = [(name, c.lineno) for name, tree in trees.items()
+                  for c in _header_calls(tree)]
+    assert len(everywhere) == 1, everywhere
 
 
 def test_the_header_call_is_a_statement_of_main_itself():
