@@ -1588,19 +1588,3 @@ class PDDLStreamPlanner:
             actions.append((action_name,) + tuple(action_args))
 
         return actions
-
-
-def test_planner():
-    """
-    Standalone planner test — requires a PyBullet environment with a loaded
-    robot.  Run test_full_pipeline.py instead for the full integration test.
-
-    Heuristic IK fallback has been removed (audit #80); a real robot_id
-    is now mandatory for IK-dependent streams.
-    """
-    print("="*60)
-    print("Testing PDDLStream Planner")
-    print("="*60)
-    print("ERROR: Standalone planner test requires a loaded PyBullet robot.")
-    print("       Run test_full_pipeline.py for full integration testing.")
-    return False
