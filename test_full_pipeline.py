@@ -1731,7 +1731,7 @@ def do_move(st, env, i, params):
             - np.asarray(traj.waypoints[0].joint_positions)))
         if diff > 1e-2 or _cargo:
             if _cargo:
-                q1_runtime = _readback_config(st, env, 
+                q1_runtime = _readback_config(st, env,
                     st.arm.current_config.joint_positions,
                     f"{st.arm.current_config.name}_runtime")
                 if not q1_runtime.held_body_ids:
@@ -1815,7 +1815,7 @@ def do_move(st, env, i, params):
                     or i == len(st.round.plan) - 1):
                 st.arm.home_misses += 1
             st.arm.readback_count += 1
-            st.arm.current_config = _readback_config(st, env, 
+            st.arm.current_config = _readback_config(st, env,
                 actual_joints, f"q_readback_{st.arm.readback_count}")
         ledger_event('at_home_test', passed=st.arm.at_home_ok,
                      max_abs_err=_max_err, hold_steps=_hold_steps,
@@ -1880,7 +1880,7 @@ def do_move(st, env, i, params):
         # The readback just taken carried the lost body as
         # cargo; the same readback without it (the hand is
         # empty now) starts the next plan.
-        st.arm.current_config = _readback_config(st, env, 
+        st.arm.current_config = _readback_config(st, env,
             st.arm.current_config.joint_positions, st.arm.current_config.name)
         audit_robot_held_state(
             env, st.setup.robot_id, expected_held_body_id=None,
@@ -2232,7 +2232,7 @@ def do_pick(st, env, params):
     # #P4 B3(d), D7 (iv): the cargo offset in xy is the plan's
     # grasp; the post-pick readback carries the held body.
     st.hand.held_grasp_xy = np.array(grasp.position[:2], dtype=float)
-    st.arm.current_config = _readback_config(st, env, 
+    st.arm.current_config = _readback_config(st, env,
         st.arm.current_config.joint_positions, st.arm.current_config.name)
     # #P1 F2: a successful pick proves the object is
     # graspable from its current pose — reset its strike
