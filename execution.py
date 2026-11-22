@@ -3742,6 +3742,30 @@ def handle_sense_action(
         print(f"    -> REPLANNING with updated belief...")
         return ActionResult(continue_=False, reason=f"sense_{sense_outcome}")
 
+    _sense_still_blocked(
+        env=env, registry=registry, belief=belief, viz=viz, robot_id=robot_id,
+        shadows=shadows, occluders=occluders,
+        shadow_occluder_map=shadow_occluder_map, blocked_counts=blocked_counts,
+        blocked_giveup_shadows=blocked_giveup_shadows,
+        boxel_centers=boxel_centers, boxel_to_pybullet=boxel_to_pybullet,
+        shadow_id=shadow_id, shadow_boxel=shadow_boxel,
+        target_pybullet_id=target_pybullet_id,
+        sense_support_ids=sense_support_ids, sense_detections=sense_detections,
+        sense_seg=sense_seg, sense_depth_m=sense_depth_m,
+        sense_view=sense_view, sense_proj=sense_proj,
+        _register_new_detections=_register_new_detections,
+        blocked_fraction=blocked_fraction, blocked_bbox=blocked_bbox)
+    return ActionResult(continue_=False, reason="sense_still_blocked")
+
+
+def _sense_still_blocked(
+    *,
+    env, registry, belief, viz, robot_id, shadows, occluders,
+    shadow_occluder_map, blocked_counts, blocked_giveup_shadows, boxel_centers,
+    boxel_to_pybullet, shadow_id, shadow_boxel, target_pybullet_id,
+    sense_support_ids, sense_detections, sense_seg, sense_depth_m, sense_view,
+    sense_proj, _register_new_detections, blocked_fraction, blocked_bbox,
+):
     # Occluder (or robot arm) still blocks the view.
     # Track repeated failures; after 3 attempts, assume
     # the shadow is unreachable and give up on it.
@@ -3802,4 +3826,3 @@ def handle_sense_action(
                             occluders, belief,
                             render=(sense_depth_m, sense_seg,
                                     sense_view, sense_proj))
-    return ActionResult(continue_=False, reason="sense_still_blocked")
