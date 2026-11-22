@@ -839,6 +839,331 @@ def _loop_done(st) -> bool:
     return goal_satisfied(st.setup.goal, st.setup.on_relations)
 
 
+def plan_or_stop(st, env, execution):
+    st.counts.plan_count += 1
+    st.strikes.disturbed_counts.clear()   # the #P2 disturbance cap is per plan
+    # M7 (Hani, 2026-11-20): a region suspended at the F9 give-up is
+    # offered again once its time is up (with --m7 off nothing is
+    # suspended).
+    with provenance('suspension_over'):
+        for _sid in st.setup.belief.release_suspended(time.perf_counter()):
+            print(f"  [M7] {_sid} is back in the search: its "
+                  f"{execution.M7_SUSPEND_S:.0f} s suspension at the F9 "
+                  f"give-up is over")
+    unknown_shadows = st.setup.belief.get_unknown_shadows()
+    # #P1 F15: parked-unresolved fragments are withheld from the
+    # planner exactly like eliminated ones (or the episode loops on
+    # them forever), but the BELIEF keeps them distinct — they were
+    # never observed empty, and the run outcome discloses them.
+    known_empty = (st.setup.belief.get_known_empty_shadows()
+                   + st.setup.belief.get_parked_shadows())
+    # BF#65 (d) (no-op with --interior-regions off): while the target is
+    # recorded as seen under a cover, the planner is offered that
+    # cover's interior region alone; the other unknown regions are
+    # withheld like the parked ones (the belief keeps them unknown).
+    st.round._withheld = interior_regions.withheld(
+        st.setup.registry, st.setup.belief, st.setup.planner_target_objects)
+    known_empty = known_empty + st.round._withheld
+
+    # Giveup parole (2026-08-21): see the pick_giveup_marked_at
+    # comment above.  Runs before planner.plan() so the paroled
+    # object's grasps are offered again this replan.
+    for _obj, _at in list(st.strikes.pick_giveup_marked_at.items()):
+        if (st.counts.plan_count - _at >= 4
+                and _obj in st.strikes.pick_giveup_objects
+                and st.strikes.pick_parole_counts.get(_obj, 0) < 2):
+            st.strikes.pick_parole_counts[_obj] = \
+                st.strikes.pick_parole_counts.get(_obj, 0) + 1
+            st.strikes.pick_giveup_objects.discard(_obj)
+            st.setup.planner.streams.ungraspable_objects.discard(_obj)
+            st.strikes.pick_fail_counts.pop(_obj, None)
+            st.strikes.transit_loss_counts.pop(_obj, None)
+            st.strikes.pick_giveup_marked_at.pop(_obj, None)
+            print(f"  giveup parole "
+                  f"{st.strikes.pick_parole_counts[_obj]}/2: {_obj} re-enters "
+                  f"the grasp stream after 4 replans (#P1 "
+                  f"non-absorbing giveup)")
+
+    # M8 C2: an object's observe strikes, removed look pairs and
+    # parking reset once it is re-registered or a later detection
+    # re-poses it (its box moved by more than 1 mm).
+    if st.setup.planner.m8_views is not None:
+        for _obj, (_n, _box, _bd0) in list(st.counts.observe_strikes.items()):
+            _bd = st.setup.registry.get_boxel(_obj)
+            if (_bd is None or _bd is not _bd0 or not np.allclose(
+                    np.concatenate([_bd.min_corner, _bd.max_corner]), _box,
+                    atol=1e-3)):
+                st.counts.observe_strikes.pop(_obj)
+                st.setup.planner.m8_views.parked.discard(_obj)
+                st.setup.planner.m8_views.removed = {r for r in st.setup.planner.m8_views.removed
+                                            if r[0] != _obj}
+                if getattr(st.setup.planner, 'look_views', None) is not None:
+                    st.setup.planner.look_views.forget(_obj)
+                print(f"  [M8] observe strikes of {_obj} reset (re-registered "
+                      f"or re-posed)")
+
+    print(f"\n=== PLAN #{st.counts.plan_count} ===")
+    if st.opts.goal_kind == 'find-and-tray-stack':
+        print(f"Tray-stack progress: {st.setup.on_relations} "
+              f"(unknown shadows: {len(unknown_shadows)})")
+    elif st.opts.goal_kind == 'holding':
+        print(f"Unknown shadows remaining: {len(unknown_shadows)}")
+        # #P1 F20 (2026-09-18): "nothing left to sense" is not
+        # "target not found" when the target's location IS known —
+        # a sense observation may have registered it in plain view
+        # (register_new_detections), in which case the planner can
+        # ground a direct pick from its OBJECT boxel.  belief.
+        # target_found_in stays None until the pick sets it, so the
+        # loop keeps going on the registry, not on the belief flag.
+        _target_bd = st.setup.registry.get_boxel(st.setup.target_name)
+        if not unknown_shadows and _target_bd is not None:
+            _tc = _target_bd.center
+            print(f"  no unknown shadows remain, but {st.setup.target_name} is "
+                  f"registered at [{_tc[0]:.3f},{_tc[1]:.3f},"
+                  f"{_tc[2]:.3f}] (seen by an observation) — "
+                  f"planning a direct pick (#P1 F20)")
+        elif not unknown_shadows and st.setup.belief.get_suspended_shadows():
+            # M7 (Hani, 2026-11-20): nothing is left to search but
+            # regions suspended at the F9 give-up.  The episode fails
+            # here, without a planner call, and says why.
+            st.ending.exit_reason = "rediscovery_giveup"
+            print(f"ERROR: No unknown shadows remain; "
+                  f"{sorted(st.setup.belief.get_suspended_shadows())} suspended at "
+                  f"the F9 give-up (M7), not searched; the target may "
+                  f"be inside.")
+            return True
+        elif not unknown_shadows:
+            # Audit #21: 'all_searched' is the loop-termination tag,
+            # but with the still_blocked 3-strike give-up some of
+            # the shadows below were never observed empty.  The
+            # final FAILED message classifies on blocked_giveup_shadows.
+            st.ending.exit_reason = "all_searched"
+            if st.strikes.blocked_giveup_shadows:
+                print(f"ERROR: No unknown shadows remain — but "
+                      f"{len(st.strikes.blocked_giveup_shadows)} of "
+                      f"{len(st.setup.shadows)} were given up after repeated "
+                      f"still_blocked outcomes (audit #21), not "
+                      f"observed empty.  Target may still be hiding "
+                      f"in: {sorted(st.strikes.blocked_giveup_shadows)}")
+            else:
+                print("ERROR: Searched all shadows but target not found!")
+            return True
+    else:
+        print(f"Stack progress: {st.setup.on_relations} (goal {st.setup.goal})")
+
+    # --- Held-object handling (audit #58) -----------------------------
+    # Pre-#58: any held object was unconditionally dropped here so the
+    # planner's _build_init could rely on (handempty).  That cost ~4
+    # wasted actions per re-grasp cycle whenever the action loop broke
+    # while holding (e.g. sense returned empty after pick).
+    # Post-#58: pass held_obj=name into planner.plan() so init emits
+    # (holding ?o) and the next plan continues mid-grasp.  release_held_-
+    # object_in_place stays as a SAFETY NET for the case where the
+    # held cube blocks all plans (planner returns None below — see
+    # the safety-net branch after planner.plan).
+    st.round.held_obj_name: Optional[str] = None
+    if st.hand.held_body_id is not None:
+        st.round.held_obj_name = st.setup.body_id_to_name.get(st.hand.held_body_id)
+
+    # Ensure the free-space partition is consistent before the planner
+    # reads the registry (audit #25).  After a place action,
+    # update_after_place sets registry.dirty because the consumed
+    # free boxel is gone but no replacement exists yet.  If a sense
+    # action already triggered reboxelization (clearing the flag),
+    # this is a no-op — avoiding the double octree+merge cost.
+    if st.setup.registry.dirty:
+        reboxelize_free_space(st.setup.registry, env, st.setup.boxel_centers, st.setup.viz, st.opts.show_free)
+    # Audit #73 step 2(d) plot 11: snapshot boxel counts post-
+    # reboxelize so each entry reflects what THIS planner.plan() will
+    # see (not the stale pre-reboxelize partition).
+    try:
+        st.counts.boxel_counts_per_replan.append({
+            "plan_index": st.counts.plan_count,
+            "n_object_boxels": len(st.setup.registry.get_object_boxels()),
+            "n_shadow_boxels": len(st.setup.registry.get_shadow_boxels()),
+            "n_free_space_boxels": len(st.setup.registry.get_free_space_boxels()),
+        })
+    except Exception as e:
+        print(f"  WARNING: could not snapshot per-replan boxel counts: {e}")
+
+    # Audit #46: mirror the live GUI scene into the plan client and let
+    # planner.plan() run unwrapped.  All IK/RRT/collision-check calls
+    # inside the streams target env.plan_client_id (a DIRECT-mode world),
+    # so the visible arm is no longer teleported and the OpenGL window
+    # stays interactive throughout planning.  The old outer
+    # `with RenderingLock(env.client_id):` block was the source of the
+    # GUI freeze — it's no longer needed.
+    # #P1 WP2c: the collision world is posed from the belief.
+    env.sync_to_plan_client(held_body_id=st.hand.held_body_id, registry=st.setup.registry)
+    plan_t0 = time.perf_counter()
+    st.round.plan = st.setup.planner.plan(
+        target_objects=st.setup.planner_target_objects,
+        goal=st.setup.goal,
+        current_config=st.arm.current_config,
+        known_empty_shadows=known_empty,
+        moved_occluders=dict(st.setup.belief.occluders_moved),
+        max_time=args.max_plan_time,  # audit #76 — CLI plumb (default
+                          # 1800.0, the audit #54 follow-up bump from
+                          # 120 s).  Lower values fail fast for
+                          # diagnostic runs; the default keeps the
+                          # 30-min budget that lets the sampler retry
+                          # many skeletons / stream samples.
+        verbose=(args.log_level == 'verbose'),  # audit #76 plumb
+        visible_target_locations=st.setup.visible_target_locations,
+        # on/clear facts only emitted into init when stackable
+        # objects is supplied — holding-goal runs pay nothing.
+        # find-and-tray-stack (audit #49) reuses the same plumbing
+        # because its goal AST is built from (on ?o ?x) clauses.
+        on_relations=(st.setup.on_relations
+                      if st.opts.goal_kind in ('stack', 'find-and-tray-stack')
+                      else None),
+        stackable_objects=(st.setup.stack_target_objects
+                           if st.opts.goal_kind in ('stack',
+                                            'find-and-tray-stack')
+                           else None),
+        unit_costs=st.opts.unit_costs,
+        planner=args.planner,    # F30: search weight is a CLI choice
+        held_obj=st.round.held_obj_name,  # audit #58 — preserve grasp across replans
+    )
+    plan_dt = time.perf_counter() - plan_t0
+    if st.setup.planner.last_m8_stats:
+        st.counts.m8_per_plan.append(dict(st.setup.planner.last_m8_stats, plan=st.counts.plan_count))
+    if st.setup.planner.last_look_stats:
+        st.counts.look_per_plan.append(dict(st.setup.planner.last_look_stats, plan=st.counts.plan_count))
+    # #P4 B0: every plan() call and its result go to the run ledger
+    # (gates G3, G10, G11).
+    ledger_event('plan', plan_id=st.counts.plan_count, call='mission', goal=st.setup.goal,
+                 targets=list(st.setup.planner_target_objects),
+                 actions=ledger_plan(st.round.plan),
+                 plan_obj=(id(st.round.plan) if st.round.plan is not None else None),
+                 plan_time_s=plan_dt)
+    world_eye.snapshot(
+        f"plan#{st.counts.plan_count} planned ({'no plan' if st.round.plan is None else str(len(st.round.plan)) + ' actions'})",
+        registry=st.setup.registry, belief=st.setup.belief, plan_count=st.counts.plan_count,
+        held=st.round.held_obj_name, on_relations=st.setup.on_relations,
+        shadow_occluder_map=st.setup.shadow_occluder_map,
+        init_facts=st.setup.planner.last_init, plan=st.round.plan,
+        extra={"plan_time_s": round(plan_dt, 2)})
+
+    # No-plan-while-holding (2026-08-21, user directive: NEVER
+    # blind-drop the held object — the audit-#58 release-in-place is
+    # RETIRED; its unreasoned drop spot landed inside shadow
+    # corridors and re-blocked them, GUI demo run 11-49-53).
+    # Instead, plan a minimal DISPOSAL: goal (handempty) makes the
+    # planner find a proper (move, place ...) for the held object —
+    # a strictly easier problem than the mission, and the placement
+    # respects the placement-blocking facts and kinematic streams
+    # like any other place.  The normal dispatch executes it; the
+    # next loop iteration replans the mission from handempty.  If
+    # even the disposal has no plan, end the episode honestly, still
+    # holding — no drop, ever.  (release_held_object_in_place is
+    # kept in execution.py per the dead-code policy but is no
+    # longer called from the loop.)
+    if st.round.plan is None and st.round.held_obj_name is not None:
+        print(f"  no mission plan with {st.round.held_obj_name} held — planning "
+              f"a disposal place instead (audit #58 drop retired "
+              f"2026-08-21).")
+        plan_t1 = time.perf_counter()
+        st.round.plan = st.setup.planner.plan(
+            target_objects=st.setup.planner_target_objects,
+            goal=('handempty',),
+            current_config=st.arm.current_config,
+            known_empty_shadows=known_empty,
+            moved_occluders=dict(st.setup.belief.occluders_moved),
+            max_time=args.max_plan_time,  # audit #76 plumb
+            verbose=(args.log_level == 'verbose'),  # audit #76 plumb
+            visible_target_locations=st.setup.visible_target_locations,
+            on_relations=(st.setup.on_relations
+                          if st.opts.goal_kind in ('stack', 'find-and-tray-stack')
+                          else None),
+            stackable_objects=(st.setup.stack_target_objects
+                               if st.opts.goal_kind in ('stack',
+                                                'find-and-tray-stack')
+                               else None),
+            unit_costs=st.opts.unit_costs,
+            planner=args.planner,
+            held_obj=st.round.held_obj_name,
+        )
+        plan_dt += time.perf_counter() - plan_t1
+        ledger_event('plan', plan_id=st.counts.plan_count, call='disposal',
+                     goal=('handempty',),
+                     targets=list(st.setup.planner_target_objects),
+                     actions=ledger_plan(st.round.plan),
+                     plan_obj=(id(st.round.plan) if st.round.plan is not None else None),
+                     plan_time_s=time.perf_counter() - plan_t1)
+        if st.round.plan is None:
+            st.ending.exit_reason = "no_plan_while_holding"
+            _bd = getattr(st.setup.planner, 'last_no_plan_binding_death', None)
+            if _bd:
+                print(f"  note: the disposal no-plan was a #P1 F7 "
+                      f"binding death — {_bd['skeletons']} action "
+                      f"skeleton(s) existed, stream binding failed "
+                      f"(sample_time={_bd['sample_time']:.3f}s; "
+                      f"[F7-diag] in the log has the skeleton).")
+            print(f"ERROR: no disposal plan for {st.round.held_obj_name} either — "
+                  f"ending the episode honestly while holding (no blind "
+                  f"drop; user directive 2026-08-21).")
+            # C-07: the round called the planner twice; count its time.
+            st.counts.total_plan_time += plan_dt
+            st.counts.plan_times.append(plan_dt)
+            return True
+    st.counts.total_plan_time += plan_dt
+    st.counts.plan_times.append(plan_dt)
+    print(f"  [timing] planner.plan() #{st.counts.plan_count}: {plan_dt:.3f}s "
+          f"(cumulative {st.counts.total_plan_time:.3f}s)")
+
+    if st.opts.gui:
+        env.refresh_debug_camera_views()
+
+
+def no_plan_ends_episode(st):
+    if st.round.plan is None:
+        # #P1 F2: classify "pick_giveup" only when a GOAL-CRITICAL
+        # object (the holding target / a stack-goal cube) was
+        # withdrawn from the grasp stream — then the goal is
+        # provably unreachable because of the giveup.  A withdrawn
+        # OCCLUDER may or may not be why this particular plan()
+        # failed (review fix 2026-08-20: blanket labelling
+        # mis-attributed unrelated no-plans to grasping), so those
+        # runs keep "planner_failed" with a disclosure line.
+        goal_critical_giveups = (
+            st.strikes.pick_giveup_objects & set(st.setup.planner_target_objects))
+        binding_death = getattr(st.setup.planner,
+                                'last_no_plan_binding_death', None)
+        if goal_critical_giveups:
+            st.ending.exit_reason = "pick_giveup"
+            print(f"ERROR: No plan found — goal-critical object(s) "
+                  f"marked ungraspable after repeated pick failures: "
+                  f"{sorted(goal_critical_giveups)} (#P1 F2 giveup).")
+        elif binding_death:
+            # #P1 F7: FastDownward found action skeletons but the
+            # stream-binding layer never delivered values — the
+            # silent re-pick binding death, now disclosed and
+            # classified instead of folding into the generic
+            # planner_failed bucket.  Root cause (skeleton-queue
+            # scheduling; see the F7 audit entry) is #P2 scope.
+            st.ending.exit_reason = "no_plan_binding_death"
+            print(f"ERROR: No plan found — but PDDLStream DID find "
+                  f"{binding_death['skeletons']} action skeleton(s) "
+                  f"and stream binding failed to deliver values "
+                  f"(sample_time="
+                  f"{binding_death['sample_time']:.3f}s) — the "
+                  f"#P1 F7 binding-death class.  The last skeleton "
+                  f"is in the log ([F7-diag]).")
+        else:
+            st.ending.exit_reason = "planner_failed"
+            if st.strikes.pick_giveup_objects:
+                print(f"ERROR: No plan found.  Note: "
+                      f"{len(st.strikes.pick_giveup_objects)} non-goal object(s) "
+                      f"were earlier withdrawn from the grasp stream "
+                      f"after repeated pick failures "
+                      f"({sorted(st.strikes.pick_giveup_objects)}) and may "
+                      f"contribute (#P1 F2).")
+            else:
+                print("ERROR: No plan found!")
+        return True
+
+
 def execute_plan(st, env):
     print(f"Plan: {len(st.round.plan)} actions")
     for i, action in enumerate(st.round.plan):
@@ -3174,280 +3499,8 @@ def main(gui=True, run_logger=None, scene_config=None,
                        else None)
 
     while not _loop_done(st):
-        st.counts.plan_count += 1
-        st.strikes.disturbed_counts.clear()   # the #P2 disturbance cap is per plan
-        # M7 (Hani, 2026-11-20): a region suspended at the F9 give-up is
-        # offered again once its time is up (with --m7 off nothing is
-        # suspended).
-        with provenance('suspension_over'):
-            for _sid in st.setup.belief.release_suspended(time.perf_counter()):
-                print(f"  [M7] {_sid} is back in the search: its "
-                      f"{execution.M7_SUSPEND_S:.0f} s suspension at the F9 "
-                      f"give-up is over")
-        unknown_shadows = st.setup.belief.get_unknown_shadows()
-        # #P1 F15: parked-unresolved fragments are withheld from the
-        # planner exactly like eliminated ones (or the episode loops on
-        # them forever), but the BELIEF keeps them distinct — they were
-        # never observed empty, and the run outcome discloses them.
-        known_empty = (st.setup.belief.get_known_empty_shadows()
-                       + st.setup.belief.get_parked_shadows())
-        # BF#65 (d) (no-op with --interior-regions off): while the target is
-        # recorded as seen under a cover, the planner is offered that
-        # cover's interior region alone; the other unknown regions are
-        # withheld like the parked ones (the belief keeps them unknown).
-        st.round._withheld = interior_regions.withheld(
-            st.setup.registry, st.setup.belief, st.setup.planner_target_objects)
-        known_empty = known_empty + st.round._withheld
-
-        # Giveup parole (2026-08-21): see the pick_giveup_marked_at
-        # comment above.  Runs before planner.plan() so the paroled
-        # object's grasps are offered again this replan.
-        for _obj, _at in list(st.strikes.pick_giveup_marked_at.items()):
-            if (st.counts.plan_count - _at >= 4
-                    and _obj in st.strikes.pick_giveup_objects
-                    and st.strikes.pick_parole_counts.get(_obj, 0) < 2):
-                st.strikes.pick_parole_counts[_obj] = \
-                    st.strikes.pick_parole_counts.get(_obj, 0) + 1
-                st.strikes.pick_giveup_objects.discard(_obj)
-                st.setup.planner.streams.ungraspable_objects.discard(_obj)
-                st.strikes.pick_fail_counts.pop(_obj, None)
-                st.strikes.transit_loss_counts.pop(_obj, None)
-                st.strikes.pick_giveup_marked_at.pop(_obj, None)
-                print(f"  giveup parole "
-                      f"{st.strikes.pick_parole_counts[_obj]}/2: {_obj} re-enters "
-                      f"the grasp stream after 4 replans (#P1 "
-                      f"non-absorbing giveup)")
-
-        # M8 C2: an object's observe strikes, removed look pairs and
-        # parking reset once it is re-registered or a later detection
-        # re-poses it (its box moved by more than 1 mm).
-        if st.setup.planner.m8_views is not None:
-            for _obj, (_n, _box, _bd0) in list(st.counts.observe_strikes.items()):
-                _bd = st.setup.registry.get_boxel(_obj)
-                if (_bd is None or _bd is not _bd0 or not np.allclose(
-                        np.concatenate([_bd.min_corner, _bd.max_corner]), _box,
-                        atol=1e-3)):
-                    st.counts.observe_strikes.pop(_obj)
-                    st.setup.planner.m8_views.parked.discard(_obj)
-                    st.setup.planner.m8_views.removed = {r for r in st.setup.planner.m8_views.removed
-                                                if r[0] != _obj}
-                    if getattr(st.setup.planner, 'look_views', None) is not None:
-                        st.setup.planner.look_views.forget(_obj)
-                    print(f"  [M8] observe strikes of {_obj} reset (re-registered "
-                          f"or re-posed)")
-
-        print(f"\n=== PLAN #{st.counts.plan_count} ===")
-        if goal_kind == 'find-and-tray-stack':
-            print(f"Tray-stack progress: {st.setup.on_relations} "
-                  f"(unknown shadows: {len(unknown_shadows)})")
-        elif goal_kind == 'holding':
-            print(f"Unknown shadows remaining: {len(unknown_shadows)}")
-            # #P1 F20 (2026-09-18): "nothing left to sense" is not
-            # "target not found" when the target's location IS known —
-            # a sense observation may have registered it in plain view
-            # (register_new_detections), in which case the planner can
-            # ground a direct pick from its OBJECT boxel.  belief.
-            # target_found_in stays None until the pick sets it, so the
-            # loop keeps going on the registry, not on the belief flag.
-            _target_bd = st.setup.registry.get_boxel(st.setup.target_name)
-            if not unknown_shadows and _target_bd is not None:
-                _tc = _target_bd.center
-                print(f"  no unknown shadows remain, but {st.setup.target_name} is "
-                      f"registered at [{_tc[0]:.3f},{_tc[1]:.3f},"
-                      f"{_tc[2]:.3f}] (seen by an observation) — "
-                      f"planning a direct pick (#P1 F20)")
-            elif not unknown_shadows and st.setup.belief.get_suspended_shadows():
-                # M7 (Hani, 2026-11-20): nothing is left to search but
-                # regions suspended at the F9 give-up.  The episode fails
-                # here, without a planner call, and says why.
-                st.ending.exit_reason = "rediscovery_giveup"
-                print(f"ERROR: No unknown shadows remain; "
-                      f"{sorted(st.setup.belief.get_suspended_shadows())} suspended at "
-                      f"the F9 give-up (M7), not searched; the target may "
-                      f"be inside.")
-                break
-            elif not unknown_shadows:
-                # Audit #21: 'all_searched' is the loop-termination tag,
-                # but with the still_blocked 3-strike give-up some of
-                # the shadows below were never observed empty.  The
-                # final FAILED message classifies on blocked_giveup_shadows.
-                st.ending.exit_reason = "all_searched"
-                if st.strikes.blocked_giveup_shadows:
-                    print(f"ERROR: No unknown shadows remain — but "
-                          f"{len(st.strikes.blocked_giveup_shadows)} of "
-                          f"{len(st.setup.shadows)} were given up after repeated "
-                          f"still_blocked outcomes (audit #21), not "
-                          f"observed empty.  Target may still be hiding "
-                          f"in: {sorted(st.strikes.blocked_giveup_shadows)}")
-                else:
-                    print("ERROR: Searched all shadows but target not found!")
-                break
-        else:
-            print(f"Stack progress: {st.setup.on_relations} (goal {st.setup.goal})")
-
-        # --- Held-object handling (audit #58) -----------------------------
-        # Pre-#58: any held object was unconditionally dropped here so the
-        # planner's _build_init could rely on (handempty).  That cost ~4
-        # wasted actions per re-grasp cycle whenever the action loop broke
-        # while holding (e.g. sense returned empty after pick).
-        # Post-#58: pass held_obj=name into planner.plan() so init emits
-        # (holding ?o) and the next plan continues mid-grasp.  release_held_-
-        # object_in_place stays as a SAFETY NET for the case where the
-        # held cube blocks all plans (planner returns None below — see
-        # the safety-net branch after planner.plan).
-        st.round.held_obj_name: Optional[str] = None
-        if st.hand.held_body_id is not None:
-            st.round.held_obj_name = st.setup.body_id_to_name.get(st.hand.held_body_id)
-
-        # Ensure the free-space partition is consistent before the planner
-        # reads the registry (audit #25).  After a place action,
-        # update_after_place sets registry.dirty because the consumed
-        # free boxel is gone but no replacement exists yet.  If a sense
-        # action already triggered reboxelization (clearing the flag),
-        # this is a no-op — avoiding the double octree+merge cost.
-        if st.setup.registry.dirty:
-            reboxelize_free_space(st.setup.registry, env, st.setup.boxel_centers, st.setup.viz, show_free)
-        # Audit #73 step 2(d) plot 11: snapshot boxel counts post-
-        # reboxelize so each entry reflects what THIS planner.plan() will
-        # see (not the stale pre-reboxelize partition).
-        try:
-            st.counts.boxel_counts_per_replan.append({
-                "plan_index": st.counts.plan_count,
-                "n_object_boxels": len(st.setup.registry.get_object_boxels()),
-                "n_shadow_boxels": len(st.setup.registry.get_shadow_boxels()),
-                "n_free_space_boxels": len(st.setup.registry.get_free_space_boxels()),
-            })
-        except Exception as e:
-            print(f"  WARNING: could not snapshot per-replan boxel counts: {e}")
-
-        # Audit #46: mirror the live GUI scene into the plan client and let
-        # planner.plan() run unwrapped.  All IK/RRT/collision-check calls
-        # inside the streams target env.plan_client_id (a DIRECT-mode world),
-        # so the visible arm is no longer teleported and the OpenGL window
-        # stays interactive throughout planning.  The old outer
-        # `with RenderingLock(env.client_id):` block was the source of the
-        # GUI freeze — it's no longer needed.
-        # #P1 WP2c: the collision world is posed from the belief.
-        env.sync_to_plan_client(held_body_id=st.hand.held_body_id, registry=st.setup.registry)
-        plan_t0 = time.perf_counter()
-        st.round.plan = st.setup.planner.plan(
-            target_objects=st.setup.planner_target_objects,
-            goal=st.setup.goal,
-            current_config=st.arm.current_config,
-            known_empty_shadows=known_empty,
-            moved_occluders=dict(st.setup.belief.occluders_moved),
-            max_time=args.max_plan_time,  # audit #76 — CLI plumb (default
-                              # 1800.0, the audit #54 follow-up bump from
-                              # 120 s).  Lower values fail fast for
-                              # diagnostic runs; the default keeps the
-                              # 30-min budget that lets the sampler retry
-                              # many skeletons / stream samples.
-            verbose=(args.log_level == 'verbose'),  # audit #76 plumb
-            visible_target_locations=st.setup.visible_target_locations,
-            # on/clear facts only emitted into init when stackable
-            # objects is supplied — holding-goal runs pay nothing.
-            # find-and-tray-stack (audit #49) reuses the same plumbing
-            # because its goal AST is built from (on ?o ?x) clauses.
-            on_relations=(st.setup.on_relations
-                          if goal_kind in ('stack', 'find-and-tray-stack')
-                          else None),
-            stackable_objects=(st.setup.stack_target_objects
-                               if goal_kind in ('stack',
-                                                'find-and-tray-stack')
-                               else None),
-            unit_costs=unit_costs,
-            planner=args.planner,    # F30: search weight is a CLI choice
-            held_obj=st.round.held_obj_name,  # audit #58 — preserve grasp across replans
-        )
-        plan_dt = time.perf_counter() - plan_t0
-        if st.setup.planner.last_m8_stats:
-            st.counts.m8_per_plan.append(dict(st.setup.planner.last_m8_stats, plan=st.counts.plan_count))
-        if st.setup.planner.last_look_stats:
-            st.counts.look_per_plan.append(dict(st.setup.planner.last_look_stats, plan=st.counts.plan_count))
-        # #P4 B0: every plan() call and its result go to the run ledger
-        # (gates G3, G10, G11).
-        ledger_event('plan', plan_id=st.counts.plan_count, call='mission', goal=st.setup.goal,
-                     targets=list(st.setup.planner_target_objects),
-                     actions=ledger_plan(st.round.plan),
-                     plan_obj=(id(st.round.plan) if st.round.plan is not None else None),
-                     plan_time_s=plan_dt)
-        world_eye.snapshot(
-            f"plan#{st.counts.plan_count} planned ({'no plan' if st.round.plan is None else str(len(st.round.plan)) + ' actions'})",
-            registry=st.setup.registry, belief=st.setup.belief, plan_count=st.counts.plan_count,
-            held=st.round.held_obj_name, on_relations=st.setup.on_relations,
-            shadow_occluder_map=st.setup.shadow_occluder_map,
-            init_facts=st.setup.planner.last_init, plan=st.round.plan,
-            extra={"plan_time_s": round(plan_dt, 2)})
-
-        # No-plan-while-holding (2026-08-21, user directive: NEVER
-        # blind-drop the held object — the audit-#58 release-in-place is
-        # RETIRED; its unreasoned drop spot landed inside shadow
-        # corridors and re-blocked them, GUI demo run 11-49-53).
-        # Instead, plan a minimal DISPOSAL: goal (handempty) makes the
-        # planner find a proper (move, place ...) for the held object —
-        # a strictly easier problem than the mission, and the placement
-        # respects the placement-blocking facts and kinematic streams
-        # like any other place.  The normal dispatch executes it; the
-        # next loop iteration replans the mission from handempty.  If
-        # even the disposal has no plan, end the episode honestly, still
-        # holding — no drop, ever.  (release_held_object_in_place is
-        # kept in execution.py per the dead-code policy but is no
-        # longer called from the loop.)
-        if st.round.plan is None and st.round.held_obj_name is not None:
-            print(f"  no mission plan with {st.round.held_obj_name} held — planning "
-                  f"a disposal place instead (audit #58 drop retired "
-                  f"2026-08-21).")
-            plan_t1 = time.perf_counter()
-            st.round.plan = st.setup.planner.plan(
-                target_objects=st.setup.planner_target_objects,
-                goal=('handempty',),
-                current_config=st.arm.current_config,
-                known_empty_shadows=known_empty,
-                moved_occluders=dict(st.setup.belief.occluders_moved),
-                max_time=args.max_plan_time,  # audit #76 plumb
-                verbose=(args.log_level == 'verbose'),  # audit #76 plumb
-                visible_target_locations=st.setup.visible_target_locations,
-                on_relations=(st.setup.on_relations
-                              if goal_kind in ('stack', 'find-and-tray-stack')
-                              else None),
-                stackable_objects=(st.setup.stack_target_objects
-                                   if goal_kind in ('stack',
-                                                    'find-and-tray-stack')
-                                   else None),
-                unit_costs=unit_costs,
-                planner=args.planner,
-                held_obj=st.round.held_obj_name,
-            )
-            plan_dt += time.perf_counter() - plan_t1
-            ledger_event('plan', plan_id=st.counts.plan_count, call='disposal',
-                         goal=('handempty',),
-                         targets=list(st.setup.planner_target_objects),
-                         actions=ledger_plan(st.round.plan),
-                         plan_obj=(id(st.round.plan) if st.round.plan is not None else None),
-                         plan_time_s=time.perf_counter() - plan_t1)
-            if st.round.plan is None:
-                st.ending.exit_reason = "no_plan_while_holding"
-                _bd = getattr(st.setup.planner, 'last_no_plan_binding_death', None)
-                if _bd:
-                    print(f"  note: the disposal no-plan was a #P1 F7 "
-                          f"binding death — {_bd['skeletons']} action "
-                          f"skeleton(s) existed, stream binding failed "
-                          f"(sample_time={_bd['sample_time']:.3f}s; "
-                          f"[F7-diag] in the log has the skeleton).")
-                print(f"ERROR: no disposal plan for {st.round.held_obj_name} either — "
-                      f"ending the episode honestly while holding (no blind "
-                      f"drop; user directive 2026-08-21).")
-                # C-07: the round called the planner twice; count its time.
-                st.counts.total_plan_time += plan_dt
-                st.counts.plan_times.append(plan_dt)
-                break
-        st.counts.total_plan_time += plan_dt
-        st.counts.plan_times.append(plan_dt)
-        print(f"  [timing] planner.plan() #{st.counts.plan_count}: {plan_dt:.3f}s "
-              f"(cumulative {st.counts.total_plan_time:.3f}s)")
-
-        if gui:
-            env.refresh_debug_camera_views()
+        if plan_or_stop(st, env, execution):
+            break
 
         # BF#65 (d) (never true with --interior-regions off, where nothing
         # is withheld): no plan while the planner was offered only the
@@ -3458,50 +3511,7 @@ def main(gui=True, run_logger=None, scene_config=None,
             interior_regions.release(st.setup.planner_target_objects)
             continue
 
-        if st.round.plan is None:
-            # #P1 F2: classify "pick_giveup" only when a GOAL-CRITICAL
-            # object (the holding target / a stack-goal cube) was
-            # withdrawn from the grasp stream — then the goal is
-            # provably unreachable because of the giveup.  A withdrawn
-            # OCCLUDER may or may not be why this particular plan()
-            # failed (review fix 2026-08-20: blanket labelling
-            # mis-attributed unrelated no-plans to grasping), so those
-            # runs keep "planner_failed" with a disclosure line.
-            goal_critical_giveups = (
-                st.strikes.pick_giveup_objects & set(st.setup.planner_target_objects))
-            binding_death = getattr(st.setup.planner,
-                                    'last_no_plan_binding_death', None)
-            if goal_critical_giveups:
-                st.ending.exit_reason = "pick_giveup"
-                print(f"ERROR: No plan found — goal-critical object(s) "
-                      f"marked ungraspable after repeated pick failures: "
-                      f"{sorted(goal_critical_giveups)} (#P1 F2 giveup).")
-            elif binding_death:
-                # #P1 F7: FastDownward found action skeletons but the
-                # stream-binding layer never delivered values — the
-                # silent re-pick binding death, now disclosed and
-                # classified instead of folding into the generic
-                # planner_failed bucket.  Root cause (skeleton-queue
-                # scheduling; see the F7 audit entry) is #P2 scope.
-                st.ending.exit_reason = "no_plan_binding_death"
-                print(f"ERROR: No plan found — but PDDLStream DID find "
-                      f"{binding_death['skeletons']} action skeleton(s) "
-                      f"and stream binding failed to deliver values "
-                      f"(sample_time="
-                      f"{binding_death['sample_time']:.3f}s) — the "
-                      f"#P1 F7 binding-death class.  The last skeleton "
-                      f"is in the log ([F7-diag]).")
-            else:
-                st.ending.exit_reason = "planner_failed"
-                if st.strikes.pick_giveup_objects:
-                    print(f"ERROR: No plan found.  Note: "
-                          f"{len(st.strikes.pick_giveup_objects)} non-goal object(s) "
-                          f"were earlier withdrawn from the grasp stream "
-                          f"after repeated pick failures "
-                          f"({sorted(st.strikes.pick_giveup_objects)}) and may "
-                          f"contribute (#P1 F2).")
-                else:
-                    print("ERROR: No plan found!")
+        if no_plan_ends_episode(st):
             break
 
         if execute_plan(st, env):
