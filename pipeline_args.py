@@ -136,8 +136,9 @@ def parse_pipeline_args(argv=None):
         '--allow-unwinnable',
         action='store_true',
         help='Inspection mode: downgrade the pre-flight CLASSIFICATION '
-             'rejections (F5 sensable guarantee, find-and-tray-stack '
-             'role split) to loud warnings and run the episode anyway, '
+             'rejection (the find-and-tray-stack role split: at least one '
+             'visible and one hidden target) to a loud warning and run the '
+             'episode anyway, '
              'e.g. to confirm in the GUI that a rejected seed is truly '
              'unwinnable.  Scene-construction failures still abort — '
              'there is no scene to show.  Never use in eval sweeps.',

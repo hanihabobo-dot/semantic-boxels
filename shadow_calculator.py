@@ -53,8 +53,10 @@ class ShadowCalculator:
         self.table_y_min, self.table_y_max = table_y_range
         # Path 9 (PLAN 11.12): the longest side in x and y a returned fragment
         # may have.  None (the default): the fragments are returned as they
-        # are.  A look mode sets it to observe_views.look_cell_side(), because
-        # a look can only be planned for a region one arm-camera image holds.
+        # are.  No run mode sets it: the cap was made for a look, which can
+        # only be planned for a region one arm-camera image holds
+        # (observe_views.look_cell_side()); only tests/test_look_cells.py
+        # sets it.
         self.max_fragment_side: Optional[float] = None
 
     def _cap_fragments(self, fragments: List[BoxelData]) -> List[BoxelData]:

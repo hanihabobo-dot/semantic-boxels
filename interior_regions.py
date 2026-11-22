@@ -13,7 +13,8 @@ height; None for a solid body) owns one more hiding region, of kind
 'interior': the cavity's footprint at table height under the object's
 estimated box.  It is a SHADOW boxel and is wired exactly like a lateral
 fragment: registry, belief (unknown), the blocker census (every point of it
-lies inside the cover, so the cover is what blocks the view), the planner's
+lies inside the cover, so the cover is what blocks the view; with --eye arm
+no blocker census is run at all, a look reads none of it), the planner's
 facts, the sense and its grid, the kin stream.  It is searched by moving the
 cover away and looking.  It is a fixed region of space: when its cover is
 moved it stays where it was.  No domain, planner or sense change.

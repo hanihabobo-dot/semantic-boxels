@@ -8,7 +8,7 @@
 #                              window goes on with the next seed, Ctrl-C stops the list
 #   run tampura -Headless      no GUI: the console only (a diagnostic run, never scored;
 #                              it goes on past a G19 scene mismatch like a GUI run)
-#   run tampura -Seed 118 -Gen a scene from their own generator (BF#63's seeds 100 to 139)
+#   run tampura -Seed 118 -Gen a scene from their own generator (seeds 100 to 339 are committed)
 #   run boxels                 our own random-pairs holding scene, seed 0, in the GUI, the
 #                              same console and planner;  `boxels` alone is the same word
 #   run boxels -Seed 3 -Headless
@@ -120,7 +120,7 @@ if ($What -eq 'tampura' -and $Gen) {
         -not (Test-Path -LiteralPath (Join-Path $PSScriptRoot "tampura_bridge/gen_scenes/find_dice/find_dice_gen_s$_.json")) })
     if ($missing.Count -gt 0) {
         $word = if ($missing.Count -gt 1) { 'seeds' } else { 'seed' }
-        Write-Host "run: no generated scene for $word $($missing -join ', ') (BF#63's are 100 to 139)" -ForegroundColor Yellow
+        Write-Host "run: no generated scene for $word $($missing -join ', ') (committed are 100 to 339)" -ForegroundColor Yellow
         exit 2
     }
 }
