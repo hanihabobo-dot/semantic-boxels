@@ -404,6 +404,15 @@ def parse_pipeline_args(argv=None):
     )
     args = parser.parse_args(argv)
 
+    _promote_default_scene_for_counts(args)
+    _check_n_hidden(args, parser)
+    _apply_random_pairs_rules(args, parser, argv)
+    _default_scene_for_stack_goal(args)
+
+    return args
+
+
+def _promote_default_scene_for_counts(args):
     # Audit #29: --n-hidden only makes sense on the scalability scene
     # with --goal holding.  Auto-promote --scene default to scalability
     # when the user passes any of the count knobs under --goal holding
@@ -420,6 +429,8 @@ def parse_pipeline_args(argv=None):
             and _holding_counts_explicit):
         args.scene = 'scalability'
 
+
+def _check_n_hidden(args, parser):
     if args.n_hidden > 0:
         if args.scene not in ('scalability',):
             parser.error(
@@ -443,6 +454,8 @@ def parse_pipeline_args(argv=None):
                   f"{args.n_targets}.", file=sys.stderr)
             args.n_hidden = args.n_targets
 
+
+def _apply_random_pairs_rules(args, parser, argv):
     # Audit #68: random-pairs derives n_hidden from --n-occluders
     # (hidden count is drawn uniformly from [1, --n-occluders] per
     # seed).  --n-hidden / --n-targets remain mutually exclusive — they
@@ -493,10 +506,10 @@ def parse_pipeline_args(argv=None):
                   f"top of the K hidden ones.", file=sys.stderr)
             args.n_extra_distractors = 1
 
+
+def _default_scene_for_stack_goal(args):
     # When --goal stack is requested without an explicit --scene, fall
     # back to stack_scene so the spawned objects are reach-constrained
     # cubes by default.  Explicit --scene overrides this for A/B tests.
     if args.goal == 'stack' and args.scene == 'default':
         args.scene = 'stack'
-
-    return args
