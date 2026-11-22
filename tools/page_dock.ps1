@@ -19,7 +19,10 @@
 # ones open before is taken first).  The page's: with -PageWord, the page of THIS run and no
 # other: the script asks the page servers on this machine (-PortFrom to -PortTo, as run.ps1's
 # Find-Page does) which one gives the run's word back, and takes the window named by that
-# server's port.  A page left open by an earlier run on another port is never taken for it.
+# server's port.  A page left open by an earlier run on another port is never taken for it, and
+# neither is a browser window with tabs that shows the page (its title goes on after the page's:
+# "... - Microsoft Edge"): only a window whose whole title is the page's, as the window that
+# `run boxels` opens for the page has it.
 # Without -PageWord the first window whose title starts with -PageTitle is taken (the trial).
 #
 # It only places and cuts the page's window and reads the simulator's; nothing is sent to either
@@ -75,6 +78,7 @@ if ($PageWord) {
         if (-not $port) { Start-Sleep -Milliseconds 400 }
     }
     $PageTitle = 'Semantic Boxels (page ' + $port + ')'
+    [PageDock]::WholeTitle = $true      # the page's own window, never a browser window with the page in a tab
     Say "this run's page answers on port $port; its window is named $PageTitle"
 }
 exit [PageDock]::Run($SimTitle, $SimProcess, $PageTitle, $PageClass, $PageChildClass,

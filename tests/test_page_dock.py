@@ -191,6 +191,11 @@ def test_the_holder_finds_this_runs_page_as_the_launcher_does_and_names_it_as_th
     assert (first, last) == (gui_page.DEFAULT_PORT, gui_page.DEFAULT_PORT + gui_page.PORT_TRIES - 1)
     # the windows open before are listed before that wait, so this run's window counts as new
     assert ps.index('[PageDock]::Snapshot(') < ps.index('if ($PageWord) {') < ps.index('[PageDock]::Run(')
+    # and only a window whose WHOLE title is the page's is taken: a browser window with tabs
+    # that shows the page ("... - Microsoft Edge") is a person's own and is never cut or moved
+    assert ps.index("$PageTitle = '") < ps.index('[PageDock]::WholeTitle = $true') < ps.index('[PageDock]::Run(')
+    cs = DOCK_CS.read_text(encoding='utf-8')
+    assert 'WholeTitle ? t == titleStart : t.StartsWith(titleStart, StringComparison.Ordinal)' in cs
 
 
 @needs_pwsh

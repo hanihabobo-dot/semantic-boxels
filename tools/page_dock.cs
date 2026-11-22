@@ -153,14 +153,23 @@ public static class PageDock
         return found;
     }
 
-    /// The page's browser window: visible, its title starts with `titleStart`, its window
-    /// class with `classStart` ('' takes any).
+    /// A page in a browser window of its own carries the page's title and nothing more; a
+    /// browser window with tabs that shows the page adds the browser's name ("... - Microsoft
+    /// Edge").  Set (page_dock.ps1 sets it once it knows the run's page), only a window whose
+    /// title IS the page's title is taken, so a person's own browser window with the page in a
+    /// tab is never cut or moved.  Not set (the trial's stand-in pages): the title's start.
+    public static bool WholeTitle;
+
+    /// The page's browser window: visible, its title starts with `titleStart` (or is it, see
+    /// WholeTitle), its window class starts with `classStart` ('' takes any).
     public static long FindPage(string titleStart, string classStart)
     {
         long found = 0;
         EnumWindows((h, l) =>
         {
-            if (IsWindowVisible(h) && Title(h).StartsWith(titleStart, StringComparison.Ordinal)
+            if (!IsWindowVisible(h)) return true;
+            string t = Title(h);
+            if ((WholeTitle ? t == titleStart : t.StartsWith(titleStart, StringComparison.Ordinal))
                     && (classStart.Length == 0 || Class(h).StartsWith(classStart, StringComparison.Ordinal)))
             { found = h.ToInt64(); return false; }
             return true;
