@@ -1604,8 +1604,3 @@ def test_planner():
     print("ERROR: Standalone planner test requires a loaded PyBullet robot.")
     print("       Run test_full_pipeline.py for full integration testing.")
     return False
-
-
-if __name__ == "__main__":
-    success = test_planner()
-    sys.exit(0 if success else 1)

@@ -305,10 +305,6 @@ def set_context(**fields):
         _console.context.update(fields)
 
 
-def context():
-    return dict(_console.context) if _console is not None else {}
-
-
 def set_task(task):
     """Plug in another task's words (the Wumpus world: wumpus/console_words.py).
     `task` is an object whose optional methods take the console first and

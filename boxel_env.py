@@ -1239,29 +1239,6 @@ class BoxelTestEnv(WorldPlacement):
             self.far_plane - (self.far_plane - self.near_plane) * depth_buffer
         )
     
-    def _depth_to_point_cloud(self, depth_image: np.ndarray, view_matrix, projection_matrix) -> np.ndarray:
-        """Convert depth image to 3D point cloud."""
-        height, width = depth_image.shape
-        u, v = np.meshgrid(np.arange(width), np.arange(height))
-        z_ndc = depth_image.flatten()
-        
-        fx = fy = (width / 2.0) / np.tan(np.radians(self.fov / 2.0))
-        cx, cy = width / 2.0, height / 2.0
-        
-        x_cam = (u.flatten() - cx) * z_ndc / fx
-        y_cam = (v.flatten() - cy) * z_ndc / fy
-        
-        points_cam = np.stack([x_cam, y_cam, z_ndc], axis=1)
-        
-        view_matrix_4x4 = np.array(view_matrix).reshape(4, 4)
-        camera_to_world = np.linalg.inv(view_matrix_4x4)
-        
-        points_cam_homogeneous = np.hstack([points_cam, np.ones((points_cam.shape[0], 1))])
-        points_world = (camera_to_world @ points_cam_homogeneous.T).T[:, :3]
-        
-        valid_mask = (points_world[:, 2] > -1.0) & (points_world[:, 2] < 2.0)
-        return points_world[valid_mask]
-    
     def oracle_detect_objects(self, check_occlusion: bool = True,
                               physics_client: Optional[int] = None
                               ) -> Tuple[List[str], Dict[str, Tuple[np.ndarray, np.ndarray]]]:
