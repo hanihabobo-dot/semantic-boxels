@@ -12,6 +12,10 @@
 #   run boxels                 our own random-pairs holding scene, seed 0, in the GUI, the
 #                              same console and planner;  `boxels` alone is the same word
 #   run boxels -Seed 3 -Headless
+#   run boxels -NoPage         PyBullet's own window as it was (its panels and three camera panes) and no page;
+#                              without it a window run of boxels shows the simulator alone in its window and
+#                              opens a page beside it (a browser window; move it): the console's drawing and
+#                              lines and the three pictures of the robot's camera (gui_page.py)
 #   run boxels -Scene stack -Goal stack -Occluders 0
 #   run tampura -Off           without M8-M10 (the old pipeline);  -Squeeze 1   a pick squeeze in mm
 #   run boxels -Look boxel     one look action from a free-space boxel instead of sense and observe (path 9)
@@ -55,6 +59,7 @@ param(
     [double]$Squeeze = 0,
     [switch]$Screenshots,
     [string[]]$Draw = @(),
+    [switch]$NoPage,
     [switch]$Music,
     [switch]$Sfx,
     [switch]$Voice,
@@ -73,7 +78,7 @@ $PY = '/root/armO-venvA/bin/python'
 $PROCS = "tr -d '\r' < $S/tools/run_procs.sh | bash -s --"
 
 if ($What -in 'help', '-h', '--help', '/?', '?') {
-    Get-Content $PSCommandPath | Select-Object -First 33 | ForEach-Object { $_ -replace '^# ?', '' }
+    Get-Content $PSCommandPath | Select-Object -First 37 | ForEach-Object { $_ -replace '^# ?', '' }
     return
 }
 if ($What -in 'ps', 'status') {
@@ -171,6 +176,7 @@ $audio = if ($Music) { 'on' } elseif ($Sfx) { 'sfx' } else { '' }
 function New-Run([int]$seedNo) {
     $record = $null
     $cameras = $null
+    $page = $null
     if ($What -eq 'tampura') {
         $stamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
         $vis = if ($Headless) { 0 } else { 1 }
@@ -213,8 +219,17 @@ function New-Run([int]$seedNo) {
     } else {
         $nogui = if ($Headless) { ' --no-gui' } else { '' }
         $mine = "test_full_pipeline.py$nogui --scene $Scene --seed $seedNo --goal $Goal --n-occluders $Occluders"
-        $cmd = "cd $S && PYTHONHASHSEED=0 $PY $mine$sw$extra"
+        # The page beside our own window (gui_page.py; Hani, 2026-11-22): a window run asks
+        # for it unless -NoPage.  $page is a word of this run alone: the page's server gives
+        # it back, so that the page opened below is this run's and no other's.
+        $pageFlag = ''
+        if (-not $Headless -and -not $NoPage) {
+            $page = [guid]::NewGuid().ToString('N').Substring(0, 12)
+            $pageFlag = ' --gui-page on'
+        }
+        $cmd = "cd $S && PYTHONHASHSEED=0 $PY $mine$pageFlag$sw$extra"
     }
+    if ($page) { $cmd = "export SB_GUI_PAGE_TOKEN=$page; " + $cmd }
     if ($audio) { $cmd = "export SB_AUDIO=$audio; " + $cmd }
     if ($Voice) { $cmd = 'export SB_VOICE=on; ' + $cmd }
     # TB-17 and rule 7: the run holds the pipeline lock, so a track's episode
@@ -232,7 +247,41 @@ function New-Run([int]$seedNo) {
     # TB-17: the run and its children carry SB_RUN, so run kill ends what
     # run started and leaves a track's episode, probe or planner alone.
     $cmd = 'export SB_RUN=1; ' + $cmd
-    [pscustomobject]@{ Seed = $seedNo; Cmd = $cmd; Mine = $mine; Record = $record; Cameras = $cameras }
+    [pscustomobject]@{ Seed = $seedNo; Cmd = $cmd; Mine = $mine; Record = $record; Cameras = $cameras; Page = $page }
+}
+
+# The page beside our own window (gui_page.py).  Its server runs inside the run, in WSL, on
+# 127.0.0.1 (WSL hands that port to Windows' localhost), on $pagePorts' first free port.
+# Find-Page: the address of the page whose server gives this run's word back, or nothing yet.
+$pagePorts = 8765..8774
+function Find-Page([string]$word) {
+    foreach ($port in $pagePorts) {
+        $tcp = [System.Net.Sockets.TcpClient]::new()
+        try {
+            if (-not $tcp.ConnectAsync('127.0.0.1', $port).Wait(150)) { continue }
+        } catch { continue } finally { $tcp.Dispose() }
+        try {
+            $state = Invoke-RestMethod -Uri "http://127.0.0.1:$port/state" -TimeoutSec 2 -NoProxy
+            if ($state.run.token -eq $word) { return "http://localhost:$port/" }
+        } catch { }
+    }
+    return $null
+}
+# Open-Page: a browser window on the page, Edge without its address bar where Edge is found,
+# else the default browser.  A page left open by an earlier run on the same port takes up
+# the new run by itself (it keeps asking its address), so no second window is opened for it.
+function Open-Page([string]$url) {
+    $title = 'Semantic Boxels (page ' + ([uri]$url).Port + ')'
+    $open = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like "$title*" }).Count
+    if ($open -gt 0) { return }
+    try {
+        $edge = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe' -ErrorAction Stop).'(default)'
+        Start-Process -FilePath $edge -ArgumentList "--app=$url", '--window-size=640,800'
+    } catch {
+        try { Start-Process $url } catch {
+            Write-Host "run: the page did not open ($($_.Exception.Message)); it is at $url" -ForegroundColor Yellow
+        }
+    }
 }
 
 if ($DryRun) {
@@ -275,6 +324,7 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
     $seen = $false
     $ended = ''
     $viewerAt = $null
+    $pageWord = $r.Page     # the page is looked for until its server answers (the run may wait for the lock first)
     try {
         if ($r.Cameras) {
             # -Draw cameras: the window of what our cameras see (tools/camera_view.ps1).  It only
@@ -304,6 +354,14 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
                     Write-Host ("run: the camera window ended at once (exit code $($viewer.ExitCode)); to see why, run: " +
                                 "pwsh -NoProfile -File tools/camera_view.ps1 -Dir '$($r.Cameras)'") -ForegroundColor Yellow
                 }
+            }
+            if ($pageWord) {
+                # The page beside the window: opened once, as soon as this run's server answers.
+                # A failure here never touches the run.
+                try {
+                    $pageUrl = Find-Page $pageWord
+                    if ($pageUrl) { $pageWord = $null; Open-Page $pageUrl }
+                } catch { $pageWord = $null }
             }
             if ($Headless -or $ended) { continue }
             $open = @(Get-Process -Name msrdc -ErrorAction SilentlyContinue |

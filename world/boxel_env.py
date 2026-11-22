@@ -12,6 +12,7 @@ from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 
+from console import gui_page           # the page beside our own window (display only; off unless started)
 from acting import robot_utils
 from acting import slip_fixes
 from console import telemetry          # #P1 F17 world telemetry (no-op unless armed)
@@ -83,6 +84,11 @@ class BoxelTestEnv(WorldPlacement):
     - Oracle functions for object detection and pose estimation
     """
     
+    # The page beside our own window (gui_page), when the run started one
+    # and this env opened the window; None otherwise (headless, an adopted
+    # world, a window without the page): then nothing below differs.
+    _page = None
+
     # Camera defaults (image_width to far_plane): origin not known; the bridge overrides all five.
     def __init__(
         self,
@@ -180,6 +186,14 @@ class BoxelTestEnv(WorldPlacement):
             p.configureDebugVisualizer(p.COV_ENABLE_MOUSE_PICKING, 0)
             # The three camera panes (RGB, depth, segmentation mask) stay on,
             # as PyBullet opens the window (Hani, 2026-11-21).
+            # With the page beside the window (gui_page, --gui-page on; Hani,
+            # 2026-11-22) PyBullet's own panels go instead: its menu, tabs,
+            # Params column, white strip, status bar and grid, and the three
+            # panes with them (one switch for all of it, the same as the key
+            # g, which brings them back).  The page shows the pictures.
+            self._page = gui_page.active()
+            if self._page is not None:
+                p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
             # Main view: match fixed semantic camera immediately (before resetSimulation).
             if np.allclose(self.camera_position, _DEFAULT_SEMANTIC_EYE) and np.allclose(
                 self.camera_target, _DEFAULT_SEMANTIC_TARGET
@@ -1138,13 +1152,17 @@ class BoxelTestEnv(WorldPlacement):
         camera sees and nothing else (TB-48; Hani, 2026-11-15 and
         2026-11-21).  Where no overlay body exists (the bridge draws lines
         only) the two calls move nothing.
+
+        With the page beside our own window (gui_page) the panes are off
+        and the same render, made at the same moments, is handed to the
+        page instead of being dropped.
         """
         if not self._gui:
             return
         view_matrix, projection_matrix = self._view_and_projection_matrices()
         conceal_overlay_for_observation()
         try:
-            p.getCameraImage(
+            render = p.getCameraImage(
                 width=self.image_width,
                 height=self.image_height,
                 viewMatrix=view_matrix,
@@ -1153,6 +1171,10 @@ class BoxelTestEnv(WorldPlacement):
             )
         finally:
             restore_overlay_after_observation()
+        if self._page is not None:
+            self._page.offer_render(self.image_width, self.image_height,
+                                    render[2], render[3], render[4],
+                                    self.near_plane, self.far_plane, 'display')
 
     def get_camera_observation(self) -> CameraObservation:
         """
@@ -1179,6 +1201,9 @@ class BoxelTestEnv(WorldPlacement):
             # as soon as that is made, so this one shows only for the
             # time that render takes.  The overlay's bodies are out of
             # view for it, as in refresh_debug_camera_views (TB-48).
+            # With the page beside the window (gui_page) the panes are
+            # off and this render shows nowhere; it stays, so that a run
+            # with the page makes the renders of a run without it.
             conceal_overlay_for_observation()
             try:
                 p.getCameraImage(
@@ -1249,6 +1274,12 @@ class BoxelTestEnv(WorldPlacement):
             )
         finally:
             restore_overlay_after_observation()
+        if self._page is not None:
+            # Display only: a copy of what the robot sees, for the page
+            # beside our own window (it shows what PyBullet's panes showed).
+            self._page.offer_render(self.image_width, self.image_height,
+                                    rgb_array, depth_array, seg_array,
+                                    self.near_plane, self.far_plane, 'observation')
         rgb_image = np.array(rgb_array, dtype=np.uint8).reshape(
             (self.image_height, self.image_width, 4)
         )[:, :, :3]

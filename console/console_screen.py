@@ -27,6 +27,7 @@ BLOCK_MIN_ROWS = 12
 FRAME_S = 0.1          # the animation's tick
 SHOW_AFTER_S = 0.3     # an activity shorter than this never shows its drawing
 BANNER_COLS = 60       # the banner's widest rule
+PAGE_LINES = 500       # the committed lines kept for the page beside our own window (gui_page)
 
 
 # ---------------------------------------------------------------------------
@@ -289,11 +290,42 @@ class ConsoleScreen:
         except Exception:
             pass
 
-    def _mirror(self, plain):
+    def _mirror(self, plain, parts=None):
+        """A committed line into the debug file, as plain text; with `parts`
+        (the line as the terminal shows it) it is kept for the page too.  A
+        line the terminal does not show (a held gate row) has no parts."""
         try:
             self.debug.write('[console] ' + plain + '\n')
         except Exception:
             pass
+        if parts is not None:
+            self._page_seq += 1
+            self._page_lines.append((self._page_seq, [(str(t), s) for t, s in parts if t]))
+
+    def page_snapshot(self, after=0):
+        """What the page beside our own window shows (gui_page asks from its
+        own thread, a few times a second): the committed lines numbered
+        above `after`, the live activity and the counts the narration keeps.
+        Read only: nothing of the console changes."""
+        with self._lock:
+            live = self._live
+            activity = None
+            if live is not None:
+                activity = {'id': live['t0'], 'kind': live['kind'],
+                            'head': [list(part) for part in live['head']],
+                            'info': [str(text) for text in live['info']],
+                            'sprite': live.get('sprite'),
+                            'elapsed': time.perf_counter() - live['t0']}
+            return {'seq': self._page_seq,
+                    'lines': [[n, [list(part) for part in parts]]
+                              for n, parts in self._page_lines if n > after],
+                    'live': activity,
+                    'run_id': self.run_id,
+                    'elapsed': time.perf_counter() - self._t0,
+                    'counts': {'plans': self._plans, 'plans_found': self._plans_found,
+                               'dispatched': self._dispatched, 'completed': self._completed,
+                               'failed': self._failed, 'holding': self._holding,
+                               'unknown': self._unknown}}
 
     def _say(self, text, important=False):
         """The voice, when there is one: important sentences are always
@@ -378,7 +410,7 @@ class ConsoleScreen:
             cols = self._cols()
             rows = _wrap(parts, (cols - 1) if cols else None, indent, hang)
             self._write_rows(rows)
-            self._mirror(' ' * indent + _plain(parts))
+            self._mirror(' ' * indent + _plain(parts), [(' ' * indent, None)] + list(parts))
             self._redraw_live()
 
     # ----- the live activity (the animated block) ---------------------------
@@ -410,7 +442,7 @@ class ConsoleScreen:
             self._live = live
             if mode == 'block':
                 self._write_rows(_wrap(head, cols - 1, 0, 2))
-                self._mirror(head_plain)
+                self._mirror(head_plain, head)
                 live['committed'] = True
             elif mode == 'line':
                 # A head that leaves no room for the status is committed
@@ -418,7 +450,7 @@ class ConsoleScreen:
                 # is the pending row the status is appended to.
                 if len(head_plain) + 14 > cols - 1:
                     self._write_rows(_wrap(head, cols - 1, 0, 2))
-                    self._mirror(head_plain)
+                    self._mirror(head_plain, head)
                     live['committed'] = True
                 else:
                     self._write_raw(self._render(head))
@@ -450,7 +482,7 @@ class ConsoleScreen:
             self._write_raw('\n')
         else:
             self._write_raw(self._render(live['head']) + '\n')
-        self._mirror(live['head_plain'])
+        self._mirror(live['head_plain'], live['head'])
         live['committed'] = True
 
     def _stand_aside(self):
@@ -489,7 +521,8 @@ class ConsoleScreen:
                         and len(joined) <= cols - 1):
                     self._write_raw(f"\033[1A\033[{len(live['head_plain']) + 2}G"
                                     + self._render(completion) + '\n')
-                    self._mirror('  ' + self.g('sub') + ' ' + _plain(sub))
+                    self._mirror('  ' + self.g('sub') + ' ' + _plain(sub),
+                                 [('  ', None), (self.g('sub') + ' ', 'dim')] + sub)
                 else:
                     self._emit([(self.g('sub') + ' ', 'dim')] + sub, indent=2, hang=4)
             elif not live['committed']:
@@ -504,7 +537,7 @@ class ConsoleScreen:
                 else:
                     self._write_raw((self._render(live['head']) + ' ' if live['mode'] == 'line'
                                      else ' ') + self._render(completion) + '\n')
-                    self._mirror(joined)
+                    self._mirror(joined, list(live['head']) + [(' ', None)] + list(completion))
             else:
                 self._emit([(self.g('sub') + ' ', 'dim')] + sub, indent=2, hang=4)
             self._show_cursor()

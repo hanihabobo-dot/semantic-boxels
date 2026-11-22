@@ -153,6 +153,14 @@ How a line reaches the screen
   5. print() inside `with terminal():` (_TerminalWriter).
 What is shown ends in ConsoleScreen._emit (a committed line) or in the
 live activity (_start_live, _update_live, _end_live).
+
+The page beside our own window
+------------------------------
+gui_page.py (--gui-page on) shows the same console in a browser.  It reads
+it through page_snapshot (ConsoleScreen.page_snapshot: the committed lines
+with their styles, the live activity, the narration's counts) and page_art
+(the looks as data), from its own thread and under the console's lock;
+nothing of the console changes for it.
 """
 import argparse
 import atexit
@@ -166,6 +174,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections import deque
 from contextlib import contextmanager
 
 # Parts of the console live in files of their own (the console_* imports
@@ -181,7 +190,7 @@ from console.console_phrases import (  # noqa: F401
     _DEFAULT_REASON, _GATE_ROW, _OUTCOME)
 from console.console_screen import (  # noqa: F401
     BLOCK_MIN_COLS, BLOCK_MIN_ROWS, FRAME_S, SHOW_AFTER_S, BANNER_COLS,
-    _GLYPHS, _STARS, _STARS_ASCII, _CUBE, _CUBE_ASCII, _CUBE_LOOP,
+    PAGE_LINES, _GLYPHS, _STARS, _STARS_ASCII, _CUBE, _CUBE_ASCII, _CUBE_LOOP,
     _CUBE_INNER, _CUBE_W, _LIGHT_LEN, _CODES, _CODES_256, _PALETTE, _Style,
     _color_depth, _load_art, _start_audio, _color_wanted, _unicode_wanted,
     _mark, _plain, _wrap, _clip, ConsoleScreen)
@@ -351,6 +360,34 @@ def say(text):
 
 def warn(text):
     _call(Console.warn, text)
+
+
+def page_snapshot(after=0):
+    """For gui_page (the page beside our own window): what the console shows
+    now, as data (ConsoleScreen.page_snapshot); None without an installed
+    console.  Read only, and the one call here that another thread makes."""
+    c = _console
+    return c.page_snapshot(after) if c is not None else None
+
+
+def page_art():
+    """For gui_page: the console's looks as data, so that the page draws
+    what the terminal draws: the styles' SGR codes, the activities' colours,
+    the boxel cube with its running light, the stars and console_art's
+    sprites with their palette."""
+    sprites, palette, _ = _load_art()
+    return {
+        'codes': dict(_CODES_256),
+        'palette': {key: codes[0] for key, codes in palette.items()},
+        'kinds': {kind: list(hues) for kind, hues in _PALETTE.items()},
+        'cube': list(_CUBE),
+        'cube_loop': [list(cell) for cell in _CUBE_LOOP],
+        'cube_inner': sorted(list(cell) for cell in _CUBE_INNER),
+        'light_len': _LIGHT_LEN,
+        'stars': list(_STARS),
+        'frame_ms': int(FRAME_S * 1000),
+        'sprites': sprites,
+    }
 
 
 def finish(code=0):
@@ -579,6 +616,10 @@ class Console(ConsoleScreen, ConsoleNarration):
         self._closed = False
         self._crash_reported = False
         self._lock = threading.RLock()
+        # the committed lines as (text, style) parts, numbered, for the page
+        # beside our own window (gui_page reads them through page_snapshot)
+        self._page_lines = deque(maxlen=PAGE_LINES)
+        self._page_seq = 0
         # the terminal and the files, taken over in _take_over
         self._saved = None
         self._term_fd = None

@@ -77,13 +77,39 @@ def test_these_are_the_panes_our_own_window_keeps():
     """boxel_env.py opens our window with PyBullet's panel as it comes, all
     three panes on (Hani, 2026-11-21: "put segmentation pane back on all
     over"); were a pane switched off there, their window would no longer
-    show what ours shows."""
-    flags = {(ast.unparse(c.args[0]), ast.unparse(c.args[1]))
-             for c in _calls_in(_tree('world', 'boxel_env.py'), 'p.configureDebugVisualizer')}
-    assert not [f for f, _ in flags
-                if f in ('p.COV_ENABLE_GUI', 'p.COV_ENABLE_RGB_BUFFER_PREVIEW',
-                         'p.COV_ENABLE_DEPTH_BUFFER_PREVIEW',
-                         'p.COV_ENABLE_SEGMENTATION_MARK_PREVIEW')]
+    show what ours shows.  One switch is there since 2026-11-22, under its
+    own condition alone: with the page beside our own window (gui_page.py,
+    --gui-page on) the whole panel goes and the page shows the pictures."""
+    tree = _tree('world', 'boxel_env.py')
+    pane_flags = ('p.COV_ENABLE_GUI', 'p.COV_ENABLE_RGB_BUFFER_PREVIEW',
+                  'p.COV_ENABLE_DEPTH_BUFFER_PREVIEW',
+                  'p.COV_ENABLE_SEGMENTATION_MARK_PREVIEW')
+
+    def switches(node):
+        return [(ast.unparse(c.args[0]), ast.unparse(c.args[1]))
+                for c in _calls_in(node, 'p.configureDebugVisualizer')
+                if ast.unparse(c.args[0]) in pane_flags]
+
+    under_the_page = [s for n in ast.walk(tree)
+                      if isinstance(n, ast.If) and ast.unparse(n.test) == 'self._page is not None'
+                      for s in switches(n)]
+    assert switches(tree) == [('p.COV_ENABLE_GUI', '0')]
+    assert under_the_page == switches(tree)
+
+
+def test_the_bridge_never_starts_the_page_of_our_own_window():
+    """The page belongs to our own window; in their window the panes stay.
+    No file of the bridge names the module gui_page (as a name, in an
+    import of console.gui_page, or in an import from it)."""
+    folder = os.path.join(REPO, 'tampura_bridge')
+    for name in sorted(os.listdir(folder)):
+        if not name.endswith('.py'):
+            continue
+        named = [n for n in ast.walk(_tree('tampura_bridge', name))
+                 if (isinstance(n, ast.Name) and n.id == 'gui_page')
+                 or (isinstance(n, ast.alias) and 'gui_page' in n.name.split('.'))
+                 or (isinstance(n, ast.ImportFrom) and 'gui_page' in (n.module or '').split('.'))]
+        assert not named, name
 
 
 def test_show_asks_pybullet_for_window_flags_and_nothing_else():

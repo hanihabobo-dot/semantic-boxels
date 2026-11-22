@@ -3170,6 +3170,23 @@ if __name__ == "__main__":
     random.seed(args.seed)
     np.random.seed(args.seed)
 
+    # The page beside our own window (gui_page.py; Hani, 2026-11-22), only
+    # when the run asks for it and opens a window.  Started here, before
+    # the scene is built, so that a browser finds it while the run starts
+    # up; BoxelTestEnv asks gui_page.active() when it opens the window and
+    # then leaves PyBullet's own panels off.  Display only: the page reads
+    # the console and gets copies of the camera's renders, nothing more.
+    if getattr(args, 'gui_page', 'off') == 'on' and not args.no_gui:
+        from console import gui_page
+        _page = gui_page.start(console=console_ui)
+        if _page is not None:
+            _line = f"the page of this run: {_page.url}"
+            console_ui.startup(_line) if console_ui.installed() else print(_line)
+        else:
+            _line = (f"--gui-page on: no page, no free port for it "
+                     f"({gui_page.last_error}); PyBullet's window stays as it is")
+            console_ui.warn(_line) if console_ui.installed() else print(_line)
+
     # Lazy scene construction — each builder captures CLI args and
     # returns a SceneConfig when called, so only the selected scene
     # pays the cost of object placement computation.
@@ -3251,6 +3268,8 @@ if __name__ == "__main__":
     }
     if getattr(args, 'eye', 'fixed') == 'arm':     # path 9
         run_config["eye"] = "arm"
+    if getattr(args, 'gui_page', 'off') == 'on' and not args.no_gui:
+        run_config["gui_page"] = "on"              # only where a run has the page
 
     # RunLogger captures all artefacts (PDDL files, boxel data, logs)
     # regardless of console verbosity for post-mortem analysis.

@@ -22,6 +22,8 @@ meanings are in the help text):
     optimistic search       --search-effort-weight  --search-initial-complexity
     die-slip fixes,         --slip-fixes  --grip-squeeze-mm  --save-screenshots
       squeeze, screenshots
+    the page beside our     --gui-page
+      own window
     FastDownward's search   --planner
     free space              --baseline  --uniform-cell-size  --min-boxel-size
     telemetry and counts    --telemetry  --no-telemetry  --world-counts
@@ -329,6 +331,18 @@ def parse_pipeline_args(argv=None):
         help="Save world_eye's eye_<k>_camera.png (the robot's camera) and, "
              "under the GUI, eye_<k>_gui.png at every snapshot, in the run "
              "directory.  Debugging only; off by default (BF#50).")
+    # The page beside our own window (gui_page.py; Hani, 2026-11-22).
+    # Display only and off unless a run asks: the launcher (run boxels)
+    # asks for it in a window run.
+    parser.add_argument(
+        '--gui-page', choices=['off', 'on'], default='off',
+        help="Under the GUI: open our own window without PyBullet's own "
+             "panels (its menu, tabs, Params column, white strip, status "
+             "bar, grid and three camera panes) and serve a page for a "
+             "browser beside it, with the console's drawing and lines and "
+             "the three pictures of the robot's camera (gui_page.py; the "
+             "address is printed, `run boxels` opens it).  Display only; "
+             "off by default; nothing happens with --no-gui.")
     # Flag of FastDownward's search.
     parser.add_argument(
         '--planner',
