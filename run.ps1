@@ -13,9 +13,9 @@
 #                              same console and planner;  `boxels` alone is the same word
 #   run boxels -Seed 3 -Headless
 #   run boxels -NoPage         PyBullet's own window as it was (its panels and three camera panes) and no page;
-#                              without it a window run of boxels shows the simulator alone in its window and
-#                              opens a page beside it (a browser window; move it): the console's drawing and
-#                              lines and the three pictures of the robot's camera (gui_page.py)
+#                              without it a window run of boxels shows the simulator alone in its window and a
+#                              page held against it, the two moving as one (the console's drawing and lines, the
+#                              robot camera's three pictures; gui_page.py);  -LoosePage   the page as its own window
 #   run boxels -Scene stack -Goal stack -Occluders 0
 #   run tampura -Off           without M8-M10 (the old pipeline);  -Squeeze 1   a pick squeeze in mm
 #   run boxels -Look boxel     one look action from a free-space boxel instead of sense and observe (path 9)
@@ -60,6 +60,7 @@ param(
     [switch]$Screenshots,
     [string[]]$Draw = @(),
     [switch]$NoPage,
+    [switch]$LoosePage,
     [switch]$Music,
     [switch]$Sfx,
     [switch]$Voice,
@@ -276,7 +277,7 @@ function Open-Page([string]$url) {
     if ($open -gt 0) { return }
     try {
         $edge = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe' -ErrorAction Stop).'(default)'
-        Start-Process -FilePath $edge -ArgumentList "--app=$url", '--window-size=640,800'
+        Start-Process -FilePath $edge -ArgumentList "--app=$url", '--window-size=420,640'
     } catch {
         try { Start-Process $url } catch {
             Write-Host "run: the page did not open ($($_.Exception.Message)); it is at $url" -ForegroundColor Yellow
@@ -326,6 +327,18 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
     $viewerAt = $null
     $pageWord = $r.Page     # the page is looked for until its server answers (the run may wait for the lock first)
     try {
+        if ($r.Page -and -not $LoosePage) {
+            # The page is held against the simulator's window, the two as one (tools/page_dock.ps1;
+            # Hani, 2026-11-22).  The holder waits for this run's two windows, ends by itself when
+            # the window or the run is gone, and is never ended from here.  A failure to start it
+            # never touches the run: the page then opens as a window of its own.
+            try {
+                $holdArgs = @('-NoProfile', '-File', ('"' + (Join-Path $PSScriptRoot 'tools/page_dock.ps1') + '"'), '-WatchPid', $p.Id)
+                $null = Start-Process -FilePath (Join-Path $PSHOME 'pwsh.exe') -ArgumentList $holdArgs -WindowStyle Hidden
+            } catch {
+                Write-Host "run: the page is not held against the window ($($_.Exception.Message)); it opens as a window of its own" -ForegroundColor Yellow
+            }
+        }
         if ($r.Cameras) {
             # -Draw cameras: the window of what our cameras see (tools/camera_view.ps1).  It only
             # reads the run's cameras folder (at low priority), closes 20 s after this run's process

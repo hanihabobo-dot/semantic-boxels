@@ -1,0 +1,187 @@
+"""Hani, 2026-11-22: "can you make them stick together and look like one
+window and move together?"  The holder of the page beside our own window
+(tools/page_dock.ps1, tools/page_dock.cs), as far as it can be tested
+without a window on the desktop (tracks rule 13):
+
+  the arithmetic   PageDock.Place, compiled and called through pwsh.exe: where
+                   the page's window goes for a simulator window at the left
+                   edge, in the middle, at the right edge, as wide as the
+                   screen, and that the page keeps its side while it serves
+  what it touches  the Windows calls the source names: it places, shows and
+                   cuts a window and reads; nothing is sent to a program
+  the names        the windows it looks for are the ones the page and
+                   PyBullet open, and the ones the launcher watches
+  the launcher     run boxels starts it for a run with the page, -LoosePage
+                   leaves it out, and it changes nothing of the run's command
+
+Holding two real windows together is tried on a desktop that is not shown
+(tracks/dbgcams/checks/dock_trial.ps1); how the pair looks, and how the real
+simulator window behaves, only a look at a real run can say.
+"""
+import platform
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+RUN_PS1 = ROOT / 'run.ps1'
+DOCK_PS1 = ROOT / 'tools' / 'page_dock.ps1'
+DOCK_CS = ROOT / 'tools' / 'page_dock.cs'
+
+_IN_WSL = 'microsoft' in platform.uname().release.lower()
+_ON_DRIVE = re.match(r'^/mnt/[a-z]/', str(ROOT)) is not None
+_PWSH = shutil.which('pwsh.exe') if _IN_WSL and _ON_DRIVE else None
+needs_pwsh = pytest.mark.skipif(
+    _PWSH is None, reason='needs pwsh.exe through WSL interop and a checkout '
+                          'on a Windows drive')
+
+RIGHT, LEFT, OVER_RIGHT, OVER_LEFT = 1, 2, 3, 4
+WORK = (0, 0, 1920, 1008)               # a 1920x1080 screen without its taskbar
+MARGINS = (11, 45, 14, 14)              # the page inside its browser window, as the trial measured it
+WANT, MIN = 600, 360                    # 400 and 240 at 150 % scaling
+
+# name: (the simulator's window, the page's margins, the side it is on, then what is expected:
+#        side, width, the page's whole window, the cut inside it)
+CASES = {
+    'room on the right':
+        ((0, 40, 1296, 800), MARGINS, 0, RIGHT, 600, (1285, -5, 1910, 814), (11, 45, 611, 805)),
+    'less room on the right than wanted':
+        ((200, 100, 1496, 860), MARGINS, 0, RIGHT, 424, (1485, 55, 1934, 874), (11, 45, 435, 805)),
+    'room on the left only':
+        ((624, 40, 1920, 800), MARGINS, 0, LEFT, 600, (13, -5, 638, 814), (11, 45, 611, 805)),
+    'too little room on both sides':
+        ((300, 40, 1596, 800), MARGINS, 0, OVER_RIGHT, 360, (1549, -5, 1934, 814), (11, 45, 371, 805)),
+    'too little room on both sides, coming from the left':
+        ((300, 40, 1596, 800), MARGINS, LEFT, OVER_LEFT, 360, (-11, -5, 374, 814), (11, 45, 371, 805)),
+    'the simulator as wide as the screen':
+        ((0, 0, 1920, 1008), MARGINS, 0, OVER_RIGHT, 360, (1549, -45, 1934, 1022), (11, 45, 371, 1053)),
+    'on the left while the left serves, though the right has room too':
+        ((500, 40, 1400, 800), MARGINS, LEFT, LEFT, 500, (-11, -5, 514, 814), (11, 45, 511, 805)),
+    'on the right while the right serves, though the left has more room':
+        ((700, 40, 1520, 800), MARGINS, RIGHT, RIGHT, 400, (1509, -5, 1934, 814), (11, 45, 411, 805)),
+    'a window without a page found inside it is not cut':
+        ((0, 40, 1296, 800), (0, 0, 0, 0), 0, RIGHT, 600, (1296, 40, 1896, 800), (0, 0, 600, 760)),
+}
+
+
+def _win(path):
+    return subprocess.run(['wslpath', '-w', str(path)], capture_output=True,
+                          text=True, check=True).stdout.strip()
+
+
+@pytest.fixture(scope='module')
+def placed():
+    """Every case through the compiled PageDock.Place, in one pwsh call."""
+    lines = ["$ErrorActionPreference = 'Stop'",
+             f"Add-Type -Path '{_win(DOCK_CS)}' -IgnoreWarnings",
+             # (not named R: that is PowerShell's own short name for Invoke-History)
+             "function New-Rect($l, $t, $r, $b) { $x = New-Object PageDock+RECT; "
+             "$x.L = $l; $x.T = $t; $x.R = $r; $x.B = $b; $x }",
+             "$work = New-Rect %d %d %d %d" % WORK,
+             "'consts|' + [PageDock]::Right + '|' + [PageDock]::Left + '|' + "
+             "[PageDock]::OverRight + '|' + [PageDock]::OverLeft"]
+    for i, (sim, m, side_now, *_expected) in enumerate(CASES.values()):
+        lines.append(
+            "$p = [PageDock]::Place((New-Rect %d %d %d %d), $work, %d, %d, %d, %d, %d, %d, %d); "
+            "'%d|' + $p.Side + '|' + $p.Width + '|' + $p.Window + '|' + $p.Region"
+            % (*sim, *m, WANT, MIN, side_now, i))
+    proc = subprocess.run([_PWSH, '-NoProfile', '-NonInteractive', '-Command', '\n'.join(lines)],
+                          capture_output=True, text=True, timeout=300, cwd=str(ROOT))
+    assert proc.returncode == 0, proc.stderr
+    rows = [ln.strip().split('|') for ln in proc.stdout.splitlines() if '|' in ln]
+    return {row[0]: row[1:] for row in rows}
+
+
+@needs_pwsh
+def test_the_sides_have_the_numbers_this_file_uses(placed):
+    assert placed['consts'] == [str(RIGHT), str(LEFT), str(OVER_RIGHT), str(OVER_LEFT)]
+
+
+@needs_pwsh
+@pytest.mark.parametrize('name', list(CASES))
+def test_where_the_page_goes(placed, name):
+    sim, margins, _side_now, side, width, window, cut = CASES[name]
+    got = placed[str(list(CASES).index(name))]
+    assert got == [str(side), str(width), ','.join(map(str, window)), ','.join(map(str, cut))], name
+    # what is seen of the page: the cut, on the screen
+    seen = (window[0] + cut[0], window[1] + cut[1], window[0] + cut[2], window[1] + cut[3])
+    assert (seen[1], seen[3]) == (sim[1], sim[3]), 'the simulator\'s top and height'
+    if side == RIGHT:
+        assert seen[0] == sim[2], 'flush against its right edge'
+    elif side == LEFT:
+        assert seen[2] == sim[0], 'flush against its left edge'
+    elif side == OVER_RIGHT:
+        assert seen[2] == WORK[2] and seen[2] - seen[0] == MIN
+    else:
+        assert seen[0] == WORK[0] and seen[2] - seen[0] == MIN
+    assert WORK[0] <= seen[0] and seen[2] <= WORK[2], 'what is seen stays on the screen'
+
+
+def test_the_holder_places_shows_and_cuts_a_window_and_sends_nothing():
+    """The Windows calls the source names, all of them: reading windows,
+    placing, showing and cutting one, the reports of Windows about the two
+    programs' windows, the holder's own message loop and timer.  No call
+    that sends a message, a key or a click to a program is among them."""
+    names = set(re.findall(r'static extern [\w\[\]]+ (\w+)\(', DOCK_CS.read_text(encoding='utf-8')))
+    assert names == {
+        'EnumWindows', 'EnumChildWindows', 'IsWindow', 'IsWindowVisible', 'IsIconic', 'IsZoomed',
+        'GetWindowText', 'GetClassName', 'GetWindowThreadProcessId', 'GetWindowRect',
+        'GetWindowRgnBox', 'GetWindowPlacement', 'MonitorFromWindow', 'GetMonitorInfo',
+        'GetDpiForWindow', 'DwmGetWindowAttribute',
+        'SetWindowPos', 'ShowWindow', 'SetWindowRgn', 'SetWindowPlacement',
+        'CreateRectRgn', 'DeleteObject',
+        'SetThreadDpiAwarenessContext', 'SetWinEventHook', 'UnhookWinEvent',
+        'GetMessage', 'TranslateMessage', 'DispatchMessage', 'SetTimer', 'KillTimer',
+        'PostQuitMessage'}
+
+
+def _default(name):
+    return re.search(r"\[string\]\$%s = '([^']*)'" % name, DOCK_PS1.read_text(encoding='utf-8')).group(1)
+
+
+def test_the_holder_looks_for_the_windows_the_page_and_pybullet_open():
+    from console import gui_page
+    import pybullet
+    page = gui_page.Page(None, 0)
+    try:
+        assert page.title.startswith(_default('PageTitle'))
+    finally:
+        page.close()
+    # the simulator's title is PyBullet's own (it takes none from us): read from the library
+    with open(pybullet.__file__, 'rb') as f:
+        assert (_default('SimTitle') + ' ExampleBrowser').encode() in f.read()
+    # and the launcher watches the same window of the same program
+    ps = RUN_PS1.read_text(encoding='utf-8')
+    assert f"Get-Process -Name {_default('SimProcess')} " in ps
+    assert f"-like '*{_default('SimTitle')}*'" in ps
+
+
+def test_the_launcher_starts_the_holder_for_a_run_with_the_page_and_never_ends_it():
+    ps = RUN_PS1.read_text(encoding='utf-8')
+    code = '\n'.join(ln for ln in ps.splitlines() if not ln.lstrip().startswith('#'))
+    assert code.count('tools/page_dock.ps1') == 1
+    start = code.index('if ($r.Page -and -not $LoosePage) {')
+    block = code[start:code.index('if ($r.Cameras) {', start)]
+    assert "'tools/page_dock.ps1'" in block and "'-WatchPid', $p.Id" in block
+    assert '-WindowStyle Hidden' in block and '-PassThru' not in block     # started, not kept, not ended
+    assert 'try {' in block and 'catch {' in block                           # a failure never touches the run
+    assert code.index('$p = [System.Diagnostics.Process]::Start($psi)') < start
+
+
+@needs_pwsh
+def test_loose_page_changes_nothing_of_the_runs_command():
+    """-LoosePage is the launcher's own: the run asks for the page as before."""
+    win = _win(RUN_PS1)
+    script = (f"& '{win}' boxels -Seed 3 -LoosePage -DryRun *>&1 | Out-String; '@@'; "
+              f"& '{win}' boxels -Seed 3 -DryRun *>&1 | Out-String; '@@'; & '{win}' help | Out-String")
+    proc = subprocess.run([_PWSH, '-NoProfile', '-NonInteractive', '-Command', script],
+                          capture_output=True, text=True, timeout=300, cwd=str(ROOT))
+    assert proc.returncode == 0, proc.stderr
+    loose, held, help_text = proc.stdout.split('@@')
+    word = re.compile(r'SB_GUI_PAGE_TOKEN=[0-9a-f]{12}')
+    assert word.search(loose) and ' --gui-page on' in loose
+    assert word.sub('', loose).strip() == word.sub('', held).strip()
+    assert '-LoosePage' in help_text and 'held against it' in help_text

@@ -487,6 +487,19 @@ figcaption { color: var(--dim); font-size: 12px; margin-top: 3px; }
   #cams { grid-column: 2; grid-row: 1 / span 2; border-bottom: 0; border-left: 1px solid var(--line); overflow: auto; }
   .camrow { grid-template-columns: minmax(0, 1fr); }
 }
+/* held against the simulator's window the page is narrow and no taller than that window */
+@media (max-width: 520px) {
+  header { padding: 7px 10px; gap: 8px; }
+  header .brand { letter-spacing: .08em; }
+  #now { gap: 12px; padding: 9px 10px; min-height: 0; }
+  #art { font-size: 17px; }
+  #head { font-size: 14px; }
+  #info, #status, #counts { font-size: 12px; }
+  #cams { padding: 8px 10px 9px; }
+  .camrow { gap: 6px; }
+  figcaption { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #log { padding: 8px 10px 12px; font-size: 12px; }
+}
 </style>
 <style id="art-css"></style>
 </head>
@@ -536,6 +549,11 @@ let art = null, after = 0, runKey = null, ended = false, endedAt = 0, sawRun = f
 let live = null, liveT0 = 0, lastHead = null, drawn = '';
 let camVersion = -1, cam = null, camAt = 0;
 let runElapsed = null, runElapsedAt = 0, runId = '';
+// The log shows its newest line until the reader scrolls up, and again once they are back at
+// its end.  Kept as a state, not measured when lines arrive: the log's box changes its height
+// without a scroll (the window is resized when it is held against the simulator's, the camera
+// pictures load, one is made large), and a log that was at its end must still be there after.
+let following = true;
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -581,7 +599,7 @@ function empty(id, text) {
 }
 function startOver() {
   after = 0; live = null; lastHead = null; drawn = ''; camVersion = -1; cam = null; art = null;
-  runId = ''; runElapsed = null;
+  runId = ''; runElapsed = null; following = true;
   for (const name of ['rgb', 'depth', 'mask']) $('cam-' + name).src = BLANK;
   empty('camline', "The robot's camera: no picture yet");
   empty('cap-depth', 'depth, near is bright');
@@ -621,7 +639,6 @@ function show(s) {
     runId = c.run_id || '';
     runElapsed = c.elapsed; runElapsedAt = performance.now();
     const log = $('log');
-    const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
     for (const row of c.lines) {
       const line = el('div', 'ln');
       partsInto(line, row[1]);
@@ -630,7 +647,7 @@ function show(s) {
       if (first && first[0] !== ' ' && row[1].length > 1) lastHead = row[1];
     }
     while (log.childNodes.length > 600) log.removeChild(log.firstChild);
-    if (stick && c.lines.length) log.scrollTop = log.scrollHeight;
+    if (following && c.lines.length) log.scrollTop = log.scrollHeight;
     after = c.seq;
     if (c.live) {
       if (!live || live.id !== c.live.id) liveT0 = performance.now() - c.live.elapsed * 1000;
@@ -744,6 +761,12 @@ $('camrow').addEventListener('click', ev => {
   row.classList.toggle('one', !big);
   if (!big) fig.classList.add('big');
 });
+
+$('log').addEventListener('scroll', () => {
+  const log = $('log');
+  following = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+});
+new ResizeObserver(() => { if (following) $('log').scrollTop = $('log').scrollHeight; }).observe($('log'));
 
 for (const name of ['rgb', 'depth', 'mask']) $('cam-' + name).src = BLANK;
 setInterval(draw, 50);
