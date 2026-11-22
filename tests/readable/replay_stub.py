@@ -33,6 +33,7 @@ plan() is the caller.  Nothing here touches a pipeline file.
 """
 import hashlib
 import importlib.util
+import io
 import json
 import pickle
 import sys
@@ -57,6 +58,18 @@ class ReplayTapeError(BaseException):
     """The replay asked the solver more often than the live episode did."""
 
 
+class _TapeUnpickler(pickle.Unpickler):
+    """Reads also a tape recorded before the modules moved into their
+    folders.  A tape names the class of a stream object by its module, and
+    such a tape says 'streams' where this checkout imports
+    'planning.streams' (record_episode.real_module finds the folder)."""
+
+    def find_class(self, module, name):
+        if '.' not in module:
+            module = _tool().real_module(module)
+        return super().find_class(module, name)
+
+
 class Tape:
     """A recorded tape folder: calls.jsonl, solution_k.pkl, text_k.json,
     rng_k.pkl.  pickle is read only from folders record_episode.py wrote on
@@ -70,7 +83,7 @@ class Tape:
         return len(self.calls)
 
     def solution(self, k):
-        return pickle.loads((self.folder / f'solution_{k:04d}.pkl').read_bytes())
+        return _TapeUnpickler(io.BytesIO((self.folder / f'solution_{k:04d}.pkl').read_bytes())).load()
 
     def chunks(self, k):
         return json.loads((self.folder / f'text_{k:04d}.json').read_text(encoding='utf-8'))
