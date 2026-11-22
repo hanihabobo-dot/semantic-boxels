@@ -186,14 +186,23 @@ def test_the_post_lift_check_is_contact_only_and_ungated():
 
 
 def test_the_dispatcher_takes_the_empty_hand_path_on_a_loss():
-    src = inspect.getsource(test_full_pipeline.main)
+    # The dispatcher's move branch is the call of do_move, cut out of main():
+    # the branch passes do_move's True on, and execute_plan leaves its loop
+    # over the plan on it.  So a `return True` of do_move is the `break` the
+    # branch held before, and the names are fields of the episode state st.
+    src = inspect.getsource(test_full_pipeline.dispatch_step)
     m = src.index("if action_name == 'move':")
-    move = src[m:src.index("elif action_name == 'sense':", m)]
-    begin = move.index('_carry0 = carry_hold_begin(robot_id, held_body_id)')
+    assert src[m:src.index("elif action_name == 'sense':", m)].split() == (
+        "if action_name == 'move': if do_move(st, env, i, params): return True").split()
+    assert ("for i, action in enumerate(st.round.plan): "
+            "if dispatch_step(st, env, i, action): break") in ' '.join(
+        inspect.getsource(test_full_pipeline.execute_plan).split())
+    move = inspect.getsource(test_full_pipeline.do_move)
+    begin = move.index('_carry0 = carry_hold_begin(st.setup.robot_id, st.hand.held_body_id)')
     # The waypoint stream: today's per-pair loop, or carry_trapezoid's one
     # call once that fix is merged beside this one (slip/campaign).
     stream = [i for i in (move.find('for wi, wp in enumerate(traj.waypoints[1:]'),
-                          move.find('stream_move_waypoints(robot_id, traj.waypoints'))
+                          move.find('stream_move_waypoints(st.setup.robot_id, traj.waypoints'))
               if i >= 0]
     assert stream and begin < min(stream)
     end = move.index('_carry = carry_hold_end(')
@@ -207,11 +216,11 @@ def test_the_dispatcher_takes_the_empty_hand_path_on_a_loss():
                  'held_object_boxel_id = None',
                  'audit_robot_held_state(',
                  'env.update_object_positions()',
-                 'pose_belief.mark_pose_unknown(registry.get_boxel(_lost_obj))',
-                 'refresh_object_aabbs(env, registry, viz=viz,',
+                 'pose_belief.mark_pose_unknown(st.setup.registry.get_boxel(_lost_obj))',
+                 'refresh_object_aabbs(env, st.setup.registry, viz=st.setup.viz,',
                  'retire_lost_objects(',
                  "dispatch_end('empty_hand')",
-                 'break'):
+                 'return True'):
         assert step in path, step
     import os
     import sys

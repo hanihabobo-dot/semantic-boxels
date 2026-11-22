@@ -13,6 +13,15 @@ from its head to the classification of a failed plan (the dispatch of a
 plan is left out): taken from the source by ast, compiled as they are, and
 run with stand-ins for the names they use.  The record's plan_count is the
 expression main() passes to report_run_outcome, evaluated after the loop.
+
+Since main() was cut into functions these statements stand in three
+places: the loop itself in main(), and plan_or_stop and
+no_plan_ends_episode, which the loop calls before execute_plan (the
+dispatch; its first statement is the "Plan:" print the loop was cut at).
+The two functions are compiled from the source with the loop.  The names
+the statements use are fields of the episode state st now, so the stand-ins
+are fields of a stand-in st; what was a global of the file stays a name.
+The report_run_outcome call stands in report_episode.
 """
 import ast
 import contextlib
@@ -30,29 +39,53 @@ GOAL = ('holding', TARGET)
 
 
 def _main():
+    """The file's functions by name: main() and the functions cut out of it
+    (their first parameter is the episode state st), defined in the file or
+    in a file beside it that it imports them from by name."""
     tree = ast.parse(SOURCE_PATH.read_text(encoding='utf-8'))
-    (main,) = [n for n in tree.body
-               if isinstance(n, ast.FunctionDef) and n.name == 'main']
-    return main
+    defs = [n for n in tree.body if isinstance(n, ast.FunctionDef)]
+    for imp in tree.body:
+        other = SOURCE_PATH.parent / f'{getattr(imp, "module", None)}.py'
+        if isinstance(imp, ast.ImportFrom) and other.exists():
+            names = {a.name for a in imp.names}
+            defs += [n for n in ast.parse(other.read_text(encoding='utf-8')).body
+                     if isinstance(n, ast.FunctionDef) and n.name in names]
+    fns = {n.name: n for n in defs if n.name == 'main'
+           or [a.arg for a in n.args.args][:1] == ['st']}
+    assert len(fns) == len([n for n in defs if n.name in fns])   # each name once
+    return fns
 
 
-def _planning_rounds(main):
-    """main()'s loop up to the dispatch of a plan, compiled with the
-    file's own name and line numbers."""
-    (loop,) = [n for n in main.body if isinstance(n, ast.While)
-               and ast.unparse(n.test) == 'not _loop_done()']
+def _planning_rounds(fns):
+    """main()'s loop up to the dispatch of a plan, with the functions of the
+    file these statements call, compiled with the file's own name and line
+    numbers."""
+    (loop,) = [n for n in fns['main'].body if isinstance(n, ast.While)
+               and ast.unparse(n.test) == 'not _loop_done(st)']
+    # the dispatch: the loop's call of execute_plan, whose first statement
+    # is the print the loop was cut at
     (cut,) = [i for i, s in enumerate(loop.body)
-              if isinstance(s, ast.Expr)
-              and ast.unparse(s).startswith("print(f'Plan: ")]
+              if isinstance(s, ast.If)
+              and ast.unparse(s.test) == 'execute_plan(st, env)']
+    first = fns['execute_plan'].body[0]
+    assert isinstance(first, ast.Expr)
+    assert ast.unparse(first).startswith("print(f'Plan: ")
     rounds = ast.copy_location(
         ast.While(test=loop.test, body=loop.body[:cut], orelse=[]), loop)
-    return compile(ast.Module(body=[rounds], type_ignores=[]),
+    called = dict.fromkeys(c.func.id for s in rounds.body for c in ast.walk(s)
+                           if isinstance(c, ast.Call) and isinstance(c.func, ast.Name))
+    cut_out = [fns[name] for name in called if name in fns]
+    assert cut_out                         # plan_or_stop, no_plan_ends_episode
+    return compile(ast.Module(body=cut_out + [rounds], type_ignores=[]),
                    str(SOURCE_PATH), 'exec')
 
 
-def _record_plan_count(main):
-    """The plan_count main() passes to report_run_outcome."""
-    (call,) = [n for n in ast.walk(main) if isinstance(n, ast.Call)
+def _record_plan_count(fns):
+    """The plan_count main() passes to report_run_outcome (through
+    report_episode: the one call in main() and the functions cut out of
+    it)."""
+    (call,) = [n for fn in fns.values() for n in ast.walk(fn)
+               if isinstance(n, ast.Call)
                and ast.unparse(n.func) == 'report_run_outcome']
     (value,) = [k.value for k in call.keywords if k.arg == 'plan_count']
     return compile(ast.Expression(body=value), str(SOURCE_PATH), 'eval')
@@ -93,7 +126,7 @@ def _run(unknown_shadows, plans, seconds, held_body_id=None, belief=None,
     """The rounds of a holding goal; unknown_shadows is what the belief
     reports at the head of each round, or belief is a real BeliefState (M7's
     suspension) and clock_now the clock at the first head.  Returns the
-    names after the loop, the record's plan_count and the planner."""
+    episode state after the loop, the record's plan_count and the planner."""
     main = _main()
     clock = _Clock()
     clock.now = clock_now
@@ -105,76 +138,87 @@ def _run(unknown_shadows, plans, seconds, held_body_id=None, belief=None,
             get_known_empty_shadows=lambda: [],
             get_parked_shadows=lambda: [], occluders_moved={},
             release_suspended=lambda now: [], get_suspended_shadows=lambda: [])
+    # The stand-ins that were names of main() are fields of st, each in the
+    # group episode_state.py gives it; st.round is bound by plan_or_stop.
+    st = types.SimpleNamespace(
+        counts=types.SimpleNamespace(
+            plan_count=0, plan_times=[], total_plan_time=0.0,
+            observe_strikes={}, m8_per_plan=[],
+            boxel_counts_per_replan=[]),
+        ending=types.SimpleNamespace(exit_reason=None),
+        opts=types.SimpleNamespace(gui=False, goal_kind='holding',
+                                   unit_costs=False),
+        strikes=types.SimpleNamespace(
+            disturbed_counts={}, pick_giveup_marked_at={},
+            pick_giveup_objects=set(), pick_parole_counts={},
+            blocked_giveup_shadows=set()),
+        setup=types.SimpleNamespace(
+            belief=belief,
+            registry=types.SimpleNamespace(
+                dirty=False, get_boxel=lambda name: None,
+                get_object_boxels=lambda: [], get_shadow_boxels=lambda: [],
+                get_free_space_boxels=lambda: []),
+            planner=planner,
+            goal=GOAL, target_name=TARGET,
+            planner_target_objects=[TARGET], stack_target_objects=[],
+            on_relations={}, shadows=['s1', 's2'],
+            shadow_occluder_map={}, body_id_to_name={HELD: 'red_object'},
+            visible_target_locations={}),
+        hand=types.SimpleNamespace(held_body_id=held_body_id),
+        arm=types.SimpleNamespace(current_config=None),
+        round=types.SimpleNamespace())
     names = {
-        '_loop_done': lambda: False,
-        'plan_count': 0, 'plan_times': [], 'total_plan_time': 0.0,
-        'exit_reason': None, 'gui': False,
-        'disturbed_counts': {}, 'pick_giveup_marked_at': {},
-        'pick_giveup_objects': set(), 'pick_parole_counts': {},
-        'observe_strikes': {}, 'm8_per_plan': [],
-        'boxel_counts_per_replan': [],
-        'belief': belief,
+        'st': st,
+        '_loop_done': lambda st: False,
         # M7's suspension (Hani, 2026-11-20): the channel of a release and
         # the suspension length in its line
         'provenance': lambda *a, **k: contextlib.nullcontext(),
         'execution': types.SimpleNamespace(M7_SUSPEND_S=120.0),
-        'registry': types.SimpleNamespace(
-            dirty=False, get_boxel=lambda name: None,
-            get_object_boxels=lambda: [], get_shadow_boxels=lambda: [],
-            get_free_space_boxels=lambda: []),
-        'planner': planner,
         'env': types.SimpleNamespace(sync_to_plan_client=_ignore),
         'world_eye': types.SimpleNamespace(snapshot=_ignore),
         'ledger_event': _ignore, 'ledger_plan': _ignore,
         'time': clock, 'Optional': typing.Optional,
-        'goal_kind': 'holding', 'goal': GOAL, 'target_name': TARGET,
-        'planner_target_objects': [TARGET], 'stack_target_objects': [],
-        'on_relations': {}, 'shadows': ['s1', 's2'],
-        'blocked_giveup_shadows': set(), 'shadow_occluder_map': {},
-        'held_body_id': held_body_id, 'body_id_to_name': {HELD: 'red_object'},
-        'current_config': None, 'visible_target_locations': {},
-        'unit_costs': False,
         # BF#65's module (merged with C-07 on track/evalfinal): the rounds call it; off by default
         'interior_regions': interior_regions,
         'args': types.SimpleNamespace(max_plan_time=60.0, log_level='quiet',
                                       planner='default'),
     }
     exec(_planning_rounds(main), names)
-    return names, eval(_record_plan_count(main), names), planner
+    return st, eval(_record_plan_count(main), names), planner
 
 
 def test_all_searched_files_only_the_rounds_that_planned(capsys):
     # round 1 plans a sense; round 2 finds no unknown shadow and stops
-    names, record, planner = _run([['s1'], []], [[('sense', 's1')]], [2.5])
-    assert names['exit_reason'] == 'all_searched'
+    st, record, planner = _run([['s1'], []], [[('sense', 's1')]], [2.5])
+    assert st.ending.exit_reason == 'all_searched'
     assert planner.goals == [GOAL]
-    assert names['plan_times'] == [2.5] and names['total_plan_time'] == 2.5
-    assert record == len(names['plan_times']) == 1
+    assert st.counts.plan_times == [2.5] and st.counts.total_plan_time == 2.5
+    assert record == len(st.counts.plan_times) == 1
     # inside the loop the count is as it was: the last round is PLAN #2
-    assert names['plan_count'] == 2
+    assert st.counts.plan_count == 2
     out = capsys.readouterr().out
     assert '=== PLAN #2 ===' in out and 'Searched all shadows' in out
 
 
 def test_no_plan_while_holding_counts_its_last_round():
     # no mission plan (3 s) with an object held, and no disposal (1.25 s)
-    names, record, planner = _run([['s1']], [None, None], [3.0, 1.25],
-                                  held_body_id=HELD)
-    assert names['exit_reason'] == 'no_plan_while_holding'
+    st, record, planner = _run([['s1']], [None, None], [3.0, 1.25],
+                               held_body_id=HELD)
+    assert st.ending.exit_reason == 'no_plan_while_holding'
     assert planner.goals == [GOAL, ('handempty',)]
-    assert names['plan_times'] == [4.25]          # both calls of the round
-    assert names['total_plan_time'] == 4.25
-    assert record == len(names['plan_times']) == 1
-    assert names['plan_count'] == 1
+    assert st.counts.plan_times == [4.25]          # both calls of the round
+    assert st.counts.total_plan_time == 4.25
+    assert record == len(st.counts.plan_times) == 1
+    assert st.counts.plan_count == 1
 
 
 def test_planner_failed_counts_agree_as_before():
     # the endings after the time is counted are unchanged
-    names, record, planner = _run([['s1'], ['s1']], [[('sense', 's1')], None],
-                                  [1.0, 2.0])
-    assert names['exit_reason'] == 'planner_failed'
-    assert names['plan_times'] == [1.0, 2.0] and names['total_plan_time'] == 3.0
-    assert record == names['plan_count'] == 2
+    st, record, planner = _run([['s1'], ['s1']], [[('sense', 's1')], None],
+                               [1.0, 2.0])
+    assert st.ending.exit_reason == 'planner_failed'
+    assert st.counts.plan_times == [1.0, 2.0] and st.counts.total_plan_time == 3.0
+    assert record == st.counts.plan_count == 2
 
 
 # ----- M7's suspension at the loop's head (Hani, 2026-11-20) -----------------
@@ -189,9 +233,9 @@ def _suspended_belief():
 
 def test_only_a_suspended_region_left_ends_as_a_rediscovery_giveup(capsys):
     # the round ends before any planner call, failed, with its own reason
-    names, record, planner = _run(None, [], [], belief=_suspended_belief(),
-                                  clock_now=60.0)
-    assert names['exit_reason'] == 'rediscovery_giveup'
+    st, record, planner = _run(None, [], [], belief=_suspended_belief(),
+                               clock_now=60.0)
+    assert st.ending.exit_reason == 'rediscovery_giveup'
     assert planner.goals == [] and record == 0
     out = capsys.readouterr().out
     assert "['s2'] suspended at the F9 give-up (M7), not searched" in out
@@ -200,9 +244,9 @@ def test_only_a_suspended_region_left_ends_as_a_rediscovery_giveup(capsys):
 
 def test_a_suspension_whose_time_is_up_is_planned_for_again(capsys):
     b = _suspended_belief()
-    names, record, planner = _run(None, [None], [1.0], belief=b, clock_now=120.0)
+    st, record, planner = _run(None, [None], [1.0], belief=b, clock_now=120.0)
     assert b.shadow_status['s2'] == 'unknown' and not b.get_suspended_shadows()
     assert planner.goals == [GOAL]                   # the round planned, for s2
-    assert names['exit_reason'] == 'planner_failed'
+    assert st.ending.exit_reason == 'planner_failed'
     assert ('[M7] s2 is back in the search: its 120 s suspension at the F9 '
             'give-up is over') in capsys.readouterr().out

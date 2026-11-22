@@ -294,7 +294,49 @@ def test_the_unseen_regions_after_the_first_scan(env, joints):
 # ----- 7. the wiring in main() ------------------------------------------------------
 
 PIPELINE = ast.parse((ROOT / 'test_full_pipeline.py').read_text(encoding='utf-8'))
-MAIN = next(n for n in ast.walk(PIPELINE) if isinstance(n, ast.FunctionDef) and n.name == 'main')
+
+
+def _main_and_its_stages():
+    """main() with the functions cut out of it, as one tree, and the file
+    tree of each: the functions whose first parameter is the episode state
+    st, defined in test_full_pipeline.py or in a file beside it that it
+    imports them from by name.  What this section read in main() it reads
+    in this tree."""
+    home = {}
+    for n in PIPELINE.body:
+        if isinstance(n, ast.FunctionDef):
+            home[n] = PIPELINE
+        elif isinstance(n, ast.ImportFrom) and (ROOT / f'{n.module}.py').exists():
+            other = ast.parse((ROOT / f'{n.module}.py').read_text(encoding='utf-8'))
+            names = {a.name for a in n.names}
+            home.update({f: other for f in other.body
+                         if isinstance(f, ast.FunctionDef) and f.name in names})
+    home = {f: tree for f, tree in home.items()
+            if f.name == 'main' or [a.arg for a in f.args.args][:1] == ['st']}
+    return ast.Module(body=list(home), type_ignores=[]), home
+
+
+MAIN, _FILE_OF = _main_and_its_stages()
+
+
+def _holder(node):
+    """The function of MAIN that holds the node."""
+    (fn,) = [f for f in MAIN.body if any(n is node for n in ast.walk(f))]
+    return fn
+
+
+def _runs_before_in_main(first, second):
+    """main() calls both functions once, each as a statement of its own body
+    (under no branch and no loop), the first before the second."""
+    (main,) = [f for f in MAIN.body if f.name == 'main']
+    at = {s.value.func.id: i for i, s in enumerate(main.body)
+          if isinstance(s, ast.Expr) and isinstance(s.value, ast.Call)
+          and isinstance(s.value.func, ast.Name)}
+    called = [c.func.id for c in ast.walk(main)
+              if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)]
+    return (called.count(first.name) == called.count(second.name) == 1
+            and first.name in at and second.name in at
+            and at[first.name] < at[second.name])
 
 
 def _under(tree, test):
@@ -319,11 +361,11 @@ def _assigns(tree, target):
 
 
 def test_with_the_arm_camera_the_unseen_regions_join_the_first_scan_before_free_space():
-    arm = _under(MAIN, "eye == 'arm'")
+    arm = _under(MAIN, "st.setup.eye == 'arm'")
     (call,) = _calls(MAIN, 'unseen_boxels')
     assert id(call) in arm
     assert [ast.unparse(a) for a in call.args] == [
-        'eye_camera_pose', 'env._SAFE_TABLE_X_RANGE', 'env._SAFE_TABLE_Y_RANGE',
+        'st.setup.eye_camera_pose', 'env._SAFE_TABLE_X_RANGE', 'env._SAFE_TABLE_Y_RANGE',
         'env.table_surface_height', 'float(streams.NOMINAL_HIDDEN_EXTENTS[2])']
     assert [(k.arg, ast.unparse(k.value)) for k in call.keywords] == [('known', 'all_known')]
     (scan,) = [n for n in _assigns(MAIN, 'all_known') if ast.unparse(n.value) == 'obs.boxels']
@@ -331,25 +373,31 @@ def test_with_the_arm_camera_the_unseen_regions_join_the_first_scan_before_free_
                if ast.unparse(n.value) == 'all_known + _unseen']
     (free,) = _calls(MAIN, 'generate_free_space')
     assert id(join) in arm and ast.unparse(free.args[0]) == 'all_known'
+    # The four stand in one function, so their lines give their order.
+    assert _holder(scan) is _holder(call) is _holder(join) is _holder(free)
     assert scan.lineno < call.lineno < join.lineno < free.lineno
-    # The camera pose is the one use_start_view returned, kept in the settle block.
-    (pose,) = _assigns(MAIN, 'eye_camera_pose')
+    # The camera pose is the one use_start_view returned, kept in the settle
+    # block; its function runs in main() before the scan's function.
+    (pose,) = _assigns(MAIN, 'st.setup.eye_camera_pose')
     (start_view,) = _calls(MAIN, 'use_start_view')
     assert id(pose) in arm and ast.unparse(pose.value) == "_cam['camera_pose']"
-    assert start_view.lineno < pose.lineno < scan.lineno
+    assert _holder(start_view) is _holder(pose) and start_view.lineno < pose.lineno
+    assert _runs_before_in_main(_holder(pose), _holder(scan))
+    # streams is imported, by that name, in the file that holds the call.
     assert any(isinstance(n, ast.Import)
                and [(a.name, a.asname) for a in n.names] == [('streams', None)]
-               for n in PIPELINE.body)
+               for n in _FILE_OF[_holder(call)].body)
     # main() cuts no region to a look's cell side (PLAN 11.16).
     text = ast.unparse(MAIN)
     assert 'max_fragment_side' not in text and 'look_cell_side' not in text
 
 
 def test_with_the_fixed_camera_main_makes_no_unseen_region_and_records_no_eye():
-    """Case 7: every path-9 call in main() is under ``if eye == 'arm':``, so
-    with --eye fixed (the default) none runs; the record's literal has no eye
-    key, and one plain ``if`` after it adds the key for --eye arm alone."""
-    arm = _under(MAIN, "eye == 'arm'")
+    """Case 7: every path-9 call in main() and in the functions cut out of it
+    is under ``if st.setup.eye == 'arm':``, so with --eye fixed (the default)
+    none runs; the record's literal has no eye key, and one plain ``if``
+    after it adds the key for --eye arm alone."""
+    arm = _under(MAIN, "st.setup.eye == 'arm'")
     for name in ('place_arm', 'use_start_view', 'unseen_boxels'):
         calls = _calls(MAIN, name)
         assert calls and all(id(c) in arm for c in calls), name
@@ -368,12 +416,12 @@ def test_with_the_fixed_camera_main_makes_no_unseen_region_and_records_no_eye():
 def test_the_arm_cameras_default_start_is_set_under_the_switch_alone():
     """With --eye fixed home_joints stays the caller's (None on the tabletop:
     q_home REST_POSES); TAMPURA's home joints enter under --eye arm only."""
-    arm = _under(MAIN, "eye == 'arm'")
-    (default,) = [a for a in _assigns(MAIN, 'home_joints')
+    arm = _under(MAIN, "st.setup.eye == 'arm'")
+    (default,) = [a for a in _assigns(MAIN, 'st.setup.home_joints')
                   if ast.unparse(a.value) == 'list(arm_eye.TAMPURA_HOME_JOINTS)']
     assert id(default) in arm
-    (start,) = _assigns(MAIN, 'eye_start')
-    assert id(start) in arm and ast.unparse(start.value) == 'list(home_joints)'
+    (start,) = _assigns(MAIN, 'st.setup.eye_start')
+    assert id(start) in arm and ast.unparse(start.value) == 'list(st.setup.home_joints)'
 
 
 def test_main_starts_the_arm_camera_at_their_home_joints_and_makes_them_q_home(
