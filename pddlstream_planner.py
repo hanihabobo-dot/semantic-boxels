@@ -885,45 +885,11 @@ class PDDLStreamPlanner:
             # would double every line).
             self._last_egregious_triples = sorted(egregious_triples)
 
-        # F31 (2026-09-19): a placement must not hide a KNOWN body from
-        # the camera.  The facts above protect the sense corridors to
-        # shadow fragments only; nothing kept the planner from standing
-        # an occluder between the camera and a registered object (user
-        # GUI run 22-12-06: orange at free_017 cut blue from 507 to 62
-        # px; red at free_005 stood on the ray to purple).  A hidden
-        # known body cannot be re-posed by any refresh, cannot be re-
-        # detected, and may be the next target.  Static per-(object,
-        # cell) facts; :action place requires (not (placement_hides)).
-        if self.camera_pos is not None:
-            hides = self._compute_placement_hides(held_obj)
-            for (obj_id, free_id) in sorted(hides):
-                init.append(('placement_hides', obj_id, free_id))
-            self._last_placement_hides = sorted(hides)
+        self._facts_placement_hides(init, held_obj)
 
-        for obj in target_objects:
-            init.append(('Obj', obj))
-
-        # audit #49 — tray as a stackable support.  No obj_at_boxel
-        # emitted, so pick's (obj_at_boxel ?o ?b) precondition is
-        # unsatisfiable for the tray => implicitly unpickable.
-        # (clear tray) and (on_table tray) emerge from the all_obj_ids
-        # loop further down.  (Boxel tray) is required so the move
-        # action's (Boxel ?b) precondition is satisfied when the
-        # destination is the tray (compute-stack-kin certifies
-        # (config_for_boxel ?q tray)).
-        if self.tray_name is not None:
-            init.append(('Obj', self.tray_name))
-            init.append(('Boxel', self.tray_name))
-            if not look_on:
-                init.append(('is_tray', self.tray_name))
-
-        for tgt, boxel_id in visible_target_locations.items():
-            init.append(('obj_at_boxel', tgt, boxel_id))
-            init.append(('obj_at_boxel_KIF', tgt, boxel_id))
-            # M8 B: the same gate as every registered object.
-            _tbd = self.registry.get_boxel(tgt)
-            if not m8 or (_tbd is not None and _pose_known(_tbd)):
-                init.append(('obj_pose_known', tgt))
+        self._facts_targets_and_tray(init, target_objects,
+                                     visible_target_locations, m8, look_on,
+                                     _pose_known)
 
         self._facts_boxel_fits(init, target_objects, look_on)
 
@@ -955,6 +921,50 @@ class PDDLStreamPlanner:
 
         random.shuffle(init)
         return init
+
+    def _facts_placement_hides(self, init, held_obj):
+        # F31 (2026-09-19): a placement must not hide a KNOWN body from
+        # the camera.  The facts above protect the sense corridors to
+        # shadow fragments only; nothing kept the planner from standing
+        # an occluder between the camera and a registered object (user
+        # GUI run 22-12-06: orange at free_017 cut blue from 507 to 62
+        # px; red at free_005 stood on the ray to purple).  A hidden
+        # known body cannot be re-posed by any refresh, cannot be re-
+        # detected, and may be the next target.  Static per-(object,
+        # cell) facts; :action place requires (not (placement_hides)).
+        if self.camera_pos is not None:
+            hides = self._compute_placement_hides(held_obj)
+            for (obj_id, free_id) in sorted(hides):
+                init.append(('placement_hides', obj_id, free_id))
+            self._last_placement_hides = sorted(hides)
+
+    def _facts_targets_and_tray(self, init, target_objects,
+                                visible_target_locations, m8, look_on,
+                                _pose_known):
+        for obj in target_objects:
+            init.append(('Obj', obj))
+
+        # audit #49 — tray as a stackable support.  No obj_at_boxel
+        # emitted, so pick's (obj_at_boxel ?o ?b) precondition is
+        # unsatisfiable for the tray => implicitly unpickable.
+        # (clear tray) and (on_table tray) emerge from the all_obj_ids
+        # loop further down.  (Boxel tray) is required so the move
+        # action's (Boxel ?b) precondition is satisfied when the
+        # destination is the tray (compute-stack-kin certifies
+        # (config_for_boxel ?q tray)).
+        if self.tray_name is not None:
+            init.append(('Obj', self.tray_name))
+            init.append(('Boxel', self.tray_name))
+            if not look_on:
+                init.append(('is_tray', self.tray_name))
+
+        for tgt, boxel_id in visible_target_locations.items():
+            init.append(('obj_at_boxel', tgt, boxel_id))
+            init.append(('obj_at_boxel_KIF', tgt, boxel_id))
+            # M8 B: the same gate as every registered object.
+            _tbd = self.registry.get_boxel(tgt)
+            if not m8 or (_tbd is not None and _pose_known(_tbd)):
+                init.append(('obj_pose_known', tgt))
 
     def _facts_boxel_fits(self, init, target_objects, look_on):
         # Static boxel_fits facts (audit #102): do NOT use a PDDLStream test stream.
