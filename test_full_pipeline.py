@@ -1018,6 +1018,203 @@ def build_registry(st, env, overlay_bodies):
                           skip_free=not st.opts.show_free)
 
 
+def choose_target_and_goal(st, env):
+    # =========================================================
+    # PHASE 4: Hidden Object Scenario (ORACLE ONLY)
+    # =========================================================
+    # This phase establishes ground truth that the ROBOT does NOT have
+    # access to.  Hidden detection uses camera-ray occlusion (the same
+    # criterion as Phase 1 / oracle_detect_objects — the physically
+    # meaningful definition: "robot can't see it from the camera").
+    # The robot only discovers this through sensing.
+    print("\n--- Phase 4: Hidden Object Scenario ---")
+
+    # audit #49 — also exclude is_tray=True (the fixed-base tray is a
+    # support surface, never a pickable target; it would otherwise leak
+    # into stack_target_objects under --goal find-and-tray-stack and
+    # produce nonsense (on tray <cube>) clauses in the goal AST).
+    all_targets = [
+        name for name, info in env.objects.items()
+        if not info.is_occluder and not info.is_tray
+        and name not in ("plane", "table", "robot")
+    ]
+
+    # audit #67 — Hidden detection uses camera-ray occlusion, matching
+    # Phase 1.  The previous AABB-containment criterion (target's
+    # position lies inside a shadow boxel's AABB) is a downstream
+    # geometric proxy that disagrees with camera-ray occlusion near
+    # shadow-cone edges; using it as the hidden criterion silently
+    # aborts ~16% of seeds in the n_occluders=1..3 eval prefix when a
+    # target is camera-occluded but lies just outside every shadow
+    # AABB.  AABB containment is now a best-effort follow-up that
+    # supplies one shadow id per hidden target for the oracle log
+    # line; it is allowed to be empty for individual targets without
+    # aborting the run.  An empty lookup is legitimate (2026-08-23, F5
+    # guardrail removed): a camera-occluded target may sit outside every
+    # shadow fragment — sensing cannot reach it, but clearing its
+    # occluders and re-detecting it can, so the episode still runs.
+    # #P4 B3(c): oracle_phases=False runs none of this; the robot then
+    # knows of the target only what perception registered.
+    st.setup.hidden_targets_set = set()
+    target_to_shadow = {}
+    if st.opts.oracle_phases:
+        visible_now, _ = env.oracle_detect_objects()
+        st.setup.hidden_targets_set = set(all_targets) - set(visible_now)
+    for tname in st.setup.hidden_targets_set:
+        tpos = np.array(env.objects[tname].position)
+        t_min, t_max = p.getAABB(env.objects[tname].object_id)
+        containing_only = None
+        for shadow_id in st.setup.shadows:
+            sb = st.setup.registry.get_boxel(shadow_id)
+            if not (sb and np.all(tpos >= sb.min_corner)
+                    and np.all(tpos <= sb.max_corner)):
+                continue
+            # Prefer the fragment the shared sense ray grid would
+            # actually hit, so the oracle line names a fragment whose
+            # sense can really find the target (diagnostic preference
+            # only — no guarantee is enforced anywhere since the F5
+            # guardrail was removed 2026-08-23).
+            if grid_would_hit(env.camera_position, sb.min_corner,
+                              sb.max_corner, t_min, t_max):
+                target_to_shadow[tname] = shadow_id
+                break
+            if containing_only is None:
+                containing_only = shadow_id
+        if tname not in target_to_shadow and containing_only is not None:
+            target_to_shadow[tname] = containing_only
+            print(f"  note: {tname}'s containing fragment "
+                  f"{containing_only} is not sense-hittable — sensing it "
+                  f"cannot reveal the target; discovery has to come from "
+                  f"re-detection after its occluders move",
+                  file=sys.stderr)
+
+    st.setup.visible_target_locations = {}
+    st.setup.on_relations: Dict[str, str] = {}      # stacked_obj -> support_obj
+    st.setup.physical_failures: list = []           # audit #40 — per-action verifier log
+    st.setup.stack_target_objects = []              # populated only for --goal stack
+
+    if st.opts.goal_kind == 'holding':
+        if st.setup.target_name is not None:
+            # #P4 B3(c): the caller names the target symbol; whether its
+            # location is known is perception's: a registered OBJECT
+            # boxel from the first observation.
+            for boxel in st.setup.registry.boxels.values():
+                if boxel.object_name == st.setup.target_name:
+                    st.setup.visible_target_locations[st.setup.target_name] = boxel.id
+                    break
+            if st.setup.target_name in st.setup.visible_target_locations:
+                print(f"  Target: {st.setup.target_name} at boxel "
+                      f"{st.setup.visible_target_locations[st.setup.target_name]} (given; in "
+                      f"the first observation, direct pick)")
+            else:
+                print(f"  Target: {st.setup.target_name} (given; not in the first "
+                      f"observation; the robot must search)")
+        elif st.setup.hidden_targets_set:
+            hidden_targets_ordered = [t for t in all_targets
+                                      if t in st.setup.hidden_targets_set]
+            st.setup.target_name = random.choice(hidden_targets_ordered)
+            oracle_hidden_shadow = target_to_shadow.get(st.setup.target_name)
+            print(f"  Target: {st.setup.target_name}")
+            if oracle_hidden_shadow is not None:
+                print(f"  ORACLE: Actually hidden in {oracle_hidden_shadow} "
+                      f"(camera-ray occlusion; shadow AABB also contains "
+                      f"its centre)")
+            else:
+                print(f"  ORACLE: Actually hidden by camera-ray occlusion "
+                      f"but inside NO shadow fragment — sensing alone "
+                      f"cannot reach it; discovery must come from "
+                      f"re-detecting it once its occluders are cleared")
+            print(f"  Robot must search to find it!")
+        else:
+            # No target is hidden — all are visible from the camera.
+            # Pick a random visible target and resolve its boxel ID so the
+            # planner can generate a direct move→pick plan without sensing.
+            print(f"  No targets hidden — all visible from camera.")
+            st.setup.target_name = random.choice(all_targets)
+            for boxel in st.setup.registry.boxels.values():
+                if boxel.object_name == st.setup.target_name:
+                    st.setup.visible_target_locations[st.setup.target_name] = boxel.id
+                    break
+            if st.setup.target_name in st.setup.visible_target_locations:
+                print(f"  Target: {st.setup.target_name} at boxel "
+                      f"{st.setup.visible_target_locations[st.setup.target_name]} (direct pick)")
+            else:
+                print(f"  WARNING: Target {st.setup.target_name} has no boxel in registry")
+                env.close()
+                return EARLY_FALSE
+        st.setup.goal = ('holding', st.setup.target_name)
+    elif st.opts.goal_kind == 'stack':
+        # stack_scene has no occluders → no shadows → no sensing needed.
+        # Every cube is its own visible target so the planner can pick
+        # any of them without a search loop.
+        st.setup.stack_target_objects = list(all_targets)
+        for tname in st.setup.stack_target_objects:
+            for boxel in st.setup.registry.boxels.values():
+                if boxel.object_name == tname:
+                    st.setup.visible_target_locations[tname] = boxel.id
+                    break
+        st.setup.goal = build_stack_goal(st.setup.stack_target_objects, st.opts.stack_height)
+        # ``target_name`` is still referenced in the holding-style log
+        # paths (planner export, replan loop banner).  Pick the top of
+        # the requested tower as a representative — it matches the
+        # holding semantics ("the object the user cares about").
+        if isinstance(st.setup.goal, tuple) and st.setup.goal[0] == 'and':
+            st.setup.target_name = str(st.setup.goal[1][1])
+        else:
+            st.setup.target_name = str(st.setup.goal[1])
+        print(f"  Stack goal: {st.setup.goal}")
+        print(f"  Stackable cubes: {st.setup.stack_target_objects}")
+    elif st.opts.goal_kind == 'find-and-tray-stack':
+        # audit #55 — 2-cube tower on tray (smallest goal that exercises
+        # sense → pick → stack end-to-end).  One VISIBLE cube placed on
+        # the tray, then one HIDDEN cube sensed and stacked on top of
+        # the visible one.  Both cubes drawn from all_targets — same
+        # physical size; visible/hidden is the only role distinction.
+        # Replaces #49's multi-cube goal.
+        tray_obj = next((name for name, info in env.objects.items()
+                         if info.is_tray), None)
+        if tray_obj is None:
+            env.close()
+            raise RuntimeError(
+                "--goal find-and-tray-stack requires a tray in the scene. "
+                "The CLI auto-enables it; if you constructed the SceneConfig "
+                "manually, set enable_tray=True."
+            )
+        # audit #67 — classify by camera-ray occlusion (matches Phase 1
+        # and the holding-goal path above), not AABB containment.
+        visible_targets = [t for t in all_targets
+                           if t not in st.setup.hidden_targets_set]
+        hidden_targets = [t for t in all_targets
+                          if t in st.setup.hidden_targets_set]
+        if not visible_targets or not hidden_targets:
+            env.close()
+            raise RuntimeError(
+                f"find-and-tray-stack needs at least 1 visible AND 1 "
+                f"hidden target.  Got {len(visible_targets)} visible / "
+                f"{len(hidden_targets)} hidden.  Adjust --seed or "
+                f"--n-hidden so both roles are populated."
+            )
+        chosen_visible = random.choice(visible_targets)
+        chosen_hidden = random.choice(hidden_targets)
+        st.setup.stack_target_objects = [chosen_visible, chosen_hidden]
+        print(f"  2-cube tray tower: {chosen_visible} (on tray) + "
+              f"{chosen_hidden} (on {chosen_visible})")
+        # Visible cube → emit obj_at_boxel; hidden cube stays unknown
+        # until the sense action uncovers it.
+        for boxel in st.setup.registry.boxels.values():
+            if boxel.object_name == chosen_visible:
+                st.setup.visible_target_locations[chosen_visible] = boxel.id
+                break
+        st.setup.goal = ('and', ('on', chosen_visible, tray_obj),
+                       ('on', chosen_hidden, chosen_visible))
+        st.setup.target_name = chosen_hidden  # belief / sense logging
+        print(f"  Find-and-tray-stack goal: {st.setup.goal}")
+        print(f"  Tray: {tray_obj}")
+    else:
+        raise ValueError(f"Unsupported --goal '{st.opts.goal_kind}'. "
+                         "Add a builder before passing it through.")
+
+
 def map_blockers_and_bodies(st, env):
     # Build shadow → [blocker_ids] mapping via raycasting (audit #78).
     # A shadow can be blocked by MORE than just the object that created it
@@ -3356,200 +3553,8 @@ def main(gui=True, run_logger=None, scene_config=None,
 
     build_registry(st, env, overlay_bodies)
 
-    # =========================================================
-    # PHASE 4: Hidden Object Scenario (ORACLE ONLY)
-    # =========================================================
-    # This phase establishes ground truth that the ROBOT does NOT have
-    # access to.  Hidden detection uses camera-ray occlusion (the same
-    # criterion as Phase 1 / oracle_detect_objects — the physically
-    # meaningful definition: "robot can't see it from the camera").
-    # The robot only discovers this through sensing.
-    print("\n--- Phase 4: Hidden Object Scenario ---")
-
-    # audit #49 — also exclude is_tray=True (the fixed-base tray is a
-    # support surface, never a pickable target; it would otherwise leak
-    # into stack_target_objects under --goal find-and-tray-stack and
-    # produce nonsense (on tray <cube>) clauses in the goal AST).
-    all_targets = [
-        name for name, info in env.objects.items()
-        if not info.is_occluder and not info.is_tray
-        and name not in ("plane", "table", "robot")
-    ]
-
-    # audit #67 — Hidden detection uses camera-ray occlusion, matching
-    # Phase 1.  The previous AABB-containment criterion (target's
-    # position lies inside a shadow boxel's AABB) is a downstream
-    # geometric proxy that disagrees with camera-ray occlusion near
-    # shadow-cone edges; using it as the hidden criterion silently
-    # aborts ~16% of seeds in the n_occluders=1..3 eval prefix when a
-    # target is camera-occluded but lies just outside every shadow
-    # AABB.  AABB containment is now a best-effort follow-up that
-    # supplies one shadow id per hidden target for the oracle log
-    # line; it is allowed to be empty for individual targets without
-    # aborting the run.  An empty lookup is legitimate (2026-08-23, F5
-    # guardrail removed): a camera-occluded target may sit outside every
-    # shadow fragment — sensing cannot reach it, but clearing its
-    # occluders and re-detecting it can, so the episode still runs.
-    # #P4 B3(c): oracle_phases=False runs none of this; the robot then
-    # knows of the target only what perception registered.
-    st.setup.hidden_targets_set = set()
-    target_to_shadow = {}
-    if oracle_phases:
-        visible_now, _ = env.oracle_detect_objects()
-        st.setup.hidden_targets_set = set(all_targets) - set(visible_now)
-    for tname in st.setup.hidden_targets_set:
-        tpos = np.array(env.objects[tname].position)
-        t_min, t_max = p.getAABB(env.objects[tname].object_id)
-        containing_only = None
-        for shadow_id in st.setup.shadows:
-            sb = st.setup.registry.get_boxel(shadow_id)
-            if not (sb and np.all(tpos >= sb.min_corner)
-                    and np.all(tpos <= sb.max_corner)):
-                continue
-            # Prefer the fragment the shared sense ray grid would
-            # actually hit, so the oracle line names a fragment whose
-            # sense can really find the target (diagnostic preference
-            # only — no guarantee is enforced anywhere since the F5
-            # guardrail was removed 2026-08-23).
-            if grid_would_hit(env.camera_position, sb.min_corner,
-                              sb.max_corner, t_min, t_max):
-                target_to_shadow[tname] = shadow_id
-                break
-            if containing_only is None:
-                containing_only = shadow_id
-        if tname not in target_to_shadow and containing_only is not None:
-            target_to_shadow[tname] = containing_only
-            print(f"  note: {tname}'s containing fragment "
-                  f"{containing_only} is not sense-hittable — sensing it "
-                  f"cannot reveal the target; discovery has to come from "
-                  f"re-detection after its occluders move",
-                  file=sys.stderr)
-
-    st.setup.visible_target_locations = {}
-    st.setup.on_relations: Dict[str, str] = {}      # stacked_obj -> support_obj
-    st.setup.physical_failures: list = []           # audit #40 — per-action verifier log
-    st.setup.stack_target_objects = []              # populated only for --goal stack
-
-    if goal_kind == 'holding':
-        if st.setup.target_name is not None:
-            # #P4 B3(c): the caller names the target symbol; whether its
-            # location is known is perception's: a registered OBJECT
-            # boxel from the first observation.
-            for boxel in st.setup.registry.boxels.values():
-                if boxel.object_name == st.setup.target_name:
-                    st.setup.visible_target_locations[st.setup.target_name] = boxel.id
-                    break
-            if st.setup.target_name in st.setup.visible_target_locations:
-                print(f"  Target: {st.setup.target_name} at boxel "
-                      f"{st.setup.visible_target_locations[st.setup.target_name]} (given; in "
-                      f"the first observation, direct pick)")
-            else:
-                print(f"  Target: {st.setup.target_name} (given; not in the first "
-                      f"observation; the robot must search)")
-        elif st.setup.hidden_targets_set:
-            hidden_targets_ordered = [t for t in all_targets
-                                      if t in st.setup.hidden_targets_set]
-            st.setup.target_name = random.choice(hidden_targets_ordered)
-            oracle_hidden_shadow = target_to_shadow.get(st.setup.target_name)
-            print(f"  Target: {st.setup.target_name}")
-            if oracle_hidden_shadow is not None:
-                print(f"  ORACLE: Actually hidden in {oracle_hidden_shadow} "
-                      f"(camera-ray occlusion; shadow AABB also contains "
-                      f"its centre)")
-            else:
-                print(f"  ORACLE: Actually hidden by camera-ray occlusion "
-                      f"but inside NO shadow fragment — sensing alone "
-                      f"cannot reach it; discovery must come from "
-                      f"re-detecting it once its occluders are cleared")
-            print(f"  Robot must search to find it!")
-        else:
-            # No target is hidden — all are visible from the camera.
-            # Pick a random visible target and resolve its boxel ID so the
-            # planner can generate a direct move→pick plan without sensing.
-            print(f"  No targets hidden — all visible from camera.")
-            st.setup.target_name = random.choice(all_targets)
-            for boxel in st.setup.registry.boxels.values():
-                if boxel.object_name == st.setup.target_name:
-                    st.setup.visible_target_locations[st.setup.target_name] = boxel.id
-                    break
-            if st.setup.target_name in st.setup.visible_target_locations:
-                print(f"  Target: {st.setup.target_name} at boxel "
-                      f"{st.setup.visible_target_locations[st.setup.target_name]} (direct pick)")
-            else:
-                print(f"  WARNING: Target {st.setup.target_name} has no boxel in registry")
-                env.close()
-                return False
-        st.setup.goal = ('holding', st.setup.target_name)
-    elif goal_kind == 'stack':
-        # stack_scene has no occluders → no shadows → no sensing needed.
-        # Every cube is its own visible target so the planner can pick
-        # any of them without a search loop.
-        st.setup.stack_target_objects = list(all_targets)
-        for tname in st.setup.stack_target_objects:
-            for boxel in st.setup.registry.boxels.values():
-                if boxel.object_name == tname:
-                    st.setup.visible_target_locations[tname] = boxel.id
-                    break
-        st.setup.goal = build_stack_goal(st.setup.stack_target_objects, stack_height)
-        # ``target_name`` is still referenced in the holding-style log
-        # paths (planner export, replan loop banner).  Pick the top of
-        # the requested tower as a representative — it matches the
-        # holding semantics ("the object the user cares about").
-        if isinstance(st.setup.goal, tuple) and st.setup.goal[0] == 'and':
-            st.setup.target_name = str(st.setup.goal[1][1])
-        else:
-            st.setup.target_name = str(st.setup.goal[1])
-        print(f"  Stack goal: {st.setup.goal}")
-        print(f"  Stackable cubes: {st.setup.stack_target_objects}")
-    elif goal_kind == 'find-and-tray-stack':
-        # audit #55 — 2-cube tower on tray (smallest goal that exercises
-        # sense → pick → stack end-to-end).  One VISIBLE cube placed on
-        # the tray, then one HIDDEN cube sensed and stacked on top of
-        # the visible one.  Both cubes drawn from all_targets — same
-        # physical size; visible/hidden is the only role distinction.
-        # Replaces #49's multi-cube goal.
-        tray_obj = next((name for name, info in env.objects.items()
-                         if info.is_tray), None)
-        if tray_obj is None:
-            env.close()
-            raise RuntimeError(
-                "--goal find-and-tray-stack requires a tray in the scene. "
-                "The CLI auto-enables it; if you constructed the SceneConfig "
-                "manually, set enable_tray=True."
-            )
-        # audit #67 — classify by camera-ray occlusion (matches Phase 1
-        # and the holding-goal path above), not AABB containment.
-        visible_targets = [t for t in all_targets
-                           if t not in st.setup.hidden_targets_set]
-        hidden_targets = [t for t in all_targets
-                          if t in st.setup.hidden_targets_set]
-        if not visible_targets or not hidden_targets:
-            env.close()
-            raise RuntimeError(
-                f"find-and-tray-stack needs at least 1 visible AND 1 "
-                f"hidden target.  Got {len(visible_targets)} visible / "
-                f"{len(hidden_targets)} hidden.  Adjust --seed or "
-                f"--n-hidden so both roles are populated."
-            )
-        chosen_visible = random.choice(visible_targets)
-        chosen_hidden = random.choice(hidden_targets)
-        st.setup.stack_target_objects = [chosen_visible, chosen_hidden]
-        print(f"  2-cube tray tower: {chosen_visible} (on tray) + "
-              f"{chosen_hidden} (on {chosen_visible})")
-        # Visible cube → emit obj_at_boxel; hidden cube stays unknown
-        # until the sense action uncovers it.
-        for boxel in st.setup.registry.boxels.values():
-            if boxel.object_name == chosen_visible:
-                st.setup.visible_target_locations[chosen_visible] = boxel.id
-                break
-        st.setup.goal = ('and', ('on', chosen_visible, tray_obj),
-                       ('on', chosen_hidden, chosen_visible))
-        st.setup.target_name = chosen_hidden  # belief / sense logging
-        print(f"  Find-and-tray-stack goal: {st.setup.goal}")
-        print(f"  Tray: {tray_obj}")
-    else:
-        raise ValueError(f"Unsupported --goal '{goal_kind}'. "
-                         "Add a builder before passing it through.")
+    if choose_target_and_goal(st, env) is EARLY_FALSE:
+        return False
 
     map_blockers_and_bodies(st, env)
 
