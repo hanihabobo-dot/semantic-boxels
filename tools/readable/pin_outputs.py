@@ -3251,7 +3251,7 @@ def p48_twin_constants(out):
                     vals = [ast.unparse(a) for a in node.args[1:]] + \
                            [f'{k.arg}={ast.unparse(k.value)}' for k in node.keywords if k.arg == 'default']
                     add('squeeze 0.5 mm', node, qual, vals)
-            if r == 'console_ui.py':
+            if r in ('console_ui.py', 'console_phrases.py'):
                 t = _template(node) if isinstance(node, (ast.Constant, ast.JoinedStr)) else None
                 if t and ('of 3' in t or '/3' in t):
                     add('"of 3" console pattern', node, qual, t)
