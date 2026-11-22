@@ -36,7 +36,7 @@ G1 | boxel_env.py | BoxelTestEnv._setup_scene | 952 | unreachable on the bridge 
 G1 | boxel_env.py | BoxelTestEnv._spawn_object | 888 | unreachable on the bridge path | our scene construction | body_id = p.createMultiBody(baseMass=spec.mass,
 G1 | boxel_env.py | BoxelTestEnv._spawn_object | 893 | unreachable on the bridge path | our scene construction | p.changeDynamics(body_id, -1,
 G2 | boxel_env.py | BoxelTestEnv._create_tray | 1068 | unreachable on the bridge path | our scene construction (tray) | aabb_min, aabb_max = p.getAABB(body_id,
-G2 | boxel_env.py | BoxelTestEnv._hidden_xy_positions | 1332 | unreachable on the bridge path | our scene construction (hidden-target placement) | hits = p.rayTestBatch([cam] * 8, corners, numThreads=0)
+G2 | world_placement.py | WorldPlacement._hidden_xy_positions | 1332 | unreachable on the bridge path | our scene construction (hidden-target placement) | hits = p.rayTestBatch([cam] * 8, corners, numThreads=0)
 G2 | boxel_env.py | BoxelTestEnv._create_targets | 1365 | unreachable on the bridge path | spawn code | ((float(info.position[0]), float(info.position[1])),
 G2 | boxel_env.py | BoxelTestEnv._create_targets | 1365 | unreachable on the bridge path | spawn code | ((float(info.position[0]), float(info.position[1])),
 G2 | boxel_env.py | BoxelTestEnv.oracle_detect_objects | 1822 | unreachable on the bridge path | oracle path; the env adapter overrides it to raise (G16) | pos, orn = p.getBasePositionAndOrientation(obj_info.object_id, **_pc)
@@ -80,8 +80,8 @@ G2 | telemetry.py | WorldTelemetry._position | 711 | write-only | TB-22 collisio
 G2 | test_full_pipeline.py | _verify_cube_on | 181 | write-only | scoring-only verifier, recorded and not acted on (test_full_pipeline.py:2219-2225) | o_min, o_max = p.getAABB(env.objects[obj_name].object_id)
 G2 | test_full_pipeline.py | _verify_cube_on | 182 | write-only | scoring-only verifier, recorded and not acted on (test_full_pipeline.py:2219-2225) | s_min, s_max = p.getAABB(env.objects[support_name].object_id)
 G2 | test_full_pipeline.py | _verify_on_table | 220 | write-only | scoring-only verifier | o_min, _ = p.getAABB(env.objects[obj_name].object_id)
-G2 | test_full_pipeline.py | main | 698 | unreachable on the bridge path | Phase-4 oracle read, unreachable under oracle_phases=False (B3) | tpos = np.array(env.objects[tname].position)
-G2 | test_full_pipeline.py | main | 699 | unreachable on the bridge path | Phase-4 oracle read, unreachable under oracle_phases=False (B3) | t_min, t_max = p.getAABB(env.objects[tname].object_id)
+G2 | test_full_pipeline.py | choose_target_and_goal | 732 | unreachable on the bridge path | Phase-4 oracle read, unreachable under oracle_phases=False (B3) | tpos = np.array(env.objects[tname].position)
+G2 | test_full_pipeline.py | choose_target_and_goal | 733 | unreachable on the bridge path | Phase-4 oracle read, unreachable under oracle_phases=False (B3) | t_min, t_max = p.getAABB(env.objects[tname].object_id)
 G1 | visualization.py | conceal_overlay_for_observation | 68 | unreachable on the bridge path | loops over drawn overlay bodies; the bridge's overlay (run tampura -Draw boxels, BF#68) is debug lines only and draws no body, so _PHANTOM_HOME stays empty and the loop never reaches the write | p.resetBasePositionAndOrientation(
 G1 | visualization.py | restore_overlay_after_observation | 85 | unreachable on the bridge path | loops over drawn overlay bodies; the bridge's overlay (run tampura -Draw boxels, BF#68) is debug lines only and draws no body, so _PHANTOM_HOME stays empty and the loop never reaches the write | p.resetBasePositionAndOrientation(
 G1 | visualization.py | BoxelVisualizer._draw_boxel_phantom | 193 | unreachable on the bridge path | overlay body; every bridge run passes overlay_bodies=False (BF#68), which makes BoxelVisualizer(phantoms=False) raise before this line, and the G14 hook fails a createMultiBody on the executing client | body_id = p.createMultiBody(
