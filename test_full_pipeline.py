@@ -1629,169 +1629,8 @@ def dispatch_step(st, env, i, action):
             return True
 
     elif action_name == 'pick':
-        # PICK: approach → open gripper → lower to contact →
-        # close gripper (friction squeeze, #P1) → verify grip →
-        # lift.  Aims at the object's REGISTRY ESTIMATE (#P1 F24,
-        # 2026-09-18): the box perception registered and has
-        # re-posed at every observation since; execute_pick
-        # re-observes once more before the descent.  The
-        # simulator pose is never read for control.
-        obj, boxel_id, grasp, config = params
-        obj_str = str(obj)
-        print(f"    Picking {obj_str} from {boxel_id}...")
-
-        # Defensive: refuse to pick when the gripper is already
-        # holding something.  The pre-replan release step should
-        # have cleared this, but a fresh planner skeleton can in
-        # principle chain pick→pick without an intervening place;
-        # double-grasping would silently pinch two bodies.
-        if st.hand.held_body_id is not None:
-            held_name = st.setup.body_id_to_name.get(st.hand.held_body_id, str(st.hand.held_body_id))
-            print(f"    ERROR: Cannot pick {obj_str} — gripper already "
-                  f"holds {held_name}. Replanning.")
-            dispatch_end('stale_precondition')
+        if do_pick(st, env, params):
             return True
-
-        # Resolve symbolic name → PyBullet object.  The target
-        # isn't in boxel_to_pybullet (it's hidden), so we
-        # handle it as a special case.
-        if obj_str in st.setup.boxel_to_pybullet:
-            pick_obj_name = st.setup.boxel_to_pybullet[obj_str]['name']
-        elif obj_str == st.setup.target_name:
-            pick_obj_name = st.setup.target_name
-        else:
-            print(f"    ERROR: Cannot resolve PyBullet object for '{obj_str}'")
-            dispatch_end('stale_precondition')
-            return True
-        # #P1 F24: the pick aims at the registry estimate.  A
-        # pick is grounded on obj_at_boxel_KIF, which _build_init
-        # emits from a registered OBJECT boxel (a sense that
-        # found the target registers one at the render estimate,
-        # audit #76), so a missing boxel means the planner acted
-        # on a stale fact — say so and replan instead of reading
-        # the simulator.
-        _pick_bd = st.setup.registry.get_boxel(obj_str)
-        if _pick_bd is None:
-            print(f"    ERROR: no registry estimate for {obj_str} — "
-                  f"the pick was grounded on a fact the belief no "
-                  f"longer holds; replanning (#P1 F24)")
-            dispatch_end('stale_precondition')
-            return True
-        # M8 B: the pick's (obj_pose_known ?o) must still hold in
-        # the belief (a sense's effect assumes it; the detection
-        # that registered the object may leave it outside the
-        # margin): replan, which observes first.
-        if pose_belief.SWITCHES['M8'] and not pose_belief.pose_known(
-                _pick_bd, robot_model().finger_limits[0][1],
-                st.setup.planner.streams.GRASP_MAX_SPAN,
-                st.setup.planner.streams.GRASP_SQUARE_TOL):
-            print(f"    [M8] {obj_str} pose_radius "
-                  f"{_pick_bd.pose_radius * 1e3:.2f} mm is outside its "
-                  f"commit margin — the pick's obj_pose_known no longer "
-                  f"holds; replanning")
-            dispatch_end('stale_precondition')
-            return True
-        pick_pos = np.asarray(_pick_bd.center, dtype=float).copy()
-        pick_aabb = (np.asarray(_pick_bd.min_corner, dtype=float).copy(),
-                     np.asarray(_pick_bd.max_corner, dtype=float).copy())
-
-        result = execute_pick(
-            st.setup.robot_id, env, pick_obj_name, pick_pos,
-            grasp, config, st.opts.gui, obj_aabb=pick_aabb, pose=_pick_bd)
-        if result[0] is None:
-            print(f"    IK or grip failure during pick — replanning "
-                  f"(audit #82 / #P1 grip verification)")
-            # #P1 F2: strike counter mirroring the audit-#21
-            # sense giveup.  3 failed picks of the same object
-            # mark it ungraspable at the stream layer, so the
-            # next planner.plan() cannot ground a pick for it —
-            # it either routes around the object or honestly
-            # reports no plan (classified as pick_giveup below)
-            # instead of regenerating the identical miss
-            # forever.
-            st.strikes.pick_fail_counts[obj_str] = \
-                st.strikes.pick_fail_counts.get(obj_str, 0) + 1
-            print(f"    pick failure {st.strikes.pick_fail_counts[obj_str]}/3 "
-                  f"for {obj_str} (#P1 F2 strike counter)")
-            if (st.strikes.pick_fail_counts[obj_str] >= 3
-                    and obj_str not in st.strikes.pick_giveup_objects):
-                print(f"    ERROR: {obj_str} failed "
-                      f"{st.strikes.pick_fail_counts[obj_str]} pick attempts "
-                      f"— giving up on grasping it (#P1 F2, "
-                      f"mirrors audit #21).  Object is NOT "
-                      f"picked; marking it ungraspable so the "
-                      f"planner stops re-attempting.  Real "
-                      f"remedy: the shape-aware grasp sampler "
-                      f"(#P1 step (4)).")
-                st.strikes.pick_giveup_objects.add(obj_str)
-                st.setup.planner.streams.ungraspable_objects.add(obj_str)
-                st.strikes.pick_giveup_marked_at[obj_str] = st.counts.plan_count
-            # #P1: a failed grasp attempt can shove or topple
-            # the object (the descent or close physically
-            # touched it).  Refresh every OBJECT boxel from
-            # live PyBullet before replanning — otherwise the
-            # planner re-targets the stale pose and the same
-            # miss repeats until timeout (audit #83's
-            # stale-boxel loop, pick edition; observed on
-            # random-pairs seed 3: ee_vs_obj_xy ~130 mm on
-            # every retry against a toppled occluder).
-            env.update_object_positions()
-            # #P1 step (3c): hand is empty here — also check
-            # for objects whose believed region renders empty.
-            _lost = refresh_object_aabbs(env, st.setup.registry, viz=st.setup.viz,
-                                         check_lost=True)
-            if _lost:
-                retire_lost_objects(
-                    _lost, st.setup.registry, st.setup.viz, st.setup.shadows,
-                    st.setup.shadow_occluder_map, st.setup.boxel_centers,
-                    st.setup.occluders, st.setup.belief, env=env)
-            # M10 (PLAN_P4_POSE_GRASP_SAMPLERS.md E): every body
-            # the pads touched, bystanders too, has an unknown
-            # pose until a complete detection says otherwise
-            # (set after the refresh, which cannot undo it).
-            for _tn in sorted(result.touched):
-                _tb = st.setup.registry.get_boxel(_tn)
-                if _tb is not None:
-                    _tb.pose_radius = float('inf')
-                    print(f"    [M10] {_tn} touched by the pads in the "
-                          f"failed pick — pose unknown")
-            dispatch_end('pick_failure')
-            return True
-        st.hand.held_body_id, st.arm.current_config = result.held_body_id, result.config
-        # #P4 B3(d), D7 (iv): the cargo offset in xy is the plan's
-        # grasp; the post-pick readback carries the held body.
-        st.hand.held_grasp_xy = np.array(grasp.position[:2], dtype=float)
-        st.arm.current_config = _readback_config(st, env, 
-            st.arm.current_config.joint_positions, st.arm.current_config.name)
-        # #P1 F2: a successful pick proves the object is
-        # graspable from its current pose — reset its strike
-        # counter so unrelated later failures start fresh.
-        st.strikes.pick_fail_counts.pop(obj_str, None)
-        # Track the registry boxel ID corresponding to the held
-        # body so the emergency-drop path can relocate the right
-        # OBJECT boxel if we have to release mid-plan.
-        st.hand.held_object_boxel_id = obj_str if obj_str in st.setup.boxel_to_pybullet else None
-        detect_execution_collisions(
-            st.setup.robot_id, env.client_id,
-            held_body_id=st.hand.held_body_id,
-            support_body_ids=st.setup.support_body_ids,
-            label=f"after pick {pick_obj_name}",
-            body_names=st.setup.body_id_to_name)
-        print(f"    *** {pick_obj_name} PICKED UP! ***")
-        # #P2 (a): the descent and the lift can shove neighbours;
-        # the held object is excluded (F26).
-        if _integrity_after(st, env, f"plan#{st.counts.plan_count} pick({pick_obj_name})"):
-            dispatch_end('integrity_replan')
-            return True
-        # Audit #48: clear the symbolic stack relation so the next
-        # _build_init does not re-emit a stale (on obj_str ?x) fact
-        # while also asserting (holding obj_str).  Mirrors the PDDL
-        # pick conditional effect (forall ?x: when (on ?o ?x) then
-        # not (on ?o ?x)).  No-op when obj_str was on the table.
-        st.setup.on_relations.pop(obj_str, None)
-        if pick_obj_name == st.setup.target_name:
-            st.setup.belief.target_found_in = st.setup.visible_target_locations.get(
-                st.setup.target_name, "picked")
 
     elif action_name in ('place', 'place_hiding'):
         if do_place(st, env, params):
@@ -1804,6 +1643,172 @@ def dispatch_step(st, env, i, action):
     dispatch_end('ok')
     if st.opts.gui:
         env.refresh_debug_camera_views()
+
+
+def do_pick(st, env, params):
+    # PICK: approach → open gripper → lower to contact →
+    # close gripper (friction squeeze, #P1) → verify grip →
+    # lift.  Aims at the object's REGISTRY ESTIMATE (#P1 F24,
+    # 2026-09-18): the box perception registered and has
+    # re-posed at every observation since; execute_pick
+    # re-observes once more before the descent.  The
+    # simulator pose is never read for control.
+    obj, boxel_id, grasp, config = params
+    obj_str = str(obj)
+    print(f"    Picking {obj_str} from {boxel_id}...")
+
+    # Defensive: refuse to pick when the gripper is already
+    # holding something.  The pre-replan release step should
+    # have cleared this, but a fresh planner skeleton can in
+    # principle chain pick→pick without an intervening place;
+    # double-grasping would silently pinch two bodies.
+    if st.hand.held_body_id is not None:
+        held_name = st.setup.body_id_to_name.get(st.hand.held_body_id, str(st.hand.held_body_id))
+        print(f"    ERROR: Cannot pick {obj_str} — gripper already "
+              f"holds {held_name}. Replanning.")
+        dispatch_end('stale_precondition')
+        return True
+
+    # Resolve symbolic name → PyBullet object.  The target
+    # isn't in boxel_to_pybullet (it's hidden), so we
+    # handle it as a special case.
+    if obj_str in st.setup.boxel_to_pybullet:
+        pick_obj_name = st.setup.boxel_to_pybullet[obj_str]['name']
+    elif obj_str == st.setup.target_name:
+        pick_obj_name = st.setup.target_name
+    else:
+        print(f"    ERROR: Cannot resolve PyBullet object for '{obj_str}'")
+        dispatch_end('stale_precondition')
+        return True
+    # #P1 F24: the pick aims at the registry estimate.  A
+    # pick is grounded on obj_at_boxel_KIF, which _build_init
+    # emits from a registered OBJECT boxel (a sense that
+    # found the target registers one at the render estimate,
+    # audit #76), so a missing boxel means the planner acted
+    # on a stale fact — say so and replan instead of reading
+    # the simulator.
+    _pick_bd = st.setup.registry.get_boxel(obj_str)
+    if _pick_bd is None:
+        print(f"    ERROR: no registry estimate for {obj_str} — "
+              f"the pick was grounded on a fact the belief no "
+              f"longer holds; replanning (#P1 F24)")
+        dispatch_end('stale_precondition')
+        return True
+    # M8 B: the pick's (obj_pose_known ?o) must still hold in
+    # the belief (a sense's effect assumes it; the detection
+    # that registered the object may leave it outside the
+    # margin): replan, which observes first.
+    if pose_belief.SWITCHES['M8'] and not pose_belief.pose_known(
+            _pick_bd, robot_model().finger_limits[0][1],
+            st.setup.planner.streams.GRASP_MAX_SPAN,
+            st.setup.planner.streams.GRASP_SQUARE_TOL):
+        print(f"    [M8] {obj_str} pose_radius "
+              f"{_pick_bd.pose_radius * 1e3:.2f} mm is outside its "
+              f"commit margin — the pick's obj_pose_known no longer "
+              f"holds; replanning")
+        dispatch_end('stale_precondition')
+        return True
+    pick_pos = np.asarray(_pick_bd.center, dtype=float).copy()
+    pick_aabb = (np.asarray(_pick_bd.min_corner, dtype=float).copy(),
+                 np.asarray(_pick_bd.max_corner, dtype=float).copy())
+
+    result = execute_pick(
+        st.setup.robot_id, env, pick_obj_name, pick_pos,
+        grasp, config, st.opts.gui, obj_aabb=pick_aabb, pose=_pick_bd)
+    if result[0] is None:
+        print(f"    IK or grip failure during pick — replanning "
+              f"(audit #82 / #P1 grip verification)")
+        # #P1 F2: strike counter mirroring the audit-#21
+        # sense giveup.  3 failed picks of the same object
+        # mark it ungraspable at the stream layer, so the
+        # next planner.plan() cannot ground a pick for it —
+        # it either routes around the object or honestly
+        # reports no plan (classified as pick_giveup below)
+        # instead of regenerating the identical miss
+        # forever.
+        st.strikes.pick_fail_counts[obj_str] = \
+            st.strikes.pick_fail_counts.get(obj_str, 0) + 1
+        print(f"    pick failure {st.strikes.pick_fail_counts[obj_str]}/3 "
+              f"for {obj_str} (#P1 F2 strike counter)")
+        if (st.strikes.pick_fail_counts[obj_str] >= 3
+                and obj_str not in st.strikes.pick_giveup_objects):
+            print(f"    ERROR: {obj_str} failed "
+                  f"{st.strikes.pick_fail_counts[obj_str]} pick attempts "
+                  f"— giving up on grasping it (#P1 F2, "
+                  f"mirrors audit #21).  Object is NOT "
+                  f"picked; marking it ungraspable so the "
+                  f"planner stops re-attempting.  Real "
+                  f"remedy: the shape-aware grasp sampler "
+                  f"(#P1 step (4)).")
+            st.strikes.pick_giveup_objects.add(obj_str)
+            st.setup.planner.streams.ungraspable_objects.add(obj_str)
+            st.strikes.pick_giveup_marked_at[obj_str] = st.counts.plan_count
+        # #P1: a failed grasp attempt can shove or topple
+        # the object (the descent or close physically
+        # touched it).  Refresh every OBJECT boxel from
+        # live PyBullet before replanning — otherwise the
+        # planner re-targets the stale pose and the same
+        # miss repeats until timeout (audit #83's
+        # stale-boxel loop, pick edition; observed on
+        # random-pairs seed 3: ee_vs_obj_xy ~130 mm on
+        # every retry against a toppled occluder).
+        env.update_object_positions()
+        # #P1 step (3c): hand is empty here — also check
+        # for objects whose believed region renders empty.
+        _lost = refresh_object_aabbs(env, st.setup.registry, viz=st.setup.viz,
+                                     check_lost=True)
+        if _lost:
+            retire_lost_objects(
+                _lost, st.setup.registry, st.setup.viz, st.setup.shadows,
+                st.setup.shadow_occluder_map, st.setup.boxel_centers,
+                st.setup.occluders, st.setup.belief, env=env)
+        # M10 (PLAN_P4_POSE_GRASP_SAMPLERS.md E): every body
+        # the pads touched, bystanders too, has an unknown
+        # pose until a complete detection says otherwise
+        # (set after the refresh, which cannot undo it).
+        for _tn in sorted(result.touched):
+            _tb = st.setup.registry.get_boxel(_tn)
+            if _tb is not None:
+                _tb.pose_radius = float('inf')
+                print(f"    [M10] {_tn} touched by the pads in the "
+                      f"failed pick — pose unknown")
+        dispatch_end('pick_failure')
+        return True
+    st.hand.held_body_id, st.arm.current_config = result.held_body_id, result.config
+    # #P4 B3(d), D7 (iv): the cargo offset in xy is the plan's
+    # grasp; the post-pick readback carries the held body.
+    st.hand.held_grasp_xy = np.array(grasp.position[:2], dtype=float)
+    st.arm.current_config = _readback_config(st, env, 
+        st.arm.current_config.joint_positions, st.arm.current_config.name)
+    # #P1 F2: a successful pick proves the object is
+    # graspable from its current pose — reset its strike
+    # counter so unrelated later failures start fresh.
+    st.strikes.pick_fail_counts.pop(obj_str, None)
+    # Track the registry boxel ID corresponding to the held
+    # body so the emergency-drop path can relocate the right
+    # OBJECT boxel if we have to release mid-plan.
+    st.hand.held_object_boxel_id = obj_str if obj_str in st.setup.boxel_to_pybullet else None
+    detect_execution_collisions(
+        st.setup.robot_id, env.client_id,
+        held_body_id=st.hand.held_body_id,
+        support_body_ids=st.setup.support_body_ids,
+        label=f"after pick {pick_obj_name}",
+        body_names=st.setup.body_id_to_name)
+    print(f"    *** {pick_obj_name} PICKED UP! ***")
+    # #P2 (a): the descent and the lift can shove neighbours;
+    # the held object is excluded (F26).
+    if _integrity_after(st, env, f"plan#{st.counts.plan_count} pick({pick_obj_name})"):
+        dispatch_end('integrity_replan')
+        return True
+    # Audit #48: clear the symbolic stack relation so the next
+    # _build_init does not re-emit a stale (on obj_str ?x) fact
+    # while also asserting (holding obj_str).  Mirrors the PDDL
+    # pick conditional effect (forall ?x: when (on ?o ?x) then
+    # not (on ?o ?x)).  No-op when obj_str was on the table.
+    st.setup.on_relations.pop(obj_str, None)
+    if pick_obj_name == st.setup.target_name:
+        st.setup.belief.target_found_in = st.setup.visible_target_locations.get(
+            st.setup.target_name, "picked")
 
 
 def do_place(st, env, params):
