@@ -3373,373 +3373,22 @@ def handle_sense_action(
                                 reason="sense_contains_unlocalizable")
 
     if sense_outcome in ("clear_but_empty", "contains_nontarget"):
-        sid_str = str(shadow_id)
-        # M7, the F9 give-up (TB-46 review b1, option (i)): the rays that
-        # met the discovered body did not see what lies behind it, and a
-        # body given up casts no new fragment that would cover it again.
-        # So the sensed fragment is not removed: it stays, parked
-        # unresolved, and no region leaves the belief unobserved.  The park
-        # is a suspension of M7_SUSPEND_S (Hani, 2026-11-20): then the
-        # region is offered again, and a further rediscovery suspends it
-        # again.
-        _m7_giveups = {}
-        if M7 and sense_outcome == "contains_nontarget":
-            _m7_giveups = _m7_giveup_names(
-                [body_id_to_name[b] for b in detected_bodies
-                 if b in body_id_to_name],
-                env=env, registry=registry, belief=belief,
-                sense_detections=sense_detections,
-                nontarget_rediscovery_counts=nontarget_rediscovery_counts)
-        _m7_park = bool(_m7_giveups)
-        if _m7_park:
-            print(f"    {shadow_id}: a body found in it reaches the F9 "
-                  f"give-up, so nothing re-covers what it hides; suspending "
-                  f"{shadow_id} for {M7_SUSPEND_S:.0f} s instead of marking "
-                  f"it empty (M7): "
-                  + ', '.join(f"{n} rediscovered {c} times"
-                              for n, c in _m7_giveups.items()))
-            with provenance('strike_park'):
-                belief.suspend(sid_str, bodies=_m7_giveups,
-                               now=time.perf_counter(), seconds=M7_SUSPEND_S)
-        else:
-            belief.mark_sensed(sid_str, found=False)
-
-            registry.remove_boxel(sid_str)
-            if viz is not None:
-                # Drop wireframe + label for the cleared shadow so
-                # the GUI doesn't keep the old SHADOW outline alive
-                # alongside whatever the next refresh draws.
-                # remove_boxel_viz is a no-op on unknown ids.
-                viz.remove_boxel_viz(sid_str)
-            if sid_str in shadows:
-                shadows.remove(sid_str)
-            shadow_occluder_map.pop(sid_str, None)
-            boxel_centers.pop(sid_str, None)
-
-            # Sanity check: the registry entry and every GUI overlay (wireframe
-            # lines + label + phantom AABB body) for this shadow MUST be gone
-            # after a successful sense_empty.  A leftover surfaces as the
-            # "sensed shadow still painted on the GUI" bug (user-reported).
-            # Loud warning here lets us catch the regression without crashing
-            # the run; the planner already updated belief so execution can
-            # continue, but the GUI is lying to the user.
-            if registry.get_boxel(sid_str) is not None:
-                print(f"    WARNING: shadow {sid_str} still in registry after "
-                      f"sense_empty — viz/planner state will diverge")
-            if viz is not None and viz.tracks_boxel(sid_str):
-                print(f"    WARNING: shadow {sid_str} GUI overlay still tracked "
-                      f"after remove_boxel_viz — wireframe/phantom likely "
-                      f"painted at the stale location")
-
-        # Sibling batch-sense (2026-08-21, user-directed): F3's corrected
-        # geometry splits one caster's occlusion into several fragments,
-        # so a single sense cleared only ITS fragment and the GUI kept
-        # showing the caster's other shadows ("shadow still there after
-        # sensing" field report).  Re-run the same ray-grid cast on the
-        # caster's remaining fragments now and remove every one that is
-        # ALSO observably empty — each removal is backed by a real
-        # observation, so the belief stays honest.  Fragments that come
-        # back blocked / non-empty stay for a planned sense of their
-        # own; a surprise found_target here is deliberately left for the
-        # next planned sense rather than plumbed through this replan
-        # branch.
-        caster_id = (shadow_boxel.created_by_boxel_id
-                     or shadow_boxel.created_by_object)
-        caster_bd = registry.get_boxel(caster_id) if caster_id else None
-        if _m7_park:
-            caster_bd = None          # M7: the parked fragment stays its caster's
-        if caster_bd is not None and sid_str in getattr(
-                caster_bd, "shadow_boxel_ids", []):
-            caster_bd.shadow_boxel_ids.remove(sid_str)
-        if caster_bd is not None and sid_str in getattr(
-                caster_bd, "interior_boxel_ids", []):
-            caster_bd.interior_boxel_ids.remove(sid_str)      # BF#65
-        # #P1 F16: sweep EVERY fragment against this render, not just the
-        # caster's siblings.  Same observation, same removal criterion —
-        # it simply stops discarding evidence the render already has.
-        sweep_all_fragments(
-            registry=registry, belief=belief, viz=viz, shadows=shadows,
-            shadow_occluder_map=shadow_occluder_map,
+        _sense_cleared(
+            env=env, registry=registry, belief=belief, viz=viz,
+            target_name=target_name, robot_id=robot_id, shadows=shadows,
+            occluders=occluders, shadow_occluder_map=shadow_occluder_map,
+            nontarget_rediscovery_counts=nontarget_rediscovery_counts,
             boxel_centers=boxel_centers, boxel_to_pybullet=boxel_to_pybullet,
-            target_pybullet_id=target_pybullet_id, robot_id=robot_id,
-            sense_support_ids=sense_support_ids, sense_depth_m=sense_depth_m,
-            sense_seg=sense_seg, sense_view=sense_view,
-            sense_proj=sense_proj, skip_ids={sid_str},
-            target_det=_target_det)
-
-        if sense_outcome == "contains_nontarget":
-            # Non-target objects discovered inside the shadow.
-            # Create OBJECT + SHADOW boxels for each one so the
-            # planner knows about them on the next replan.
-            discovered_names = [
-                body_id_to_name[bid]
-                for bid in detected_bodies
-                if bid in body_id_to_name
-            ]
-            print(f"    Shadow {shadow_id} contains non-target "
-                  f"object(s): {discovered_names}")
-            _capture_freeze(f"replan trigger: {shadow_id} holds non-target "
-                            f"{discovered_names}")
-
-            for obj_name in discovered_names:
-                obj_info = env.objects.get(obj_name)
-                if obj_info is None:
-                    continue
-                bid = obj_info.object_id
-                # #P1 step (3): the discovered object's boxel comes from
-                # the SAME rendered observation that discovered it — no
-                # p.getAABB.  A body below the detection minimum stays
-                # unregistered this round (the guard above already
-                # ensured at least one discovery IS localizable).
-                det = sense_detections.get(obj_name)
-                if det is None:
-                    print(f"      [step3-diag] discovered {obj_name} "
-                          f"renders below the detection minimum — not "
-                          f"registered this round; a later observation "
-                          f"localizes it.")
-                    continue
-                aabb_min = np.array(det.est_min)
-                aabb_max = np.array(det.est_max)
-
-                # Discovery may re-trigger for an object_name we
-                # already know about (e.g. previous re-sense pass
-                # added it; current sense saw it through a second
-                # shadow).  Without this cleanup the registry
-                # silently overwrites the OBJECT entry but the old
-                # wireframe + ALL prior shadow entries (both registry
-                # and viz) survive — that's the "two boxels under
-                # one name" trace.  Clean both before recreating
-                # so only the accurate (live-AABB) entry stays.
-                old_obj = registry.get_boxel(obj_name)
-                _m7_kept = []
-                if old_obj is not None and M7:
-                    # M7: nothing is dropped unrendered.  The F16 sweep just
-                    # tested every fragment but the sensed one against this
-                    # same render with the sense slices: the observed-empty
-                    # ones are gone (sweep_render, marked not_here), the
-                    # still-hidden ones were shrunk to what is still hidden.
-                    # What is left of this body's fragments is that hidden
-                    # part; it stays unknown, left to the sense action, and
-                    # its ids go to the new boxel below.
-                    _m7_kept = [s for s in old_obj.shadow_boxel_ids
-                                if registry.get_boxel(s) is not None]
-                    if viz is not None:
-                        viz.remove_boxel_viz(obj_name)
-                        for s in _m7_kept:        # drawn again with the new boxel
-                            viz.remove_boxel_viz(s)
-                elif old_obj is not None:
-                    # #P4 B0 gate G5: no render of these fragments' grids
-                    # backs this removal (P4.5 correction (6), M7); the
-                    # channel says so and the ledger counts it.
-                    with provenance('superseded_unrendered', body=obj_name):
-                        for old_sid in list(old_obj.shadow_boxel_ids):
-                            registry.remove_boxel(old_sid)
-                            if viz is not None:
-                                viz.remove_boxel_viz(old_sid)
-                            if old_sid in shadows:
-                                shadows.remove(old_sid)
-                            shadow_occluder_map.pop(old_sid, None)
-                            boxel_centers.pop(old_sid, None)
-                            # #P1 F20 follow-up: the belief must forget the
-                            # superseded fragment too, or it stays 'unknown'
-                            # forever and blocks the all-searched exit.
-                            belief.remove_shadow(old_sid)
-                    if viz is not None:
-                        viz.remove_boxel_viz(obj_name)
-
-                # #P1 F9: strike counter for REDISCOVERIES — this
-                # object was already registered (spawn occluder or a
-                # previous discovery) and a sense has hit it inside a
-                # fragment again.  Mirrors the audit-#21 3-strike
-                # sense giveup; see the counter's declaration in
-                # test_full_pipeline for the semantics.
-                # #P1 F20 follow-up: a body that entered the registry from
-                # a whole-workspace observation is being DISCOVERED inside
-                # a fragment for the first time here — that is not the
-                # relocate-rediscover cycle F9 bounds.  One exemption, then
-                # it counts like any other object.
-                if (nontarget_rediscovery_counts is not None
-                        and old_obj is not None
-                        and obj_name not in belief.redetected):
-                    nontarget_rediscovery_counts[obj_name] = \
-                        nontarget_rediscovery_counts.get(obj_name, 0) + 1
-                    print(f"      -> rediscovery "
-                          f"{nontarget_rediscovery_counts[obj_name]}/3 "
-                          f"for {obj_name} (#P1 F9 strike counter)")
-                belief.redetected.discard(obj_name)
-
-                obj_bd = BoxelData(
-                    id=obj_name,
-                    boxel_type=BoxelType.OBJECT,
-                    min_corner=aabb_min,
-                    max_corner=aabb_max,
-                    object_name=obj_name,
-                    is_occluder=False,
-                    on_surface=(
-                        "table"
-                        if aabb_min[2] <= env.table_surface_height + 0.01
-                        else None
-                    ),
-                    surface_z=env.table_surface_height,
-                )
-                obj_bd.shadow_boxel_ids.extend(_m7_kept)       # M7 (empty off)
-                registry.add_boxel(obj_bd)
-                pose_belief.record_detection(
-                    obj_bd, det, 'eye',
-                    detection_complete(
-                        env, aabb_min, aabb_max, det,
-                        (sense_depth_m, sense_seg, sense_view, sense_proj)),
-                    first=True)
-                boxel_centers[obj_name] = obj_bd.center
-                # object_body_ids is the planner-side mapping
-                # (audit #46): translate the GUI body id to the
-                # plan client's body id before exposing the new
-                # OBJECT to BoxelStreams' compute_kin / plan_motion.
-                object_body_ids[obj_name] = env.plan_body_id(bid)
-                boxel_to_pybullet[obj_name] = {
-                    'name': obj_name,
-                    'pybullet_id': bid,
-                    'position': np.array(det.est_center),
-                }
-                # Keep the `occluders` snapshot in sync with the
-                # registry: compute_shadow_blockers iterates this
-                # list to build its body_id → boxel_id map.  If
-                # we don't append the freshly discovered object
-                # here, any ray that hits it is silently treated
-                # as "not a blocker" and the planner thinks the
-                # new shadow region is view_clear — leading to
-                # (move, sense, pick) plans against shadows whose
-                # occluder is still in front, which sense->reveals
-                # the same occluder again with zero progress.
-                if obj_name not in occluders:
-                    occluders.append(obj_name)
-
-                # Compute shadow for this newly visible object.
-                # ShadowCalculator now accepts BoxelData directly,
-                # so we can pass obj_bd and the OBJECT registry
-                # entries with no conversion (audit #35).
-                # #P1 F9: after 3 rediscoveries the object's shadows
-                # are no longer re-created — the rediscover-relocate
-                # cycle it fed is bounded, like the audit-#21 giveup.
-                # The OBJECT boxel above still refreshed (census and
-                # collision mirroring stay correct); only the
-                # occlusion model goes un-rebuilt, so the belief may
-                # end incomplete and the episode ends honestly if the
-                # target actually hides behind this object.
-                if (nontarget_rediscovery_counts is not None
-                        and nontarget_rediscovery_counts.get(
-                            obj_name, 0) >= 3):
-                    print(f"    ERROR: {obj_name} rediscovered "
-                          f"{nontarget_rediscovery_counts[obj_name]} "
-                          f"times — giving up re-creating its shadows "
-                          f"(#P1 F9 strike counter, mirrors audit "
-                          f"#21).  Belief may be incomplete for "
-                          f"regions it occludes.")
-                    _capture_freeze(f"give-up: {obj_name} rediscovered "
-                                    f"3x (F9)")
-                    shadow_parts = []
-                    _m7_giveup = True
-                else:
-                    _m7_giveup = False
-                    other_solids = [
-                        bd for bd in registry.boxels.values()
-                        if (bd.boxel_type == BoxelType.OBJECT
-                            and bd.id != obj_name)
-                    ]
-                    if M7:
-                        # M7: register_new_detections' carve set, every
-                        # existing fragment too (this body's kept ones
-                        # among them), so no space is held twice.
-                        other_solids.extend(registry.get_shadow_boxels())
-                    # #P4 B3(c): the plan twin, posed from the belief
-                    # (the hand is empty: sense needs handempty).
-                    if env.shadow_raycast_client is not None:
-                        env.sync_to_plan_client(registry=registry)
-                    shadow_parts = \
-                        env.shadow_calculator.calculate_shadow_boxel(
-                            obj_bd, other_solids,
-                            physics_client=env.shadow_raycast_client)
-
-                if shadow_parts:
-                    obj_bd.is_occluder = True
-                    table_z = env.table_surface_height
-                    for sp in shadow_parts:
-                        sp.created_by_boxel_id = obj_name
-                        sp.created_by_object = obj_name
-                        sp.on_surface = (
-                            "table"
-                            if sp.min_corner[2] <= table_z + 0.01
-                            else None
-                        )
-                        sp.surface_z = table_z
-                        s_id = registry.add_boxel(sp)  # auto-assigns "shadow_NNN"
-                        obj_bd.shadow_boxel_ids.append(s_id)
-                        shadows.append(s_id)
-                        shadow_occluder_map[s_id] = [obj_name]
-                        boxel_centers[s_id] = sp.center
-                        # #P1 F20 follow-up: the belief must know the
-                        # fragment exists, or get_unknown_shadows() never
-                        # lists it and the loop can exit "all searched"
-                        # with it unsensed.
-                        belief.add_shadow(s_id)
-
-                # M7 (TB-46 review b3): one row per body found here, for G5
-                # and for the eval's list of episodes that reach this branch.
-                if M7:
-                    ledger_event(
-                        'sense_discovery', body=obj_name, region=sid_str,
-                        rediscovery=old_obj is not None, kept=list(_m7_kept),
-                        recast=[s for s in obj_bd.shadow_boxel_ids
-                                if s not in _m7_kept],
-                        giveup=_m7_giveup, parked=_m7_park)
-
-                # BF#65 option 1 (no-op with --interior-regions off): the
-                # discovered body's interior region, under D6's status
-                # rule, as in register_new_detections.
-                interior_regions.bookkeep(
-                    interior_regions.cast_for(env, registry, obj_bd,
-                                              [str(target_name)],
-                                              first_observation=False),
-                    shadows=shadows, shadow_occluder_map=shadow_occluder_map,
-                    boxel_centers=boxel_centers, belief=belief, viz=viz)
-
-                if viz is not None:
-                    viz.draw_boxel_data(obj_bd)
-                    for s_id in obj_bd.shadow_boxel_ids:
-                        s_bd = registry.get_boxel(s_id)
-                        if s_bd is not None:
-                            viz.draw_boxel_data(s_bd)
-
-                print(f"      -> {obj_name}: object boxel + "
-                      f"{len(shadow_parts)} shadow(s)")
-        else:
-            print(f"    Target NOT in {shadow_id} "
-                  f"(ray-cast: view clear but no target hit)")
-
-        # Re-run octree + merge now that the shadow is gone
-        # (and possibly new object/shadow boxels were added).
-        if viz is not None and not _m7_park:
-            viz.remove_boxel_viz(sid_str)
-        # audit #71 — refresh OBJECT AABBs from the observation BEFORE
-        # reboxelize so the free-space carve uses current geometry,
-        # not the spawn-time snapshot.  SHADOW boxels intentionally
-        # left stale (scope cut).  Lost objects retire BEFORE the
-        # carve so free space reclaims their vacated regions.
-        _register_new_detections()
-        _lost = refresh_object_aabbs(
-            env, registry, viz, detections=sense_detections,
-            render=(sense_depth_m, sense_seg, sense_view, sense_proj),
-            check_lost=True)
-        if _lost:
-            retire_lost_objects(_lost, registry, viz, shadows,
-                                shadow_occluder_map, boxel_centers,
-                                occluders, belief,
-                                render=(sense_depth_m, sense_seg,
-                                        sense_view, sense_proj))
-        reboxelize_free_space(
-            registry, env, boxel_centers, viz, show_free)
-
-        print(f"    -> REPLANNING with updated belief...")
+            object_body_ids=object_body_ids, body_id_to_name=body_id_to_name,
+            show_free=show_free, shadow_id=shadow_id,
+            shadow_boxel=shadow_boxel, target_pybullet_id=target_pybullet_id,
+            sense_support_ids=sense_support_ids,
+            sense_detections=sense_detections, sense_seg=sense_seg,
+            sense_depth_m=sense_depth_m, sense_view=sense_view,
+            sense_proj=sense_proj,
+            _register_new_detections=_register_new_detections,
+            sense_outcome=sense_outcome, detected_bodies=detected_bodies,
+            _target_det=_target_det)
         return ActionResult(continue_=False, reason=f"sense_{sense_outcome}")
 
     _sense_still_blocked(
@@ -3756,6 +3405,384 @@ def handle_sense_action(
         _register_new_detections=_register_new_detections,
         blocked_fraction=blocked_fraction, blocked_bbox=blocked_bbox)
     return ActionResult(continue_=False, reason="sense_still_blocked")
+
+
+def _sense_cleared(
+    *,
+    env, registry, belief, viz, target_name, robot_id, shadows, occluders,
+    shadow_occluder_map, nontarget_rediscovery_counts, boxel_centers,
+    boxel_to_pybullet, object_body_ids, body_id_to_name, show_free, shadow_id,
+    shadow_boxel, target_pybullet_id, sense_support_ids, sense_detections,
+    sense_seg, sense_depth_m, sense_view, sense_proj, _register_new_detections,
+    sense_outcome, detected_bodies, _target_det,
+):
+    sid_str = str(shadow_id)
+    # M7, the F9 give-up (TB-46 review b1, option (i)): the rays that
+    # met the discovered body did not see what lies behind it, and a
+    # body given up casts no new fragment that would cover it again.
+    # So the sensed fragment is not removed: it stays, parked
+    # unresolved, and no region leaves the belief unobserved.  The park
+    # is a suspension of M7_SUSPEND_S (Hani, 2026-11-20): then the
+    # region is offered again, and a further rediscovery suspends it
+    # again.
+    _m7_giveups = {}
+    if M7 and sense_outcome == "contains_nontarget":
+        _m7_giveups = _m7_giveup_names(
+            [body_id_to_name[b] for b in detected_bodies
+             if b in body_id_to_name],
+            env=env, registry=registry, belief=belief,
+            sense_detections=sense_detections,
+            nontarget_rediscovery_counts=nontarget_rediscovery_counts)
+    _m7_park = bool(_m7_giveups)
+    if _m7_park:
+        print(f"    {shadow_id}: a body found in it reaches the F9 "
+              f"give-up, so nothing re-covers what it hides; suspending "
+              f"{shadow_id} for {M7_SUSPEND_S:.0f} s instead of marking "
+              f"it empty (M7): "
+              + ', '.join(f"{n} rediscovered {c} times"
+                          for n, c in _m7_giveups.items()))
+        with provenance('strike_park'):
+            belief.suspend(sid_str, bodies=_m7_giveups,
+                           now=time.perf_counter(), seconds=M7_SUSPEND_S)
+    else:
+        belief.mark_sensed(sid_str, found=False)
+
+        registry.remove_boxel(sid_str)
+        if viz is not None:
+            # Drop wireframe + label for the cleared shadow so
+            # the GUI doesn't keep the old SHADOW outline alive
+            # alongside whatever the next refresh draws.
+            # remove_boxel_viz is a no-op on unknown ids.
+            viz.remove_boxel_viz(sid_str)
+        if sid_str in shadows:
+            shadows.remove(sid_str)
+        shadow_occluder_map.pop(sid_str, None)
+        boxel_centers.pop(sid_str, None)
+
+        # Sanity check: the registry entry and every GUI overlay (wireframe
+        # lines + label + phantom AABB body) for this shadow MUST be gone
+        # after a successful sense_empty.  A leftover surfaces as the
+        # "sensed shadow still painted on the GUI" bug (user-reported).
+        # Loud warning here lets us catch the regression without crashing
+        # the run; the planner already updated belief so execution can
+        # continue, but the GUI is lying to the user.
+        if registry.get_boxel(sid_str) is not None:
+            print(f"    WARNING: shadow {sid_str} still in registry after "
+                  f"sense_empty — viz/planner state will diverge")
+        if viz is not None and viz.tracks_boxel(sid_str):
+            print(f"    WARNING: shadow {sid_str} GUI overlay still tracked "
+                  f"after remove_boxel_viz — wireframe/phantom likely "
+                  f"painted at the stale location")
+
+    # Sibling batch-sense (2026-08-21, user-directed): F3's corrected
+    # geometry splits one caster's occlusion into several fragments,
+    # so a single sense cleared only ITS fragment and the GUI kept
+    # showing the caster's other shadows ("shadow still there after
+    # sensing" field report).  Re-run the same ray-grid cast on the
+    # caster's remaining fragments now and remove every one that is
+    # ALSO observably empty — each removal is backed by a real
+    # observation, so the belief stays honest.  Fragments that come
+    # back blocked / non-empty stay for a planned sense of their
+    # own; a surprise found_target here is deliberately left for the
+    # next planned sense rather than plumbed through this replan
+    # branch.
+    caster_id = (shadow_boxel.created_by_boxel_id
+                 or shadow_boxel.created_by_object)
+    caster_bd = registry.get_boxel(caster_id) if caster_id else None
+    if _m7_park:
+        caster_bd = None          # M7: the parked fragment stays its caster's
+    if caster_bd is not None and sid_str in getattr(
+            caster_bd, "shadow_boxel_ids", []):
+        caster_bd.shadow_boxel_ids.remove(sid_str)
+    if caster_bd is not None and sid_str in getattr(
+            caster_bd, "interior_boxel_ids", []):
+        caster_bd.interior_boxel_ids.remove(sid_str)      # BF#65
+    # #P1 F16: sweep EVERY fragment against this render, not just the
+    # caster's siblings.  Same observation, same removal criterion —
+    # it simply stops discarding evidence the render already has.
+    sweep_all_fragments(
+        registry=registry, belief=belief, viz=viz, shadows=shadows,
+        shadow_occluder_map=shadow_occluder_map,
+        boxel_centers=boxel_centers, boxel_to_pybullet=boxel_to_pybullet,
+        target_pybullet_id=target_pybullet_id, robot_id=robot_id,
+        sense_support_ids=sense_support_ids, sense_depth_m=sense_depth_m,
+        sense_seg=sense_seg, sense_view=sense_view,
+        sense_proj=sense_proj, skip_ids={sid_str},
+        target_det=_target_det)
+
+    if sense_outcome == "contains_nontarget":
+        # Non-target objects discovered inside the shadow.
+        # Create OBJECT + SHADOW boxels for each one so the
+        # planner knows about them on the next replan.
+        discovered_names = [
+            body_id_to_name[bid]
+            for bid in detected_bodies
+            if bid in body_id_to_name
+        ]
+        print(f"    Shadow {shadow_id} contains non-target "
+              f"object(s): {discovered_names}")
+        _capture_freeze(f"replan trigger: {shadow_id} holds non-target "
+                        f"{discovered_names}")
+
+        for obj_name in discovered_names:
+            obj_info = env.objects.get(obj_name)
+            if obj_info is None:
+                continue
+            bid = obj_info.object_id
+            # #P1 step (3): the discovered object's boxel comes from
+            # the SAME rendered observation that discovered it — no
+            # p.getAABB.  A body below the detection minimum stays
+            # unregistered this round (the guard above already
+            # ensured at least one discovery IS localizable).
+            det = sense_detections.get(obj_name)
+            if det is None:
+                print(f"      [step3-diag] discovered {obj_name} "
+                      f"renders below the detection minimum — not "
+                      f"registered this round; a later observation "
+                      f"localizes it.")
+                continue
+            aabb_min = np.array(det.est_min)
+            aabb_max = np.array(det.est_max)
+
+            # Discovery may re-trigger for an object_name we
+            # already know about (e.g. previous re-sense pass
+            # added it; current sense saw it through a second
+            # shadow).  Without this cleanup the registry
+            # silently overwrites the OBJECT entry but the old
+            # wireframe + ALL prior shadow entries (both registry
+            # and viz) survive — that's the "two boxels under
+            # one name" trace.  Clean both before recreating
+            # so only the accurate (live-AABB) entry stays.
+            old_obj = registry.get_boxel(obj_name)
+            _m7_kept = []
+            if old_obj is not None and M7:
+                # M7: nothing is dropped unrendered.  The F16 sweep just
+                # tested every fragment but the sensed one against this
+                # same render with the sense slices: the observed-empty
+                # ones are gone (sweep_render, marked not_here), the
+                # still-hidden ones were shrunk to what is still hidden.
+                # What is left of this body's fragments is that hidden
+                # part; it stays unknown, left to the sense action, and
+                # its ids go to the new boxel below.
+                _m7_kept = [s for s in old_obj.shadow_boxel_ids
+                            if registry.get_boxel(s) is not None]
+                if viz is not None:
+                    viz.remove_boxel_viz(obj_name)
+                    for s in _m7_kept:        # drawn again with the new boxel
+                        viz.remove_boxel_viz(s)
+            elif old_obj is not None:
+                # #P4 B0 gate G5: no render of these fragments' grids
+                # backs this removal (P4.5 correction (6), M7); the
+                # channel says so and the ledger counts it.
+                with provenance('superseded_unrendered', body=obj_name):
+                    for old_sid in list(old_obj.shadow_boxel_ids):
+                        registry.remove_boxel(old_sid)
+                        if viz is not None:
+                            viz.remove_boxel_viz(old_sid)
+                        if old_sid in shadows:
+                            shadows.remove(old_sid)
+                        shadow_occluder_map.pop(old_sid, None)
+                        boxel_centers.pop(old_sid, None)
+                        # #P1 F20 follow-up: the belief must forget the
+                        # superseded fragment too, or it stays 'unknown'
+                        # forever and blocks the all-searched exit.
+                        belief.remove_shadow(old_sid)
+                if viz is not None:
+                    viz.remove_boxel_viz(obj_name)
+
+            # #P1 F9: strike counter for REDISCOVERIES — this
+            # object was already registered (spawn occluder or a
+            # previous discovery) and a sense has hit it inside a
+            # fragment again.  Mirrors the audit-#21 3-strike
+            # sense giveup; see the counter's declaration in
+            # test_full_pipeline for the semantics.
+            # #P1 F20 follow-up: a body that entered the registry from
+            # a whole-workspace observation is being DISCOVERED inside
+            # a fragment for the first time here — that is not the
+            # relocate-rediscover cycle F9 bounds.  One exemption, then
+            # it counts like any other object.
+            if (nontarget_rediscovery_counts is not None
+                    and old_obj is not None
+                    and obj_name not in belief.redetected):
+                nontarget_rediscovery_counts[obj_name] = \
+                    nontarget_rediscovery_counts.get(obj_name, 0) + 1
+                print(f"      -> rediscovery "
+                      f"{nontarget_rediscovery_counts[obj_name]}/3 "
+                      f"for {obj_name} (#P1 F9 strike counter)")
+            belief.redetected.discard(obj_name)
+
+            obj_bd = BoxelData(
+                id=obj_name,
+                boxel_type=BoxelType.OBJECT,
+                min_corner=aabb_min,
+                max_corner=aabb_max,
+                object_name=obj_name,
+                is_occluder=False,
+                on_surface=(
+                    "table"
+                    if aabb_min[2] <= env.table_surface_height + 0.01
+                    else None
+                ),
+                surface_z=env.table_surface_height,
+            )
+            obj_bd.shadow_boxel_ids.extend(_m7_kept)       # M7 (empty off)
+            registry.add_boxel(obj_bd)
+            pose_belief.record_detection(
+                obj_bd, det, 'eye',
+                detection_complete(
+                    env, aabb_min, aabb_max, det,
+                    (sense_depth_m, sense_seg, sense_view, sense_proj)),
+                first=True)
+            boxel_centers[obj_name] = obj_bd.center
+            # object_body_ids is the planner-side mapping
+            # (audit #46): translate the GUI body id to the
+            # plan client's body id before exposing the new
+            # OBJECT to BoxelStreams' compute_kin / plan_motion.
+            object_body_ids[obj_name] = env.plan_body_id(bid)
+            boxel_to_pybullet[obj_name] = {
+                'name': obj_name,
+                'pybullet_id': bid,
+                'position': np.array(det.est_center),
+            }
+            # Keep the `occluders` snapshot in sync with the
+            # registry: compute_shadow_blockers iterates this
+            # list to build its body_id → boxel_id map.  If
+            # we don't append the freshly discovered object
+            # here, any ray that hits it is silently treated
+            # as "not a blocker" and the planner thinks the
+            # new shadow region is view_clear — leading to
+            # (move, sense, pick) plans against shadows whose
+            # occluder is still in front, which sense->reveals
+            # the same occluder again with zero progress.
+            if obj_name not in occluders:
+                occluders.append(obj_name)
+
+            # Compute shadow for this newly visible object.
+            # ShadowCalculator now accepts BoxelData directly,
+            # so we can pass obj_bd and the OBJECT registry
+            # entries with no conversion (audit #35).
+            # #P1 F9: after 3 rediscoveries the object's shadows
+            # are no longer re-created — the rediscover-relocate
+            # cycle it fed is bounded, like the audit-#21 giveup.
+            # The OBJECT boxel above still refreshed (census and
+            # collision mirroring stay correct); only the
+            # occlusion model goes un-rebuilt, so the belief may
+            # end incomplete and the episode ends honestly if the
+            # target actually hides behind this object.
+            if (nontarget_rediscovery_counts is not None
+                    and nontarget_rediscovery_counts.get(
+                        obj_name, 0) >= 3):
+                print(f"    ERROR: {obj_name} rediscovered "
+                      f"{nontarget_rediscovery_counts[obj_name]} "
+                      f"times — giving up re-creating its shadows "
+                      f"(#P1 F9 strike counter, mirrors audit "
+                      f"#21).  Belief may be incomplete for "
+                      f"regions it occludes.")
+                _capture_freeze(f"give-up: {obj_name} rediscovered "
+                                f"3x (F9)")
+                shadow_parts = []
+                _m7_giveup = True
+            else:
+                _m7_giveup = False
+                other_solids = [
+                    bd for bd in registry.boxels.values()
+                    if (bd.boxel_type == BoxelType.OBJECT
+                        and bd.id != obj_name)
+                ]
+                if M7:
+                    # M7: register_new_detections' carve set, every
+                    # existing fragment too (this body's kept ones
+                    # among them), so no space is held twice.
+                    other_solids.extend(registry.get_shadow_boxels())
+                # #P4 B3(c): the plan twin, posed from the belief
+                # (the hand is empty: sense needs handempty).
+                if env.shadow_raycast_client is not None:
+                    env.sync_to_plan_client(registry=registry)
+                shadow_parts = \
+                    env.shadow_calculator.calculate_shadow_boxel(
+                        obj_bd, other_solids,
+                        physics_client=env.shadow_raycast_client)
+
+            if shadow_parts:
+                obj_bd.is_occluder = True
+                table_z = env.table_surface_height
+                for sp in shadow_parts:
+                    sp.created_by_boxel_id = obj_name
+                    sp.created_by_object = obj_name
+                    sp.on_surface = (
+                        "table"
+                        if sp.min_corner[2] <= table_z + 0.01
+                        else None
+                    )
+                    sp.surface_z = table_z
+                    s_id = registry.add_boxel(sp)  # auto-assigns "shadow_NNN"
+                    obj_bd.shadow_boxel_ids.append(s_id)
+                    shadows.append(s_id)
+                    shadow_occluder_map[s_id] = [obj_name]
+                    boxel_centers[s_id] = sp.center
+                    # #P1 F20 follow-up: the belief must know the
+                    # fragment exists, or get_unknown_shadows() never
+                    # lists it and the loop can exit "all searched"
+                    # with it unsensed.
+                    belief.add_shadow(s_id)
+
+            # M7 (TB-46 review b3): one row per body found here, for G5
+            # and for the eval's list of episodes that reach this branch.
+            if M7:
+                ledger_event(
+                    'sense_discovery', body=obj_name, region=sid_str,
+                    rediscovery=old_obj is not None, kept=list(_m7_kept),
+                    recast=[s for s in obj_bd.shadow_boxel_ids
+                            if s not in _m7_kept],
+                    giveup=_m7_giveup, parked=_m7_park)
+
+            # BF#65 option 1 (no-op with --interior-regions off): the
+            # discovered body's interior region, under D6's status
+            # rule, as in register_new_detections.
+            interior_regions.bookkeep(
+                interior_regions.cast_for(env, registry, obj_bd,
+                                          [str(target_name)],
+                                          first_observation=False),
+                shadows=shadows, shadow_occluder_map=shadow_occluder_map,
+                boxel_centers=boxel_centers, belief=belief, viz=viz)
+
+            if viz is not None:
+                viz.draw_boxel_data(obj_bd)
+                for s_id in obj_bd.shadow_boxel_ids:
+                    s_bd = registry.get_boxel(s_id)
+                    if s_bd is not None:
+                        viz.draw_boxel_data(s_bd)
+
+            print(f"      -> {obj_name}: object boxel + "
+                  f"{len(shadow_parts)} shadow(s)")
+    else:
+        print(f"    Target NOT in {shadow_id} "
+              f"(ray-cast: view clear but no target hit)")
+
+    # Re-run octree + merge now that the shadow is gone
+    # (and possibly new object/shadow boxels were added).
+    if viz is not None and not _m7_park:
+        viz.remove_boxel_viz(sid_str)
+    # audit #71 — refresh OBJECT AABBs from the observation BEFORE
+    # reboxelize so the free-space carve uses current geometry,
+    # not the spawn-time snapshot.  SHADOW boxels intentionally
+    # left stale (scope cut).  Lost objects retire BEFORE the
+    # carve so free space reclaims their vacated regions.
+    _register_new_detections()
+    _lost = refresh_object_aabbs(
+        env, registry, viz, detections=sense_detections,
+        render=(sense_depth_m, sense_seg, sense_view, sense_proj),
+        check_lost=True)
+    if _lost:
+        retire_lost_objects(_lost, registry, viz, shadows,
+                            shadow_occluder_map, boxel_centers,
+                            occluders, belief,
+                            render=(sense_depth_m, sense_seg,
+                                    sense_view, sense_proj))
+    reboxelize_free_space(
+        registry, env, boxel_centers, viz, show_free)
+
+    print(f"    -> REPLANNING with updated belief...")
 
 
 def _sense_still_blocked(
