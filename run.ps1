@@ -166,6 +166,13 @@ if ($draws.Count -gt 0 -and $What -ne 'tampura') {
     $draws = @()
 }
 if ($draws.Count -gt 0) { $sw += ' --draw ' + ($draws -join ',') }
+# -NoPage and -LoosePage are about the page beside our own window, which only a window run of
+# boxels has.
+if (($NoPage -or $LoosePage) -and ($What -ne 'boxels' -or $Headless)) {
+    $named = (@('-NoPage', '-LoosePage') | Where-Object { ($_ -eq '-NoPage' -and $NoPage) -or ($_ -eq '-LoosePage' -and $LoosePage) }) -join ' and '
+    $why = if ($What -ne 'boxels') { "run $What has none" } else { 'this run has no window' }
+    Write-Host "run: $named ignored: only a window run of boxels has the page beside its window ($why)" -ForegroundColor Yellow
+}
 $extra = (@($Args) + @($Rest) | Where-Object { $_ -and $_ -ne '--' }) -join ' '
 if ($extra) { $extra = ' ' + $extra }
 $audio = if ($Music) { 'on' } elseif ($Sfx) { 'sfx' } else { '' }
@@ -268,17 +275,31 @@ function Find-Page([string]$word) {
     }
     return $null
 }
+# Test-PageShown: is a window open whose title is the page's ($whole), or starts with it (a
+# browser window with tabs that shows the page adds its own name).  All windows are looked
+# through, as the page's holder does it (tools/page_dock.cs, compiled here when first asked):
+# a browser is one process with many windows, and a process's main window alone would miss a
+# page window that stands behind another window of the same browser.
+function Test-PageShown([string]$title, [bool]$whole) {
+    try {
+        if (-not ('PageDock' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'tools/page_dock.cs') -IgnoreWarnings }
+        [PageDock]::WholeTitle = $whole
+        return ([PageDock]::FindPage($title, '') -ne 0)
+    } catch { return $false }
+}
 # Open-Page: a browser window on the page, Edge without its address bar where Edge is found,
 # else the default browser.  A page left open by an earlier run on the same port takes up
 # the new run by itself (it keeps asking its address), so no second window is opened for it.
-function Open-Page([string]$url) {
+# $own: only a window of the page's own counts as open (the holder never takes a browser
+# window with tabs); without Edge there is no such window, and a tab that shows the page does.
+function Open-Page([string]$url, [bool]$own) {
     $title = 'Semantic Boxels (page ' + ([uri]$url).Port + ')'
-    $open = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like "$title*" }).Count
-    if ($open -gt 0) { return }
+    if (Test-PageShown $title $own) { return }
     try {
         $edge = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe' -ErrorAction Stop).'(default)'
         Start-Process -FilePath $edge -ArgumentList "--app=$url", '--window-size=420,640'
     } catch {
+        if ($own -and (Test-PageShown $title $false)) { return }
         try { Start-Process $url } catch {
             Write-Host "run: the page did not open ($($_.Exception.Message)); it is at $url" -ForegroundColor Yellow
         }
@@ -323,21 +344,29 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
     $t0 = Get-Date
     $p = [System.Diagnostics.Process]::Start($psi)
     $seen = $false
+    $seenAt = $null
     $ended = ''
     $viewerAt = $null
     $pageWord = $r.Page     # the page is looked for until its server answers (the run may wait for the lock first)
+    $holder = $null
+    $holderLog = Join-Path $PSScriptRoot 'logs\page_dock.log'
     try {
         if ($r.Page -and -not $LoosePage) {
             # The page is held against the simulator's window, the two as one (tools/page_dock.ps1;
             # Hani, 2026-11-22).  The holder waits for this run's two windows (the page by this
             # run's word, as Find-Page does, so a page left open by another run is never taken),
             # ends by itself when the window or the run is gone, and is never ended from here.
-            # A failure to start it never touches the run: the page then opens as a window of its own.
+            # It writes down what it finds and does in $holderLog (one file, started anew by
+            # every run that has a holder).  A failure to start it never touches the run: the
+            # page then opens as a window of its own.
             try {
                 $holdArgs = @('-NoProfile', '-File', ('"' + (Join-Path $PSScriptRoot 'tools/page_dock.ps1') + '"'), '-WatchPid', $p.Id,
-                              '-PageWord', $r.Page, '-PortFrom', $pagePorts[0], '-PortTo', $pagePorts[-1])
-                $null = Start-Process -FilePath (Join-Path $PSHOME 'pwsh.exe') -ArgumentList $holdArgs -WindowStyle Hidden
+                              '-PageWord', $r.Page, '-PortFrom', $pagePorts[0], '-PortTo', $pagePorts[-1],
+                              '-Log', ('"' + $holderLog + '"'), '-Trace')
+                $holder = Start-Process -FilePath (Join-Path $PSHOME 'pwsh.exe') -ArgumentList $holdArgs -WindowStyle Hidden -PassThru
+                $null = $holder.Handle      # keeps the handle: HasExited and ExitCode stay readable
             } catch {
+                $holder = $null
                 Write-Host "run: the page is not held against the window ($($_.Exception.Message)); it opens as a window of its own" -ForegroundColor Yellow
             }
         }
@@ -370,18 +399,41 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
                                 "pwsh -NoProfile -File tools/camera_view.ps1 -Dir '$($r.Cameras)'") -ForegroundColor Yellow
                 }
             }
+            if ($holder -and $holder.HasExited) {
+                # The holder ends by itself: with 0 after holding (the page's window was closed),
+                # with 2 when the run ended first.  Any other code while the run goes on means
+                # that the page is not held, which would otherwise show as a loose page without
+                # a word.
+                if ($holder.ExitCode -notin 0, 2 -and -not $p.HasExited) {
+                    $why = switch ($holder.ExitCode) {
+                        5 { 'more than one simulator window is open and it cannot tell which is this run''s' }
+                        6 { 'it found no simulator window' }
+                        7 { 'no browser window of its own shows the page' }
+                        default { 'the holder stopped on an error' }
+                    }
+                    Write-Host ("run: the page is not held against the window: $why (exit code $($holder.ExitCode)). " +
+                                "The page stays a window of its own; the holder's log is $holderLog") -ForegroundColor Yellow
+                }
+                $holder = $null
+            }
+            if ($pageWord -and $seenAt -and ((Get-Date) - $seenAt).TotalSeconds -ge 20) {
+                # The run's window has been open this long and no page answers: this run has
+                # none (no free port for it, or a flag of -Args took it away).  The ports are
+                # asked no more; asking them slows this loop's watch of the window.
+                $pageWord = $null
+            }
             if ($pageWord) {
                 # The page beside the window: opened once, as soon as this run's server answers.
                 # A failure here never touches the run.
                 try {
                     $pageUrl = Find-Page $pageWord
-                    if ($pageUrl) { $pageWord = $null; Open-Page $pageUrl }
+                    if ($pageUrl) { $pageWord = $null; Open-Page $pageUrl ([bool]$holder) }
                 } catch { $pageWord = $null }
             }
             if ($Headless -or $ended) { continue }
             $open = @(Get-Process -Name msrdc -ErrorAction SilentlyContinue |
                       Where-Object { $_.MainWindowTitle -like '*Bullet Physics*' }).Count
-            if ($open -gt 0) { $seen = $true }
+            if ($open -gt 0) { $seen = $true; if (-not $seenAt) { $seenAt = Get-Date } }
             elseif ($seen) {
                 # A run that is ending closes its own window: give it a moment.
                 if (-not $p.WaitForExit(3000)) {

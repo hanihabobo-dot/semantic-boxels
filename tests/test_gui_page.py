@@ -156,6 +156,35 @@ def test_only_what_the_page_needs_is_answered(page):
     assert not [h for h in headers if h.lower().startswith('access-control')]
 
 
+def test_a_connection_dropped_half_way_leaves_nothing_on_stderr(page, capfd):
+    """A browser window that is closed, or a page that is loaded again, drops
+    its connection wherever it stands.  The server's threads say nothing
+    about it: the run's stderr is the console's, and nothing of the page
+    reaches the run's output (review r4: the standard server printed a
+    traceback there for each of the first three)."""
+    import struct
+
+    def drop(sent):
+        s = socket.create_connection(('127.0.0.1', page.port), timeout=5)
+        try:
+            if sent:
+                s.sendall(sent)
+            time.sleep(0.05)
+            # closed with a reset, not an orderly end
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
+        finally:
+            s.close()
+
+    host = b'Host: localhost:%d\r\n' % page.port
+    drop(b'GET /state HTTP/1.1\r\n' + host + b'\r\n')      # a whole request, its answer never read
+    drop(b'GET /sta')                                       # half a request line
+    drop(b'GET /state HTTP/1.1\r\n' + host)                 # half the headers
+    drop(b'')                                               # nothing at all
+    time.sleep(0.4)                                         # the server's threads have met the resets
+    assert _get(page, '/state')[0] == 200                   # and the server goes on
+    assert capfd.readouterr().err == ''
+
+
 def test_the_state_carries_the_run_the_console_and_no_camera_yet(page):
     status, headers, body = _get(page, '/state?after=3')
     state = json.loads(body)

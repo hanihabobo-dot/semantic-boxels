@@ -218,7 +218,6 @@ def _png(picture):
 
 class Page:
     def __init__(self, console, port, token=''):
-        from http.server import ThreadingHTTPServer
         self._console = console
         self.token = str(token or '')
         self.started = time.time()
@@ -227,7 +226,7 @@ class Page:
         self._renders = 0
         self._png = {}             # (render number, picture name) -> PNG bytes
         self._served = (0.0, -1)   # (monotonic time, console line number) of the last /state
-        self._httpd = ThreadingHTTPServer(('127.0.0.1', int(port)), _handler_class())
+        self._httpd = _server_class()(('127.0.0.1', int(port)), _handler_class())
         self._httpd.daemon_threads = True
         self._httpd.page = self
         self.port = self._httpd.server_address[1]
@@ -367,7 +366,27 @@ class Page:
             pass
 
 
+_server = None
 _handler = None
+
+
+def _server_class():
+    """The server, built when the first page starts (as the handler below).
+    A browser drops its connection wherever it stands (a closed window, a
+    page loaded again); the standard server prints a traceback on stderr for
+    each such request.  This one says nothing: the run's stderr is the
+    console's, and nothing of the page reaches the run's output."""
+    global _server
+    if _server is not None:
+        return _server
+    from http.server import ThreadingHTTPServer
+
+    class Server(ThreadingHTTPServer):
+        def handle_error(self, request, client_address):
+            pass
+
+    _server = Server
+    return Server
 
 
 def _handler_class():
@@ -445,7 +464,8 @@ _HTML = r'''<!doctype html>
 <title>__TITLE__</title>
 <link rel="icon" href="data:,">
 <style>
-:root { --bg:#161822; --line:#2a2e42; --text:#e6e8ef; --dim:#9aa0b4; --brand:#5fd7d7; --well:#0c0d14; }
+:root { --bg:#161822; --line:#2a2e42; --text:#e6e8ef; --dim:#9aa0b4; --brand:#5fd7d7; --well:#0c0d14;
+        color-scheme: dark; }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--text); font: 14px/1.4 "Segoe UI", system-ui, sans-serif;
@@ -499,6 +519,12 @@ figcaption { color: var(--dim); font-size: 12px; margin-top: 3px; }
   .camrow { gap: 6px; }
   figcaption { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #log { padding: 8px 10px 12px; font-size: 12px; }
+}
+/* at its least width the head keeps the name and the whole pill */
+@media (max-width: 300px) {
+  header .brand { font-size: 12px; letter-spacing: 0; }
+  header .run { display: none; }
+  .pill { padding: 2px 7px; }
 }
 </style>
 <style id="art-css"></style>

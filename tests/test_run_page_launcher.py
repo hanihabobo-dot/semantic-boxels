@@ -9,9 +9,12 @@ nothing; as tests/test_run_draw_launcher.py does for -Draw):
   run boxels -Headless   no window, no page
   run boxels -NoPage     PyBullet's own window as it was
   run tampura, wumpus    never (TAMPURA's window has no panels to take off)
+  -NoPage, -LoosePage    where a run has no page they change nothing, and
+                         the launcher says so
 
 Opening the browser is not tested here: a dry run never reaches it, and a
-real run would put a window on the desktop (tracks rule 13).
+real run would put a window on the desktop (tracks rule 13).  Whether a
+page's window is open already is asked of all windows (read only).
 """
 import platform
 import re
@@ -40,6 +43,9 @@ CALLS = {
     'list': 'boxels -Seed 3,4 -DryRun',
     'tampura': 'tampura -Seed 0 -DryRun',
     'wumpus': 'wumpus -Seed 3 -DryRun',
+    'tampura_switches': 'tampura -Seed 0 -NoPage -LoosePage -DryRun',
+    'headless_loose': 'boxels -Seed 3 -Headless -LoosePage -DryRun',
+    'loose': 'boxels -Seed 3 -LoosePage -DryRun',
     'help': 'help',
 }
 TOKEN = re.compile(r'export SB_GUI_PAGE_TOKEN=([0-9a-f]{12}); ')
@@ -121,6 +127,25 @@ def test_the_other_targets_never_ask_for_the_page(out):
 
 
 @needs_pwsh
+def test_the_pages_switches_say_so_where_a_run_has_no_page(out):
+    """-NoPage and -LoosePage with a run that has no page (tampura, wumpus,
+    -Headless): one line, as -Draw has it for run boxels, and the command is
+    the one without the switch."""
+    said = [ln for ln in out['tampura_switches'].splitlines() if ln.startswith('run: ')]
+    assert said == ['run: -NoPage and -LoosePage ignored: only a window run of boxels has the page '
+                    'beside its window (run tampura has none)']
+    strip = lambda text: [re.sub(r'_\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d', '', c) for c in _commands(text)]
+    assert strip(out['tampura_switches']) == strip(out['tampura'])
+    said = [ln for ln in out['headless_loose'].splitlines() if ln.startswith('run: ')]
+    assert said == ['run: -LoosePage ignored: only a window run of boxels has the page beside its '
+                    'window (this run has no window)']
+    assert _commands(out['headless_loose']) == _commands(out['headless'])
+    # and where the run has a page, or -NoPage takes it away, nothing is said
+    for name in ('boxels', 'nopage', 'loose'):
+        assert not [ln for ln in out[name].splitlines() if ln.startswith('run: ')], out[name]
+
+
+@needs_pwsh
 def test_the_help_text_names_the_switch_and_still_ends_at_run_help(out):
     text = out['help']
     assert 'run boxels -NoPage' in text and 'gui_page.py' in text
@@ -151,3 +176,57 @@ def test_the_page_is_looked_for_only_where_a_run_has_one():
     block = loop[loop.index('if ($pageWord) {'):loop.index('if ($Headless -or $ended)')]
     assert 'try {' in block and 'catch { $pageWord = $null }' in block
     assert 'Find-Page $pageWord' in block and 'Open-Page $pageUrl' in block
+
+
+def test_the_ports_are_asked_no_more_once_the_window_has_stood_without_a_page():
+    """A run whose window has been open for 20 s and whose page never
+    answered has none: the launcher stops asking the ten ports, which slows
+    its watch of the window (BF#51)."""
+    ps = RUN_PS1.read_text(encoding='utf-8')
+    loop = ps[ps.index('while (-not $p.HasExited)'):]
+    assert 'if ($open -gt 0) { $seen = $true; if (-not $seenAt) { $seenAt = Get-Date } }' in loop
+    stop = loop.index('if ($pageWord -and $seenAt -and ((Get-Date) - $seenAt).TotalSeconds -ge 20) {')
+    assert stop < loop.index('if ($pageWord) {')
+    assert '$pageWord = $null' in loop[stop:loop.index('if ($pageWord) {')]
+
+
+def _function(name):
+    """One function of run.ps1 as text, with the checkout's folder in place of
+    $PSScriptRoot (which a function typed into a shell does not have)."""
+    ps = RUN_PS1.read_text(encoding='utf-8')
+    start = ps.index('function %s(' % name)
+    end = ps.index('\n}\n', start) + 3
+    win = subprocess.run(['wslpath', '-w', str(ROOT)], capture_output=True, text=True, check=True).stdout.strip()
+    return ps[start:end].replace('$PSScriptRoot', "'%s'" % win)
+
+
+def test_a_page_window_left_open_is_looked_for_among_all_windows():
+    """Open-Page opens no second window for a page that is open.  A browser
+    is one process with many windows, so a process's main window does not
+    tell (review r4): the windows are looked through as the holder does it.
+    For the holder only a window of the page's own counts; without Edge a
+    tab that shows the page counts too, so that tabs do not pile up."""
+    ps = RUN_PS1.read_text(encoding='utf-8')
+    opener = ps[ps.index('function Open-Page('):ps.index('if ($DryRun) {')]
+    assert 'MainWindowTitle' not in opener
+    assert 'if (Test-PageShown $title $own) { return }' in opener
+    assert opener.index('Start-Process -FilePath $edge') < opener.index(
+        'if ($own -and (Test-PageShown $title $false)) { return }') < opener.index('Start-Process $url')
+    shown = ps[ps.index('function Test-PageShown('):ps.index('function Open-Page(')]
+    assert "Add-Type -Path (Join-Path $PSScriptRoot 'tools/page_dock.cs')" in shown
+    assert "[PageDock]::WholeTitle = $whole" in shown and "[PageDock]::FindPage($title, '') -ne 0" in shown
+    assert 'catch { return $false }' in shown
+    assert 'Open-Page $pageUrl ([bool]$holder)' in ps
+
+
+@needs_pwsh
+def test_no_window_carries_a_title_nobody_gave():
+    """Test-PageShown itself, on the real list of windows (read only): no
+    window is named like a page of a port no page has."""
+    script = (_function('Test-PageShown') +
+              "; 'whole=' + (Test-PageShown 'Semantic Boxels (page 1)' $true)"
+              "; 'start=' + (Test-PageShown 'Semantic Boxels (page 1)' $false)")
+    proc = subprocess.run([_PWSH, '-NoProfile', '-NonInteractive', '-Command', script],
+                          capture_output=True, text=True, timeout=300, cwd=str(ROOT))
+    assert proc.returncode == 0, proc.stderr
+    assert 'whole=False' in proc.stdout and 'start=False' in proc.stdout, proc.stdout + proc.stderr

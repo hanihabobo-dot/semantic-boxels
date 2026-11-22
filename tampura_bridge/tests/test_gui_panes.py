@@ -90,9 +90,10 @@ def test_these_are_the_panes_our_own_window_keeps():
                 for c in _calls_in(node, 'p.configureDebugVisualizer')
                 if ast.unparse(c.args[0]) in pane_flags]
 
+    # under the condition itself: the statements of the `if`, not those of an `else`
     under_the_page = [s for n in ast.walk(tree)
                       if isinstance(n, ast.If) and ast.unparse(n.test) == 'self._page is not None'
-                      for s in switches(n)]
+                      for statement in n.body for s in switches(statement)]
     assert switches(tree) == [('p.COV_ENABLE_GUI', '0')]
     assert under_the_page == switches(tree)
 
@@ -110,6 +111,25 @@ def test_the_bridge_never_starts_the_page_of_our_own_window():
                  or (isinstance(n, ast.alias) and 'gui_page' in n.name.split('.'))
                  or (isinstance(n, ast.ImportFrom) and 'gui_page' in (n.module or '').split('.'))]
         assert not named, name
+
+
+def test_the_page_is_started_by_our_own_pipelines_entry_and_nowhere_else():
+    """Nothing but a run of our own pipeline (run boxels) starts the page:
+    over the whole checkout, tests and records aside, gui_page.start is
+    called in test_full_pipeline.py alone."""
+    starters = []
+    for folder, folders, files in os.walk(REPO):
+        folders[:] = [d for d in folders
+                      if not d.startswith('.') and d not in ('tests', 'archive', 'logs', 'pddlstream_lib',
+                                                               '__pycache__', 'eval_results', 'thesis', 'report')]
+        for name in files:
+            if not name.endswith('.py'):
+                continue
+            with open(os.path.join(folder, name), encoding='utf-8', errors='replace') as f:
+                text = f.read()
+            if 'gui_page' in text and _calls_in(ast.parse(text), 'gui_page.start'):
+                starters.append(os.path.relpath(os.path.join(folder, name), REPO).replace(os.sep, '/'))
+    assert starters == ['test_full_pipeline.py']
 
 
 def test_show_asks_pybullet_for_window_flags_and_nothing_else():

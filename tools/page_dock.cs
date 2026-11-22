@@ -4,13 +4,18 @@
 //   Place        the arithmetic, and nothing else: where the page's window goes and which part
 //                of it stays visible, from the simulator's rectangle, the screen's work area and
 //                the page window's own margins.  tests/test_page_dock.py reads it.
+//   Choose       which of the simulator windows open now is this run's, and nothing else.
 //   Run          waits for the two windows, then keeps them together until one of them or the
 //                run is gone: Sync (place and cut), Raise and RaiseSim (the two come to the
 //                front together), OnEvent (the windows' own moves, as Windows reports them) and
 //                Tick (four times a second: are both still there; a sync in case an event was
-//                missed).
-//   Describe,    read only, for the trial on a hidden desktop
-//   ContentOf    (tracks/dbgcams/checks/dock_trial.ps1).
+//                missed).  Its log says which windows it took and how Windows describes them.
+//   Describe,    read only, and TryRaise, TryRaiseSim: for the trial on a desktop that is not
+//   ContentOf... shown (tracks/dbgcams/checks/dock_trial.ps1).
+//
+// Reports of Windows can arrive inside Sync while it waits in SetWindowPos on the other
+// program's window; the Sync that runs then and the outer one may each place once more, and the
+// look four times a second settles it.
 //
 // It touches two windows that are not its own, and only so: the page's browser window is moved,
 // sized, cut to its page (a window region), shown, minimised and moved in the stacking order;
@@ -58,6 +63,7 @@ public static class PageDock
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] static extern int SetWindowRgn(IntPtr h, IntPtr rgn, bool redraw);
     [DllImport("user32.dll")] static extern int GetWindowRgnBox(IntPtr h, out RECT r);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr(IntPtr h, int index);
     [DllImport("gdi32.dll")] static extern IntPtr CreateRectRgn(int l, int t, int r, int b);
     [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr o);
     [DllImport("user32.dll")] static extern bool GetWindowPlacement(IntPtr h, ref WINDOWPLACEMENT p);
@@ -124,6 +130,20 @@ public static class PageDock
         return p;
     }
 
+    /// Which of the simulator windows open now (`open`, the topmost first) is this run's.
+    /// `before` are the ones that were open when the holder last looked without the run's page
+    /// answering, so before the run opened its window.  One that opened since is the run's (the
+    /// topmost of them).  When none has, the list may have been taken late: then the run is
+    /// asked, and once it has drawn its window (`runWindowOpen`) a single open window is the
+    /// run's.  Returns the window, 0 for none yet, -1 when the run's window is open and there
+    /// is more than one to choose from (the holder then takes none).
+    public static long Choose(IList<long> open, ICollection<long> before, bool runWindowOpen)
+    {
+        foreach (long h in open) if (!before.Contains(h)) return h;
+        if (!runWindowOpen || open.Count == 0) return 0;
+        return open.Count == 1 ? open[0] : -1;
+    }
+
     // ----- reading windows ------------------------------------------------------------------
 
     static string Title(IntPtr h) { var s = new StringBuilder(512); GetWindowText(h, s, 512); return s.ToString(); }
@@ -131,11 +151,15 @@ public static class PageDock
     static string ProcName(IntPtr h)
     {
         uint pid; GetWindowThreadProcessId(h, out pid);
-        try { return Process.GetProcessById((int)pid).ProcessName; } catch { return ""; }
+        try { using (Process p = Process.GetProcessById((int)pid)) return p.ProcessName; } catch { return ""; }
     }
-    static bool Alive(int pid)
+    /// The run's process, opened once: asked four times a second whether it has ended, and a
+    /// process number given to another program later is never taken for it.
+    static Process watched;
+    static bool RunAlive()
     {
-        try { return !Process.GetProcessById(pid).HasExited; } catch { return false; }
+        if (watch == 0) return true;
+        try { return watched != null && !watched.HasExited; } catch { return false; }
     }
 
     /// The simulator's windows open now, the topmost first: visible, `title` in the title,
@@ -182,6 +206,23 @@ public static class PageDock
     {
         RECT r;
         if (DwmGetWindowAttribute(h, 9, out r, 16) != 0 || r.R <= r.L) GetWindowRect(h, out r);
+        return r;
+    }
+
+    /// How far what is SEEN of the simulator's window lies inside the rectangle Windows gives
+    /// for it, in real pixels from the left, the top, the right and the bottom (page_dock.ps1's
+    /// -SimInset).  All zero: the rectangle is taken as what is seen.  The simulator's window
+    /// is drawn by WSL's window host, which may send its shadow as part of the window; Windows
+    /// has no call that tells, so this is a measured number.
+    public static RECT Inset;
+    public static void SetInset(int left, int top, int right, int bottom)
+    {
+        Inset.L = left; Inset.T = top; Inset.R = right; Inset.B = bottom;
+    }
+    static RECT Seen(IntPtr simulator)
+    {
+        RECT r = Frame(simulator);
+        r.L += Inset.L; r.T += Inset.T; r.R -= Inset.R; r.B -= Inset.B;
         return r;
     }
 
@@ -251,9 +292,27 @@ public static class PageDock
         return all;
     }
 
+    /// For the trial: whether a window is shown, and whether it is set to stay above all
+    /// others (the holder must never leave the page so).
+    public static bool VisibleOf(long window) { return IsWindowVisible(new IntPtr(window)); }
+    public static bool TopmostOf(long window) { return (GetWindowLongPtr(new IntPtr(window), -20).ToInt64() & 0x8) != 0; }
+
+    /// For the trial: Windows reports no "came to the front" on a desktop that is not shown,
+    /// so the holder's two answers to that report are called here, on the two windows named.
+    public static void TryRaise(long simWindow, long pageWindow)
+    {
+        sim = new IntPtr(simWindow); page = new IntPtr(pageWindow);
+        Raise();
+    }
+    public static void TryRaiseSim(long simWindow, long pageWindow)
+    {
+        sim = new IntPtr(simWindow); page = new IntPtr(pageWindow);
+        RaiseSim();
+    }
+
     // ----- holding the two together ---------------------------------------------------------
 
-    const int OldAfterMs = 20000;   // a simulator window that was open before this run is taken only after this long
+    const int GiveUpMs = 30000;     // what is missing for the pair stays missing this long: the holder ends and says why
     const int Slack = 3;            // pixels of window kept beyond the page on the right and below (see Sync)
     static IntPtr sim, page;
     static string childClass;
@@ -261,8 +320,8 @@ public static class PageDock
     static bool done, away, havePlacement, trace;
     static WINDOWPLACEMENT saved;
     static string lastLine = "", lastSim = "";
-    static int unasked;             // placings in a row while the simulator stood still
-    static long quietUntil, hiddenSince = -1;
+    static int unasked;             // placings in a row, close together, while the simulator stood still
+    static long quietUntil, lastUnasked, hiddenSince = -1;
     static readonly Stopwatch life = Stopwatch.StartNew();
     static StreamWriter log;
     static WinEventProc proc;       // kept here: the hooks call it for as long as the holder lives
@@ -304,7 +363,7 @@ public static class PageDock
         hiddenSince = -1;
         if (away || IsIconic(page) || IsZoomed(page)) ShowWindow(page, 4);     // back, not activated
         away = false;
-        RECT s = Frame(sim);
+        RECT s = Seen(sim);
         RECT work = Work(sim);
         double k = GetDpiForWindow(page) / 96.0;
         if (k < 0.5) k = 1.0;
@@ -320,10 +379,13 @@ public static class PageDock
         if (simNow != lastSim) { lastSim = simNow; unasked = 0; }
         if (w.L != p.Window.L || w.T != p.Window.T || w.R != p.Window.R || w.B != p.Window.B)
         {
-            // A window that leaves its place while the simulator stands still is put back a few
-            // times and then left alone for a while: the holder never fights for it.
+            // A window that leaves its place again and again while the simulator stands still
+            // is put back a few times and then left alone for a while: the holder never fights
+            // for it.  Placings more than five seconds apart are not such a fight.
             long now = life.ElapsedMilliseconds;
             if (now < quietUntil) return;
+            if (now - lastUnasked > 5000) unasked = 0;
+            lastUnasked = now;
             if (++unasked > 8)
             {
                 quietUntil = now + 3000; unasked = 0;
@@ -396,7 +458,7 @@ public static class PageDock
         if (!IsWindow(page)) { Finish("the page's window is gone", false); return; }
         if (!IsWindow(sim)) { if (++missing >= 2) Finish("the simulator's window is gone", true); return; }
         missing = 0;
-        if (watch != 0 && !Alive(watch)) { Finish("the run has ended", true); return; }
+        if (!RunAlive()) { Finish("the run has ended", true); return; }
         Sync("tick");
     }
 
@@ -423,58 +485,94 @@ public static class PageDock
         catch (Exception e) { Note("event " + ev.ToString("X") + ": " + e.Message); }
     }
 
-    static HashSet<long> before;
+    static HashSet<long> before, looked;
 
-    /// The simulator windows that are open now, kept as "open before this run's": for a
-    /// caller that has something to wait for before Run (page_dock.ps1 waits for the run's
-    /// page to answer), so that a window which opens during that wait still counts as new.
-    public static int Snapshot(string simTitle, string simProcess)
+    /// The simulator windows that are open now.  Keep makes that list the one of the windows
+    /// "open before this run's".  page_dock.ps1 looks before every ask of the page servers and
+    /// keeps the list when no page gave the run's word back: the run starts its page before it
+    /// opens its window, so the run's window was not open at that look, and a window which
+    /// opens after it counts as new.
+    public static int Look(string simTitle, string simProcess)
     {
-        before = new HashSet<long>(FindSim(simTitle, simProcess));
-        return before.Count;
+        looked = new HashSet<long>(FindSim(simTitle, simProcess));
+        return looked.Count;
     }
+    public static void Keep() { before = looked; }
+
+    /// Asks the run's page whether the run has shown a render, which it does only once its
+    /// window is open (page_dock.ps1 sets it).  Asked only while no simulator window has opened
+    /// since the list was kept, see Choose.  Not set: such a window is never taken.
+    public static Func<bool> RunWindowOpen;
 
     /// Wait for the page's window and this run's simulator window, hold them together, end
     /// when one of them or the run (`watchPid`, 0: none) is gone.  Widths are pixels at 100 %
-    /// scaling.  Returns 0 after holding, 2 when the run ended before its windows came, 3 when
-    /// no run is watched and they did not come within `waitSeconds`.  `traceAll`: the log also
-    /// gets every report of Windows about the two windows and how long each placing took.
+    /// scaling.  `traceAll`: the log also gets every report of Windows about the two windows
+    /// and how long each placing took.  Returns
+    ///   0  after holding
+    ///   2  the run ended before its windows came
+    ///   3  no run is watched and the windows did not come within `waitSeconds`
+    ///   5  the run's window is open, more than one simulator window is, and none opened
+    ///      after the holder's list: it cannot tell which is the run's and takes none
+    ///   6  the run's window is open and no window with the simulator's title is found
+    ///   7  the simulator's window is there and no browser window of its own shows the page
+    /// (5 to 7 after GiveUpMs of that state; the log says which and why).
     public static int Run(string simTitle, string simProcess, string pageTitle, string pageClass,
                           string pageChildClass, int width, int minWidth, int watchPid, int waitSeconds,
                           string logPath, bool traceAll)
     {
         SetThreadDpiAwarenessContext(new IntPtr(-4));       // real pixels on every screen
-        if (!String.IsNullOrEmpty(logPath)) { log = new StreamWriter(logPath, true, new UTF8Encoding(false)); log.AutoFlush = true; }
+        if (!String.IsNullOrEmpty(logPath))
+        {
+            // a log that cannot be written never stops the holder
+            try
+            {
+                log = new StreamWriter(new FileStream(logPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite), new UTF8Encoding(false));
+                log.AutoFlush = true;
+            }
+            catch { log = null; }
+        }
         childClass = pageChildClass ?? ""; wantAt100 = width; minAt100 = minWidth; watch = watchPid;
-        side = 0; missing = 0; done = false; away = false; lastLine = ""; lastSim = ""; unasked = 0; quietUntil = 0; hiddenSince = -1; trace = traceAll;
-        IntPtr h1 = IntPtr.Zero, h2 = IntPtr.Zero;
+        side = 0; missing = 0; done = false; away = false; lastLine = ""; lastSim = ""; unasked = 0; quietUntil = 0; lastUnasked = 0; hiddenSince = -1; trace = traceAll;
+        var hooks = new List<IntPtr>();
         UIntPtr timer = UIntPtr.Zero;
+        bool held = false;
         try
         {
-            // This run's simulator window is one that opens while the holder waits.  One that
-            // was open before (another program's, or a window left behind) is taken only when
-            // no new one has come for a while after the page.  The list of those is taken
-            // here, or earlier by Snapshot when the caller waits for something first.
-            if (before == null) Snapshot(simTitle, simProcess);
+            if (watchPid != 0) { try { watched = Process.GetProcessById(watchPid); } catch { watched = null; } }
+            if (before == null) { Look(simTitle, simProcess); Keep(); }
             Note("waiting; simulator windows open before: " + before.Count);
             var clock = Stopwatch.StartNew();
-            long pageSince = -1;
+            bool open = false;
+            long asked = -1000, lacksSince = 0;
+            string lacks = "";
             while (true)
             {
-                if (watchPid != 0 && !Alive(watchPid)) { Note("the run ended before its windows came"); return 2; }
+                if (!RunAlive()) { Note("the run ended before its windows came"); return 2; }
                 if (watchPid == 0 && clock.ElapsedMilliseconds > waitSeconds * 1000L) { Note("the windows did not come"); return 3; }
                 page = new IntPtr(FindPage(pageTitle, pageClass));
-                if (page != IntPtr.Zero)
+                List<long> sims = FindSim(simTitle, simProcess);
+                long pick = Choose(sims, before, open);
+                if (pick == 0 && !open && RunWindowOpen != null && clock.ElapsedMilliseconds - asked >= 1000)
                 {
-                    if (pageSince < 0) pageSince = clock.ElapsedMilliseconds;
-                    List<long> sims = FindSim(simTitle, simProcess);
-                    sim = IntPtr.Zero;
-                    foreach (long h in sims) if (!before.Contains(h)) { sim = new IntPtr(h); break; }
-                    if (sim == IntPtr.Zero && sims.Count > 0 && clock.ElapsedMilliseconds - pageSince > OldAfterMs)
-                        sim = new IntPtr(sims[0]);
-                    if (sim != IntPtr.Zero) break;
+                    // none has opened since the list was kept: has the run drawn its window?
+                    asked = clock.ElapsedMilliseconds;
+                    try { open = RunWindowOpen(); } catch { open = false; }
+                    if (open) { Note("the run has drawn its window; simulator windows open: " + sims.Count); pick = Choose(sims, before, true); }
                 }
-                else pageSince = -1;
+                if (pick > 0 && page != IntPtr.Zero) { sim = new IntPtr(pick); break; }
+                // What is missing for the pair, said when it changes.  When it stays missing
+                // the holder ends with a code of its own, so that the launcher can say that
+                // the page is not held.
+                string now = pick > 0 ? "no browser window of its own shows the page (a window named exactly '" + pageTitle + "')"
+                           : pick < 0 ? "the run's window is open, " + sims.Count + " simulator windows are, and none of them opened after the holder's list was taken: it cannot tell which is this run's and takes none"
+                           : open ? "the run has drawn its window, and no window with '" + simTitle + "' in its title is found" + (simProcess.Length > 0 ? " among the windows of " + simProcess : "")
+                           : "";
+                if (now != lacks) { lacks = now; lacksSince = clock.ElapsedMilliseconds; if (now.Length > 0) Note("waiting: " + now); }
+                if (lacks.Length > 0 && clock.ElapsedMilliseconds - lacksSince > GiveUpMs)
+                {
+                    Note("given up after " + (GiveUpMs / 1000) + " s: " + lacks);
+                    return pick > 0 ? 7 : pick < 0 ? 5 : 6;
+                }
                 System.Threading.Thread.Sleep(150);
             }
             uint pidSim, pidPage;
@@ -482,12 +580,39 @@ public static class PageDock
             GetWindowThreadProcessId(page, out pidPage);
             saved = new WINDOWPLACEMENT(); saved.length = Marshal.SizeOf(typeof(WINDOWPLACEMENT));
             havePlacement = GetWindowPlacement(page, ref saved);
+            held = true;
             Note("holding: simulator " + sim.ToInt64().ToString("X") + " [" + Title(sim) + "], page "
                  + page.ToInt64().ToString("X") + " [" + Title(page) + "]");
+            // What the two windows are to Windows, before anything is placed: the look of the
+            // pair on a real screen is measured against these lines (see Inset).
+            Note("  the simulator's window " + (before.Contains(sim.ToInt64())
+                 ? "was open when the holder's list was taken; taken as the only one, the run having drawn its window"
+                 : "opened after the holder's list was taken"));
+            Note("  simulator: " + Describe(sim.ToInt64()) + " process=" + ProcName(sim) + " dpi=" + GetDpiForWindow(sim)
+                 + " work=" + Work(sim) + " inset=" + Inset + " taken as seen=" + Seen(sim));
+            bool inside;
+            RECT content = Content(page, childClass, out inside);
+            Note("  page: " + Describe(page.ToInt64()) + " dpi=" + GetDpiForWindow(page)
+                 + " its page inside=" + (inside ? content.ToString() : "not found"));
+            foreach (long h in FindSim(simTitle, simProcess))
+                if (h != sim.ToInt64())
+                    Note("  another simulator window, left alone (" + (before.Contains(h) ? "open before" : "opened since") + "): " + Describe(h));
             proc = OnEvent;
-            // from 'a window came to the front' to 'a window moved', of these two programs only
-            h1 = SetWinEventHook(0x0003, 0x800B, IntPtr.Zero, proc, pidSim, 0, 0x0002);
-            if (pidPage != pidSim) h2 = SetWinEventHook(0x0003, 0x800B, IntPtr.Zero, proc, pidPage, 0, 0x0002);
+            // The reports the holder acts on, of these two programs only: a window came to the
+            // front (0003), was minimised or restored (0016, 0017), was closed, shown or hidden
+            // (8001 to 8003), moved or resized (800B).  Narrow ranges: a browser reports much else.
+            uint[] ranges = { 0x0003, 0x0003, 0x0016, 0x0017, 0x8001, 0x8003, 0x800B, 0x800B };
+            uint[] programs = pidPage != pidSim ? new uint[] { pidSim, pidPage } : new uint[] { pidSim };
+            int refused = 0;
+            foreach (uint program in programs)
+                for (int i = 0; i < ranges.Length; i += 2)
+                {
+                    IntPtr hook = SetWinEventHook(ranges[i], ranges[i + 1], IntPtr.Zero, proc, program, 0, 0x0002);
+                    if (hook == IntPtr.Zero) refused++; else hooks.Add(hook);
+                }
+            if (refused > 0)
+                Note("Windows refused " + refused + " of the holder's " + (programs.Length * ranges.Length / 2)
+                     + " report hooks: for those the look four times a second stands in");
             timer = SetTimer(IntPtr.Zero, UIntPtr.Zero, 250, IntPtr.Zero);
             Sync("first");
             Raise();
@@ -503,11 +628,11 @@ public static class PageDock
         finally
         {
             if (timer != UIntPtr.Zero) KillTimer(IntPtr.Zero, timer);
-            if (h1 != IntPtr.Zero) UnhookWinEvent(h1);
-            if (h2 != IntPtr.Zero) UnhookWinEvent(h2);
-            if (!done) { try { Release(); } catch { } }      // an error on the way: the page is not left cut
+            foreach (IntPtr hook in hooks) UnhookWinEvent(hook);
+            if (held && !done) { try { Release(); } catch { } }      // an error on the way: the page is not left cut
             if (log != null) { try { log.Dispose(); } catch { } log = null; }
-            before = null;
+            if (watched != null) { try { watched.Dispose(); } catch { } watched = null; }
+            before = null; looked = null;
         }
     }
 }

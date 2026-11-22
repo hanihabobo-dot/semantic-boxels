@@ -7,12 +7,17 @@ without a window on the desktop (tracks rule 13):
                    the page's window goes for a simulator window at the left
                    edge, in the middle, at the right edge, as wide as the
                    screen, and that the page keeps its side while it serves
+  which window     PageDock.Choose, the same way: which of the simulator
+                   windows open is this run's, and when it takes none
   what it touches  the Windows calls the source names: it places, shows and
                    cuts a window and reads; nothing is sent to a program
   the names        the windows it looks for are the ones the page and
                    PyBullet open, and the ones the launcher watches
-  the launcher     run boxels starts it for a run with the page, -LoosePage
-                   leaves it out, and it changes nothing of the run's command
+  the launcher     run boxels starts it for a run with the page and gives it
+                   a log, -LoosePage leaves it out, and it changes nothing of
+                   the run's command
+  its ends         the real script without a page to find: the run gone, no
+                   run to watch, a parameter it cannot read (the log says so)
 
 Holding two real windows together is tried on a desktop that is not shown
 (tracks/dbgcams/checks/dock_trial.ps1); how the pair looks, and how the real
@@ -67,6 +72,26 @@ CASES = {
 }
 
 
+# name: (the simulator windows open now, the topmost first; the ones open at the holder's kept
+#        look; whether the run has drawn its window; the window taken, 0 none yet, -1 it cannot tell)
+CHOICES = {
+    'one opened since the look':
+        ((7, 3), (3,), False, 7),
+    'the topmost of two that opened since':
+        ((9, 7, 3), (3,), False, 9),
+    'none opened since and the run has not drawn its window: none yet':
+        ((3,), (3,), False, 0),
+    'none opened since, the run has drawn its window, one is open: that one':
+        ((3,), (3,), True, 3),
+    'none opened since, the run has drawn its window, two are open: it cannot tell':
+        ((3, 4), (3, 4), True, -1),
+    'one that opened since is taken whatever else is open':
+        ((5, 3, 4), (3, 4), True, 5),
+    'no simulator window at all':
+        ((), (), True, 0),
+}
+
+
 def _win(path):
     return subprocess.run(['wslpath', '-w', str(path)], capture_output=True,
                           text=True, check=True).stdout.strip()
@@ -88,6 +113,9 @@ def placed():
             "$p = [PageDock]::Place((New-Rect %d %d %d %d), $work, %d, %d, %d, %d, %d, %d, %d); "
             "'%d|' + $p.Side + '|' + $p.Width + '|' + $p.Window + '|' + $p.Region"
             % (*sim, *m, WANT, MIN, side_now, i))
+    for i, (now, before, drawn, _taken) in enumerate(CHOICES.values()):
+        lines.append("'choose%d|' + [PageDock]::Choose([long[]]@(%s), [long[]]@(%s), $%s)"
+                     % (i, ', '.join(map(str, now)), ', '.join(map(str, before)), str(drawn).lower()))
     proc = subprocess.run([_PWSH, '-NoProfile', '-NonInteractive', '-Command', '\n'.join(lines)],
                           capture_output=True, text=True, timeout=300, cwd=str(ROOT))
     assert proc.returncode == 0, proc.stderr
@@ -120,6 +148,18 @@ def test_where_the_page_goes(placed, name):
     assert WORK[0] <= seen[0] and seen[2] <= WORK[2], 'what is seen stays on the screen'
 
 
+@needs_pwsh
+@pytest.mark.parametrize('name', list(CHOICES))
+def test_which_simulator_window_is_this_runs(placed, name):
+    """A window that opened since the holder's kept look is the run's.  With
+    none, the holder may have looked late: only once the run has drawn its
+    window is a window from before taken, and only when it is the one there
+    is.  No waiting decides it (review r4: a window was taken after 20 s)."""
+    assert placed['choose%d' % list(CHOICES).index(name)] == [str(CHOICES[name][3])], name
+    cs = DOCK_CS.read_text(encoding='utf-8')
+    assert 'OldAfterMs' not in cs and cs.count('Choose(sims, before, ') == 2
+
+
 def test_the_holder_places_shows_and_cuts_a_window_and_sends_nothing():
     """The Windows calls the source names, all of them: reading windows,
     placing, showing and cutting one, the reports of Windows about the two
@@ -130,7 +170,7 @@ def test_the_holder_places_shows_and_cuts_a_window_and_sends_nothing():
         'EnumWindows', 'EnumChildWindows', 'IsWindow', 'IsWindowVisible', 'IsIconic', 'IsZoomed',
         'GetWindowText', 'GetClassName', 'GetWindowThreadProcessId', 'GetWindowRect',
         'GetWindowRgnBox', 'GetWindowPlacement', 'MonitorFromWindow', 'GetMonitorInfo',
-        'GetDpiForWindow', 'DwmGetWindowAttribute',
+        'GetDpiForWindow', 'DwmGetWindowAttribute', 'GetWindowLongPtr',
         'SetWindowPos', 'ShowWindow', 'SetWindowRgn', 'SetWindowPlacement',
         'CreateRectRgn', 'DeleteObject',
         'SetThreadDpiAwarenessContext', 'SetWinEventHook', 'UnhookWinEvent',
@@ -168,9 +208,37 @@ def test_the_launcher_starts_the_holder_for_a_run_with_the_page_and_never_ends_i
     assert "'tools/page_dock.ps1'" in block and "'-WatchPid', $p.Id" in block
     # this run's word and the launcher's own ports: the holder takes this run's page and no other
     assert "'-PageWord', $r.Page, '-PortFrom', $pagePorts[0], '-PortTo', $pagePorts[-1]" in block
-    assert '-WindowStyle Hidden' in block and '-PassThru' not in block     # started, not kept, not ended
+    assert '-WindowStyle Hidden' in block
     assert 'try {' in block and 'catch {' in block                           # a failure never touches the run
     assert code.index('$p = [System.Diagnostics.Process]::Start($psi)') < start
+    # it writes a log the launcher can name (one file in the checkout's logs folder, which
+    # git ignores), with every report of Windows about the two windows
+    assert "'-Log', ('\"' + $holderLog + '\"'), '-Trace'" in block
+    assert "$holderLog = Join-Path $PSScriptRoot 'logs\\page_dock.log'" in code
+    assert 'logs/' in (ROOT / '.gitignore').read_text(encoding='utf-8').split()
+    # the process is kept only to be asked whether it has ended; nothing here ends it
+    assert '$holder = Start-Process' in block and '-PassThru' in block
+    assert not re.search(r'(Stop-Process|taskkill|Kill\(\))[^\n]*holder', code)
+    assert not re.search(r'\$holder\.(Kill|Close|CloseMainWindow)', code)
+
+
+def test_the_launcher_says_so_when_the_holder_ends_while_the_run_goes_on():
+    """A holder that has ended with anything but 0 (it held, the page's
+    window was closed) or 2 (the run ended first) left a loose page: the
+    launcher's loop says it once, with the holder's exit code and its log,
+    and only while the run goes on."""
+    ps = RUN_PS1.read_text(encoding='utf-8')
+    loop = ps[ps.index('while (-not $p.HasExited)'):]
+    block = loop[loop.index('if ($holder -and $holder.HasExited) {'):loop.index('if ($pageWord -and $seenAt')]
+    assert 'if ($holder.ExitCode -notin 0, 2 -and -not $p.HasExited) {' in block
+    assert 'Write-Host' in block and '$holder.ExitCode' in block and '$holderLog' in block
+    assert block.rstrip().endswith('$holder = $null\n            }')       # said once
+    # the codes it names are the holder's own
+    cs = DOCK_CS.read_text(encoding='utf-8')
+    for code in re.findall(r'^\s+(\d) \{ ', block, re.M):
+        assert re.search(r'^\s+///\s+%s  ' % code, cs, re.M), code
+    assert set(re.findall(r'^\s+(\d) \{ ', block, re.M)) == {'5', '6', '7'}
+    assert 'return pick > 0 ? 7 : pick < 0 ? 5 : 6;' in cs
 
 
 def test_the_holder_finds_this_runs_page_as_the_launcher_does_and_names_it_as_the_page_does():
@@ -189,8 +257,18 @@ def test_the_holder_finds_this_runs_page_as_the_launcher_does_and_names_it_as_th
     first = int(re.search(r'\[int\]\$PortFrom = (\d+)', ps).group(1))
     last = int(re.search(r'\[int\]\$PortTo = (\d+)', ps).group(1))
     assert (first, last) == (gui_page.DEFAULT_PORT, gui_page.DEFAULT_PORT + gui_page.PORT_TRIES - 1)
-    # the windows open before are listed before that wait, so this run's window counts as new
-    assert ps.index('[PageDock]::Snapshot(') < ps.index('if ($PageWord) {') < ps.index('[PageDock]::Run(')
+    # The simulator windows are looked at before every ask of the page servers, and the look
+    # is kept when no page gave the word back: this run's window was not open at it, since
+    # the run starts its page before it opens its window (tests/test_window_page.py pins that
+    # order in the pipeline's entry).  A page that answers at the first ask: the look is kept
+    # all the same and the run is asked whether it has drawn its window (PageDock.Choose).
+    loop = ps[ps.index('while (-not $port) {'):ps.index("$PageTitle = 'Semantic Boxels (page ' + $port")]
+    assert (loop.index('[PageDock]::Look($SimTitle, $SimProcess)') < loop.index('Invoke-RestMethod')
+            < loop.index('if (-not $port) {') < loop.index('[PageDock]::Keep()')
+            < loop.index('if (-not $kept) { [PageDock]::Keep() }'))
+    assert ps.index('[PageDock]::RunWindowOpen = [Func[bool]] {') < ps.index('[PageDock]::Run(')
+    asked = ps[ps.index('[PageDock]::RunWindowOpen = '):ps.index('}.GetNewClosure()')]
+    assert '$stateUrl' in asked and ').camera' in asked and 'catch { $false }' in asked
     # and only a window whose WHOLE title is the page's is taken: a browser window with tabs
     # that shows the page ("... - Microsoft Edge") is a person's own and is never cut or moved
     assert ps.index("$PageTitle = '") < ps.index('[PageDock]::WholeTitle = $true') < ps.index('[PageDock]::Run(')
@@ -212,6 +290,27 @@ def test_the_holder_ends_by_itself_when_no_page_gives_the_word_back():
                           capture_output=True, text=True, timeout=300, cwd=str(ROOT))
     assert proc.returncode == 0, proc.stderr
     assert 'gone=2' in proc.stdout and 'nopage=3' in proc.stdout, proc.stdout + proc.stderr
+
+
+@needs_pwsh
+def test_an_error_of_the_holder_is_in_its_log_and_in_its_exit_code(tmp_path):
+    """The launcher starts the holder hidden, so what stops it must be in its
+    log: here a -SimInset it cannot read.  The log is started anew by every
+    holder."""
+    log = tmp_path / 'sub' / 'page_dock.log'
+    log.parent.mkdir()
+    log.write_text('a line of the run before\n', encoding='utf-8')
+    script = ("$me = Join-Path $PSHOME 'pwsh.exe'; "
+              f"& $me -NoProfile -File '{_win(DOCK_PS1)}' -WaitSeconds 1 -PageWord nosuchword -PortFrom 8799 "
+              f"-PortTo 8799 -SimInset '1,2,3' -Log '{_win(log)}'; \"bad=$LASTEXITCODE\"")
+    proc = subprocess.run([_PWSH, '-NoProfile', '-NonInteractive', '-Command', script],
+                          capture_output=True, text=True, timeout=300, cwd=str(ROOT))
+    assert proc.returncode == 0, proc.stderr
+    assert 'bad=4' in proc.stdout, proc.stdout + proc.stderr
+    said = log.read_text(encoding='utf-8-sig')
+    assert 'a line of the run before' not in said
+    assert 'the holder of the page starts' in said and "word 'nosuchword'" in said
+    assert 'ERROR, the holder ends: -SimInset takes four whole numbers' in said
 
 
 @needs_pwsh
