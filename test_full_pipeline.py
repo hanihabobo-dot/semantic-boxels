@@ -1233,290 +1233,16 @@ def dispatch_step(st, env, i, action):
         f"{', '.join(x for x in params if isinstance(x, str))})")
 
     if action_name == 'move':
-        # MOVE: follow a collision-free trajectory from q1 to q2.
-        # The trajectory was computed by the plan_motion stream
-        # using RRT; we replay its waypoints with smooth
-        # interpolation for visual fidelity and physics stability.
-        q1, q2, dest_boxel_id, traj = params
-        print(f"    Moving to {dest_boxel_id} ({len(traj.waypoints)} waypoints)...")
-        # audit #60 fix (i) — if current_config (post-lift, post-action
-        # arm pose) differs from traj.waypoints[0] (the planner's q1 =
-        # compute_kin contact pose), the planner-baked trajectory would
-        # drop the arm BACK to contact altitude before traversing.
-        # Re-invoke plan_motion at execution time so the trajectory
-        # starts from the actual lifted arm pose and uses the up-to-
-        # date plan_client cube layout (synced by fix (ii) at the end
-        # of execute_place / execute_stack).  Carries q1's collision-
-        # check metadata (ignored_body_ids, held_body_ids,
-        # grasp_ee_offset) so plan_motion's held-body tracking and
-        # is_pick_place detection behave as the planner originally
-        # invoked it.  On replan failure, break the dispatch loop and
-        # let the outer replan recover from current_config — same
-        # path as IK failures during pick/place.
-        # #P4 B3(d), D7 (iv): with held_cargo_resolve, every move
-        # made while holding is re-solved from the readback with
-        # the held body as cargo, whatever the drift, toward the
-        # planned goal configuration.
-        _cargo = st.opts.held_cargo_resolve and st.hand.held_body_id is not None
-        if st.arm.current_config is not None and len(traj.waypoints) > 0:
-            diff = float(np.linalg.norm(
-                np.asarray(st.arm.current_config.joint_positions)
-                - np.asarray(traj.waypoints[0].joint_positions)))
-            if diff > 1e-2 or _cargo:
-                if _cargo:
-                    q1_runtime = _readback_config(st, env, 
-                        st.arm.current_config.joint_positions,
-                        f"{st.arm.current_config.name}_runtime")
-                    if not q1_runtime.held_body_ids:
-                        print(f"    WARNING: no estimated box for "
-                              f"the held body; the re-solve runs "
-                              f"without cargo (D7 (iv))")
-                else:
-                    q1_runtime = RobotConfig(
-                        joint_positions=np.asarray(st.arm.current_config.joint_positions),
-                        name=f"{st.arm.current_config.name}_runtime",
-                        ignored_body_ids=q1.ignored_body_ids,
-                        held_body_ids=q1.held_body_ids,
-                        grasp_ee_offset=q1.grasp_ee_offset,
-                    )
-                try:
-                    (new_traj,) = next(st.setup.planner.streams.plan_motion(q1_runtime, q2))
-                    # print(f"    [#60-fix(i)] replanned motion from runtime pose "
-                    #       f"(prior diff={diff:.4f} rad, "
-                    #       f"{len(new_traj.waypoints)} waypoints)")
-                    traj = new_traj
-                    # #P4 B0 gate G3: the re-solve keeps the
-                    # planned goal configuration.
-                    ledger_event(
-                        'move_resolve', goal_config=q2.name,
-                        goal_equal=bool(np.array_equal(
-                            np.asarray(new_traj.waypoints[-1].joint_positions),
-                            np.asarray(q2.joint_positions))),
-                        start_diff=diff,
-                        cargo=sorted(q1_runtime.held_body_ids))
-                except StopIteration:
-                    # print(f"    [#60-fix(i)] plan_motion could not replan from "
-                    #       f"runtime pose (diff={diff:.4f}) — breaking dispatch "
-                    #       f"loop to trigger outer replan")
-                    dispatch_end('motion_resolve_failed')
-                    return True
-
-        # BF#59 carry_hold_check: the finger and wrist readback at
-        # the start of a move made while holding (None when the
-        # switch is off or the hand is empty).
-        _carry0 = carry_hold_begin(st.setup.robot_id, st.hand.held_body_id)
-
-        # Stream the waypoints (stream_move_waypoints: today's
-        # per-pair stream with the settle at the last one, the
-        # #P1 endpoint hold and the F17 notes; BF#59
-        # carry_trapezoid's one schedule when it is on and a
-        # body is held).
-        stream_move_waypoints(st.setup.robot_id, traj.waypoints, st.opts.gui,
-                              holding=st.hand.held_body_id is not None)
-        # Read the arm's true joint state after motion completes.
-        # Position control can undershoot the IK target; if we
-        # used the planned q2 directly, errors would accumulate
-        # across chained actions and confuse the next replan
-        # (audit #86).
-        if st.opts.goal_at_home and q2 == st.setup.planner.home_config:
-            # #P4 B3(d), D7 (vii) and (v): a move to the goal
-            # configuration ends with the final hold (when a cap
-            # is declared), then TAMPURA's at-home test judges the
-            # readback.  A miss names the readback q_readback_k,
-            # never q_home, so the planner plans the correction.
-            _hold_steps = 0
-            if st.opts.home_hold_step_cap is not None:
-                _, _hold_steps = hold_at_config(
-                    st.setup.robot_id, st.setup.planner.home_config.joint_positions,
-                    int(st.opts.home_hold_step_cap), gui=st.opts.gui)
-            actual_joints = arm_joint_positions(st.setup.robot_id)
-            st.arm.at_home_ok = _at_home(st, actual_joints)
-            _max_err = float(np.max(np.abs(
-                actual_joints - np.asarray(
-                    st.setup.planner.home_config.joint_positions, dtype=float))))
-            if st.arm.at_home_ok:
-                st.arm.home_misses = 0
-                st.arm.current_config = _readback_config(st, env, actual_joints,
-                                                  q2.name)
-            else:
-                # M8 C1: q_home is also a sense view spot; a miss
-                # counts toward home_not_reached for a planned
-                # move to the goal's home boxel, or for the plan's
-                # final move (the goal move, whichever boxel names
-                # q_home), not for a move made to sense from there.
-                if (dest_boxel_id == HOME_PSEUDO_BOXEL
-                        or i == len(st.round.plan) - 1):
-                    st.arm.home_misses += 1
-                st.arm.readback_count += 1
-                st.arm.current_config = _readback_config(st, env, 
-                    actual_joints, f"q_readback_{st.arm.readback_count}")
-            ledger_event('at_home_test', passed=st.arm.at_home_ok,
-                         max_abs_err=_max_err, hold_steps=_hold_steps,
-                         consecutive_misses=st.arm.home_misses,
-                         config=st.arm.current_config.name)
-            print(f"    [D7] at-home test "
-                  f"{'passed' if st.arm.at_home_ok else 'FAILED'}: max "
-                  f"|dq| {_max_err:.2e} rad after a {_hold_steps}-step "
-                  f"hold (config {st.arm.current_config.name})")
-        else:
-            actual_joints = np.array(
-                [p.getJointState(st.setup.robot_id, i)[0] for i in robot_model().arm_joints]
-            )
-            st.arm.current_config = _readback_config(st, env, actual_joints, q2.name)
-        detect_execution_collisions(
-            st.setup.robot_id, env.client_id,
-            held_body_id=st.hand.held_body_id,
-            support_body_ids=st.setup.support_body_ids,
-            label=f"move to {dest_boxel_id}",
-            body_names=st.setup.body_id_to_name)
-        print(f"    -> Arrived at {dest_boxel_id}")
-        if st.opts.goal_at_home and st.arm.home_misses >= 2:
-            st.ending.exit_reason = "home_not_reached"
-            st.ending.episode_over = True
-            print(f"ERROR: two consecutive planned moves to q_home "
-                  f"left TAMPURA's at-home test false; ending the "
-                  f"episode (home_not_reached, D7 (vi)).")
-            dispatch_end('home_not_reached')
-            return True
-        # BF#59 carry_hold_check (proposals/loss_dynamics.md 2.1):
-        # the move's postcondition while holding, checked after the
-        # home hold and the at-home test.  Without it nothing reads
-        # the pads after the pick, a die lost on the swing home
-        # leaves held_body_id set and the goal check is the first
-        # to notice (physics_mismatch).  A loss takes the empty-hand
-        # path of the place entry assert, unchanged: the transit
-        # strike, the held state cleared, the pose unknown, the
-        # lost-region refresh, then a replan.  In 3 of 3 recorded
-        # losses the die ended outside W, so that replan mostly
-        # ends as target_lost (reviews/loss_dynamics.md).
-        _carry = carry_hold_end(
-            st.setup.robot_id, st.hand.held_body_id, _carry0,
-            st.setup.body_id_to_name.get(st.hand.held_body_id), dest_boxel_id, st.opts.gui)
-        if _carry is not None and not _carry.held:
-            _lost_obj = st.setup.body_id_to_name.get(st.hand.held_body_id,
-                                            str(st.hand.held_body_id))
-            st.strikes.transit_loss_counts[_lost_obj] = \
-                st.strikes.transit_loss_counts.get(_lost_obj, 0) + 1
-            print(f"    transit loss {st.strikes.transit_loss_counts[_lost_obj]}"
-                  f"/3 for {_lost_obj} (review-fix strike counter)")
-            if (st.strikes.transit_loss_counts[_lost_obj] >= 3
-                    and _lost_obj not in st.strikes.pick_giveup_objects):
-                print(f"    ERROR: {_lost_obj} lost in transit "
-                      f"{st.strikes.transit_loss_counts[_lost_obj]} times, "
-                      f"giving up on grasping it (#P1 F2 giveup, "
-                      f"transit edition).")
-                st.strikes.pick_giveup_objects.add(_lost_obj)
-                st.setup.planner.streams.ungraspable_objects.add(_lost_obj)
-                st.strikes.pick_giveup_marked_at[_lost_obj] = st.counts.plan_count
-            st.hand.held_body_id = None
-            st.hand.held_object_boxel_id = None
-            # The readback just taken carried the lost body as
-            # cargo; the same readback without it (the hand is
-            # empty now) starts the next plan.
-            st.arm.current_config = _readback_config(st, env, 
-                st.arm.current_config.joint_positions, st.arm.current_config.name)
-            audit_robot_held_state(
-                env, st.setup.robot_id, expected_held_body_id=None,
-                tag=f"post-carry-loss:{_lost_obj}")
-            env.update_object_positions()
-            # M8 A: lost in transit, its pose is unknown.
-            pose_belief.mark_pose_unknown(st.setup.registry.get_boxel(_lost_obj))
-            _lost = refresh_object_aabbs(env, st.setup.registry, viz=st.setup.viz,
-                                         check_lost=True)
-            if _lost:
-                retire_lost_objects(
-                    _lost, st.setup.registry, st.setup.viz, st.setup.shadows,
-                    st.setup.shadow_occluder_map, st.setup.boxel_centers,
-                    st.setup.occluders, st.setup.belief, env=env)
-            dispatch_end('empty_hand')
-            return True
-        # #P2 (a): a transit is the action that most often
-        # disturbs bystanders (F18, F10) and nothing re-read the
-        # scene after it until now.
-        if _integrity_after(st, env, f"plan#{st.counts.plan_count} move({dest_boxel_id})"):
-            dispatch_end('integrity_replan')
+        if do_move(st, env, i, params):
             return True
 
     elif action_name == 'sense':
-        # Audit #73 step 3(c) plot 4: count every attempted
-        # sense action (any outcome — found_target, empty,
-        # contains_nontarget, still_blocked, missing_shadow).
-        st.counts.sense_count += 1
-        # See pipeline_actions.handle_sense_action for the full
-        # body.  When result.continue_ is False the dispatch
-        # loop breaks → outer replan loop drops any held object
-        # before the next planner.plan() (audit S-01 contract).
-        sense_result = handle_sense_action(
-            action_params=params,
-            env=env,
-            registry=st.setup.registry,
-            belief=st.setup.belief,
-            viz=st.setup.viz,
-            target_name=st.setup.target_name,
-            robot_id=st.setup.robot_id,
-            support_body_ids=st.setup.support_body_ids,
-            shadows=st.setup.shadows,
-            occluders=st.setup.occluders,
-            shadow_occluder_map=st.setup.shadow_occluder_map,
-            blocked_counts=st.strikes.blocked_counts,
-            blocked_giveup_shadows=st.strikes.blocked_giveup_shadows,
-            nontarget_rediscovery_counts=st.strikes.nontarget_rediscovery_counts,
-            boxel_centers=st.setup.boxel_centers,
-            boxel_to_pybullet=st.setup.boxel_to_pybullet,
-            object_body_ids=st.setup.object_body_ids,
-            body_id_to_name=st.setup.body_id_to_name,
-            show_free=st.opts.show_free,
-        )
-        ledger_event('sense_result', reason=sense_result.reason,
-                     continue_=sense_result.continue_)
-        if not sense_result.continue_:
-            dispatch_end('sense_outcome')
+        if do_sense(st, env, params):
             return True
 
     elif action_name == 'observe':
-        # OBSERVE (M8 C2): one wrist render at the look
-        # configuration re-poses the registered objects it shows
-        # completely; every observe forces a replan.
-        obj_str, look_q = str(params[0]), params[1]
-        st.counts.observe_count += 1
-        status, lost = handle_observe_action(
-            env=env, registry=st.setup.registry, viz=st.setup.viz, obj=obj_str,
-            robot_id=st.setup.robot_id,
-            pose_known=lambda bd: pose_belief.pose_known(
-                bd, robot_model().finger_limits[0][1],
-                st.setup.planner.streams.GRASP_MAX_SPAN,
-                st.setup.planner.streams.GRASP_SQUARE_TOL))
-        if lost:
-            # Not seen at all and its region renders empty: the
-            # lost path, exactly as after a sense; no strike.
-            retire_lost_objects([obj_str], st.setup.registry, st.setup.viz, st.setup.shadows,
-                                st.setup.shadow_occluder_map, st.setup.boxel_centers,
-                                st.setup.occluders, st.setup.belief, env=env)
-            if obj_str in st.setup.planner_target_objects:
-                st.ending.target_lost_seen = True
-        elif (status == 'observe_incomplete'
-              and st.setup.registry.get_boxel(obj_str) is not None):
-            _bd = st.setup.registry.get_boxel(obj_str)
-            _k = observe_views.look_index(look_q.name, obj_str)
-            st.setup.planner.m8_views.removed.add((obj_str, _k))
-            _n = st.counts.observe_strikes.get(obj_str, (0,))[0] + 1
-            st.counts.observe_strikes[obj_str] = (
-                _n, np.concatenate([_bd.min_corner, _bd.max_corner]), _bd)
-            _left = (len(observe_views.LOOK_STANDOFFS)
-                     * len(observe_views.LOOK_WRIST_YAWS)
-                     - sum(1 for r in st.setup.planner.m8_views.removed
-                           if r[0] == obj_str))
-            if _n >= 3 or _left <= 0:
-                st.setup.planner.m8_views.parked.add(obj_str)
-            print(f"    [M8] observe strike {_n}/3 for {obj_str}; look "
-                  f"{look_q.name} removed"
-                  f"{'; PARKED (no look configurations)' if obj_str in st.setup.planner.m8_views.parked else ''}")
-        else:
-            st.counts.observe_strikes.pop(obj_str, None)
-        ledger_event('observe_result', obj=obj_str, status=status,
-                     lost=lost, config=look_q.name)
-        dispatch_end(status)
-        return True
+        if do_observe(st, env, params):
+            return True
 
     elif action_name == 'look':
         if do_look(st, env, params):
@@ -1537,6 +1263,295 @@ def dispatch_step(st, env, i, action):
     dispatch_end('ok')
     if st.opts.gui:
         env.refresh_debug_camera_views()
+
+
+def do_move(st, env, i, params):
+    # MOVE: follow a collision-free trajectory from q1 to q2.
+    # The trajectory was computed by the plan_motion stream
+    # using RRT; we replay its waypoints with smooth
+    # interpolation for visual fidelity and physics stability.
+    q1, q2, dest_boxel_id, traj = params
+    print(f"    Moving to {dest_boxel_id} ({len(traj.waypoints)} waypoints)...")
+    # audit #60 fix (i) — if current_config (post-lift, post-action
+    # arm pose) differs from traj.waypoints[0] (the planner's q1 =
+    # compute_kin contact pose), the planner-baked trajectory would
+    # drop the arm BACK to contact altitude before traversing.
+    # Re-invoke plan_motion at execution time so the trajectory
+    # starts from the actual lifted arm pose and uses the up-to-
+    # date plan_client cube layout (synced by fix (ii) at the end
+    # of execute_place / execute_stack).  Carries q1's collision-
+    # check metadata (ignored_body_ids, held_body_ids,
+    # grasp_ee_offset) so plan_motion's held-body tracking and
+    # is_pick_place detection behave as the planner originally
+    # invoked it.  On replan failure, break the dispatch loop and
+    # let the outer replan recover from current_config — same
+    # path as IK failures during pick/place.
+    # #P4 B3(d), D7 (iv): with held_cargo_resolve, every move
+    # made while holding is re-solved from the readback with
+    # the held body as cargo, whatever the drift, toward the
+    # planned goal configuration.
+    _cargo = st.opts.held_cargo_resolve and st.hand.held_body_id is not None
+    if st.arm.current_config is not None and len(traj.waypoints) > 0:
+        diff = float(np.linalg.norm(
+            np.asarray(st.arm.current_config.joint_positions)
+            - np.asarray(traj.waypoints[0].joint_positions)))
+        if diff > 1e-2 or _cargo:
+            if _cargo:
+                q1_runtime = _readback_config(st, env, 
+                    st.arm.current_config.joint_positions,
+                    f"{st.arm.current_config.name}_runtime")
+                if not q1_runtime.held_body_ids:
+                    print(f"    WARNING: no estimated box for "
+                          f"the held body; the re-solve runs "
+                          f"without cargo (D7 (iv))")
+            else:
+                q1_runtime = RobotConfig(
+                    joint_positions=np.asarray(st.arm.current_config.joint_positions),
+                    name=f"{st.arm.current_config.name}_runtime",
+                    ignored_body_ids=q1.ignored_body_ids,
+                    held_body_ids=q1.held_body_ids,
+                    grasp_ee_offset=q1.grasp_ee_offset,
+                )
+            try:
+                (new_traj,) = next(st.setup.planner.streams.plan_motion(q1_runtime, q2))
+                # print(f"    [#60-fix(i)] replanned motion from runtime pose "
+                #       f"(prior diff={diff:.4f} rad, "
+                #       f"{len(new_traj.waypoints)} waypoints)")
+                traj = new_traj
+                # #P4 B0 gate G3: the re-solve keeps the
+                # planned goal configuration.
+                ledger_event(
+                    'move_resolve', goal_config=q2.name,
+                    goal_equal=bool(np.array_equal(
+                        np.asarray(new_traj.waypoints[-1].joint_positions),
+                        np.asarray(q2.joint_positions))),
+                    start_diff=diff,
+                    cargo=sorted(q1_runtime.held_body_ids))
+            except StopIteration:
+                # print(f"    [#60-fix(i)] plan_motion could not replan from "
+                #       f"runtime pose (diff={diff:.4f}) — breaking dispatch "
+                #       f"loop to trigger outer replan")
+                dispatch_end('motion_resolve_failed')
+                return True
+
+    # BF#59 carry_hold_check: the finger and wrist readback at
+    # the start of a move made while holding (None when the
+    # switch is off or the hand is empty).
+    _carry0 = carry_hold_begin(st.setup.robot_id, st.hand.held_body_id)
+
+    # Stream the waypoints (stream_move_waypoints: today's
+    # per-pair stream with the settle at the last one, the
+    # #P1 endpoint hold and the F17 notes; BF#59
+    # carry_trapezoid's one schedule when it is on and a
+    # body is held).
+    stream_move_waypoints(st.setup.robot_id, traj.waypoints, st.opts.gui,
+                          holding=st.hand.held_body_id is not None)
+    # Read the arm's true joint state after motion completes.
+    # Position control can undershoot the IK target; if we
+    # used the planned q2 directly, errors would accumulate
+    # across chained actions and confuse the next replan
+    # (audit #86).
+    if st.opts.goal_at_home and q2 == st.setup.planner.home_config:
+        # #P4 B3(d), D7 (vii) and (v): a move to the goal
+        # configuration ends with the final hold (when a cap
+        # is declared), then TAMPURA's at-home test judges the
+        # readback.  A miss names the readback q_readback_k,
+        # never q_home, so the planner plans the correction.
+        _hold_steps = 0
+        if st.opts.home_hold_step_cap is not None:
+            _, _hold_steps = hold_at_config(
+                st.setup.robot_id, st.setup.planner.home_config.joint_positions,
+                int(st.opts.home_hold_step_cap), gui=st.opts.gui)
+        actual_joints = arm_joint_positions(st.setup.robot_id)
+        st.arm.at_home_ok = _at_home(st, actual_joints)
+        _max_err = float(np.max(np.abs(
+            actual_joints - np.asarray(
+                st.setup.planner.home_config.joint_positions, dtype=float))))
+        if st.arm.at_home_ok:
+            st.arm.home_misses = 0
+            st.arm.current_config = _readback_config(st, env, actual_joints,
+                                              q2.name)
+        else:
+            # M8 C1: q_home is also a sense view spot; a miss
+            # counts toward home_not_reached for a planned
+            # move to the goal's home boxel, or for the plan's
+            # final move (the goal move, whichever boxel names
+            # q_home), not for a move made to sense from there.
+            if (dest_boxel_id == HOME_PSEUDO_BOXEL
+                    or i == len(st.round.plan) - 1):
+                st.arm.home_misses += 1
+            st.arm.readback_count += 1
+            st.arm.current_config = _readback_config(st, env, 
+                actual_joints, f"q_readback_{st.arm.readback_count}")
+        ledger_event('at_home_test', passed=st.arm.at_home_ok,
+                     max_abs_err=_max_err, hold_steps=_hold_steps,
+                     consecutive_misses=st.arm.home_misses,
+                     config=st.arm.current_config.name)
+        print(f"    [D7] at-home test "
+              f"{'passed' if st.arm.at_home_ok else 'FAILED'}: max "
+              f"|dq| {_max_err:.2e} rad after a {_hold_steps}-step "
+              f"hold (config {st.arm.current_config.name})")
+    else:
+        actual_joints = np.array(
+            [p.getJointState(st.setup.robot_id, i)[0] for i in robot_model().arm_joints]
+        )
+        st.arm.current_config = _readback_config(st, env, actual_joints, q2.name)
+    detect_execution_collisions(
+        st.setup.robot_id, env.client_id,
+        held_body_id=st.hand.held_body_id,
+        support_body_ids=st.setup.support_body_ids,
+        label=f"move to {dest_boxel_id}",
+        body_names=st.setup.body_id_to_name)
+    print(f"    -> Arrived at {dest_boxel_id}")
+    if st.opts.goal_at_home and st.arm.home_misses >= 2:
+        st.ending.exit_reason = "home_not_reached"
+        st.ending.episode_over = True
+        print(f"ERROR: two consecutive planned moves to q_home "
+              f"left TAMPURA's at-home test false; ending the "
+              f"episode (home_not_reached, D7 (vi)).")
+        dispatch_end('home_not_reached')
+        return True
+    # BF#59 carry_hold_check (proposals/loss_dynamics.md 2.1):
+    # the move's postcondition while holding, checked after the
+    # home hold and the at-home test.  Without it nothing reads
+    # the pads after the pick, a die lost on the swing home
+    # leaves held_body_id set and the goal check is the first
+    # to notice (physics_mismatch).  A loss takes the empty-hand
+    # path of the place entry assert, unchanged: the transit
+    # strike, the held state cleared, the pose unknown, the
+    # lost-region refresh, then a replan.  In 3 of 3 recorded
+    # losses the die ended outside W, so that replan mostly
+    # ends as target_lost (reviews/loss_dynamics.md).
+    _carry = carry_hold_end(
+        st.setup.robot_id, st.hand.held_body_id, _carry0,
+        st.setup.body_id_to_name.get(st.hand.held_body_id), dest_boxel_id, st.opts.gui)
+    if _carry is not None and not _carry.held:
+        _lost_obj = st.setup.body_id_to_name.get(st.hand.held_body_id,
+                                        str(st.hand.held_body_id))
+        st.strikes.transit_loss_counts[_lost_obj] = \
+            st.strikes.transit_loss_counts.get(_lost_obj, 0) + 1
+        print(f"    transit loss {st.strikes.transit_loss_counts[_lost_obj]}"
+              f"/3 for {_lost_obj} (review-fix strike counter)")
+        if (st.strikes.transit_loss_counts[_lost_obj] >= 3
+                and _lost_obj not in st.strikes.pick_giveup_objects):
+            print(f"    ERROR: {_lost_obj} lost in transit "
+                  f"{st.strikes.transit_loss_counts[_lost_obj]} times, "
+                  f"giving up on grasping it (#P1 F2 giveup, "
+                  f"transit edition).")
+            st.strikes.pick_giveup_objects.add(_lost_obj)
+            st.setup.planner.streams.ungraspable_objects.add(_lost_obj)
+            st.strikes.pick_giveup_marked_at[_lost_obj] = st.counts.plan_count
+        st.hand.held_body_id = None
+        st.hand.held_object_boxel_id = None
+        # The readback just taken carried the lost body as
+        # cargo; the same readback without it (the hand is
+        # empty now) starts the next plan.
+        st.arm.current_config = _readback_config(st, env, 
+            st.arm.current_config.joint_positions, st.arm.current_config.name)
+        audit_robot_held_state(
+            env, st.setup.robot_id, expected_held_body_id=None,
+            tag=f"post-carry-loss:{_lost_obj}")
+        env.update_object_positions()
+        # M8 A: lost in transit, its pose is unknown.
+        pose_belief.mark_pose_unknown(st.setup.registry.get_boxel(_lost_obj))
+        _lost = refresh_object_aabbs(env, st.setup.registry, viz=st.setup.viz,
+                                     check_lost=True)
+        if _lost:
+            retire_lost_objects(
+                _lost, st.setup.registry, st.setup.viz, st.setup.shadows,
+                st.setup.shadow_occluder_map, st.setup.boxel_centers,
+                st.setup.occluders, st.setup.belief, env=env)
+        dispatch_end('empty_hand')
+        return True
+    # #P2 (a): a transit is the action that most often
+    # disturbs bystanders (F18, F10) and nothing re-read the
+    # scene after it until now.
+    if _integrity_after(st, env, f"plan#{st.counts.plan_count} move({dest_boxel_id})"):
+        dispatch_end('integrity_replan')
+        return True
+
+
+def do_sense(st, env, params):
+    # Audit #73 step 3(c) plot 4: count every attempted
+    # sense action (any outcome — found_target, empty,
+    # contains_nontarget, still_blocked, missing_shadow).
+    st.counts.sense_count += 1
+    # See pipeline_actions.handle_sense_action for the full
+    # body.  When result.continue_ is False the dispatch
+    # loop breaks → outer replan loop drops any held object
+    # before the next planner.plan() (audit S-01 contract).
+    sense_result = handle_sense_action(
+        action_params=params,
+        env=env,
+        registry=st.setup.registry,
+        belief=st.setup.belief,
+        viz=st.setup.viz,
+        target_name=st.setup.target_name,
+        robot_id=st.setup.robot_id,
+        support_body_ids=st.setup.support_body_ids,
+        shadows=st.setup.shadows,
+        occluders=st.setup.occluders,
+        shadow_occluder_map=st.setup.shadow_occluder_map,
+        blocked_counts=st.strikes.blocked_counts,
+        blocked_giveup_shadows=st.strikes.blocked_giveup_shadows,
+        nontarget_rediscovery_counts=st.strikes.nontarget_rediscovery_counts,
+        boxel_centers=st.setup.boxel_centers,
+        boxel_to_pybullet=st.setup.boxel_to_pybullet,
+        object_body_ids=st.setup.object_body_ids,
+        body_id_to_name=st.setup.body_id_to_name,
+        show_free=st.opts.show_free,
+    )
+    ledger_event('sense_result', reason=sense_result.reason,
+                 continue_=sense_result.continue_)
+    if not sense_result.continue_:
+        dispatch_end('sense_outcome')
+        return True
+
+
+def do_observe(st, env, params):
+    # OBSERVE (M8 C2): one wrist render at the look
+    # configuration re-poses the registered objects it shows
+    # completely; every observe forces a replan.
+    obj_str, look_q = str(params[0]), params[1]
+    st.counts.observe_count += 1
+    status, lost = handle_observe_action(
+        env=env, registry=st.setup.registry, viz=st.setup.viz, obj=obj_str,
+        robot_id=st.setup.robot_id,
+        pose_known=lambda bd: pose_belief.pose_known(
+            bd, robot_model().finger_limits[0][1],
+            st.setup.planner.streams.GRASP_MAX_SPAN,
+            st.setup.planner.streams.GRASP_SQUARE_TOL))
+    if lost:
+        # Not seen at all and its region renders empty: the
+        # lost path, exactly as after a sense; no strike.
+        retire_lost_objects([obj_str], st.setup.registry, st.setup.viz, st.setup.shadows,
+                            st.setup.shadow_occluder_map, st.setup.boxel_centers,
+                            st.setup.occluders, st.setup.belief, env=env)
+        if obj_str in st.setup.planner_target_objects:
+            st.ending.target_lost_seen = True
+    elif (status == 'observe_incomplete'
+          and st.setup.registry.get_boxel(obj_str) is not None):
+        _bd = st.setup.registry.get_boxel(obj_str)
+        _k = observe_views.look_index(look_q.name, obj_str)
+        st.setup.planner.m8_views.removed.add((obj_str, _k))
+        _n = st.counts.observe_strikes.get(obj_str, (0,))[0] + 1
+        st.counts.observe_strikes[obj_str] = (
+            _n, np.concatenate([_bd.min_corner, _bd.max_corner]), _bd)
+        _left = (len(observe_views.LOOK_STANDOFFS)
+                 * len(observe_views.LOOK_WRIST_YAWS)
+                 - sum(1 for r in st.setup.planner.m8_views.removed
+                       if r[0] == obj_str))
+        if _n >= 3 or _left <= 0:
+            st.setup.planner.m8_views.parked.add(obj_str)
+        print(f"    [M8] observe strike {_n}/3 for {obj_str}; look "
+              f"{look_q.name} removed"
+              f"{'; PARKED (no look configurations)' if obj_str in st.setup.planner.m8_views.parked else ''}")
+    else:
+        st.counts.observe_strikes.pop(obj_str, None)
+    ledger_event('observe_result', obj=obj_str, status=status,
+                 lost=lost, config=look_q.name)
+    dispatch_end(status)
+    return True
 
 
 def do_look(st, env, params):
