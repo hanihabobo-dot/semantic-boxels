@@ -323,8 +323,12 @@ def test_real_closure_cut_at_home_is_clean(tmp_path):
 
 
 def test_real_cut_through_a_try_of_main_is_flagged(tmp_path):
+    # the try of main() this walk found at the checkpoint (the one around
+    # the boxel counts of a replan, with the sync to the plan client after
+    # it) stands in plan_or_stop since main was cut into functions, and the
+    # same walk finds it there
     text = real_text("test_full_pipeline.py")
-    main_node, _f, _l = def_lines(text, "main")
+    main_node, _f, _l = def_lines(text, "plan_or_stop")
     pick = None
     for parent in ast.walk(main_node):
         for fld in ("body", "orelse"):
@@ -342,7 +346,7 @@ def test_real_cut_through_a_try_of_main_is_flagged(tmp_path):
     assert pick, "main has Try nodes at the checkpoint"
     try_node, after = pick
     entry = {"id": "bad-try-cut", "kind": "cut", "phase": "P5",
-             "old": {"file": "test_full_pipeline.py", "qualname": "main",
+             "old": {"file": "test_full_pipeline.py", "qualname": "plan_or_stop",
                      "start_line": try_node.body[0].lineno,
                      "end_line": after.lineno},
              "new": {"file": "stages.py", "qualname": "stage"}}

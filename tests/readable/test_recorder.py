@@ -1450,21 +1450,26 @@ def test_m7_rows_keep_every_key_their_times_masked_the_length_kept(tmp_path):
 # ---------------------------------------------------------------------------
 
 # (file of the tag, function, statement): what each claim of the order NOTES
-# rests on.
+# rests on.  Since _build_init was cut into builders the loops over the sets
+# stand in _facts_view_blocking and _facts_stacking, which _build_init calls
+# (the two rows after the shuffle's); since main() was cut into functions the
+# look's two statements stand in do_look, with the episode state's names.
 _ORDER_SITES = [
     ('pddlstream_planner.py', '_build_init', 'random.shuffle(init)'),
-    ('pddlstream_planner.py', '_build_init',
+    ('pddlstream_planner.py', '_build_init', 'self._facts_view_blocking('),
+    ('pddlstream_planner.py', '_build_init', 'self._facts_stacking('),
+    ('pddlstream_planner.py', '_facts_view_blocking',
      'for shadow_id, blocker_ids in self.shadow_occluder_map.items():'),
-    ('pddlstream_planner.py', '_build_init', 'for (free_id, shadow_id) in placement_blocks:'),
-    ('pddlstream_planner.py', '_build_init', 'all_obj_ids = {fact[1] for fact in init'),
-    ('pddlstream_planner.py', '_build_init', 'for obj_id in all_obj_ids:'),
+    ('pddlstream_planner.py', '_facts_view_blocking', 'for (free_id, shadow_id) in placement_blocks:'),
+    ('pddlstream_planner.py', '_facts_stacking', 'all_obj_ids = {fact[1] for fact in init'),
+    ('pddlstream_planner.py', '_facts_stacking', 'for obj_id in all_obj_ids:'),
     ('pddlstream_planner.py', '_compute_placement_view_blocks', 'blocking = set()'),
     ('pddlstream_planner.py', '_compute_placement_view_blocks', 'return blocking, egregious'),
     ('pddlstream_planner.py', 'create_problem', 'self.last_init = init'),
     ('execution.py', 'compute_shadow_blockers', 'blocker_set = set()'),
     ('execution.py', 'compute_shadow_blockers', 'blockers[shadow_id] = list(blocker_set)'),
-    ('test_full_pipeline.py', 'main', '_named = [str(f[2]) for f in planner.last_init'),
-    ('test_full_pipeline.py', 'main', "ledger_event('look_reveals', config=look_q.name, named=_named)"),
+    ('test_full_pipeline.py', 'do_look', '_named = [str(f[2]) for f in st.setup.planner.last_init'),
+    ('test_full_pipeline.py', 'do_look', "ledger_event('look_reveals', config=look_q.name, named=_named)"),
     ('run_logger.py', '_ledger_default', 'return list(obj)'),
 ]
 

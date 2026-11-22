@@ -66,8 +66,11 @@ def _log(rec, row):
 
 
 def _caller_is_main_of_tfp(depth=1):
+    # main()'s two reads of the arm's joints stand, since main was cut into
+    # functions, in initial_home_readback (the start check) and in do_move
+    # (the at-home test); no other function of the file reads them
     f = sys._getframe(depth + 1)
-    return (f is not None and f.f_code.co_name == 'main'
+    return (f is not None and f.f_code.co_name in ('initial_home_readback', 'do_move')
             and f.f_code.co_filename.replace('\\', '/').endswith('test_full_pipeline.py'))
 
 
