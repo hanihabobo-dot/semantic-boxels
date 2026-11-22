@@ -542,10 +542,6 @@ def disable():
     _ACTIVE = None
 
 
-def is_active() -> bool:
-    return _ACTIVE is not None
-
-
 def snapshot(tag: str, **kwargs):
     if _ACTIVE is not None:
         try:

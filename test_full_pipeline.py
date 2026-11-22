@@ -104,7 +104,6 @@ from reboxelize import reboxelize_free_space
 from execution import (audit_robot_held_state,
                        compute_shadow_blockers,
                        refresh_object_aabbs,
-                       release_held_object_in_place,
                        retire_lost_objects,
                        execute_pick, execute_place, execute_stack,
                        handle_sense_action, EmptyHandError,

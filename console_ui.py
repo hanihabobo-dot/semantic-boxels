@@ -222,17 +222,6 @@ def _pre_parse(argv, default='smart'):
     return pre.parse_known_args(argv)[0]
 
 
-def argv_log_level(argv=None, default='smart'):
-    """The --log-level value as the entry point's parser will read it
-    (abbreviations such as --log quiet, the last of repeated flags), or
-    the default; None when the command line does not parse."""
-    argv = list(sys.argv[1:] if argv is None else argv)
-    try:
-        return _pre_parse(argv, default).log_level
-    except Exception:
-        return None
-
-
 def install_early(module_name, argv=None):
     """At an entry point's module top, before pybullet is imported: install
     the console when the module runs as the script and the console level

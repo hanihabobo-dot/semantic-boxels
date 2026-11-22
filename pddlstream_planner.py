@@ -452,29 +452,6 @@ class PDDLStreamPlanner:
 
         return output_path
 
-    @staticmethod
-    def _ray_aabb_intersects(origin: np.ndarray, endpoint: np.ndarray,
-                             aabb_min: np.ndarray, aabb_max: np.ndarray) -> bool:
-        """
-        Slab-method ray-AABB intersection for the segment origin→endpoint.
-
-        Returns True if the ray passes through [aabb_min, aabb_max] at a
-        parameter 0 < t < 1 (i.e. the box is strictly between origin and
-        endpoint, not behind origin or beyond endpoint).
-        """
-        direction = endpoint - origin
-        with np.errstate(divide='ignore', invalid='ignore'):
-            inv_dir = np.where(
-                np.abs(direction) > 1e-10,
-                1.0 / direction,
-                np.copysign(1e10, direction),
-            )
-        t1 = (aabb_min - origin) * inv_dir
-        t2 = (aabb_max - origin) * inv_dir
-        t_enter = np.max(np.minimum(t1, t2))
-        t_exit = np.min(np.maximum(t1, t2))
-        return bool(t_enter <= t_exit and t_exit > 0.0 and t_enter < 1.0)
-
     # F31: a placement hides a known body when at least this fraction of
     # the camera rays to the body's sample points (a 3 x 3 x 3 lattice
     # over its box) pass through the placed object's box.  Half the rays
