@@ -4,6 +4,7 @@ while holding (test_full_pipeline's move action, stream_move_waypoints).
 The schedule is checked on synthetic joint-space paths (no world); the
 move action's streaming is checked with move_robot_smooth, the joint
 readback and the robot model stubbed, so the calls can be counted."""
+import ast
 import inspect
 import logging
 import re
@@ -175,6 +176,20 @@ def test_on_and_holding_one_schedule_then_todays_settle(switch, stubbed, caplog)
                      lines[0])
 
 
+def _reached_from_main(stages):
+    """The names of the functions cut out of main() that main() reaches: it
+    calls them by name, or a function it reaches does."""
+    by_name = {f.__name__: f for f in stages}
+    seen, todo = set(), [tfp.main]
+    while todo:
+        for c in ast.walk(ast.parse(inspect.getsource(todo.pop()))):
+            if isinstance(c, ast.Call) and isinstance(c.func, ast.Name) \
+                    and c.func.id in by_name and c.func.id not in seen:
+                seen.add(c.func.id)
+                todo.append(by_name[c.func.id])
+    return seen
+
+
 def test_the_move_action_calls_the_stream_with_the_held_body():
     # The move action is do_move, cut out of main(); the names are fields of
     # the episode state st.
@@ -186,5 +201,8 @@ def test_the_move_action_calls_the_stream_with_the_held_body():
     stages = [f for f in vars(tfp).values() if inspect.isfunction(f)
               and next(iter(inspect.signature(f).parameters), None) == 'st']
     assert tfp.do_move in stages
+    # The tie to main(): main() reaches do_move through the functions cut out
+    # of it that it calls by name (the plan's loop and its dispatcher).
+    assert 'do_move' in _reached_from_main(stages)
     for fn in [tfp.main] + stages:
         assert 'move_robot_smooth(' not in inspect.getsource(fn), fn.__name__

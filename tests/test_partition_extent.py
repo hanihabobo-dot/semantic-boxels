@@ -12,6 +12,7 @@ keeps its task_spec class sizes.
 Pure tests: the object tables are built from each scene's SceneConfig the
 way BoxelTestEnv registers its bodies, with no world and no episode.
 """
+import ast
 import functools
 import inspect
 
@@ -165,6 +166,14 @@ def test_main_reads_the_declared_size():
     assert ("max_extent = partition_extent(\n"
             "        env.objects, getattr(st.opts.scene_config, 'target_extent', "
             "None))") in src
+    # The tie to main(): main() calls build_world once, with its state and
+    # its env, by a statement of its own body (under no branch and no loop).
+    main = ast.parse(inspect.getsource(tfp.main)).body[0]
+    calls = [c for c in ast.walk(main) if isinstance(c, ast.Call)
+             and getattr(c.func, 'id', None) == 'build_world']
+    assert [ast.unparse(s.value) for s in main.body if isinstance(s, ast.Expr)
+            and any(s.value is c for c in calls)] \
+        == ['build_world(st, env)'] == [ast.unparse(c) for c in calls]
     # main() and every function cut out of it (its first parameter is st) are
     # without a body's own size, as main() was.
     stages = [f for f in vars(tfp).values() if inspect.isfunction(f)

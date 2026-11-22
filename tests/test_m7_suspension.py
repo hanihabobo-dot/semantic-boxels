@@ -200,6 +200,15 @@ def _relabel():
     report, = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'report_episode']
     stmt, = [n for n in report.body if isinstance(n, ast.If)
              and 'target_lost_seen' in ast.unparse(n.test)]
+    # The tie to main(): report_episode is called once in the file, by a
+    # statement of main()'s own body (under no branch and no loop), where the
+    # relabel itself stood before the cut.
+    main, = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main']
+    calls = [c for c in ast.walk(tree) if isinstance(c, ast.Call)
+             and getattr(c.func, 'id', None) == 'report_episode']
+    assert [ast.unparse(s.value) for s in main.body if isinstance(s, ast.Expr)
+            and any(s.value is c for c in calls)] \
+        == ['report_episode(st, execution)'] == [ast.unparse(c) for c in calls]
     return compile(ast.Module(body=[stmt], type_ignores=[]), str(src), 'exec')
 
 
