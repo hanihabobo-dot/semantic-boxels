@@ -306,8 +306,8 @@ def _main_and_its_stages():
     for n in PIPELINE.body:
         if isinstance(n, ast.FunctionDef):
             home[n] = PIPELINE
-        elif isinstance(n, ast.ImportFrom) and (ROOT / f'{n.module}.py').exists():
-            other = ast.parse((ROOT / f'{n.module}.py').read_text(encoding='utf-8'))
+        elif isinstance(n, ast.ImportFrom) and (ROOT / f"{(n.module or '').replace('.', '/')}.py").exists():
+            other = ast.parse((ROOT / f"{(n.module or '').replace('.', '/')}.py").read_text(encoding='utf-8'))
             names = {a.name for a in n.names}
             home.update({f: other for f in other.body
                          if isinstance(f, ast.FunctionDef) and f.name in names})
@@ -385,7 +385,7 @@ def test_with_the_arm_camera_the_unseen_regions_join_the_first_scan_before_free_
     assert _holder(start_view) is _holder(pose) and start_view.lineno < pose.lineno
     assert _runs_before_in_main(_holder(pose), _holder(scan))
     # streams is imported, by that name, in the file that holds the call.
-    assert any(isinstance(n, ast.Import)
+    assert any(isinstance(n, ast.ImportFrom) and n.module == 'planning'      # from planning import streams
                and [(a.name, a.asname) for a in n.names] == [('streams', None)]
                for n in _FILE_OF[_holder(call)].body)
     # main() cuts no region to a look's cell side (PLAN 11.16).

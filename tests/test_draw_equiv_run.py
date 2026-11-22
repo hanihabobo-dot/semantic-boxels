@@ -17,7 +17,7 @@ FAKE_DRIVER = '''
 import numpy as np
 import pybullet as p
 from pybullet_utils import bullet_client
-import console_ui
+from console import console_ui
 
 view = p.computeViewMatrix([0, -1, 1], [0, 0, 0], [0, 0, 1])
 proj = p.computeProjectionMatrixFOV(60, 1.0, 0.05, 3.0)

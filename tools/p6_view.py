@@ -70,7 +70,10 @@ def cell_argv(arm, cell):
     src, label = runner_source(arm)
     # __package__ set: the runner's start-as-a-file line (the repository root onto sys.path, since the
     # folder move) reads it and does nothing for a module that is not started as a file
-    ns = {'__name__': 'p6_view_runner', '__file__': label, '__package__': 'p6_view'}
+    # __file__: the runner reads its seed corpus beside its own file, so arm A's source runs under the
+    # checkout's path of it (arm B's, read from git, keeps its label)
+    file = label if arm == 'B' else os.path.join(REPO, 'evaluation', 'eval_runner.py')
+    ns = {'__name__': 'p6_view_runner', '__file__': file, '__package__': 'p6_view'}
     exec(compile(src, label, 'exec'), ns)
     cells = list(ns['iterate_matrix'](ps.as_matrix([cell])))
     if len(cells) != 1:

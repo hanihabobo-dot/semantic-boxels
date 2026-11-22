@@ -71,6 +71,7 @@ def run(entries, old_files=None, new_files=None, tmp_path=None,
         if files:
             d.mkdir(parents=True, exist_ok=True)
             for name, text in files.items():
+                (d / name).parent.mkdir(parents=True, exist_ok=True)     # a file in a package folder
                 (d / name).write_text(text, encoding="utf-8")
     spec = {"spec_version": 1, "entries": entries}
     if state is not None:
@@ -132,14 +133,14 @@ def def_lines(text, qualname):
 # ---------------------------------------------------------------------------
 
 P2_ENTRY = {"id": "P2-assert-xys", "kind": "move", "phase": "P2",
-            "old": {"file": "boxel_env.py",
+            "old": {"file": "world/boxel_env.py",
                     "qualname": "BoxelTestEnv._assert_xys_in_reach"},
             "new": {"file": "world_placement.py",
                     "qualname": "WorldPlacement._assert_xys_in_reach"}}
 
 
 def p2_method_lines():
-    text = real_text("boxel_env.py")
+    text = real_text("world/boxel_env.py")
     _node, first, last = def_lines(text,
                                    "BoxelTestEnv._assert_xys_in_reach")
     return text.splitlines()[first - 1:last], first, last
@@ -274,14 +275,14 @@ def test_p1_deletion_that_drops_another_line_is_flagged(tmp_path):
 
 
 def test_decorated_def_span_starts_at_its_decorator(tmp_path):
-    text = real_text("boxel_env.py")
+    text = real_text("world/boxel_env.py")
     node, first, last = def_lines(text, "BoxelTestEnv._spawn_object")
     assert node.decorator_list, "the trap needs @staticmethod"
     entry = {"id": "P1-spawn-object", "kind": "delete", "phase": "P1",
-             "old": {"file": "boxel_env.py",
+             "old": {"file": "world/boxel_env.py",
                      "qualname": "BoxelTestEnv._spawn_object"}}
     new = deleted(text, first, last)
-    r = one(run([entry], new_files={"boxel_env.py": new},
+    r = one(run([entry], new_files={"world/boxel_env.py": new},
                 tmp_path=tmp_path, old_root=ROOT))
     assert r.old_lines == f"{first}-{last}"
     assert first < node.lineno
@@ -290,7 +291,7 @@ def test_decorated_def_span_starts_at_its_decorator(tmp_path):
     assert any("adjacent" in i for i in r.info)
     # a span written from the def line splits the decorator
     entry["old"]["start_line"] = node.lineno
-    r2 = one(run([entry], new_files={"boxel_env.py": new},
+    r2 = one(run([entry], new_files={"world/boxel_env.py": new},
                  tmp_path=tmp_path, old_root=ROOT))
     assert "span-splits-decorator" in r2.rules_failed
 

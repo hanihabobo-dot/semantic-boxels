@@ -30,7 +30,7 @@ from test_eye_switch import MAIN, _assigns, _calls, _holder, _under  # noqa: E40
 from test_look_correspondence import (_dry, _home, _planner, needs_pwsh,  # noqa: E402
                                       world)  # noqa: F401  (fixture)
 
-EXECUTION = ast.parse((ROOT / 'execution.py').read_text(encoding='utf-8'))
+EXECUTION = ast.parse((ROOT / 'acting' / 'execution.py').read_text(encoding='utf-8'))
 DRIVER = ast.parse((ROOT / 'tampura_bridge' / 'run_bridge_on_finddice.py')
                    .read_text(encoding='utf-8'))
 POLICY = ast.parse((ROOT / 'tampura_bridge' / 'policy.py').read_text(encoding='utf-8'))
@@ -143,11 +143,11 @@ def _execution_and_its_cut_files():
     back from.  What a test counted in execution.py it counts in this tree,
     as it did when the functions of those files stood in execution.py."""
     names = ['execution.py']
-    tree = ast.parse((ROOT / 'execution.py').read_text(encoding='utf-8'))
+    tree = ast.parse((ROOT / 'acting' / 'execution.py').read_text(encoding='utf-8'))
     for n in list(tree.body):
-        if isinstance(n, ast.ImportFrom) and (n.module or '').startswith('execution_'):
-            names.append(f'{n.module}.py')
-            tree.body += ast.parse((ROOT / names[-1]).read_text(encoding='utf-8')).body
+        if isinstance(n, ast.ImportFrom) and (n.module or '').startswith('acting.execution_'):
+            names.append(f"{n.module.split('.')[-1]}.py")
+            tree.body += ast.parse((ROOT / 'acting' / names[-1]).read_text(encoding='utf-8')).body
     return tree, names
 
 

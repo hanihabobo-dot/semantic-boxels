@@ -79,7 +79,7 @@ def test_these_are_the_panes_our_own_window_keeps():
     over"); were a pane switched off there, their window would no longer
     show what ours shows."""
     flags = {(ast.unparse(c.args[0]), ast.unparse(c.args[1]))
-             for c in _calls_in(_tree('boxel_env.py'), 'p.configureDebugVisualizer')}
+             for c in _calls_in(_tree('world', 'boxel_env.py'), 'p.configureDebugVisualizer')}
     assert not [f for f, _ in flags
                 if f in ('p.COV_ENABLE_GUI', 'p.COV_ENABLE_RGB_BUFFER_PREVIEW',
                          'p.COV_ENABLE_DEPTH_BUFFER_PREVIEW',

@@ -592,7 +592,7 @@ def test_a_pick_re_aims_on_a_detection_the_frame_holds_wholly():
     """execute_pick's re-observation before the descent is a re-pose, a
     presence verdict: with --eye arm its one frame test takes the render's
     view and the fresh detection's box, not the believed box."""
-    tree = ast.parse((ROOT / 'execution.py').read_text(encoding='utf-8'))
+    tree = ast.parse((ROOT / 'acting' / 'execution.py').read_text(encoding='utf-8'))
     (pick,) = [n for n in tree.body
                if isinstance(n, ast.FunctionDef) and n.name == 'execute_pick']
     (call,) = [c for c in ast.walk(pick) if isinstance(c, ast.Call)

@@ -77,7 +77,7 @@ def render(*args, **kwargs):
 
 
 p.connect, p.getCameraImage = connect, render
-import boxel_env
+from world import boxel_env
 
 boxel_env.conceal_overlay_for_observation = lambda: log.append(['overlay out of view'])
 boxel_env.restore_overlay_after_observation = lambda: log.append(['overlay back'])

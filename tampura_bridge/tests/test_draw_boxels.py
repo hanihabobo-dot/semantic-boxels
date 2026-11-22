@@ -143,9 +143,9 @@ def _main_and_its_stages(tree):
     them from by name."""
     defs = [n for n in tree.body if isinstance(n, ast.FunctionDef)]
     for imp in tree.body:
-        if isinstance(imp, ast.ImportFrom) and os.path.exists(os.path.join(REPO, f'{imp.module}.py')):
+        if isinstance(imp, ast.ImportFrom) and os.path.exists(os.path.join(REPO, f"{(imp.module or '').replace('.', '/')}.py")):
             names = {a.name for a in imp.names}
-            defs += [n for n in _tree(f'{imp.module}.py').body
+            defs += [n for n in _tree(f"{(imp.module or '').replace('.', '/')}.py").body
                      if isinstance(n, ast.FunctionDef) and n.name in names]
     return [n for n in defs if n.name == 'main' or [a.arg for a in n.args.args][:1] == ['st']]
 

@@ -45,9 +45,9 @@ def restore_runner_modules(monkeypatch):
 
 
 def test_seed_lists_are_the_corpus_files_first_thirty():
-    with open(os.path.join(REPO, 'eval_corpus.json')) as f:
+    with open(os.path.join(REPO, 'evaluation', 'eval_corpus.json')) as f:
         assert ps.S_A == json.load(f)['seeds'][:30]
-    with open(os.path.join(REPO, 'eval_corpus_2026-05-15.json')) as f:
+    with open(os.path.join(REPO, 'evaluation', 'eval_corpus_2026-05-15.json')) as f:
         assert ps.S_B == json.load(f)['seeds'][:30]
     assert len(ps.S_A) == len(ps.S_B) == ps.N_SLOTS == 30
     assert len(set(ps.S_A)) == len(set(ps.S_B)) == 30

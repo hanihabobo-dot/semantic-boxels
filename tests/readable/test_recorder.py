@@ -342,11 +342,11 @@ def _fake_main(tmp_path):
 
 def _stand_ins(monkeypatch, m7=False, suspend_s=7.25, enabled=True):
     """Stand-ins of the three modules (the recorder reads sys.modules)."""
-    ex = types.ModuleType('execution')
+    ex = types.ModuleType('acting.execution')
     ex.M7, ex.M7_SUSPEND_S = m7, suspend_s
-    ir = types.ModuleType('interior_regions')
+    ir = types.ModuleType('world.interior_regions')
     ir.ENABLED = enabled
-    ae = types.ModuleType('arm_eye')
+    ae = types.ModuleType('sensing.arm_eye')
     ae.FOLLOW_FLAG = 'arm_eye_follows'
     ae.following = lambda env: bool(getattr(env, ae.FOLLOW_FLAG, False))   # arm_eye.py:207-211
     for mod in (ex, ir, ae):
@@ -376,7 +376,7 @@ def test_module_switches_hold_m7_its_length_interior_regions_and_the_follow_flag
             got[rec.FOLLOW_KEY]) == (True, 120.0, False, False)
     assert rec.main_frame(path) is None
     assert rec.module_switches(None)[rec.FOLLOW_KEY] == rec.NO_MAIN_FRAME
-    for name in ('execution', 'interior_regions', 'arm_eye'):
+    for name in ('acting.execution', 'world.interior_regions', 'sensing.arm_eye'):
         monkeypatch.delitem(sys.modules, name)
     got = rec.module_switches(None)
     assert not {'execution.M7', 'execution.M7_SUSPEND_S', 'interior_regions.ENABLED', rec.FOLLOW_KEY} & set(got)
@@ -979,7 +979,7 @@ def test_coverage_command_prints_the_table_and_the_comparison(tmp_path, capsys, 
 
 def _execution_stand_in(calls):
     """execution's two names the stub uses, with the tag's signatures."""
-    mod = types.ModuleType('execution')
+    mod = types.ModuleType('acting.execution')
 
     def execute_place(robot_id, env, obj_name, place_pos, grasp, config, held_body_id, gui, held_aabb=None):
         calls.append(('execute_place', obj_name))
@@ -1060,13 +1060,13 @@ def test_place_fail_reaches_both_arms_of_the_tag_s_place_branch():
     cmp = next(n for n in ast.walk(probes[0].value) if isinstance(n, ast.Compare))
     assert isinstance(cmp.ops[0], ast.GtE)
     threshold = ast.literal_eval(cmp.comparators[0])
-    ru = ast.parse((REPO / 'robot_utils.py').read_text(encoding='utf-8'))
+    ru = ast.parse((REPO / 'acting' / 'robot_utils.py').read_text(encoding='utf-8'))
     og = next(n for n in ru.body if isinstance(n, ast.FunctionDef) and n.name == 'open_gripper')
     targets = [ast.literal_eval(k.value) for n in ast.walk(og) if isinstance(n, ast.Call)
                for k in n.keywords if k.arg == 'targetPosition']
     assert len(targets) == 2 and min(targets) >= threshold
-    ex = ast.parse((REPO / 'execution.py').read_text(encoding='utf-8'))
-    assert any(isinstance(n, ast.ImportFrom) and n.module == 'robot_utils'
+    ex = ast.parse((REPO / 'acting' / 'execution.py').read_text(encoding='utf-8'))
+    assert any(isinstance(n, ast.ImportFrom) and n.module == 'acting.robot_utils'
                and 'open_gripper' in [a.name for a in n.names] for n in ex.body)
     ep = next(n for n in ex.body if isinstance(n, ast.FunctionDef) and n.name == 'execute_place')
     assert [a.arg for a in ep.args.args][:3] == ['robot_id', 'env', 'obj_name'] and 'gui' in [
@@ -1103,11 +1103,11 @@ def _execution_and_its_cut_files():
     back from.  What a test counted in execution.py it counts in this tree,
     as it did when the functions of those files stood in execution.py."""
     names = ['execution.py']
-    tree = ast.parse((REPO / 'execution.py').read_text(encoding='utf-8'))
+    tree = ast.parse((REPO / 'acting' / 'execution.py').read_text(encoding='utf-8'))
     for n in list(tree.body):
-        if isinstance(n, ast.ImportFrom) and (n.module or '').startswith('execution_'):
-            names.append(f'{n.module}.py')
-            tree.body += ast.parse((REPO / names[-1]).read_text(encoding='utf-8')).body
+        if isinstance(n, ast.ImportFrom) and (n.module or '').startswith('acting.execution_'):
+            names.append(f"{n.module.split('.')[-1]}.py")
+            tree.body += ast.parse((REPO / 'acting' / names[-1]).read_text(encoding='utf-8')).body
     return tree, names
 
 
@@ -1137,7 +1137,7 @@ def test_the_names_the_counts_rest_on_are_the_tag_s():
     c = rec.ledger_counts([{'kind': rec.M7_SUSPENSION_KIND, 'op': op} for op in ops])
     assert (c['m7_suspension_start'], c['m7_suspension_end']) == (ops.count(rec.M7_SUSPENSION_START_OP),
                                                                   ops.count(rec.M7_SUSPENSION_END_OP))
-    ex = ast.parse((REPO / 'execution.py').read_text(encoding='utf-8'))
+    ex = ast.parse((REPO / 'acting' / 'execution.py').read_text(encoding='utf-8'))
     under_m7 = [(ast.unparse(cmp.left), cmp.comparators[0].value) for n in ast.walk(ex)
                 if isinstance(n, ast.BoolOp) and isinstance(n.op, ast.And)
                 and any(isinstance(v, ast.Name) and v.id == 'M7' for v in n.values)
@@ -1180,14 +1180,14 @@ def test_the_names_of_item_10_are_the_tag_s():
     suspension_rows, each name of SET_NAMES a top-level name of its module,
     D4_SET's names among them.  Catches a name the reference spells
     otherwise."""
-    rl = ast.parse((REPO / 'run_logger.py').read_text(encoding='utf-8'))
+    rl = ast.parse((REPO / 'console' / 'run_logger.py').read_text(encoding='utf-8'))
     summary = {k.value: v for n in ast.walk(rl) if isinstance(n, ast.Dict)
                for k, v in zip(n.keys, n.values) if isinstance(k, ast.Constant)}
     assert rec.M7_LENGTH_KEY in summary and rec.M7_ROWS_KEY in summary
     assert ast.unparse(summary[rec.M7_ROWS_KEY]).startswith('suspension_rows(')
     for name in rec.SET_NAMES:
         mod, attr = name.split('.')
-        tree = ast.parse((REPO / f'{mod}.py').read_text(encoding='utf-8'))
+        tree = ast.parse((REPO / (rec.real_module(mod).replace('.', '/') + '.py')).read_text(encoding='utf-8'))
         assert [n for n in tree.body if isinstance(n, (ast.Assign, ast.AnnAssign)) and attr in
                 [t.id for t in (n.targets if isinstance(n, ast.Assign) else [n.target])
                  if isinstance(t, ast.Name)]], name
@@ -1441,7 +1441,7 @@ def test_episode_notes_name_every_masked_time_key():
 def _suspension_row_keys():
     """The keys of an m7_suspensions row, read from the dict that
     run_logger.suspension_rows builds (run_logger.py:421-423)."""
-    tree = ast.parse((REPO / 'run_logger.py').read_text(encoding='utf-8'))
+    tree = ast.parse((REPO / 'console' / 'run_logger.py').read_text(encoding='utf-8'))
     fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'suspension_rows')
     row, = [n for n in ast.walk(fn) if isinstance(n, ast.Dict)]
     return [k.value for k in row.keys]
@@ -1484,22 +1484,22 @@ def test_m7_rows_keep_every_key_their_times_masked_the_length_kept(tmp_path):
 # (the two rows after the shuffle's); since main() was cut into functions the
 # look's two statements stand in do_look, with the episode state's names.
 _ORDER_SITES = [
-    ('pddlstream_planner.py', '_build_init', 'random.shuffle(init)'),
-    ('pddlstream_planner.py', '_build_init', 'self._facts_view_blocking('),
-    ('pddlstream_planner.py', '_build_init', 'self._facts_stacking('),
-    ('pddlstream_planner.py', '_facts_view_blocking',
+    ('planning/pddlstream_planner.py', '_build_init', 'random.shuffle(init)'),
+    ('planning/pddlstream_planner.py', '_build_init', 'self._facts_view_blocking('),
+    ('planning/pddlstream_planner.py', '_build_init', 'self._facts_stacking('),
+    ('planning/pddlstream_planner.py', '_facts_view_blocking',
      'for shadow_id, blocker_ids in self.shadow_occluder_map.items():'),
-    ('pddlstream_planner.py', '_facts_view_blocking', 'for (free_id, shadow_id) in placement_blocks:'),
-    ('pddlstream_planner.py', '_facts_stacking', 'all_obj_ids = {fact[1] for fact in init'),
-    ('pddlstream_planner.py', '_facts_stacking', 'for obj_id in all_obj_ids:'),
-    ('pddlstream_planner.py', '_compute_placement_view_blocks', 'blocking = set()'),
-    ('pddlstream_planner.py', '_compute_placement_view_blocks', 'return blocking, egregious'),
-    ('pddlstream_planner.py', 'create_problem', 'self.last_init = init'),
-    ('execution.py', 'compute_shadow_blockers', 'blocker_set = set()'),
-    ('execution.py', 'compute_shadow_blockers', 'blockers[shadow_id] = list(blocker_set)'),
+    ('planning/pddlstream_planner.py', '_facts_view_blocking', 'for (free_id, shadow_id) in placement_blocks:'),
+    ('planning/pddlstream_planner.py', '_facts_stacking', 'all_obj_ids = {fact[1] for fact in init'),
+    ('planning/pddlstream_planner.py', '_facts_stacking', 'for obj_id in all_obj_ids:'),
+    ('planning/pddlstream_planner.py', '_compute_placement_view_blocks', 'blocking = set()'),
+    ('planning/pddlstream_planner.py', '_compute_placement_view_blocks', 'return blocking, egregious'),
+    ('planning/pddlstream_planner.py', 'create_problem', 'self.last_init = init'),
+    ('acting/execution.py', 'compute_shadow_blockers', 'blocker_set = set()'),
+    ('acting/execution.py', 'compute_shadow_blockers', 'blockers[shadow_id] = list(blocker_set)'),
     ('test_full_pipeline.py', 'do_look', '_named = [str(f[2]) for f in st.setup.planner.last_init'),
     ('test_full_pipeline.py', 'do_look', "ledger_event('look_reveals', config=look_q.name, named=_named)"),
-    ('run_logger.py', '_ledger_default', 'return list(obj)'),
+    ('console/run_logger.py', '_ledger_default', 'return list(obj)'),
 ]
 
 
@@ -1517,7 +1517,7 @@ def test_order_notes_rest_on_the_tag_s_code():
     code (a changed site fails here, as the sorted blockers below do)."""
     texts = {f: (REPO / f).read_text(encoding='utf-8') for f in {s[0] for s in _ORDER_SITES}}
     assert [s for s in _ORDER_SITES if not _site_holds(texts[s[0]], s[1], s[2])] == []
-    sorted_blockers = texts['execution.py'].replace('blockers[shadow_id] = list(blocker_set)',
+    sorted_blockers = texts['acting/execution.py'].replace('blockers[shadow_id] = list(blocker_set)',
                                                     'blockers[shadow_id] = sorted(blocker_set)')
     assert not _site_holds(sorted_blockers, 'compute_shadow_blockers',
                            'blockers[shadow_id] = list(blocker_set)')

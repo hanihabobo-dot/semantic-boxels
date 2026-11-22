@@ -131,11 +131,11 @@ def _execution_and_its_cut_files():
     back from.  What a test counted in execution.py it counts in this tree,
     as it did when the functions of those files stood in execution.py."""
     names = ['execution.py']
-    tree = ast.parse((REPO / 'execution.py').read_text(encoding='utf-8'))
+    tree = ast.parse((REPO / 'acting' / 'execution.py').read_text(encoding='utf-8'))
     for n in list(tree.body):
-        if isinstance(n, ast.ImportFrom) and (n.module or '').startswith('execution_'):
-            names.append(f'{n.module}.py')
-            tree.body += ast.parse((REPO / names[-1]).read_text(encoding='utf-8')).body
+        if isinstance(n, ast.ImportFrom) and (n.module or '').startswith('acting.execution_'):
+            names.append(f"{n.module.split('.')[-1]}.py")
+            tree.body += ast.parse((REPO / 'acting' / names[-1]).read_text(encoding='utf-8')).body
     return tree, names
 
 
@@ -147,9 +147,9 @@ def _main_and_its_stages():
     tree = ast.parse((REPO / 'test_full_pipeline.py').read_text(encoding='utf-8'))
     defs = [n for n in tree.body if isinstance(n, ast.FunctionDef)]
     for imp in tree.body:
-        if isinstance(imp, ast.ImportFrom) and (REPO / f'{imp.module}.py').exists():
+        if isinstance(imp, ast.ImportFrom) and (REPO / f"{(imp.module or '').replace('.', '/')}.py").exists():
             names = {a.name for a in imp.names}
-            other = ast.parse((REPO / f'{imp.module}.py').read_text(encoding='utf-8'))
+            other = ast.parse((REPO / f"{(imp.module or '').replace('.', '/')}.py").read_text(encoding='utf-8'))
             defs += [n for n in other.body
                      if isinstance(n, ast.FunctionDef) and n.name in names]
     return ast.Module(body=[n for n in defs if n.name == 'main'
@@ -182,7 +182,7 @@ def test_the_pipeline_arms_the_counts_where_the_recorder_is_off():
 # ----- the hooks the counts hang on -------------------------------------
 
 def test_every_gripper_command_tells_the_observer():
-    fns = _functions('robot_utils.py')
+    fns = _functions('acting/robot_utils.py')
     opened = _calls(fns['open_gripper'], 'gripper_command')
     assert len(opened) == 1
     assert opened[0].args[0].value is True
@@ -196,7 +196,7 @@ def test_only_the_release_of_a_place_opens_as_placing():
     """An open that is no release of a place lets a carried body fall: the
     observer counts it.  The one function that releases on purpose is
     _release_and_verify_drop (place and stack)."""
-    fns = _functions('execution.py')
+    fns = _functions('acting/execution.py')
     placing = {name for name, fn in fns.items()
                for c in _calls(fn, 'open_gripper')
                if any(k.arg == 'placing' for k in c.keywords)}
@@ -225,7 +225,7 @@ def test_the_robots_three_checks_count_what_they_notice():
     wc.run_reset()                                          # a new run starts at zero
     assert sum(wc.noticed_drops().values()) == 0
     # each of execution.py's three checks counts once, under its own name
-    tree = ast.parse((REPO / 'execution.py').read_text(encoding='utf-8'))
+    tree = ast.parse((REPO / 'acting' / 'execution.py').read_text(encoding='utf-8'))
     counted = sorted(c.args[0].value for c in _calls(tree, 'notice_drop'))
     assert counted == ['carry', 'entry', 'lift']
     # and no fourth count in the two files cut out of execution.py
@@ -246,7 +246,7 @@ def test_the_executors_contact_report_is_counted_where_it_is_made():
     assert wc.collisions_reported() == 0
     # robot_utils.detect_execution_collisions counts a report that names a
     # contact, once, where it prints it
-    fn = _functions('robot_utils.py')['detect_execution_collisions']
+    fn = _functions('acting/robot_utils.py')['detect_execution_collisions']
     named = [n for n in ast.walk(fn) if isinstance(n, ast.If)
              and getattr(n.test, 'id', None) == 'collisions']
     assert len(named) == 1 and len(_calls(named[0], 'report_collision')) == 1
@@ -325,7 +325,7 @@ def _stored(out):
 
 
 def test_the_sweep_runs_its_cells_through_the_counted_runner():
-    main = _functions('eval_runner.py')['main']
+    main = _functions('evaluation/eval_runner.py')['main']
     assert len(_calls(main, 'run_cell_counted')) == 1
     assert _calls(main, 'run_cell') == []
 

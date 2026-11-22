@@ -47,9 +47,9 @@ def _module_and_the_files_it_imports_from():
     counted over the whole module."""
     trees = {'test_full_pipeline.py': TREE}
     for n in TREE.body:
-        if isinstance(n, ast.ImportFrom) and (ROOT / f'{n.module}.py').exists():
-            trees[f'{n.module}.py'] = ast.parse(
-                (ROOT / f'{n.module}.py').read_text(encoding='utf-8'))
+        if isinstance(n, ast.ImportFrom) and (ROOT / f"{(n.module or '').replace('.', '/')}.py").exists():
+            trees[f"{n.module.split('.')[-1]}.py"] = ast.parse(
+                (ROOT / f"{(n.module or '').replace('.', '/')}.py").read_text(encoding='utf-8'))
     return trees
 
 
@@ -87,7 +87,7 @@ def test_the_audit_10_comment_is_whole_again():
     # The second call had split this comment after "at the requested".
     # The comment moved whole with its code into build_world of
     # world_setup.py, which main() calls.
-    lines = (ROOT / 'world_setup.py').read_text(encoding='utf-8').splitlines()
+    lines = (ROOT / 'world' / 'world_setup.py').read_text(encoding='utf-8').splitlines()
     i = next(k for k, ln in enumerate(lines)
              if ln.rstrip().endswith('free-space dispatch and (re)build '
                                      'the lattice at the requested'))
