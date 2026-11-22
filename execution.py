@@ -3278,97 +3278,23 @@ def handle_sense_action(
                           and body_id_to_name[b] in sense_detections]
 
         if not _loc_names:
-            sid_str = str(shadow_id)
-            # #P1 F15(c): its OWN strike budget.  blocked_counts is keyed
-            # by shadow id and is also incremented by the still_blocked
-            # branch, so before this the two unrelated failure modes
-            # shared one budget — the field run retired blue's actual
-            # hiding place on 1 blocked strike + 2 unlocalizable ones,
-            # three strikes that were never three of the same
-            # observation.  A shared "_unlocalizable" key namespace keeps
-            # the counters separate without a signature change.
-            _ukey = f"{sid_str}::unlocalizable"
-            blocked_counts[_ukey] = blocked_counts.get(_ukey, 0) + 1
-            print(f"    Shadow {shadow_id} contains something the render "
-                  f"cannot localize (below the detection minimum) — "
-                  f"keeping the fragment. [attempt "
-                  f"{blocked_counts[_ukey]}]")
-            # #P1 F15: NAME what was seen.  Before this the refusal was
-            # anonymous — three strikes could retire the fragment the
-            # target was actually sitting in and the log never said which
-            # body caused it.  For each discovery: how many grid endpoints
-            # it stood in front of, how many pixels its seg id covers in
-            # the whole frame, and why it missed the detection gate.
-            _diag = []
-            for _b in sorted(detected_bodies):
-                _nm = body_id_to_name.get(_b, f"<seg id {_b}>")
-                _px = int(np.count_nonzero(sense_seg == _b))
-                # Three distinct reasons a discovery is unresolvable, and
-                # they must not share a label: a known object under the
-                # pixel gate (BELOW_MIN), versus a seg id that is not a
-                # scene object at all (F19 caught the debug overlay's
-                # phantom bodies here with 1197 px — nothing about a
-                # detection minimum applied).
-                if _nm in sense_detections:
-                    _why = 'localized'
-                elif _b in body_id_to_name:
-                    _why = 'BELOW_MIN'
-                else:
-                    _why = 'NOT_A_SCENE_OBJECT'
-                _diag.append(
-                    f"{_nm}(id={_b}) endpoints={interceptor_counts.get(_b, 0)} "
-                    f"seg_px={_px} {_why}")
-            print(f"      [F15-diag] discoveries: {'; '.join(_diag)}"
-                  f" | detection minimum {DETECTION_MIN_PIXELS} px"
-                  f" | localized this render: "
-                  f"{sorted(sense_detections)}")
-            if blocked_counts[_ukey] >= 3:
-                # #P1 F15(c): PARKED, not eliminated.  The observation
-                # backing this giveup is "this volume contains something
-                # I could not resolve" — evidence of OCCUPANCY, not of
-                # the target's absence — so mark_sensed(found=False)
-                # would assert something the robot never saw.  It did
-                # exactly that in the field run and retired the fragment
-                # the target was physically inside.  Parking stops the
-                # planner spending more actions here (the episode would
-                # otherwise loop) while the belief stays truthful and the
-                # run outcome discloses the fragment as unsearched.
-                print(f"    ERROR: {shadow_id} unlocalizable-content "
-                      f"{blocked_counts[_ukey]} times — parking it "
-                      f"UNRESOLVED (not marked empty: the observation "
-                      f"says the volume is OCCUPIED, not that the target "
-                      f"is absent).  The content stays unmodelled and "
-                      f"the fragment stays in the registry.")
-                blocked_giveup_shadows.add(sid_str)
-                with provenance('strike_park'):
-                    belief.mark_unresolved(sid_str)
-            # #P1 F16: this render is still evidence about every OTHER
-            # fragment even though it could not settle this one — the
-            # exact loop F15 exposed, where repeated senses of one
-            # fragment learned nothing while the observation in hand
-            # could have cleared others.
-            sweep_all_fragments(
-                registry=registry, belief=belief, viz=viz, shadows=shadows,
+            _sense_unlocalizable(
+                env=env, registry=registry, belief=belief, viz=viz,
+                robot_id=robot_id, shadows=shadows, occluders=occluders,
                 shadow_occluder_map=shadow_occluder_map,
+                blocked_counts=blocked_counts,
+                blocked_giveup_shadows=blocked_giveup_shadows,
                 boxel_centers=boxel_centers,
                 boxel_to_pybullet=boxel_to_pybullet,
-                target_pybullet_id=target_pybullet_id, robot_id=robot_id,
+                body_id_to_name=body_id_to_name, shadow_id=shadow_id,
+                target_pybullet_id=target_pybullet_id,
                 sense_support_ids=sense_support_ids,
-                sense_depth_m=sense_depth_m, sense_seg=sense_seg,
-                sense_view=sense_view, sense_proj=sense_proj,
-                skip_ids={sid_str}, target_det=_target_det)
-            _register_new_detections()
-            _lost = refresh_object_aabbs(
-                env, registry, viz, detections=sense_detections,
-                render=(sense_depth_m, sense_seg, sense_view,
-                        sense_proj),
-                check_lost=True)
-            if _lost:
-                retire_lost_objects(_lost, registry, viz, shadows,
-                                    shadow_occluder_map, boxel_centers,
-                                    occluders, belief,
-                                    render=(sense_depth_m, sense_seg,
-                                            sense_view, sense_proj))
+                sense_detections=sense_detections, sense_seg=sense_seg,
+                sense_depth_m=sense_depth_m, sense_view=sense_view,
+                sense_proj=sense_proj,
+                _register_new_detections=_register_new_detections,
+                detected_bodies=detected_bodies,
+                interceptor_counts=interceptor_counts, _target_det=_target_det)
             return ActionResult(continue_=False,
                                 reason="sense_contains_unlocalizable")
 
@@ -3405,6 +3331,108 @@ def handle_sense_action(
         _register_new_detections=_register_new_detections,
         blocked_fraction=blocked_fraction, blocked_bbox=blocked_bbox)
     return ActionResult(continue_=False, reason="sense_still_blocked")
+
+
+def _sense_unlocalizable(
+    *,
+    env, registry, belief, viz, robot_id, shadows, occluders,
+    shadow_occluder_map, blocked_counts, blocked_giveup_shadows, boxel_centers,
+    boxel_to_pybullet, body_id_to_name, shadow_id, target_pybullet_id,
+    sense_support_ids, sense_detections, sense_seg, sense_depth_m, sense_view,
+    sense_proj, _register_new_detections, detected_bodies, interceptor_counts,
+    _target_det,
+):
+    sid_str = str(shadow_id)
+    # #P1 F15(c): its OWN strike budget.  blocked_counts is keyed
+    # by shadow id and is also incremented by the still_blocked
+    # branch, so before this the two unrelated failure modes
+    # shared one budget — the field run retired blue's actual
+    # hiding place on 1 blocked strike + 2 unlocalizable ones,
+    # three strikes that were never three of the same
+    # observation.  A shared "_unlocalizable" key namespace keeps
+    # the counters separate without a signature change.
+    _ukey = f"{sid_str}::unlocalizable"
+    blocked_counts[_ukey] = blocked_counts.get(_ukey, 0) + 1
+    print(f"    Shadow {shadow_id} contains something the render "
+          f"cannot localize (below the detection minimum) — "
+          f"keeping the fragment. [attempt "
+          f"{blocked_counts[_ukey]}]")
+    # #P1 F15: NAME what was seen.  Before this the refusal was
+    # anonymous — three strikes could retire the fragment the
+    # target was actually sitting in and the log never said which
+    # body caused it.  For each discovery: how many grid endpoints
+    # it stood in front of, how many pixels its seg id covers in
+    # the whole frame, and why it missed the detection gate.
+    _diag = []
+    for _b in sorted(detected_bodies):
+        _nm = body_id_to_name.get(_b, f"<seg id {_b}>")
+        _px = int(np.count_nonzero(sense_seg == _b))
+        # Three distinct reasons a discovery is unresolvable, and
+        # they must not share a label: a known object under the
+        # pixel gate (BELOW_MIN), versus a seg id that is not a
+        # scene object at all (F19 caught the debug overlay's
+        # phantom bodies here with 1197 px — nothing about a
+        # detection minimum applied).
+        if _nm in sense_detections:
+            _why = 'localized'
+        elif _b in body_id_to_name:
+            _why = 'BELOW_MIN'
+        else:
+            _why = 'NOT_A_SCENE_OBJECT'
+        _diag.append(
+            f"{_nm}(id={_b}) endpoints={interceptor_counts.get(_b, 0)} "
+            f"seg_px={_px} {_why}")
+    print(f"      [F15-diag] discoveries: {'; '.join(_diag)}"
+          f" | detection minimum {DETECTION_MIN_PIXELS} px"
+          f" | localized this render: "
+          f"{sorted(sense_detections)}")
+    if blocked_counts[_ukey] >= 3:
+        # #P1 F15(c): PARKED, not eliminated.  The observation
+        # backing this giveup is "this volume contains something
+        # I could not resolve" — evidence of OCCUPANCY, not of
+        # the target's absence — so mark_sensed(found=False)
+        # would assert something the robot never saw.  It did
+        # exactly that in the field run and retired the fragment
+        # the target was physically inside.  Parking stops the
+        # planner spending more actions here (the episode would
+        # otherwise loop) while the belief stays truthful and the
+        # run outcome discloses the fragment as unsearched.
+        print(f"    ERROR: {shadow_id} unlocalizable-content "
+              f"{blocked_counts[_ukey]} times — parking it "
+              f"UNRESOLVED (not marked empty: the observation "
+              f"says the volume is OCCUPIED, not that the target "
+              f"is absent).  The content stays unmodelled and "
+              f"the fragment stays in the registry.")
+        blocked_giveup_shadows.add(sid_str)
+        with provenance('strike_park'):
+            belief.mark_unresolved(sid_str)
+    # #P1 F16: this render is still evidence about every OTHER
+    # fragment even though it could not settle this one — the
+    # exact loop F15 exposed, where repeated senses of one
+    # fragment learned nothing while the observation in hand
+    # could have cleared others.
+    sweep_all_fragments(
+        registry=registry, belief=belief, viz=viz, shadows=shadows,
+        shadow_occluder_map=shadow_occluder_map,
+        boxel_centers=boxel_centers,
+        boxel_to_pybullet=boxel_to_pybullet,
+        target_pybullet_id=target_pybullet_id, robot_id=robot_id,
+        sense_support_ids=sense_support_ids,
+        sense_depth_m=sense_depth_m, sense_seg=sense_seg,
+        sense_view=sense_view, sense_proj=sense_proj,
+        skip_ids={sid_str}, target_det=_target_det)
+    _register_new_detections()
+    _lost = refresh_object_aabbs(
+        env, registry, viz, detections=sense_detections,
+        render=(sense_depth_m, sense_seg, sense_view,
+                sense_proj),
+        check_lost=True)
+    if _lost:
+        retire_lost_objects(_lost, registry, viz, shadows,
+                            shadow_occluder_map, boxel_centers,
+                            occluders, belief,
+                            render=(sense_depth_m, sense_seg,
+                                    sense_view, sense_proj))
 
 
 def _sense_cleared(
