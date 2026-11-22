@@ -17,8 +17,12 @@ import time
 from collections import deque
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+# The root first, always: wumpus/world.py shares its name with the package
+# world/, and a script started as a file has its own folder ahead of a root
+# that came in through PYTHONPATH.
+if ROOT in sys.path:
+    sys.path.remove(ROOT)
+sys.path.insert(0, ROOT)
 
 from console import console_ui                                       # noqa: E402
 console_ui.install_early(__name__)

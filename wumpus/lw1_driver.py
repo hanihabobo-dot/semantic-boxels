@@ -35,8 +35,12 @@ import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+# The root first, always: wumpus/world.py shares its name with the package
+# world/, and a script started as a file has its own folder ahead of a root
+# that came in through PYTHONPATH.
+if ROOT in sys.path:
+    sys.path.remove(ROOT)
+sys.path.insert(0, ROOT)
 
 from wumpus import incidents, lw1_exec, lw1_problem, trace as tr      # noqa: E402
 from wumpus.world import cell_ij                            # noqa: E402
