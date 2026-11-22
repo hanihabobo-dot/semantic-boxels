@@ -839,6 +839,138 @@ def _loop_done(st) -> bool:
     return goal_satisfied(st.setup.goal, st.setup.on_relations)
 
 
+def judge_success(st, env):
+    # =========================================================
+    # PHASE 6: Results & Cleanup
+    # =========================================================
+    # Classify outcome (the exit_reason set during the loop tells us
+    # exactly why we stopped) and hand off to report_run_outcome for
+    # printing + timing_summary.json write.
+    st.ending.physics_failures: list = []
+    if st.opts.goal_kind == 'holding':
+        # Audit S-18: belief.is_target_found() flips on a successful
+        # sense OR a successful pick — neither implies the gripper
+        # is currently welded to the target body.  A sense-then-
+        # failed-pick run (or a slip after a successful pick) leaves
+        # the belief flag True but the gripper empty / holding the
+        # wrong body.  Gate the success on a physics check so the
+        # holding-goal path matches the stack-goal path's audit-#40
+        # rigour.
+        symbolic_ok = st.setup.belief.is_target_found()
+        # #P4 B3(d), D7 (vi): with a declared goal configuration the goal
+        # also needs the arm at q_home by TAMPURA's test.
+        if st.opts.goal_at_home and not st.arm.at_home_ok:
+            symbolic_ok = False
+        if symbolic_ok:
+            ok, reason = _verify_holding(env, st.setup.target_name, st.hand.held_body_id)
+            if not ok:
+                st.ending.physics_failures.append(f"(holding {st.setup.target_name}) — {reason}")
+                print(f"  PHYSICAL_FAILURE (goal): "
+                      f"(holding {st.setup.target_name}) — {reason}")
+                # Reclassify the exit reason so the FAILED summary
+                # in report_run_outcome doesn't fall through to the
+                # timeout default — the loop exited cleanly on belief,
+                # the failure is a physics mismatch with that belief.
+                if st.ending.exit_reason is None:
+                    st.ending.exit_reason = "physics_mismatch"
+        st.ending.success = symbolic_ok and not st.ending.physics_failures
+    else:
+        symbolic_ok = goal_satisfied(st.setup.goal, st.setup.on_relations)
+        if symbolic_ok:
+            # Audit #40: verify each (on a b) goal clause against
+            # PyBullet AABBs before declaring success.  Catches
+            # post-stack collapses that slipped past the per-action
+            # gate (e.g. a tower falling later under a subsequent
+            # action's vibration).
+            st.ending.physics_failures = _verify_goal_physics(
+                st.setup.goal, env, held_body_id=st.hand.held_body_id)
+            for pf in st.ending.physics_failures:
+                print(f"  PHYSICAL_FAILURE (goal): {pf}")
+            # #P2 (c) CB#122 (2026-09-19): the stack branch used to leave
+            # exit_reason None here, so a symbolic success the physics
+            # rejected was filed as "timeout" — the reason holding
+            # produced physics_mismatch and stack never did.
+            if st.ending.physics_failures and st.ending.exit_reason is None:
+                st.ending.exit_reason = "physics_mismatch"
+        st.ending.success = symbolic_ok and not st.ending.physics_failures
+
+
+def report_episode(st, execution):
+    world_eye.snapshot(
+        f"final ({'SUCCESS' if st.ending.success else 'FAILED'}: {st.ending.exit_reason})",
+        registry=st.setup.registry, belief=st.setup.belief, plan_count=st.counts.plan_count,
+        held=(st.setup.body_id_to_name.get(st.hand.held_body_id)
+              if st.hand.held_body_id is not None else None),
+        with_view=True, save_image=True, on_relations=st.setup.on_relations,
+        shadow_occluder_map=st.setup.shadow_occluder_map,
+        init_facts=st.setup.planner.last_init,
+        extra={"physical_failures": st.setup.physical_failures,
+               "physics_failures": st.ending.physics_failures})
+
+    # Review round 2 (2026-09-19): a goal object that was seen, then
+    # observed gone from its believed region and never seen again ends
+    # as target_lost, not as an exhausted search.  M7's rediscovery_giveup
+    # is an exhausted search too (only suspended regions left), so it
+    # takes the same relabel; the FAILED line still names the suspensions.
+    if (not st.ending.success and st.ending.exit_reason in ("all_searched", "rediscovery_giveup")
+            and st.ending.target_lost_seen):
+        st.ending.exit_reason = "target_lost"
+    report_run_outcome(
+        success=st.ending.success,
+        exit_reason=st.ending.exit_reason,
+        goal_kind=st.opts.goal_kind,
+        pick_giveup_objects=st.strikes.pick_giveup_objects,
+        integrity_events=st.counts.integrity_events,
+        stack_fail_counts=st.strikes.stack_fail_counts,
+        goal=st.setup.goal,
+        target_name=st.setup.target_name,
+        on_relations=st.setup.on_relations,
+        belief=st.setup.belief,
+        plan_count=len(st.counts.plan_times),  # C-07: the rounds that called plan()
+        sense_count=st.counts.sense_count,
+        m8_stats=({"n_observe_actions": st.counts.observe_count,
+                   "parked": sorted(st.setup.planner.m8_views.parked),
+                   "view_kin_skips": st.setup.planner.streams.view_kin_skips,
+                   "per_plan": st.counts.m8_per_plan,
+                   **({"n_look_actions": st.counts.look_count,
+                       "look_per_plan": st.counts.look_per_plan} if st.setup.look_on else {})}
+                  if st.setup.planner.m8_views is not None else None),
+        shadows=st.setup.shadows,
+        blocked_giveup_shadows=st.strikes.blocked_giveup_shadows,
+        # M7: the F9 give-up's suspension length (None with --m7 off)
+        m7_suspend_s=(execution.M7_SUSPEND_S if execution.M7 else None),
+        plan_times=st.counts.plan_times,
+        total_plan_time=st.counts.total_plan_time,
+        physical_failures=st.setup.physical_failures,
+        physics_failures=st.ending.physics_failures,
+        run_config=st.opts.run_config,
+        run_logger=st.opts.run_logger,
+        registry=st.setup.registry,
+        last_init=st.setup.planner.last_init,
+        boxel_counts_per_replan=st.counts.boxel_counts_per_replan,
+        # TB-22 (tracks rule 18): the observer's counts (None when nothing
+        # watched), the losses the robot noticed, the executor's reports.
+        observer_counts=telemetry.run_counts(),
+        drops_noticed=world_counts.noticed_drops(),
+        collisions_reported=world_counts.collisions_reported(),
+    )
+
+
+def close_episode(st, env):
+    # Keep the GUI visible briefly so the user can inspect the final
+    # state, then tear down the simulation cleanly.
+    if st.opts.gui and st.opts.gui_hold_s > 0:
+        print(f"\nWindow closing in {st.opts.gui_hold_s:g} seconds...")
+        end_time = time.time() + st.opts.gui_hold_s
+        while time.time() < end_time:
+            env.step_simulation()
+            time.sleep(1.0 / 240.0)
+
+    # #P1: nothing to tear down for a held object any more — the grip
+    # is a live friction pinch, and env.close() ends the simulation.
+    env.close()
+
+
 def main(gui=True, run_logger=None, scene_config=None,
          draw_boxel_overlays=True, show_free=False,
          goal_kind='holding', stack_height=2,
@@ -3370,131 +3502,11 @@ def main(gui=True, run_logger=None, scene_config=None,
         if st.ending.episode_over:
             break
 
-    # =========================================================
-    # PHASE 6: Results & Cleanup
-    # =========================================================
-    # Classify outcome (the exit_reason set during the loop tells us
-    # exactly why we stopped) and hand off to report_run_outcome for
-    # printing + timing_summary.json write.
-    st.ending.physics_failures: list = []
-    if goal_kind == 'holding':
-        # Audit S-18: belief.is_target_found() flips on a successful
-        # sense OR a successful pick — neither implies the gripper
-        # is currently welded to the target body.  A sense-then-
-        # failed-pick run (or a slip after a successful pick) leaves
-        # the belief flag True but the gripper empty / holding the
-        # wrong body.  Gate the success on a physics check so the
-        # holding-goal path matches the stack-goal path's audit-#40
-        # rigour.
-        symbolic_ok = st.setup.belief.is_target_found()
-        # #P4 B3(d), D7 (vi): with a declared goal configuration the goal
-        # also needs the arm at q_home by TAMPURA's test.
-        if goal_at_home and not st.arm.at_home_ok:
-            symbolic_ok = False
-        if symbolic_ok:
-            ok, reason = _verify_holding(env, st.setup.target_name, st.hand.held_body_id)
-            if not ok:
-                st.ending.physics_failures.append(f"(holding {st.setup.target_name}) — {reason}")
-                print(f"  PHYSICAL_FAILURE (goal): "
-                      f"(holding {st.setup.target_name}) — {reason}")
-                # Reclassify the exit reason so the FAILED summary
-                # in report_run_outcome doesn't fall through to the
-                # timeout default — the loop exited cleanly on belief,
-                # the failure is a physics mismatch with that belief.
-                if st.ending.exit_reason is None:
-                    st.ending.exit_reason = "physics_mismatch"
-        st.ending.success = symbolic_ok and not st.ending.physics_failures
-    else:
-        symbolic_ok = goal_satisfied(st.setup.goal, st.setup.on_relations)
-        if symbolic_ok:
-            # Audit #40: verify each (on a b) goal clause against
-            # PyBullet AABBs before declaring success.  Catches
-            # post-stack collapses that slipped past the per-action
-            # gate (e.g. a tower falling later under a subsequent
-            # action's vibration).
-            st.ending.physics_failures = _verify_goal_physics(
-                st.setup.goal, env, held_body_id=st.hand.held_body_id)
-            for pf in st.ending.physics_failures:
-                print(f"  PHYSICAL_FAILURE (goal): {pf}")
-            # #P2 (c) CB#122 (2026-09-19): the stack branch used to leave
-            # exit_reason None here, so a symbolic success the physics
-            # rejected was filed as "timeout" — the reason holding
-            # produced physics_mismatch and stack never did.
-            if st.ending.physics_failures and st.ending.exit_reason is None:
-                st.ending.exit_reason = "physics_mismatch"
-        st.ending.success = symbolic_ok and not st.ending.physics_failures
+    judge_success(st, env)
 
-    world_eye.snapshot(
-        f"final ({'SUCCESS' if st.ending.success else 'FAILED'}: {st.ending.exit_reason})",
-        registry=st.setup.registry, belief=st.setup.belief, plan_count=st.counts.plan_count,
-        held=(st.setup.body_id_to_name.get(st.hand.held_body_id)
-              if st.hand.held_body_id is not None else None),
-        with_view=True, save_image=True, on_relations=st.setup.on_relations,
-        shadow_occluder_map=st.setup.shadow_occluder_map,
-        init_facts=st.setup.planner.last_init,
-        extra={"physical_failures": st.setup.physical_failures,
-               "physics_failures": st.ending.physics_failures})
+    report_episode(st, execution)
 
-    # Review round 2 (2026-09-19): a goal object that was seen, then
-    # observed gone from its believed region and never seen again ends
-    # as target_lost, not as an exhausted search.  M7's rediscovery_giveup
-    # is an exhausted search too (only suspended regions left), so it
-    # takes the same relabel; the FAILED line still names the suspensions.
-    if (not st.ending.success and st.ending.exit_reason in ("all_searched", "rediscovery_giveup")
-            and st.ending.target_lost_seen):
-        st.ending.exit_reason = "target_lost"
-    report_run_outcome(
-        success=st.ending.success,
-        exit_reason=st.ending.exit_reason,
-        goal_kind=goal_kind,
-        pick_giveup_objects=st.strikes.pick_giveup_objects,
-        integrity_events=st.counts.integrity_events,
-        stack_fail_counts=st.strikes.stack_fail_counts,
-        goal=st.setup.goal,
-        target_name=st.setup.target_name,
-        on_relations=st.setup.on_relations,
-        belief=st.setup.belief,
-        plan_count=len(st.counts.plan_times),  # C-07: the rounds that called plan()
-        sense_count=st.counts.sense_count,
-        m8_stats=({"n_observe_actions": st.counts.observe_count,
-                   "parked": sorted(st.setup.planner.m8_views.parked),
-                   "view_kin_skips": st.setup.planner.streams.view_kin_skips,
-                   "per_plan": st.counts.m8_per_plan,
-                   **({"n_look_actions": st.counts.look_count,
-                       "look_per_plan": st.counts.look_per_plan} if st.setup.look_on else {})}
-                  if st.setup.planner.m8_views is not None else None),
-        shadows=st.setup.shadows,
-        blocked_giveup_shadows=st.strikes.blocked_giveup_shadows,
-        # M7: the F9 give-up's suspension length (None with --m7 off)
-        m7_suspend_s=(execution.M7_SUSPEND_S if execution.M7 else None),
-        plan_times=st.counts.plan_times,
-        total_plan_time=st.counts.total_plan_time,
-        physical_failures=st.setup.physical_failures,
-        physics_failures=st.ending.physics_failures,
-        run_config=run_config,
-        run_logger=run_logger,
-        registry=st.setup.registry,
-        last_init=st.setup.planner.last_init,
-        boxel_counts_per_replan=st.counts.boxel_counts_per_replan,
-        # TB-22 (tracks rule 18): the observer's counts (None when nothing
-        # watched), the losses the robot noticed, the executor's reports.
-        observer_counts=telemetry.run_counts(),
-        drops_noticed=world_counts.noticed_drops(),
-        collisions_reported=world_counts.collisions_reported(),
-    )
-
-    # Keep the GUI visible briefly so the user can inspect the final
-    # state, then tear down the simulation cleanly.
-    if gui and gui_hold_s > 0:
-        print(f"\nWindow closing in {gui_hold_s:g} seconds...")
-        end_time = time.time() + gui_hold_s
-        while time.time() < end_time:
-            env.step_simulation()
-            time.sleep(1.0 / 240.0)
-
-    # #P1: nothing to tear down for a held object any more — the grip
-    # is a live friction pinch, and env.close() ends the simulation.
-    env.close()
+    close_episode(st, env)
     return st.ending.success
 
 
