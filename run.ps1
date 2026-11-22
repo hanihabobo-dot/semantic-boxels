@@ -350,6 +350,10 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
     $pageWord = $r.Page     # the page is looked for until its server answers (the run may wait for the lock first)
     $holder = $null
     $holderLog = Join-Path $PSScriptRoot 'logs\page_dock.log'
+    # What the launcher has to say while the run goes on is kept here and said after the run:
+    # the run's console redraws its live rows ten times a second from where the cursor stands
+    # (console_screen.py), so a line written in between is wiped at once and leaves stale rows.
+    $late = [System.Collections.Generic.List[string]]::new()
     try {
         if ($r.Page -and -not $LoosePage) {
             # The page is held against the simulator's window, the two as one (tools/page_dock.ps1;
@@ -403,16 +407,19 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
                 # The holder ends by itself: with 0 after holding (the page's window was closed),
                 # with 2 when the run ended first.  Any other code while the run goes on means
                 # that the page is not held, which would otherwise show as a loose page without
-                # a word.
+                # a word.  The word is said after the run (see $late).
                 if ($holder.ExitCode -notin 0, 2 -and -not $p.HasExited) {
                     $why = switch ($holder.ExitCode) {
-                        5 { 'more than one simulator window is open and it cannot tell which is this run''s' }
+                        5 { 'more than one simulator window was open and it could not tell which was this run''s' }
                         6 { 'it found no simulator window' }
-                        7 { 'no browser window of its own shows the page' }
+                        7 { 'no browser window of its own showed the page' }
                         default { 'the holder stopped on an error' }
                     }
-                    Write-Host ("run: the page is not held against the window: $why (exit code $($holder.ExitCode)). " +
-                                "The page stays a window of its own; the holder's log is $holderLog") -ForegroundColor Yellow
+                    # the log this holder wrote: a file of its own when the first was in use (page_dock.ps1)
+                    $wrote = [System.IO.Path]::ChangeExtension($holderLog, "$($holder.Id).log")
+                    if (-not (Test-Path -LiteralPath $wrote)) { $wrote = $holderLog }
+                    $late.Add("run: the page was not held against the window: $why (the holder's exit code $($holder.ExitCode)). " +
+                              "It stayed a window of its own; the holder's log is $wrote")
                 }
                 $holder = $null
             }
@@ -457,6 +464,8 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
         } elseif ($p.HasExited -and $p.ExitCode -eq 130) {
             [Console]::Out.WriteLine('run: interrupted (Ctrl-C ends the run at once; its files stay as they were)')
         }
+        # what was kept while the run drew its console, in yellow
+        foreach ($line in $late) { [Console]::Out.WriteLine("`e[33m$line`e[0m") }
     }
     $code = $p.ExitCode
     $done += [pscustomobject]@{ Seed = $r.Seed; Code = $code; Ended = $ended

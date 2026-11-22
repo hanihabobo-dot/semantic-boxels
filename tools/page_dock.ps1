@@ -32,7 +32,9 @@
 # answering (the run starts its page before it opens its window, so the run's window was not
 # open at that look).  When none has opened since, the script may have started late: it then asks
 # the run's page whether the run has drawn its window, and takes the simulator window that is
-# open if it is the only one.  With more than one it takes none and ends (PageDock.Choose).
+# open if it is the only one and stays the only one for a second and a half (the run's own may
+# not have reached Windows yet; PageDock.Stands).  With more than one it takes none and ends
+# (PageDock.Choose).
 #
 # It only places and cuts the page's window and reads the simulator's (and puts it behind the
 # page when the page is clicked); no message, key or click is sent to either window and nothing
@@ -42,7 +44,9 @@
 #        [-Width 400] [-MinWidth 240] [-SimInset 0,0,0,0] [-Log <file> [-Trace]]
 # -Width, -MinWidth: the page's width and the least room it takes, in pixels at 100 % scaling.
 # -WatchPid 0 (no run to watch): it gives up after -WaitSeconds without the page or the windows.
-# -Log: the file is started anew; -Trace adds every report of Windows about the two windows.
+# -Log: the file is started anew (while another program has it open, the log goes to
+# <name>.<this process>.log beside it); -Trace adds every report of Windows about the two
+# windows.
 # Exit code: 0 after holding; 2 the run ended before its page or its windows came; 3 gave up
 # (no run to watch); 4 an error of this script (the log has it); 5 more than one simulator window
 # and it cannot tell which is the run's; 6 the run has drawn its window and no simulator window
@@ -68,16 +72,42 @@ $ErrorActionPreference = 'Stop'
 if ($SimProcess -eq '*') { $SimProcess = '' }
 if ($PageClass -eq '*') { $PageClass = '' }
 if ($PageChildClass -eq '*') { $PageChildClass = '' }
-if ($Log) {
-    # started anew; a log that cannot be written never stops the holder
-    try {
-        $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Log)
-        Set-Content -LiteralPath $Log -Encoding utf8 -Value ((Get-Date -Format 'HH:mm:ss.fff') +
-            " the holder of the page starts ($(Get-Date -Format 'yyyy-MM-dd')): run process $WatchPid, word '$PageWord'")
-    } catch { $Log = '' }
-}
 function Say([string]$text) {
-    if ($Log) { try { Add-Content -LiteralPath $Log -Value ((Get-Date -Format 'HH:mm:ss.fff') + ' ' + $text) -Encoding utf8 } catch { } }
+    # one line at the end of the log
+    if (-not $Log) { return }
+    try {
+        $file = [System.IO.FileStream]::new($Log, 'Append', 'Write', 'ReadWrite')
+        try {
+            $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes((Get-Date -Format 'HH:mm:ss.fff') + ' ' + $text + [Environment]::NewLine)
+            $file.Write($bytes, 0, $bytes.Length)
+        } finally { $file.Dispose() }
+    } catch { }
+}
+function Start-Log([string]$file, [string]$line) {
+    # the file made anew with one line; it throws while another program has the file open for
+    # writing (readers are let in: the share is Read)
+    $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $file)
+    $new = [System.IO.FileStream]::new($file, 'Create', 'Write', 'Read')
+    try {
+        $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes((Get-Date -Format 'HH:mm:ss.fff') + ' ' + $line + [Environment]::NewLine)
+        $new.Write($bytes, 0, $bytes.Length)
+    } finally { $new.Dispose() }
+}
+if ($Log) {
+    # Started anew, and only when no other program has the file open for writing.  While
+    # another holder still has it (the holder of the run before, for a moment), two holders in one file would
+    # write over each other's lines (each writes where it last stood): this holder then leaves
+    # that file alone and writes to a file of its own beside it, <name>.<its process>.log,
+    # which run.ps1 looks for when it names the holder's log.  A log that cannot be written at
+    # all never stops the holder.
+    $Log = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Log)
+    $starts = "the holder of the page starts ($(Get-Date -Format 'yyyy-MM-dd')): run process $WatchPid, word '$PageWord'"
+    try { Start-Log $Log $starts }
+    catch {
+        $first = $Log
+        $Log = [System.IO.Path]::ChangeExtension($first, "$PID.log")
+        try { Start-Log $Log ($starts + "; $first is left alone ($($_.Exception.Message))") } catch { $Log = '' }
+    }
 }
 trap {
     Say "ERROR, the holder ends: $($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))"

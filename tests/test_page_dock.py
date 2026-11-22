@@ -91,6 +91,22 @@ CHOICES = {
         ((), (), True, 0),
 }
 
+# In this order (PageDock.Stands remembers the choice): the window Choose gave, whether it is
+# one of the kept list, the time in ms, and whether it may be taken then.
+STANDS = [
+    (7, False, 0, True),            # one that opened since the look: at once
+    (3, True, 1000, False),         # one of the kept list: not at first sight
+    (3, True, 2499, False),
+    (3, True, 2500, True),          # it has been the choice for 1500 ms
+    (0, False, 2600, False),        # none: the choice is broken
+    (3, True, 2700, False),         # the same window again: its time starts again
+    (3, True, 4199, False),
+    (4, True, 4200, False),         # another window of the list: its time starts
+    (4, True, 5700, True),
+    (-1, False, 5800, False),       # it cannot tell
+    (9, False, 5900, True),         # the run's own window has come: at once
+]
+
 
 def _win(path):
     return subprocess.run(['wslpath', '-w', str(path)], capture_output=True,
@@ -116,6 +132,8 @@ def placed():
     for i, (now, before, drawn, _taken) in enumerate(CHOICES.values()):
         lines.append("'choose%d|' + [PageDock]::Choose([long[]]@(%s), [long[]]@(%s), $%s)"
                      % (i, ', '.join(map(str, now)), ', '.join(map(str, before)), str(drawn).lower()))
+    for i, (pick, old, at, _taken) in enumerate(STANDS):
+        lines.append("'stand%d|' + [PageDock]::Stands(%d, $%s, %d)" % (i, pick, str(old).lower(), at))
     proc = subprocess.run([_PWSH, '-NoProfile', '-NonInteractive', '-Command', '\n'.join(lines)],
                           capture_output=True, text=True, timeout=300, cwd=str(ROOT))
     assert proc.returncode == 0, proc.stderr
@@ -158,6 +176,24 @@ def test_which_simulator_window_is_this_runs(placed, name):
     assert placed['choose%d' % list(CHOICES).index(name)] == [str(CHOICES[name][3])], name
     cs = DOCK_CS.read_text(encoding='utf-8')
     assert 'OldAfterMs' not in cs and cs.count('Choose(sims, before, ') == 2
+
+
+@needs_pwsh
+def test_a_window_of_the_kept_list_is_taken_only_when_it_stays_the_choice(placed):
+    """The run may have drawn its window while that window has not reached
+    Windows yet: the one simulator window open is then somebody else's.  A
+    window that was open at the kept look is therefore taken only when it has
+    been the choice for a second and a half without a break; the run's own
+    window, once there, is the choice at once (review r4, post-review
+    finding E)."""
+    assert [placed['stand%d' % i] for i in range(len(STANDS))] == [[str(taken)] for *_, taken in STANDS]
+    cs = DOCK_CS.read_text(encoding='utf-8')
+    assert 'public const int OnlyOneMs = 1500;' in cs
+    # the holder's wait asks it for every choice and takes no window that does not stand
+    assert 'bool old = pick > 0 && before.Contains(pick);' in cs
+    assert 'bool stands = Stands(pick, old, clock.ElapsedMilliseconds);' in cs
+    assert 'if (stands && page != IntPtr.Zero) { sim = new IntPtr(pick); break; }' in cs
+    assert cs.count('sim = new IntPtr(pick)') == 1
 
 
 def test_the_holder_places_shows_and_cuts_a_window_and_sends_nothing():
@@ -222,17 +258,30 @@ def test_the_launcher_starts_the_holder_for_a_run_with_the_page_and_never_ends_i
     assert not re.search(r'\$holder\.(Kill|Close|CloseMainWindow)', code)
 
 
-def test_the_launcher_says_so_when_the_holder_ends_while_the_run_goes_on():
+def test_the_launcher_says_after_the_run_that_the_holder_ended_while_it_went_on():
     """A holder that has ended with anything but 0 (it held, the page's
     window was closed) or 2 (the run ended first) left a loose page: the
-    launcher's loop says it once, with the holder's exit code and its log,
-    and only while the run goes on."""
+    launcher keeps one sentence with the holder's exit code and its log,
+    only when the run still went on, and says it after the run with its
+    other closing lines.  Nothing is written from the loop: the run's
+    console redraws its live rows from where the cursor stands, so a line
+    written in between is wiped at once and leaves stale rows (review r4,
+    post-review finding A)."""
     ps = RUN_PS1.read_text(encoding='utf-8')
     loop = ps[ps.index('while (-not $p.HasExited)'):]
     block = loop[loop.index('if ($holder -and $holder.HasExited) {'):loop.index('if ($pageWord -and $seenAt')]
     assert 'if ($holder.ExitCode -notin 0, 2 -and -not $p.HasExited) {' in block
-    assert 'Write-Host' in block and '$holder.ExitCode' in block and '$holderLog' in block
-    assert block.rstrip().endswith('$holder = $null\n            }')       # said once
+    assert '$late.Add(' in block and 'Write-Host' not in block
+    assert '$holder.ExitCode' in block and '$holderLog' in block
+    assert block.rstrip().endswith('$holder = $null\n            }')       # kept once
+    # the list is made anew for every run, before the run's loop, and said in the finally:
+    # whatever ended the run
+    made = '$late = [System.Collections.Generic.List[string]]::new()'
+    assert ps.count(made) == 1
+    assert ps.index('for ($i = 0; $i -lt $seeds.Count; $i++) {') < ps.index(made) < ps.index('while (-not $p.HasExited)')
+    closing = loop[loop.index('} finally {'):loop.index('$code = $p.ExitCode')]
+    assert 'foreach ($line in $late) { [Console]::Out.WriteLine(' in closing
+    assert 'Write-Host' not in closing          # a stopped launcher writes nothing through the host
     # the codes it names are the holder's own
     cs = DOCK_CS.read_text(encoding='utf-8')
     for code in re.findall(r'^\s+(\d) \{ ', block, re.M):
@@ -311,6 +360,61 @@ def test_an_error_of_the_holder_is_in_its_log_and_in_its_exit_code(tmp_path):
     assert 'a line of the run before' not in said
     assert 'the holder of the page starts' in said and "word 'nosuchword'" in said
     assert 'ERROR, the holder ends: -SimInset takes four whole numbers' in said
+
+
+@needs_pwsh
+def test_a_log_that_cannot_be_started_anew_goes_to_a_file_of_the_holders_own():
+    """The holder of the run before may still have the log open (as
+    PageDock.Run opens it, a writer that lets others write).  A second holder
+    that started the file anew would have its lines written over: the first
+    writes where it last stood (tried by hand on 2026-11-22: its next line
+    landed inside the new holder's first line).  So the new holder starts the
+    file only when no program has it open, and otherwise writes to
+    page_dock.<its process>.log beside it and leaves the first file as it is
+    (review r4, post-review finding D).  On a Windows folder, where an open
+    file can refuse a second writer; the script makes the folder and takes
+    it away again."""
+    assert ('new FileStream(logPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite)'
+            in DOCK_CS.read_text(encoding='utf-8'))
+    script = r"""
+$ErrorActionPreference = 'Stop'
+$me = Join-Path $PSHOME 'pwsh.exe'
+$dir = Join-Path ([System.IO.Path]::GetTempPath()) ('sb_page_dock_test_' + [guid]::NewGuid().ToString('N'))
+$null = New-Item -ItemType Directory -Path $dir
+try {
+    $log = Join-Path $dir 'page_dock.log'
+    Set-Content -LiteralPath $log -Value 'a line of the holder before' -Encoding utf8
+    $held = [System.IO.StreamWriter]::new([System.IO.FileStream]::new($log, 'Append', 'Write', 'ReadWrite'))
+    $held.AutoFlush = $true
+    try {
+        & $me -NoProfile -File '%s' -WaitSeconds 1 -PageWord nosuchword -PortFrom 8799 -PortTo 8799 -Log $log
+        "code=$LASTEXITCODE"
+        $held.WriteLine('its last line, written after the new holder has ended')
+    } finally { $held.Dispose() }
+    foreach ($f in Get-ChildItem -LiteralPath $dir -File | Sort-Object Name) {
+        $kind = if ($f.Name -eq 'page_dock.log') { 'first' } elseif ($f.Name -match '^page_dock\.\d+\.log$') { 'own' } else { 'other' }
+        "file=$kind"
+        Get-Content -LiteralPath $f.FullName | ForEach-Object { "$kind>$_" }
+    }
+} finally { Remove-Item -LiteralPath $dir -Recurse -Force }
+""" % _win(DOCK_PS1)
+    proc = subprocess.run([_PWSH, '-NoProfile', '-NonInteractive', '-Command', script],
+                          capture_output=True, text=True, timeout=300, cwd=str(ROOT))
+    assert proc.returncode == 0, proc.stderr
+    out = proc.stdout.splitlines()
+    assert 'code=3' in out, proc.stdout + proc.stderr
+    assert sorted(ln for ln in out if ln.startswith('file=')) == ['file=first', 'file=own']
+    first = [ln for ln in out if ln.startswith('first>')]
+    own = [ln for ln in out if ln.startswith('own>')]
+    # the first file is as its holder wrote it, whole
+    assert first == ['first>a line of the holder before',
+                     'first>its last line, written after the new holder has ended']
+    assert 'the holder of the page starts' in own[0] and 'page_dock.log is left alone' in own[0]
+    assert any('no page gave the word back' in ln for ln in own)
+    # and the launcher names the file that holder wrote
+    ps = RUN_PS1.read_text(encoding='utf-8')
+    assert '$wrote = [System.IO.Path]::ChangeExtension($holderLog, "$($holder.Id).log")' in ps
+    assert '$Log = [System.IO.Path]::ChangeExtension($first, "$PID.log")' in DOCK_PS1.read_text(encoding='utf-8')
 
 
 @needs_pwsh

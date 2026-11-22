@@ -144,6 +144,23 @@ public static class PageDock
         return open.Count == 1 ? open[0] : -1;
     }
 
+    /// How long a window of the kept list has to stay the choice before it is taken.
+    public const int OnlyOneMs = 1500;
+    static long standing, standingSince;
+
+    /// Whether the window Choose gave (`pick`) may be taken at `nowMs`.  One that opened since
+    /// the kept look: at once.  One of the kept list (`old`), which is taken as the only
+    /// simulator window there is: only when it has been the choice for OnlyOneMs without a
+    /// break.  The run may have drawn its window while that window has not reached Windows
+    /// yet; the one open is then somebody else's, and the run's own becomes the choice as soon
+    /// as it is there (review r4, post-review finding E).
+    public static bool Stands(long pick, bool old, long nowMs)
+    {
+        if (pick <= 0 || !old) { standing = 0; return pick > 0; }
+        if (pick != standing) { standing = pick; standingSince = nowMs; }
+        return nowMs - standingSince >= OnlyOneMs;
+    }
+
     // ----- reading windows ------------------------------------------------------------------
 
     static string Title(IntPtr h) { var s = new StringBuilder(512); GetWindowText(h, s, 512); return s.ToString(); }
@@ -543,7 +560,8 @@ public static class PageDock
             Note("waiting; simulator windows open before: " + before.Count);
             var clock = Stopwatch.StartNew();
             bool open = false;
-            long asked = -1000, lacksSince = 0;
+            long asked = -1000, lacksSince = 0, told = 0;
+            standing = 0;
             string lacks = "";
             while (true)
             {
@@ -559,11 +577,19 @@ public static class PageDock
                     try { open = RunWindowOpen(); } catch { open = false; }
                     if (open) { Note("the run has drawn its window; simulator windows open: " + sims.Count); pick = Choose(sims, before, true); }
                 }
-                if (pick > 0 && page != IntPtr.Zero) { sim = new IntPtr(pick); break; }
+                bool old = pick > 0 && before.Contains(pick);
+                bool stands = Stands(pick, old, clock.ElapsedMilliseconds);
+                if (old && !stands && pick != told)
+                {
+                    told = pick;
+                    Note("one simulator window is open, " + pick.ToString("X") + ", and it was open when the holder's list was taken: "
+                         + "it is taken when it is still the only one after " + OnlyOneMs + " ms");
+                }
+                if (stands && page != IntPtr.Zero) { sim = new IntPtr(pick); break; }
                 // What is missing for the pair, said when it changes.  When it stays missing
                 // the holder ends with a code of its own, so that the launcher can say that
                 // the page is not held.
-                string now = pick > 0 ? "no browser window of its own shows the page (a window named exactly '" + pageTitle + "')"
+                string now = pick > 0 ? (page != IntPtr.Zero ? "" : "no browser window of its own shows the page (a window named exactly '" + pageTitle + "')")
                            : pick < 0 ? "the run's window is open, " + sims.Count + " simulator windows are, and none of them opened after the holder's list was taken: it cannot tell which is this run's and takes none"
                            : open ? "the run has drawn its window, and no window with '" + simTitle + "' in its title is found" + (simProcess.Length > 0 ? " among the windows of " + simProcess : "")
                            : "";
@@ -586,7 +612,7 @@ public static class PageDock
             // What the two windows are to Windows, before anything is placed: the look of the
             // pair on a real screen is measured against these lines (see Inset).
             Note("  the simulator's window " + (before.Contains(sim.ToInt64())
-                 ? "was open when the holder's list was taken; taken as the only one, the run having drawn its window"
+                 ? "was open when the holder's list was taken; taken as the only one, the run having drawn its window, after it stayed the only one for " + OnlyOneMs + " ms"
                  : "opened after the holder's list was taken"));
             Note("  simulator: " + Describe(sim.ToInt64()) + " process=" + ProcName(sim) + " dpi=" + GetDpiForWindow(sim)
                  + " work=" + Work(sim) + " inset=" + Inset + " taken as seen=" + Seen(sim));
