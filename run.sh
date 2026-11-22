@@ -24,6 +24,11 @@
 #   ./run.sh help                     this text;  --dry-run prints the command instead of running it
 # Flags are case-blind and one or two dashes both work, so run.ps1's spellings do too
 # (-Seed 7 -Headless -Gen).  A flag run.sh does not know goes to the pipeline as it is.
+# One thing is run.ps1's alone: for a GUI run of boxels it asks for the page of our own
+# beside the simulator's window, opens it and holds the two together (Windows' browser
+# and windows); here such a run has PyBullet's own panels, and run.ps1's -NoPage and
+# -LoosePage are not known.  ./run.sh boxels --gui-page on asks the pipeline for the
+# page all the same: the run prints its address, to be opened in a browser by hand.
 # Three settings come from the environment, each with a default:
 #   SB_PYTHON    the Python that has numpy, pybullet and the rest (default: .venv/bin/python
 #                in the checkout, then /root/armO-venvA/bin/python, then python3)

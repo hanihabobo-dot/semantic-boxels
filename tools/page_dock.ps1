@@ -46,8 +46,9 @@
 # -WatchPid 0 (no run to watch): it gives up after -WaitSeconds without the page or the windows.
 # -Log: the file is started anew (while another program has it open, the log goes to
 # <name>.<this process>.log beside it; such files of earlier holders are removed once they
-# have not been written to for 14 days); -Trace adds every report of Windows about the two
-# windows.
+# have not been written to for 14 days, so a copy of a log that is to stay is kept in another
+# folder or under a name that is not <name>.<digits>.log); -Trace adds every report of Windows
+# about the two windows.
 # Exit code: 0 after holding; 2 the run ended before its page or its windows came; 3 gave up
 # (no run to watch); 4 an error of this script (the log has it); 5 more than one simulator window
 # and it cannot tell which is the run's; 6 the run has drawn its window and no simulator window

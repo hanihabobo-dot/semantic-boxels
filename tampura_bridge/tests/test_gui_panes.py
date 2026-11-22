@@ -230,9 +230,15 @@ def test_the_driver_puts_the_panes_away_before_its_overview_renders():
 def test_nothing_but_the_driver_uses_gui_panes():
     """The episode (policy.py), the pipeline and the gates do not know the
     module: a headless run and an eval never import a caller of it other
-    than the driver's `if a.vis:`."""
+    than the driver's `if a.vis:`.  The pipeline's modules lie in their
+    folders since the folder move (the top level alone holds three files),
+    so every package of the checkout is read, and the six are among them."""
+    packages = sorted(d for d in os.listdir(REPO)
+                      if os.path.isfile(os.path.join(REPO, d, '__init__.py')))
+    assert {'world', 'sensing', 'planning', 'acting', 'console', 'evaluation',
+            'tampura_bridge'} <= set(packages)
     users = []
-    for folder in ('', 'tampura_bridge', 'tools'):
+    for folder in [''] + sorted(set(packages) | {'tools'}):
         for name in sorted(os.listdir(os.path.join(REPO, folder))):
             if not name.endswith('.py') or name == 'gui_panes.py':
                 continue

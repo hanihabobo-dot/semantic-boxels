@@ -5,6 +5,8 @@ the command instead of running it, so nothing starts).
                            folder and from SB_PYTHON, SB_TAMPURA and SB_LOCK
   the three targets        tampura (plain and --gen), boxels, wumpus: the
                            pipeline command run.ps1 builds, flag for flag
+                           (but for the page beside the window, which a GUI
+                           run of boxels has from run.ps1 alone)
   both spellings           --seed 7 and -Seed 7, --dry-run and -DryRun
   a seed list              118,102 or "[118, 102]" or 118 102: one command each
   --draw                   the kinds of policy.DRAW_KINDS that run.ps1 takes;
@@ -90,6 +92,22 @@ def test_boxels_flags_in_both_spellings():
 def test_unknown_flags_and_args_reach_the_pipeline():
     lines, _ = dry('boxels', '--n-extra-distractors', '1', '--args', '--foo bar')
     assert lines[0].endswith("--n-occluders 2 --n-extra-distractors 1 --foo bar'")
+
+
+def test_the_page_beside_the_window_is_run_ps1s_and_its_flag_goes_through():
+    """run.ps1 asks for the page of our own beside the window in a GUI run of
+    boxels and holds the two together (Windows only).  run.sh does not: its
+    GUI run of boxels is the command without the page, and its head says so.
+    The pipeline's own flag goes through as any flag run.sh does not know."""
+    lines, _ = dry('boxels', '--seed', '3')
+    assert '--gui-page' not in lines[0] and 'SB_GUI_PAGE_TOKEN' not in lines[0]
+    assert lines[0].endswith("--scene random-pairs --seed 3 --goal holding --n-occluders 2'")
+    lines, _ = dry('boxels', '--seed', '3', '--gui-page', 'on')
+    assert lines[0].endswith("--n-occluders 2 --gui-page on'")
+    head = RUN_SH.read_text().split('\n\n')[0]
+    assert "One thing is run.ps1's alone" in head and '--gui-page on' in head
+    ps1 = (ROOT / 'run.ps1').read_text(encoding='utf-8')
+    assert "' --gui-page on'" in ps1 and '[switch]$NoPage' in ps1 and '[switch]$LoosePage' in ps1
 
 
 def test_wumpus():

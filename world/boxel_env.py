@@ -12,10 +12,10 @@ from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 
-from console import gui_page           # the page beside our own window (display only; off unless started)
 from acting import robot_utils
 from acting import slip_fixes
 from console import telemetry          # #P1 F17 world telemetry (no-op unless armed)
+from console import gui_page           # the page beside our own window (display only; off unless started)
 from world.boxel_types import ObjectInfo, CameraObservation
 from world.boxel_data import BoxelData, BoxelType
 from sensing.perception import ObjectDetection, detect_objects_from_render
