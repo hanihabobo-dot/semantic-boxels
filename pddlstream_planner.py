@@ -733,6 +733,9 @@ class PDDLStreamPlanner:
                 bd, robot_model().finger_limits[0][1],
                 self.streams.GRASP_MAX_SPAN, self.streams.GRASP_SQUARE_TOL)
 
+        # The builders run in this order and each appends to init.  The order
+        # is behaviour: the shuffle at the end permutes the list it is given,
+        # so another order of appends gives another shuffled list.
         self._facts_registry(init, shadows, target_objects,
                              known_empty_shadows, observed_clear_regions,
                              held_obj, m8, look_on, _pose_known)
@@ -779,6 +782,7 @@ class PDDLStreamPlanner:
     def _facts_registry(self, init, shadows, target_objects,
                         known_empty_shadows, observed_clear_regions, held_obj,
                         m8, look_on, _pose_known):
+        # Appends the facts of every registry boxel by its kind; fills shadows.
         for boxel in self.registry.boxels.values():
             init.append(('Boxel', boxel.id))
 
@@ -850,6 +854,7 @@ class PDDLStreamPlanner:
                     init.append(('obj_at_boxel_KIF', boxel.id, shadow_id))
 
     def _facts_view_blocking(self, init, shadows, look_on):
+        # Appends blocks_view_at and marginally_blocked (occluders, placements).
         # Geometric facts: blocks_view_at(occ, occ_current_boxel, shadow).
         # shadow_occluder_map comes from compute_shadow_blockers' census
         # over the registry, so a listed blocker blocks the shadow from
@@ -933,6 +938,7 @@ class PDDLStreamPlanner:
             self._last_egregious_triples = sorted(egregious_triples)
 
     def _facts_placement_hides(self, init, held_obj):
+        # Appends placement_hides: a placement that would hide a known body.
         # F31 (2026-09-19): a placement must not hide a KNOWN body from
         # the camera.  The facts above protect the sense corridors to
         # shadow fragments only; nothing kept the planner from standing
@@ -951,6 +957,7 @@ class PDDLStreamPlanner:
     def _facts_targets_and_tray(self, init, target_objects,
                                 visible_target_locations, m8, look_on,
                                 _pose_known):
+        # Appends Obj per target, the tray's facts and the visible targets.
         for obj in target_objects:
             init.append(('Obj', obj))
 
@@ -977,6 +984,7 @@ class PDDLStreamPlanner:
                 init.append(('obj_pose_known', tgt))
 
     def _facts_boxel_fits(self, init, target_objects, look_on):
+        # Appends boxel_fits: which object fits which free cell or shadow.
         # Static boxel_fits facts (audit #102): do NOT use a PDDLStream test stream.
         # Adaptive search re-invokes test streams heavily across skeletons; a cheap
         # predicate became a bottleneck.  One pass here matches stream semantics.
@@ -1055,6 +1063,7 @@ class PDDLStreamPlanner:
                     init.append(('boxel_fits', o, bid))
 
     def _facts_config_and_home(self, init, current_config):
+        # Appends Config and at_config, and the home pseudo-boxel's facts.
         init.append(('Config', current_config))
         init.append(('at_config', current_config))
         if self.goal_config is not None:
@@ -1073,6 +1082,7 @@ class PDDLStreamPlanner:
 
     def _facts_m8(self, init, shadows, target_objects, known_empty_shadows,
                   current_config, held_obj, m8, look_on, _pose_known):
+        # Appends M8's view facts and the over-region facts; prints its line.
         # M8 C: the observation configurations as static facts, each with
         # its own view pseudo-boxel (not a registry boxel, like "home";
         # compute_kin returns at once on these ids).
@@ -1130,6 +1140,7 @@ class PDDLStreamPlanner:
                   f"total {self.last_m8_stats['build_s']:.2f}s")
 
     def _facts_hand(self, init, held_obj):
+        # Appends handempty or holding.
         if held_obj is None:
             init.append(('handempty',))
         else:
@@ -1141,6 +1152,7 @@ class PDDLStreamPlanner:
             init.append(('holding', held_obj))
 
     def _facts_stacking(self, init, on_relations, stackable_objects, held_obj):
+        # Appends clear, on_table, on.  Set loop: order by PYTHONHASHSEED=0 (run.ps1).
         # Stacking facts (audit #30 + #39).
         #   (clear ?o)  now emitted for EVERY object unconditionally,
         #               because pick requires it (audit #39 — prevents
@@ -1178,6 +1190,7 @@ class PDDLStreamPlanner:
                 init.append(('on', stacked, support))
 
     def _check_home_pseudo_boxel(self, init):
+        # Appends nothing: the assert other files cite as "asserted in _build_init".
         if self.goal_config is not None:
             _named = [f for f in init if HOME_PSEUDO_BOXEL in
                       [str(x) for x in f[1:]]]
