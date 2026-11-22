@@ -38,6 +38,7 @@ from tampura.config import config as tconfig    # noqa: E402
 import tampura_environments                      # noqa: E402,F401
 
 from tampura_bridge import g13_runtime              # noqa: E402
+from tampura_bridge import gui_panes                 # noqa: E402
 from tampura_bridge import policy as bridge_policy   # noqa: E402
 import slip_fixes                                    # noqa: E402  (BF#59, BF#62)
 import world_counts                                  # noqa: E402  (TB-22, rule 18)
@@ -265,6 +266,12 @@ def main():
         # clears it before each step and the driver once more after the
         # rollout.  Nothing is set when headless.
         bridge_policy.GUI_CLEANUP = clear_debug_lines
+        # Hani 2026-11-21 (BF#27): our window's debug camera panes (RGB,
+        # depth and segmentation mask of the robot's camera) in their
+        # window.  Our env fills them in every GUI run already; their window
+        # setup hides the side panel they sit in.  Flags of the window only
+        # (gui_panes.py), and nothing is set when headless.
+        gui_panes.show(env.world.client)
 
     gates = _bridge_gates()
     pinned = gates.SCENE_MAP.get(a.global_seed)
@@ -367,6 +374,11 @@ def main():
         json.dump({'seed': a.global_seed, 'scene_file': scene.name_seen,
                    'switches': dict(cfg.switches), **cfg.out}, f, indent=1,
                   default=str)
+    if a.vis:
+        # The overview below renders two views that are not the robot's,
+        # and PyBullet copies every render into the camera panes: the panes
+        # are put away first (gui_panes.py), so they never show those.
+        gui_panes.hide(env.world.client)
     try:
         _save_overview(env.world.client, config['save_dir'],
                        _eye_target(cfg.out.get('run_dir') or ''))

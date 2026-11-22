@@ -356,6 +356,14 @@ class WorldEye:
                     names.append(path.name)
             except Exception:
                 pass
+            # TB-40 (Hani, 2026-11-15: the GUI's side camera panes show what
+            # the robot sees and nothing else).  The hardware render above
+            # also refills those panes, with the user's view; the robot's
+            # camera is rendered again so that they end on its image.
+            try:
+                self.env.refresh_debug_camera_views()
+            except Exception:
+                pass
         return names
 
     # ----- the snapshot ----------------------------------------------------

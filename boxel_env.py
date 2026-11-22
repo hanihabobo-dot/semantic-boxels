@@ -173,8 +173,8 @@ class BoxelTestEnv(WorldPlacement):
             self.client_id = p.connect(p.GUI, options=f"--width={window_width} --height={window_height}")
             # Disable mouse picking so left-click rotates camera instead of grabbing objects
             p.configureDebugVisualizer(p.COV_ENABLE_MOUSE_PICKING, 0)
-            # Disable segmentation mask preview window
-            p.configureDebugVisualizer(p.COV_ENABLE_SEGMENTATION_MARK_PREVIEW, 0)
+            # The three camera panes (RGB, depth, segmentation mask) stay on,
+            # as PyBullet opens the window (Hani, 2026-11-21).
             # Main view: match fixed semantic camera immediately (before resetSimulation).
             if np.allclose(self.camera_position, _DEFAULT_SEMANTIC_EYE) and np.allclose(
                 self.camera_target, _DEFAULT_SEMANTIC_TARGET
