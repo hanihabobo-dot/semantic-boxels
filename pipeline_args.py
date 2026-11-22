@@ -4,6 +4,36 @@
 the name importable from there.  The flags keep the order they are added
 in: argparse prints ``--help`` in that order and resolves a shortened flag
 against all of them.
+
+The flags by group, in the order they are added (their defaults and
+meanings are in the help text):
+
+    display and console     --no-gui  --no-boxel-viz  --show-free  --log-level
+    scene                   --scene  --n-occluders  --n-targets  --n-hidden
+                            --n-extra-distractors  --n-objects  --seed
+    goal                    --goal  --stack-height  --allow-unwinnable
+    planner model and       --unit-costs  --corridor-test  --path-check-diag
+      motion checks         --path-check-step  --search-sample-ratio
+                            --sense-gate
+    M8 to M10               --m8  --m9  --m10  --pick-aperture-from-pose
+                            --sense-over-region
+    look, eye, interior     --look  --eye  --eye-start-joints
+      regions, M7           --interior-regions  --m7
+    optimistic search       --search-effort-weight  --search-initial-complexity
+    die-slip fixes,         --slip-fixes  --grip-squeeze-mm  --save-screenshots
+      squeeze, screenshots
+    FastDownward's search   --planner
+    free space              --baseline  --uniform-cell-size  --min-boxel-size
+    telemetry and counts    --telemetry  --no-telemetry  --world-counts
+                            --telemetry-period  --telemetry-heartbeat
+    time limit              --max-plan-time
+
+The rules applied to the parsed arguments, one function each, in call order:
+
+  _promote_default_scene_for_counts  holding with a count flag: scalability
+  _check_n_hidden                    what the hidden count needs, and its cap
+  _apply_random_pairs_rules          random-pairs errors, auto seed, distractor
+  _default_scene_for_stack_goal      stack goal on the default scene: stack
 """
 
 import argparse
@@ -17,6 +47,7 @@ import sys
 # entry-point block stays short; the scene-builder dispatch and main()
 # call remain in the orchestrator.
 # ---------------------------------------------------------------------------
+# Moved from run_logger.py (readable migration P8): "here" now means this file.
 
 
 def parse_pipeline_args(argv=None):
@@ -27,6 +58,7 @@ def parse_pipeline_args(argv=None):
     sanity checks).  ``parser.error`` exits the process on bad input.
     """
     parser = argparse.ArgumentParser(description='Full PDDLStream Pipeline with Replanning')
+    # Flags of the display and the console.
     parser.add_argument('--no-gui', action='store_true', help='Run without GUI')
     parser.add_argument(
         '--no-boxel-viz',
@@ -48,6 +80,7 @@ def parse_pipeline_args(argv=None):
                              'process to <run_dir>/console_debug.log. "normal", '
                              '"quiet", and "verbose" leave stdout untouched. '
                              'The log file always captures everything.')
+    # Flags of the scene.
     parser.add_argument('--scene', choices=['default', 'mixed',
                                             'scalability', 'stack',
                                             'random-pairs'],
@@ -81,6 +114,7 @@ def parse_pipeline_args(argv=None):
                              'Note: --n-hidden > 0 may nudge the seed on '
                              'retry if placement fails; the effective seed '
                              'is logged in run_config.')
+    # Flags of the goal.
     parser.add_argument(
         '--goal',
         choices=['holding', 'stack', 'find-and-tray-stack'],
@@ -108,6 +142,7 @@ def parse_pipeline_args(argv=None):
              'unwinnable.  Scene-construction failures still abort — '
              'there is no scene to show.  Never use in eval sweeps.',
     )
+    # Flags of the planner model and the motion checks.
     parser.add_argument(
         '--unit-costs',
         action='store_true',
@@ -167,6 +202,7 @@ def parse_pipeline_args(argv=None):
              'a target-class box can rest fully occluded (dense hideability '
              'test, streams.test_target_can_hide_in_shadow). A/B decides '
              'the default for CB#113.')
+    # Flags of M8 to M10.
     # M8-M10 (PLAN_P4_POSE_GRASP_SAMPLERS.md, P4.5 model tweaks): each
     # behind its own switch, default ON by the Q-F decision (BF#34); off
     # gives the pipeline without them (the BEFORE arm).
@@ -199,6 +235,7 @@ def parse_pipeline_args(argv=None):
              "region when the arm there does not block the eye's view, then "
              'pick from there (on), or return to a static view spot before '
              'every sense as before (off).')
+    # Flags of the look, the eye, interior regions and M7.
     # Path 9 (BF#68, tracks/look): one look action replaces sense and
     # observe (look_domain.py, look_action.py); off keeps both, as before.
     # boxel: the look from a free-space boxel (look_views.py); centred: the
@@ -243,6 +280,7 @@ def parse_pipeline_args(argv=None):
         help="M7: a sense that finds a registered body again keeps its "
              "still-hidden fragments and carves the new ones against every "
              "fragment (on, the default), or drops them unrendered (off).")
+    # Flags of the optimistic search.
     # BF#53 (2026-10-30), the optimistic search's settings.  pddlstream
     # weighs a stream result's effort into the search's costs only with
     # effort_weight set; without it every attempt of the adaptive loop may
@@ -262,6 +300,7 @@ def parse_pipeline_args(argv=None):
         help="pddlstream solve(initial_complexity=...): the stream "
              "complexity level the adaptive loop starts at (BF#53, default "
              "3); 0 is pddlstream's default.")
+    # Flags of the die-slip fixes, the squeeze and the screenshots.
     # BF#59 (the die-slip campaign): the candidate fixes' switches
     # (slip_fixes.py holds the names the fixes register; an unknown name is
     # refused before anything runs).  BF#62 (Hani, 2026-11-02): the four
@@ -289,6 +328,7 @@ def parse_pipeline_args(argv=None):
         help="Save world_eye's eye_<k>_camera.png (the robot's camera) and, "
              "under the GUI, eye_<k>_gui.png at every snapshot, in the run "
              "directory.  Debugging only; off by default (BF#50).")
+    # Flag of FastDownward's search.
     parser.add_argument(
         '--planner',
         choices=['ff-astar1', 'ff-astar2', 'ff-astar', 'ff-wastar1',
@@ -305,6 +345,7 @@ def parse_pipeline_args(argv=None):
              '900 s cap, so it is opt-in. ff-astar is plain A*(ff) without '
              'preferred operators; dijkstra is blind, cost-optimal, slow.',
     )
+    # Flags of free space.
     parser.add_argument(
         '--baseline',
         choices=['semantic', 'uniform'],
@@ -341,6 +382,7 @@ def parse_pipeline_args(argv=None):
              'budget. OBJECT / SHADOW boxels are unaffected — they '
              'remain per-object regardless of this knob.',
     )
+    # Flags of telemetry and the world counts.
     parser.add_argument(
         '--telemetry',
         dest='telemetry',
@@ -393,6 +435,7 @@ def parse_pipeline_args(argv=None):
         help='Cadence in simulated seconds of the compact where-is-'
              'everything dump written into the MAIN run log (default 0.5).',
     )
+    # Flag of the time limit.
     parser.add_argument(
         '--max-plan-time',
         type=float,
@@ -431,6 +474,7 @@ def _promote_default_scene_for_counts(args):
 
 
 def _check_n_hidden(args, parser):
+    # The --n-hidden checks announced in _promote_default_scene_for_counts.
     if args.n_hidden > 0:
         if args.scene not in ('scalability',):
             parser.error(
