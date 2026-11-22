@@ -725,6 +725,120 @@ def partition_extent(objects, target_extent=None):
     return max_extent
 
 
+def _at_home(st, joints) -> bool:
+    """TAMPURA's at-home test on the 7-joint readback (D7 (v))."""
+    return bool(np.allclose(np.asarray(joints, dtype=float),
+                            np.asarray(st.setup.planner.home_config.joint_positions,
+                                       dtype=float),
+                            rtol=1e-4, atol=1e-4))
+
+
+def _readback_config(st, env, joints, name):
+    """A readback configuration; while holding (D7 (iv) on) it carries
+        the held body as cargo."""
+    if (st.opts.held_cargo_resolve and st.hand.held_body_id is not None
+            and st.hand.held_grasp_xy is not None):
+        _hbd = st.setup.registry.get_boxel(st.setup.body_id_to_name.get(st.hand.held_body_id))
+        if _hbd is not None:
+            return held_cargo_config(
+                joints, name, env, st.hand.held_body_id,
+                (np.asarray(_hbd.min_corner, dtype=float),
+                 np.asarray(_hbd.max_corner, dtype=float)),
+                st.hand.held_grasp_xy)
+    return RobotConfig(joint_positions=np.asarray(joints), name=name)
+
+
+def _integrity_after(st, env, label: str) -> bool:
+    """Run the world-integrity monitor after an executed action and
+        react (#P2 (a)): a goal-critical object that left the belief
+        (knocked off the table / lost) ends the episode honestly; any
+        other belief change with an empty hand breaks the plan for a
+        replan (the loop's reactive replanning on an unexpected
+        observation); while holding, the plan continues and the next
+        release observation and replan absorb it.  Returns True when
+        the dispatcher should break out of the plan.
+        """
+    _held_name = (st.setup.body_id_to_name.get(st.hand.held_body_id)
+                  if st.hand.held_body_id is not None else None)
+    events, _dets, _render = world_integrity_check(
+        env=env, registry=st.setup.registry, belief=st.setup.belief, viz=st.setup.viz,
+        shadows=st.setup.shadows, occluders=st.setup.occluders,
+        shadow_occluder_map=st.setup.shadow_occluder_map,
+        boxel_centers=st.setup.boxel_centers, on_relations=st.setup.on_relations,
+        held_name=_held_name, label=label)
+    # Review 2026-09-19: this render is an observation of the whole
+    # workspace like the sense render — a body it shows for the
+    # first time (a target uncovered by a knocked-away occluder)
+    # enters the belief here, not only at the next sense.  A body
+    # partly behind the arm in this render is left for a clearer one
+    # (round 2: a first registration from a sliver made a wrong box).
+    _registered = register_new_detections(
+        env=env, registry=st.setup.registry, belief=st.setup.belief, viz=st.setup.viz,
+        detections=_dets, target_name=st.setup.target_name, shadows=st.setup.shadows,
+        occluders=st.setup.occluders, shadow_occluder_map=st.setup.shadow_occluder_map,
+        boxel_centers=st.setup.boxel_centers, boxel_to_pybullet=st.setup.boxel_to_pybullet,
+        object_body_ids=st.setup.object_body_ids,
+        skip_names=frozenset([_held_name] if _held_name else []),
+        render=_render, held_body_id=st.hand.held_body_id)
+    for e in events:
+        e["plan"] = st.counts.plan_count
+    st.counts.integrity_events.extend(events)
+    if not events and not _registered:
+        return False
+    # The motion planner's world follows the belief at once (the
+    # runtime plan_motion re-solve runs before the next sync): a body
+    # registered a moment ago was parked below the table until now.
+    env.sync_to_plan_client(held_body_id=st.hand.held_body_id, registry=st.setup.registry)
+    knocked = {e["object"] for e in events if e["kind"] == "knocked_off_table"}
+    critical = knocked & set(st.setup.planner_target_objects)
+    if critical:
+        st.ending.exit_reason = "knocked_off_table"
+        st.ending.episode_over = True
+        print(f"  ERROR: goal-critical object(s) {sorted(critical)} fell "
+              f"off the table after {label} — ending the episode "
+              f"honestly (#P2).")
+        return True
+    # A LOST goal object (its believed region observed empty) is not
+    # gone: it may resurface through re-detection, so the loop goes
+    # on; if it never does, the ending is reported as target_lost,
+    # not as an exhausted search.  Repeated disturbances of one body
+    # stop forcing replans after the third within one plan (the
+    # belief is updated regardless, the plan runs on, and the
+    # suppression is printed); a registration counts as a change.
+    if {e["object"] for e in events if e["kind"] == "lost"} & set(st.setup.planner_target_objects):
+        st.ending.target_lost_seen = True
+    _replan = bool(_registered)
+    for e in events:
+        if e["kind"] == "disturbed":
+            st.strikes.disturbed_counts[e["object"]] = st.strikes.disturbed_counts.get(e["object"], 0) + 1
+            if st.strikes.disturbed_counts[e["object"]] <= 3:
+                _replan = True
+            else:
+                print(f"  [integrity] {e['object']} disturbed "
+                      f"{st.strikes.disturbed_counts[e['object']]} times in this plan — "
+                      f"belief updated, no further replan for it this plan")
+        else:
+            _replan = True
+    if _replan and st.hand.held_body_id is None:
+        print(f"  belief changed after {label} — replanning "
+              f"(#P2 integrity)")
+        return True
+    return False
+
+
+def _loop_done(st) -> bool:
+    # Holding goals stop when the target body is held; stack goals
+    # stop when every (on a b) clause is satisfied (audit #30).
+    # #P4 B3(d), D7 (vi): with a declared goal configuration the
+    # goal test also needs the last move to q_home to have passed
+    # the at-home test.
+    if st.opts.goal_kind == 'holding':
+        return (st.hand.held_body_id is not None
+                and st.hand.held_body_id == st.setup._target_body_id
+                and (st.arm.at_home_ok or not st.opts.goal_at_home))
+    return goal_satisfied(st.setup.goal, st.setup.on_relations)
+
+
 def main(gui=True, run_logger=None, scene_config=None,
          draw_boxel_overlays=True, show_free=False,
          goal_kind='holding', stack_height=2,
@@ -1719,113 +1833,15 @@ def main(gui=True, run_logger=None, scene_config=None,
     st.arm.home_misses = 0
     st.arm.readback_count = 0
 
-    def _at_home(joints) -> bool:
-        """TAMPURA's at-home test on the 7-joint readback (D7 (v))."""
-        return bool(np.allclose(np.asarray(joints, dtype=float),
-                                np.asarray(st.setup.planner.home_config.joint_positions,
-                                           dtype=float),
-                                rtol=1e-4, atol=1e-4))
-
-    def _readback_config(joints, name):
-        """A readback configuration; while holding (D7 (iv) on) it carries
-        the held body as cargo."""
-        if (held_cargo_resolve and st.hand.held_body_id is not None
-                and st.hand.held_grasp_xy is not None):
-            _hbd = st.setup.registry.get_boxel(st.setup.body_id_to_name.get(st.hand.held_body_id))
-            if _hbd is not None:
-                return held_cargo_config(
-                    joints, name, env, st.hand.held_body_id,
-                    (np.asarray(_hbd.min_corner, dtype=float),
-                     np.asarray(_hbd.max_corner, dtype=float)),
-                    st.hand.held_grasp_xy)
-        return RobotConfig(joint_positions=np.asarray(joints), name=name)
-
     if goal_at_home:
         # D7 (v) at the start: the initial configuration is q_home only
         # if the readback passes the at-home test.
         _q0 = arm_joint_positions(st.setup.robot_id)
-        if not _at_home(_q0):
+        if not _at_home(st, _q0):
             st.arm.current_config = RobotConfig(joint_positions=_q0,
                                          name="q_readback_0")
             print(f"  [D7] initial arm readback is not at q_home "
                   f"(max |dq| {np.max(np.abs(_q0 - st.setup.planner.home_config.joint_positions)):.2e} rad)")
-
-    def _integrity_after(label: str) -> bool:
-        """Run the world-integrity monitor after an executed action and
-        react (#P2 (a)): a goal-critical object that left the belief
-        (knocked off the table / lost) ends the episode honestly; any
-        other belief change with an empty hand breaks the plan for a
-        replan (the loop's reactive replanning on an unexpected
-        observation); while holding, the plan continues and the next
-        release observation and replan absorb it.  Returns True when
-        the dispatcher should break out of the plan.
-        """
-        _held_name = (st.setup.body_id_to_name.get(st.hand.held_body_id)
-                      if st.hand.held_body_id is not None else None)
-        events, _dets, _render = world_integrity_check(
-            env=env, registry=st.setup.registry, belief=st.setup.belief, viz=st.setup.viz,
-            shadows=st.setup.shadows, occluders=st.setup.occluders,
-            shadow_occluder_map=st.setup.shadow_occluder_map,
-            boxel_centers=st.setup.boxel_centers, on_relations=st.setup.on_relations,
-            held_name=_held_name, label=label)
-        # Review 2026-09-19: this render is an observation of the whole
-        # workspace like the sense render — a body it shows for the
-        # first time (a target uncovered by a knocked-away occluder)
-        # enters the belief here, not only at the next sense.  A body
-        # partly behind the arm in this render is left for a clearer one
-        # (round 2: a first registration from a sliver made a wrong box).
-        _registered = register_new_detections(
-            env=env, registry=st.setup.registry, belief=st.setup.belief, viz=st.setup.viz,
-            detections=_dets, target_name=st.setup.target_name, shadows=st.setup.shadows,
-            occluders=st.setup.occluders, shadow_occluder_map=st.setup.shadow_occluder_map,
-            boxel_centers=st.setup.boxel_centers, boxel_to_pybullet=st.setup.boxel_to_pybullet,
-            object_body_ids=st.setup.object_body_ids,
-            skip_names=frozenset([_held_name] if _held_name else []),
-            render=_render, held_body_id=st.hand.held_body_id)
-        for e in events:
-            e["plan"] = st.counts.plan_count
-        st.counts.integrity_events.extend(events)
-        if not events and not _registered:
-            return False
-        # The motion planner's world follows the belief at once (the
-        # runtime plan_motion re-solve runs before the next sync): a body
-        # registered a moment ago was parked below the table until now.
-        env.sync_to_plan_client(held_body_id=st.hand.held_body_id, registry=st.setup.registry)
-        knocked = {e["object"] for e in events if e["kind"] == "knocked_off_table"}
-        critical = knocked & set(st.setup.planner_target_objects)
-        if critical:
-            st.ending.exit_reason = "knocked_off_table"
-            st.ending.episode_over = True
-            print(f"  ERROR: goal-critical object(s) {sorted(critical)} fell "
-                  f"off the table after {label} — ending the episode "
-                  f"honestly (#P2).")
-            return True
-        # A LOST goal object (its believed region observed empty) is not
-        # gone: it may resurface through re-detection, so the loop goes
-        # on; if it never does, the ending is reported as target_lost,
-        # not as an exhausted search.  Repeated disturbances of one body
-        # stop forcing replans after the third within one plan (the
-        # belief is updated regardless, the plan runs on, and the
-        # suppression is printed); a registration counts as a change.
-        if {e["object"] for e in events if e["kind"] == "lost"} & set(st.setup.planner_target_objects):
-            st.ending.target_lost_seen = True
-        _replan = bool(_registered)
-        for e in events:
-            if e["kind"] == "disturbed":
-                st.strikes.disturbed_counts[e["object"]] = st.strikes.disturbed_counts.get(e["object"], 0) + 1
-                if st.strikes.disturbed_counts[e["object"]] <= 3:
-                    _replan = True
-                else:
-                    print(f"  [integrity] {e['object']} disturbed "
-                          f"{st.strikes.disturbed_counts[e['object']]} times in this plan — "
-                          f"belief updated, no further replan for it this plan")
-            else:
-                _replan = True
-        if _replan and st.hand.held_body_id is None:
-            print(f"  belief changed after {label} — replanning "
-                  f"(#P2 integrity)")
-            return True
-        return False
 
     # #P1 F29 (2026-09-18): a holding goal ends when the target IS HELD,
     # not when the belief says "found".  A sense that finds the target
@@ -1841,19 +1857,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                        if goal_kind == 'holding' and st.setup.target_name in env.objects
                        else None)
 
-    def _loop_done() -> bool:
-        # Holding goals stop when the target body is held; stack goals
-        # stop when every (on a b) clause is satisfied (audit #30).
-        # #P4 B3(d), D7 (vi): with a declared goal configuration the
-        # goal test also needs the last move to q_home to have passed
-        # the at-home test.
-        if goal_kind == 'holding':
-            return (st.hand.held_body_id is not None
-                    and st.hand.held_body_id == st.setup._target_body_id
-                    and (st.arm.at_home_ok or not goal_at_home))
-        return goal_satisfied(st.setup.goal, st.setup.on_relations)
-
-    while not _loop_done():
+    while not _loop_done(st):
         st.counts.plan_count += 1
         st.strikes.disturbed_counts.clear()   # the #P2 disturbance cap is per plan
         # M7 (Hani, 2026-11-20): a region suspended at the F9 give-up is
@@ -2272,7 +2276,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                         - np.asarray(traj.waypoints[0].joint_positions)))
                     if diff > 1e-2 or _cargo:
                         if _cargo:
-                            q1_runtime = _readback_config(
+                            q1_runtime = _readback_config(st, env, 
                                 st.arm.current_config.joint_positions,
                                 f"{st.arm.current_config.name}_runtime")
                             if not q1_runtime.held_body_ids:
@@ -2338,13 +2342,13 @@ def main(gui=True, run_logger=None, scene_config=None,
                             st.setup.robot_id, st.setup.planner.home_config.joint_positions,
                             int(home_hold_step_cap), gui=gui)
                     actual_joints = arm_joint_positions(st.setup.robot_id)
-                    st.arm.at_home_ok = _at_home(actual_joints)
+                    st.arm.at_home_ok = _at_home(st, actual_joints)
                     _max_err = float(np.max(np.abs(
                         actual_joints - np.asarray(
                             st.setup.planner.home_config.joint_positions, dtype=float))))
                     if st.arm.at_home_ok:
                         st.arm.home_misses = 0
-                        st.arm.current_config = _readback_config(actual_joints,
+                        st.arm.current_config = _readback_config(st, env, actual_joints,
                                                           q2.name)
                     else:
                         # M8 C1: q_home is also a sense view spot; a miss
@@ -2356,7 +2360,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                                 or i == len(st.round.plan) - 1):
                             st.arm.home_misses += 1
                         st.arm.readback_count += 1
-                        st.arm.current_config = _readback_config(
+                        st.arm.current_config = _readback_config(st, env, 
                             actual_joints, f"q_readback_{st.arm.readback_count}")
                     ledger_event('at_home_test', passed=st.arm.at_home_ok,
                                  max_abs_err=_max_err, hold_steps=_hold_steps,
@@ -2370,7 +2374,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                     actual_joints = np.array(
                         [p.getJointState(st.setup.robot_id, i)[0] for i in robot_model().arm_joints]
                     )
-                    st.arm.current_config = _readback_config(actual_joints, q2.name)
+                    st.arm.current_config = _readback_config(st, env, actual_joints, q2.name)
                 detect_execution_collisions(
                     st.setup.robot_id, env.client_id,
                     held_body_id=st.hand.held_body_id,
@@ -2421,7 +2425,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                     # The readback just taken carried the lost body as
                     # cargo; the same readback without it (the hand is
                     # empty now) starts the next plan.
-                    st.arm.current_config = _readback_config(
+                    st.arm.current_config = _readback_config(st, env, 
                         st.arm.current_config.joint_positions, st.arm.current_config.name)
                     audit_robot_held_state(
                         env, st.setup.robot_id, expected_held_body_id=None,
@@ -2441,7 +2445,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # #P2 (a): a transit is the action that most often
                 # disturbs bystanders (F18, F10) and nothing re-read the
                 # scene after it until now.
-                if _integrity_after(f"plan#{st.counts.plan_count} move({dest_boxel_id})"):
+                if _integrity_after(st, env, f"plan#{st.counts.plan_count} move({dest_boxel_id})"):
                     dispatch_end('integrity_replan')
                     break
 
@@ -2769,7 +2773,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                 # #P4 B3(d), D7 (iv): the cargo offset in xy is the plan's
                 # grasp; the post-pick readback carries the held body.
                 st.hand.held_grasp_xy = np.array(grasp.position[:2], dtype=float)
-                st.arm.current_config = _readback_config(
+                st.arm.current_config = _readback_config(st, env, 
                     st.arm.current_config.joint_positions, st.arm.current_config.name)
                 # #P1 F2: a successful pick proves the object is
                 # graspable from its current pose — reset its strike
@@ -2788,7 +2792,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                 print(f"    *** {pick_obj_name} PICKED UP! ***")
                 # #P2 (a): the descent and the lift can shove neighbours;
                 # the held object is excluded (F26).
-                if _integrity_after(f"plan#{st.counts.plan_count} pick({pick_obj_name})"):
+                if _integrity_after(st, env, f"plan#{st.counts.plan_count} pick({pick_obj_name})"):
                     dispatch_end('integrity_replan')
                     break
                 # Audit #48: clear the symbolic stack relation so the next
@@ -3102,7 +3106,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                     shadow_occluder_map=st.setup.shadow_occluder_map)
                 # #P2 (a): bystanders after the place (the placed object's
                 # own belief was just refreshed by the carve above).
-                if _integrity_after(f"plan#{st.counts.plan_count} place({obj_str})"):
+                if _integrity_after(st, env, f"plan#{st.counts.plan_count} place({obj_str})"):
                     dispatch_end('integrity_replan')
                     break
 
@@ -3352,7 +3356,7 @@ def main(gui=True, run_logger=None, scene_config=None,
                     save_image=True, on_relations=st.setup.on_relations,
                     shadow_occluder_map=st.setup.shadow_occluder_map)
                 # #P2 (a): bystanders and the tower after the stack.
-                if _integrity_after(f"plan#{st.counts.plan_count} stack({obj_str})"):
+                if _integrity_after(st, env, f"plan#{st.counts.plan_count} stack({obj_str})"):
                     dispatch_end('integrity_replan')
                     break
 
