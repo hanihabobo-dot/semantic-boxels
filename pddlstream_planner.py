@@ -803,6 +803,46 @@ class PDDLStreamPlanner:
                 for shadow_id in shadows:
                     init.append(('obj_at_boxel_KIF', boxel.id, shadow_id))
 
+        self._facts_view_blocking(init, shadows, look_on)
+
+        self._facts_placement_hides(init, held_obj)
+
+        self._facts_targets_and_tray(init, target_objects,
+                                     visible_target_locations, m8, look_on,
+                                     _pose_known)
+
+        self._facts_boxel_fits(init, target_objects, look_on)
+
+        self._facts_config_and_home(init, current_config)
+        self._facts_m8(init, shadows, target_objects, known_empty_shadows,
+                       current_config, held_obj, m8, look_on, _pose_known)
+        self.last_look_stats = {}
+        if look_on:
+            _look_facts = (self._look_facts_centred
+                           if self.look_mode == 'centred' else self._look_facts)
+            self.last_look_stats = _look_facts(
+                init, target_objects, shadows, held_obj, current_config,
+                _pose_known)
+        self._facts_hand(init, held_obj)
+
+        self._facts_stacking(init, on_relations, stackable_objects, held_obj)
+
+        self._check_home_pseudo_boxel(init)
+
+        if look_on:
+            # The look domain declares what it uses and nothing else; an
+            # emission it does not declare is a bug here, not data.
+            import look_domain
+            declared = set(look_domain.declared_predicates(self.domain_pddl))
+            undeclared = sorted({str(f[0]) for f in init} - declared)
+            if undeclared:
+                raise ValueError(f"look mode: init facts for predicates the "
+                                 f"look domain does not declare: {undeclared}")
+
+        random.shuffle(init)
+        return init
+
+    def _facts_view_blocking(self, init, shadows, look_on):
         # Geometric facts: blocks_view_at(occ, occ_current_boxel, shadow).
         # shadow_occluder_map comes from compute_shadow_blockers' census
         # over the registry, so a listed blocker blocks the shadow from
@@ -884,43 +924,6 @@ class PDDLStreamPlanner:
             # both create_problem and export_problem_pddl — printing here
             # would double every line).
             self._last_egregious_triples = sorted(egregious_triples)
-
-        self._facts_placement_hides(init, held_obj)
-
-        self._facts_targets_and_tray(init, target_objects,
-                                     visible_target_locations, m8, look_on,
-                                     _pose_known)
-
-        self._facts_boxel_fits(init, target_objects, look_on)
-
-        self._facts_config_and_home(init, current_config)
-        self._facts_m8(init, shadows, target_objects, known_empty_shadows,
-                       current_config, held_obj, m8, look_on, _pose_known)
-        self.last_look_stats = {}
-        if look_on:
-            _look_facts = (self._look_facts_centred
-                           if self.look_mode == 'centred' else self._look_facts)
-            self.last_look_stats = _look_facts(
-                init, target_objects, shadows, held_obj, current_config,
-                _pose_known)
-        self._facts_hand(init, held_obj)
-
-        self._facts_stacking(init, on_relations, stackable_objects, held_obj)
-
-        self._check_home_pseudo_boxel(init)
-
-        if look_on:
-            # The look domain declares what it uses and nothing else; an
-            # emission it does not declare is a bug here, not data.
-            import look_domain
-            declared = set(look_domain.declared_predicates(self.domain_pddl))
-            undeclared = sorted({str(f[0]) for f in init} - declared)
-            if undeclared:
-                raise ValueError(f"look mode: init facts for predicates the "
-                                 f"look domain does not declare: {undeclared}")
-
-        random.shuffle(init)
-        return init
 
     def _facts_placement_hides(self, init, held_obj):
         # F31 (2026-09-19): a placement must not hide a KNOWN body from
