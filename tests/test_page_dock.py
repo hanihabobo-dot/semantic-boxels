@@ -418,6 +418,62 @@ try {
 
 
 @needs_pwsh
+def test_a_holders_own_log_goes_after_14_days_and_the_launcher_names_only_this_holders():
+    """Nobody starts page_dock.<a process number>.log anew, so such files
+    stayed for good, and one whose number came round again would have been
+    named by the launcher in place of the file that holder wrote (review r4,
+    third read, finding 6).  The holder removes the ones not written to for
+    14 days: files of exactly that name in the log's folder and nothing
+    else, each removal a line of its log.  The launcher takes such a file
+    for this holder's only when it was written since this holder started;
+    a file that is not there counts as written in 1601.  On a Windows
+    folder that the script makes and takes away again."""
+    script = r"""
+$ErrorActionPreference = 'Stop'
+$me = Join-Path $PSHOME 'pwsh.exe'
+$dir = Join-Path ([System.IO.Path]::GetTempPath()) ('sb_page_dock_test_' + [guid]::NewGuid().ToString('N'))
+$null = New-Item -ItemType Directory -Path $dir
+try {
+    $log = Join-Path $dir 'page_dock.log'
+    $age = [ordered]@{ 'page_dock.111.log' = 15; 'page_dock.222.log' = 13; 'page_dock.log.old' = 15
+                       'page_dock.x1.log' = 15; 'other.333.log' = 15; 'page_dock.444.log.txt' = 15; 'run.log' = 15 }
+    foreach ($n in $age.Keys) {
+        Set-Content -LiteralPath (Join-Path $dir $n) -Value "a line of $n" -Encoding utf8
+        (Get-Item -LiteralPath (Join-Path $dir $n)).LastWriteTime = (Get-Date).AddDays(-$age[$n])
+    }
+    $started = Get-Date
+    & $me -NoProfile -File '%s' -WaitSeconds 1 -PageWord nosuchword -PortFrom 8799 -PortTo 8799 -Log $log
+    "code=$LASTEXITCODE"
+    Get-ChildItem -LiteralPath $dir -File | Sort-Object Name | ForEach-Object { "file=$($_.Name)" }
+    Get-Content -LiteralPath $log | ForEach-Object { "log>$_" }
+    # the launcher's question of a file of that name, as run.ps1 asks it
+    foreach ($n in 'page_dock.222.log', 'page_dock.log', 'nosuch.999.log') {
+        "since=$n=" + ([System.IO.File]::GetLastWriteTime((Join-Path $dir $n)) -ge $started)
+    }
+} finally { Remove-Item -LiteralPath $dir -Recurse -Force }
+""" % _win(DOCK_PS1)
+    proc = subprocess.run([_PWSH, '-NoProfile', '-NonInteractive', '-Command', script],
+                          capture_output=True, text=True, timeout=300, cwd=str(ROOT))
+    assert proc.returncode == 0, proc.stderr
+    out = proc.stdout.splitlines()
+    assert 'code=3' in out, proc.stdout + proc.stderr
+    assert sorted(ln[5:] for ln in out if ln.startswith('file=')) == [
+        'other.333.log', 'page_dock.222.log', 'page_dock.444.log.txt', 'page_dock.log', 'page_dock.log.old',
+        'page_dock.x1.log', 'run.log']
+    said = [ln for ln in out if ln.startswith('log>')]
+    removed = [ln for ln in said if ' removed ' in ln]
+    assert len(removed) == 1 and 'page_dock.111.log, an earlier holder' in removed[0], said
+    assert 'the holder of the page starts' in said[0]
+    assert [ln for ln in out if ln.startswith('since=')] == [
+        'since=page_dock.222.log=False', 'since=page_dock.log=True', 'since=nosuch.999.log=False']
+    ps = RUN_PS1.read_text(encoding='utf-8')
+    assert ps.index('$holderAt = Get-Date') < ps.index('$holder = Start-Process')
+    assert ('try { $itsOwn = [System.IO.File]::GetLastWriteTime($wrote) -ge $holderAt } catch { $itsOwn = $false }'
+            in ps)
+    assert 'if (-not $itsOwn) { $wrote = $holderLog }' in ps
+
+
+@needs_pwsh
 def test_loose_page_changes_nothing_of_the_runs_command():
     """-LoosePage is the launcher's own: the run asks for the page as before."""
     win = _win(RUN_PS1)

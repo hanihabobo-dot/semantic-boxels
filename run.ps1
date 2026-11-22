@@ -292,6 +292,8 @@ function Test-PageShown([string]$title, [bool]$whole) {
 # the new run by itself (it keeps asking its address), so no second window is opened for it.
 # $own: only a window of the page's own counts as open (the holder never takes a browser
 # window with tabs); without Edge there is no such window, and a tab that shows the page does.
+# It is called while the run draws its console, so it says nothing itself: when no browser
+# starts it hands back the one sentence about it, which the caller keeps for after the run.
 function Open-Page([string]$url, [bool]$own) {
     $title = 'Semantic Boxels (page ' + ([uri]$url).Port + ')'
     if (Test-PageShown $title $own) { return }
@@ -301,7 +303,7 @@ function Open-Page([string]$url, [bool]$own) {
     } catch {
         if ($own -and (Test-PageShown $title $false)) { return }
         try { Start-Process $url } catch {
-            Write-Host "run: the page did not open ($($_.Exception.Message)); it is at $url" -ForegroundColor Yellow
+            return "run: the page did not open ($($_.Exception.Message)); it is at $url"
         }
     }
 }
@@ -349,6 +351,7 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
     $viewerAt = $null
     $pageWord = $r.Page     # the page is looked for until its server answers (the run may wait for the lock first)
     $holder = $null
+    $holderAt = $null
     $holderLog = Join-Path $PSScriptRoot 'logs\page_dock.log'
     # What the launcher has to say while the run goes on is kept here and said after the run:
     # the run's console redraws its live rows ten times a second from where the cursor stands
@@ -367,6 +370,7 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
                 $holdArgs = @('-NoProfile', '-File', ('"' + (Join-Path $PSScriptRoot 'tools/page_dock.ps1') + '"'), '-WatchPid', $p.Id,
                               '-PageWord', $r.Page, '-PortFrom', $pagePorts[0], '-PortTo', $pagePorts[-1],
                               '-Log', ('"' + $holderLog + '"'), '-Trace')
+                $holderAt = Get-Date
                 $holder = Start-Process -FilePath (Join-Path $PSHOME 'pwsh.exe') -ArgumentList $holdArgs -WindowStyle Hidden -PassThru
                 $null = $holder.Handle      # keeps the handle: HasExited and ExitCode stay readable
             } catch {
@@ -416,9 +420,13 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
                         7 { 'no browser window of its own showed the page' }
                         default { 'the holder stopped on an error' }
                     }
-                    # the log this holder wrote: a file of its own when the first was in use (page_dock.ps1)
+                    # the log this holder wrote: a file of its own when the first was in use
+                    # (page_dock.ps1).  A file of that name last written before this holder started
+                    # is an earlier holder's with the same process number, not this one's (a file
+                    # that is not there counts as written in 1601).
                     $wrote = [System.IO.Path]::ChangeExtension($holderLog, "$($holder.Id).log")
-                    if (-not (Test-Path -LiteralPath $wrote)) { $wrote = $holderLog }
+                    try { $itsOwn = [System.IO.File]::GetLastWriteTime($wrote) -ge $holderAt } catch { $itsOwn = $false }
+                    if (-not $itsOwn) { $wrote = $holderLog }
                     $late.Add("run: the page was not held against the window: $why (the holder's exit code $($holder.ExitCode)). " +
                               "It stayed a window of its own; the holder's log is $wrote")
                 }
@@ -435,7 +443,11 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
                 # A failure here never touches the run.
                 try {
                     $pageUrl = Find-Page $pageWord
-                    if ($pageUrl) { $pageWord = $null; Open-Page $pageUrl ([bool]$holder) }
+                    if ($pageUrl) {
+                        $pageWord = $null
+                        $said = Open-Page $pageUrl ([bool]$holder)
+                        if ($said) { $late.Add("$said") }
+                    }
                 } catch { $pageWord = $null }
             }
             if ($Headless -or $ended) { continue }

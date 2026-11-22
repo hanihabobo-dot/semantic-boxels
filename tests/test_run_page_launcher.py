@@ -195,16 +195,40 @@ def test_nothing_is_written_to_the_console_while_the_run_draws_in_it():
     from where the cursor stands and clearing to the end of the screen
     (console_screen.py).  A line the launcher writes in between is wiped at
     once and leaves stale rows of the block above it (review r4, post-review
-    finding A).  So the launcher's loop writes nothing: what it has to say
-    there (the page was not held, the camera window ended at once) is kept
-    and said in the finally, after the run."""
+    finding A).  So the launcher's loop writes nothing, and neither does a
+    function of the launcher that the loop calls (Open-Page wrote one line
+    itself when no browser started: the third read's finding 5): what there
+    is to say (the page was not held, the camera window ended at once, the
+    page did not open) is kept and said in the finally, after the run."""
     ps = RUN_PS1.read_text(encoding='utf-8')
     start = ps.index('while (-not $p.HasExited) {')
     loop = ps[start:ps.index('} finally {', start)]
-    for writer in ('Write-Host', '[Console]::', 'Write-Output', 'Write-Warning', 'Write-Error'):
+    writers = ('Write-Host', '[Console]::', 'Write-Output', 'Write-Warning', 'Write-Error', 'Write-Information')
+    for writer in writers:
         assert writer not in loop, writer
-    assert loop.count('$late.Add(') == 2
+    assert loop.count('$late.Add(') == 3
     assert 'the camera window ended at once' in loop and 'the page was not held against the window' in loop
+    # the launcher's own functions that the loop reaches, through one another too
+    names = re.findall(r'^function ([\w-]+)\(', ps, re.M)
+
+    def body(name):
+        at = ps.index('function %s(' % name)
+        return ps[at:ps.index('\n}\n', at)]
+
+    reached, texts = set(), [loop]
+    while texts:
+        text = texts.pop()
+        for name in names:
+            if name not in reached and re.search(r'(?<![\w-])%s(?![\w-])' % re.escape(name), text):
+                reached.add(name)
+                texts.append(body(name))
+    assert reached == {'Find-Page', 'Open-Page', 'Test-PageShown'}
+    for name in sorted(reached):
+        for writer in writers:
+            assert writer not in body(name), (name, writer)
+    # Open-Page's one sentence is handed back and kept
+    assert 'return "run: the page did not open (' in body('Open-Page')
+    assert '$said = Open-Page $pageUrl ([bool]$holder)' in loop and 'if ($said) { $late.Add("$said") }' in loop
     closing = ps[ps.index('} finally {', start):ps.index('$code = $p.ExitCode', start)]
     assert 'foreach ($line in $late) { [Console]::Out.WriteLine(' in closing
     # the console's way of redrawing, which this rests on
@@ -240,6 +264,29 @@ def test_a_page_window_left_open_is_looked_for_among_all_windows():
     assert "[PageDock]::WholeTitle = $whole" in shown and "[PageDock]::FindPage($title, '') -ne 0" in shown
     assert 'catch { return $false }' in shown
     assert 'Open-Page $pageUrl ([bool]$holder)' in ps
+
+
+@needs_pwsh
+def test_open_page_hands_its_sentence_back_and_writes_nothing():
+    """Open-Page itself, with stand-ins for what it calls, so that no browser
+    starts and no window opens: when neither Edge nor a default browser
+    starts, the one sentence is what it gives back and nothing reaches the
+    console (all streams are read); when a browser starts it gives nothing
+    back."""
+    script = (
+        "function Test-PageShown { $false }; "
+        "function Get-ItemProperty { throw 'no Edge here' }; "
+        "function Start-Process { if ($script:starts) { $script:asked = \"$args\" } else { throw 'no browser here' } }; "
+        + _function('Open-Page') +
+        "; $script:starts = $false; $a = Open-Page 'http://127.0.0.1:8765/' $true; \"none=[$a]\""
+        "; $script:starts = $true; $b = Open-Page 'http://127.0.0.1:8765/' $true; \"some=[$b] asked=[$script:asked]\"")
+    proc = subprocess.run([_PWSH, '-NoProfile', '-NonInteractive', '-Command', script],
+                          capture_output=True, text=True, timeout=300, cwd=str(ROOT))
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stderr == ''
+    assert proc.stdout.splitlines() == [
+        'none=[run: the page did not open (no browser here); it is at http://127.0.0.1:8765/]',
+        'some=[] asked=[http://127.0.0.1:8765/]']
 
 
 @needs_pwsh

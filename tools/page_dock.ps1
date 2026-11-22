@@ -45,7 +45,8 @@
 # -Width, -MinWidth: the page's width and the least room it takes, in pixels at 100 % scaling.
 # -WatchPid 0 (no run to watch): it gives up after -WaitSeconds without the page or the windows.
 # -Log: the file is started anew (while another program has it open, the log goes to
-# <name>.<this process>.log beside it); -Trace adds every report of Windows about the two
+# <name>.<this process>.log beside it; such files of earlier holders are removed once they
+# have not been written to for 14 days); -Trace adds every report of Windows about the two
 # windows.
 # Exit code: 0 after holding; 2 the run ended before its page or its windows came; 3 gave up
 # (no run to watch); 4 an error of this script (the log has it); 5 more than one simulator window
@@ -101,6 +102,7 @@ if ($Log) {
     # which run.ps1 looks for when it names the holder's log.  A log that cannot be written at
     # all never stops the holder.
     $Log = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Log)
+    $given = $Log
     $starts = "the holder of the page starts ($(Get-Date -Format 'yyyy-MM-dd')): run process $WatchPid, word '$PageWord'"
     try { Start-Log $Log $starts }
     catch {
@@ -108,6 +110,23 @@ if ($Log) {
         $Log = [System.IO.Path]::ChangeExtension($first, "$PID.log")
         try { Start-Log $Log ($starts + "; $first is left alone ($($_.Exception.Message))") } catch { $Log = '' }
     }
+    # A file of a holder's own, <name>.<a process number>.log, is started anew by nobody.  The
+    # ones of earlier holders that have not been written to for 14 days are removed here: only
+    # files of exactly that name in the log's folder, this holder's own aside; one that cannot
+    # be removed stays, and each removal is a line of the log.
+    try {
+        $ownName = '^' + [regex]::Escape([System.IO.Path]::GetFileNameWithoutExtension($given)) + '\.\d+\.log$'
+        $before = (Get-Date).AddDays(-14)
+        foreach ($old in [System.IO.Directory]::GetFiles([System.IO.Path]::GetDirectoryName($given))) {
+            if ([System.IO.Path]::GetFileName($old) -notmatch $ownName -or $old -eq $Log) { continue }
+            $written = [System.IO.File]::GetLastWriteTime($old)
+            if ($written -ge $before) { continue }
+            try {
+                [System.IO.File]::Delete($old)
+                Say "removed $old, an earlier holder's own log last written on $($written.ToString('yyyy-MM-dd'))"
+            } catch { }
+        }
+    } catch { }
 }
 trap {
     Say "ERROR, the holder ends: $($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))"
