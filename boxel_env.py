@@ -83,6 +83,7 @@ class BoxelTestEnv(WorldPlacement):
     - Oracle functions for object detection and pose estimation
     """
     
+    # Camera defaults (image_width to far_plane): origin not known; the bridge overrides all five.
     def __init__(
         self,
         gui: bool = True,
@@ -138,8 +139,10 @@ class BoxelTestEnv(WorldPlacement):
         self.far_plane = far_plane
         
         # Set default camera position
+        # Origin not known.  Also _DEFAULT_SEMANTIC_EYE and its comment; they must stay equal.
         if camera_position is None:
             camera_position = np.array([0.1, -0.8, 0.7])
+        # Origin not known.  Also _DEFAULT_SEMANTIC_TARGET and its comment; they must stay equal.
         if camera_target is None:
             camera_target = np.array([0.1, 0.0, 0.5])
         if camera_up is None:
@@ -190,6 +193,7 @@ class BoxelTestEnv(WorldPlacement):
         # caller's)
         if not self._adopted:
             p.resetSimulation(physicsClientId=self.client_id)
+            # Standard value.  Also the plan client below and reset(); they must stay equal.
             p.setGravity(0, 0, -9.81, physicsClientId=self.client_id)
             p.setRealTimeSimulation(0, physicsClientId=self.client_id)
             p.setAdditionalSearchPath(pybullet_data.getDataPath(),
@@ -216,6 +220,7 @@ class BoxelTestEnv(WorldPlacement):
         # boundary; execution-side code keeps using the GUI ids unchanged.
         self.plan_client_id = p.connect(p.DIRECT)
         p.resetSimulation(physicsClientId=self.plan_client_id)
+        # Standard value.  Also our own world above and reset(); they must stay equal.
         p.setGravity(0, 0, -9.81, physicsClientId=self.plan_client_id)
         p.setRealTimeSimulation(0, physicsClientId=self.plan_client_id)
         p.setAdditionalSearchPath(pybullet_data.getDataPath(),
@@ -293,6 +298,7 @@ class BoxelTestEnv(WorldPlacement):
             self.debug_camera_pitch = _DEFAULT_DEBUG_VIS_PITCH
             self.debug_camera_target = np.array(_DEFAULT_DEBUG_VIS_TARGET, dtype=float)
         else:
+            # Fallback debug view (distance, yaw, pitch below): origin not known.
             self.debug_camera_distance = 1.5
             self.debug_camera_yaw = 45.0
             self.debug_camera_pitch = -30.0
@@ -441,6 +447,7 @@ class BoxelTestEnv(WorldPlacement):
 
     # Where the plan client parks a body the belief does not hold (#P1
     # WP2c): far below the workspace, out of every reachable pose.
+    # The reason is above; no measurement on record.
     _PLAN_CLIENT_PARK = [5.0, 5.0, -5.0]
 
     def sync_to_plan_client(self, held_body_id: Optional[int] = None,
@@ -518,6 +525,7 @@ class BoxelTestEnv(WorldPlacement):
         """Set up the simulation scene with plane, table, robot, and objects."""
         # Load ground plane
         plane_id = self._mirror_load_urdf("plane.urdf", [0, 0, 0], [0, 0, 0, 1])
+        # The plane's size (10, 10, 0.1) is a record size, origin not known.
         self.objects["plane"] = ObjectInfo(
             object_id=plane_id, name="plane",
             position=np.array([0, 0, 0]), orientation=np.array([0, 0, 0, 1]),
@@ -525,18 +533,22 @@ class BoxelTestEnv(WorldPlacement):
         )
 
         # Load table
+        # Table at (0.5, 0.0) lowered by 0.3: origin of the offset not known.
         table_z_offset = -0.3
         table_position = [0.5, 0.0, table_z_offset]
         table_id = self._mirror_load_urdf("table/table.urdf", table_position,
                                           [0, 0, 0, 1], useFixedBase=True)
+        # 0.625 is the height of pybullet_data's table mesh.
         self.table_surface_height = 0.625 + table_z_offset
 
         # XY bounds for voxelization / shadows / free-space (logical workspace).
         # Table mesh stays centered at [0.5, 0]; this window is shifted −0.4 m
         # in X so the voxel grid encloses objects near the robot without clipping.
+        # The reason is above (the shift toward the robot, fix #17); no measurement on record.
         self.table_x_range = (-0.4, 0.6)
         self.table_y_range = (-0.5, 0.5)
 
+        # The table's size (1.0, 1.0, 0.8) is a record size, origin not known.
         self.objects["table"] = ObjectInfo(
             object_id=table_id, name="table",
             position=np.array(table_position), orientation=np.array([0, 0, 0, 1]),
@@ -544,6 +556,7 @@ class BoxelTestEnv(WorldPlacement):
         )
 
         # Load robot
+        # Reason as for the window above.  Also _ROBOT_BASE_XY; they must stay equal.
         robot_pos = [-0.4, 0.0, 0.0]
         robot_id = self._mirror_load_urdf("franka_panda/panda.urdf", robot_pos,
                                           [0, 0, 0, 1], useFixedBase=True)
@@ -562,6 +575,7 @@ class BoxelTestEnv(WorldPlacement):
         # capacity per pad under the 40 N close force, against ≤ 5 N of
         # object weight.  Physics client only — the DIRECT plan client is
         # used for collision queries, never contact simulation.
+        # Derived above.  Also tampura_bridge/task_spec.py (pad friction); they must stay equal.
         for finger_link in fingers:
             p.changeDynamics(robot_id, finger_link, lateralFriction=1.2,
                              physicsClientId=self.client_id)
@@ -576,6 +590,7 @@ class BoxelTestEnv(WorldPlacement):
         # grasp-path teleport.  sync_to_plan_client copies finger
         # joints before every plan; the plan client is mirrored here
         # anyway so the two worlds never start divergent.
+        # Reason above (the finger limit).  Also tampura_bridge/task_spec.py; they must stay equal.
         for fj in fingers:
             p.resetJointState(robot_id, fj, 0.04,
                               physicsClientId=self.client_id)
@@ -607,6 +622,7 @@ class BoxelTestEnv(WorldPlacement):
                 "%d, gearRatio %g, erp %g, maxForce %g N)", gear, self.client_id,
                 f1, f2, robot_utils.FINGER_GEAR_RATIO, robot_utils.FINGER_GEAR_ERP,
                 robot_utils.FINGER_GEAR_MAX_FORCE)
+        # The robot's size (0.5, 0.5, 0.8) is a record size, origin not known.
         self.objects["robot"] = ObjectInfo(
             object_id=robot_id, name="robot",
             position=np.array(robot_pos), orientation=np.array([0, 0, 0, 1]),
@@ -629,6 +645,7 @@ class BoxelTestEnv(WorldPlacement):
         # Let objects settle under gravity after placement.
         # 10 steps at 240 Hz ≈ 0.04 s — sufficient for cubes on a flat
         # table to reach static equilibrium.
+        # The reason is above; no measurement on record for the 10 steps.
         for _ in range(10):
             p.stepSimulation(physicsClientId=self.client_id)
             telemetry.tick()
@@ -679,12 +696,14 @@ class BoxelTestEnv(WorldPlacement):
     # Panda's effective tabletop reach radius.  Used to keep random
     # placements inside the arm's workspace when constrain_to_reach=True.
     _ROBOT_BASE_XY = (-0.4, 0.0)
+    # The radius has a reason only (effective tabletop reach), no source on record.
     _PANDA_REACH_RADIUS = 0.65
 
     # Reach-constrained on-table window: intersection of the actual
     # table mesh, the Panda reach disk, and a small edge buffer.  Used
     # by ``stack_scene`` (and any scene with ``constrain_to_reach=True``)
     # where every cube must be both pickable AND a viable stack target.
+    # The derivation is above; no numbers on record for the two ranges.
     _SAFE_TABLE_X_RANGE = (-0.1, 0.70)
     _SAFE_TABLE_Y_RANGE = (-0.40, 0.40)
 
@@ -712,6 +731,7 @@ class BoxelTestEnv(WorldPlacement):
     # yellow target slot conflicts with this and needs to be moved when
     # enable_tray is opted in (random-placement scenes auto-reserve
     # via _create_targets).
+    # Correction: the tray stands at _TRAY_XY below today, not at (0.10, 0.40).
     _TRAY_XY = (-0.130, 0.380)
     _TRAY_SCALE = 0.4
     _TRAY_NAME = "tray"
@@ -1339,6 +1359,7 @@ class BoxelTestEnv(WorldPlacement):
             self.scene_config = scene_config
         for cid in (self.client_id, self.plan_client_id):
             p.resetSimulation(physicsClientId=cid)
+            # Standard value.  Also twice in __init__ (both clients); they must stay equal.
             p.setGravity(0, 0, -9.81, physicsClientId=cid)
             p.setRealTimeSimulation(0, physicsClientId=cid)
             p.setAdditionalSearchPath(pybullet_data.getDataPath(),
