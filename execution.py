@@ -3123,95 +3123,17 @@ def handle_sense_action(
                **_eye_extra})
 
     if sense_outcome == "found_target":
-        belief.mark_sensed(str(shadow_id), found=True)
-        print(f"    *** TARGET FOUND in {shadow_id}! "
-              f"({'detection' if _interior_found else 'ray-cast'}) ***")
-
-        # Audit #76: register an OBJECT boxel for the discovered target.
-        # Hidden targets have no OBJECT boxel at startup (they live inside
-        # a shadow region).  Without this hook, every subsequent _build_init
-        # rebuilds init from registry+belief and finds no (obj_at_boxel
-        # target ?) fact for the target — so any plan that breaks mid-
-        # execution (audit #40 stack physics failure, IK failure mid-pick)
-        # leaves the planner unable to ground a re-pick of the same target.
-        # PDDLStream then concludes "Stream plan: False" at complexity 3
-        # in ~1 s with sample_time=0 — the audit #76 freeze-mode failure.
-        # The contains_nontarget branch below already registers OBJECT
-        # boxels for discovered non-targets; this is the symmetric hook
-        # for targets.
-        target_obj_str = str(obj)
-        target_info = env.objects.get(target_obj_str)
-        if (target_info is not None
-                and registry.get_boxel(target_obj_str) is None):
-            t_bid = target_info.object_id
-            # #P1 step (3): the registered boxel comes from the SAME
-            # rendered observation that just found the target — no
-            # p.getAABB.  A target found through a sliver can render
-            # below DETECTION_MIN_PIXELS; it then stays unregistered
-            # this round (loud log) and the next observation localizes
-            # it — the pick that usually follows in the SAME plan uses
-            # the execution servo's own live re-aim, not this boxel.
-            t_det = sense_detections.get(target_obj_str)
-            # BF#65 (d) (never true with --interior-regions off): a target
-            # the grid caught while it lies under a standing cover is not
-            # registered either (register_new_detections has the why).
-            _cov = (interior_regions.standing_cover(registry, t_det.est_center)
-                    if t_det is not None else None)
-            if t_det is None:
-                print(f"      [step3-diag] {target_obj_str} found but "
-                      f"renders below the detection minimum — OBJECT "
-                      f"boxel NOT registered this round (audit #76 "
-                      f"hook deferred to the next observation).")
-            elif _cov is not None:
-                interior_regions.note_seen_under(
-                    target_obj_str, _cov[0], _cov[1], t_det.pixel_count)
-            else:
-                target_bd = BoxelData(
-                    id=target_obj_str,
-                    boxel_type=BoxelType.OBJECT,
-                    min_corner=np.array(t_det.est_min),
-                    max_corner=np.array(t_det.est_max),
-                    object_name=target_obj_str,
-                    is_occluder=False,
-                    on_surface=(
-                        "table"
-                        if t_det.est_min[2]
-                        <= env.table_surface_height + 0.01
-                        else None
-                    ),
-                    surface_z=env.table_surface_height,
-                )
-                registry.add_boxel(target_bd)
-                pose_belief.record_detection(
-                    target_bd, t_det, 'eye',
-                    detection_complete(
-                        env, t_det.est_min, t_det.est_max, t_det,
-                        (sense_depth_m, sense_seg, sense_view, sense_proj)),
-                    first=True)
-                boxel_centers[target_obj_str] = target_bd.center
-                object_body_ids[target_obj_str] = env.plan_body_id(t_bid)
-                boxel_to_pybullet[target_obj_str] = {
-                    'name': target_obj_str,
-                    'pybullet_id': t_bid,
-                    'position': np.array(t_det.est_center),
-                }
-                if viz is not None:
-                    viz.draw_boxel_data(target_bd)
-                print(f"      -> registered OBJECT boxel for "
-                      f"{target_obj_str} at the render estimate "
-                      f"(audit #76, step 3).")
-
-        _register_new_detections()
-        _lost = refresh_object_aabbs(
-            env, registry, viz, detections=sense_detections,
-            render=(sense_depth_m, sense_seg, sense_view, sense_proj),
-            check_lost=True)
-        if _lost:
-            retire_lost_objects(_lost, registry, viz, shadows,
-                                shadow_occluder_map, boxel_centers,
-                                occluders, belief,
-                                render=(sense_depth_m, sense_seg,
-                                        sense_view, sense_proj))
+        _sense_found_target(
+            env=env, registry=registry, belief=belief, viz=viz,
+            shadows=shadows, occluders=occluders,
+            shadow_occluder_map=shadow_occluder_map,
+            boxel_centers=boxel_centers, boxel_to_pybullet=boxel_to_pybullet,
+            object_body_ids=object_body_ids, obj=obj, shadow_id=shadow_id,
+            sense_detections=sense_detections, sense_seg=sense_seg,
+            sense_depth_m=sense_depth_m, sense_view=sense_view,
+            sense_proj=sense_proj,
+            _register_new_detections=_register_new_detections,
+            _interior_found=_interior_found)
         return ActionResult(continue_=not _interior_found,
                             reason="sense_found_target")
 
@@ -3306,6 +3228,104 @@ def handle_sense_action(
         _register_new_detections=_register_new_detections,
         blocked_fraction=blocked_fraction, blocked_bbox=blocked_bbox)
     return ActionResult(continue_=False, reason="sense_still_blocked")
+
+
+def _sense_found_target(
+    *,
+    env, registry, belief, viz, shadows, occluders, shadow_occluder_map,
+    boxel_centers, boxel_to_pybullet, object_body_ids, obj, shadow_id,
+    sense_detections, sense_seg, sense_depth_m, sense_view, sense_proj,
+    _register_new_detections, _interior_found,
+):
+    belief.mark_sensed(str(shadow_id), found=True)
+    print(f"    *** TARGET FOUND in {shadow_id}! "
+          f"({'detection' if _interior_found else 'ray-cast'}) ***")
+
+    # Audit #76: register an OBJECT boxel for the discovered target.
+    # Hidden targets have no OBJECT boxel at startup (they live inside
+    # a shadow region).  Without this hook, every subsequent _build_init
+    # rebuilds init from registry+belief and finds no (obj_at_boxel
+    # target ?) fact for the target — so any plan that breaks mid-
+    # execution (audit #40 stack physics failure, IK failure mid-pick)
+    # leaves the planner unable to ground a re-pick of the same target.
+    # PDDLStream then concludes "Stream plan: False" at complexity 3
+    # in ~1 s with sample_time=0 — the audit #76 freeze-mode failure.
+    # The contains_nontarget branch below already registers OBJECT
+    # boxels for discovered non-targets; this is the symmetric hook
+    # for targets.
+    target_obj_str = str(obj)
+    target_info = env.objects.get(target_obj_str)
+    if (target_info is not None
+            and registry.get_boxel(target_obj_str) is None):
+        t_bid = target_info.object_id
+        # #P1 step (3): the registered boxel comes from the SAME
+        # rendered observation that just found the target — no
+        # p.getAABB.  A target found through a sliver can render
+        # below DETECTION_MIN_PIXELS; it then stays unregistered
+        # this round (loud log) and the next observation localizes
+        # it — the pick that usually follows in the SAME plan uses
+        # the execution servo's own live re-aim, not this boxel.
+        t_det = sense_detections.get(target_obj_str)
+        # BF#65 (d) (never true with --interior-regions off): a target
+        # the grid caught while it lies under a standing cover is not
+        # registered either (register_new_detections has the why).
+        _cov = (interior_regions.standing_cover(registry, t_det.est_center)
+                if t_det is not None else None)
+        if t_det is None:
+            print(f"      [step3-diag] {target_obj_str} found but "
+                  f"renders below the detection minimum — OBJECT "
+                  f"boxel NOT registered this round (audit #76 "
+                  f"hook deferred to the next observation).")
+        elif _cov is not None:
+            interior_regions.note_seen_under(
+                target_obj_str, _cov[0], _cov[1], t_det.pixel_count)
+        else:
+            target_bd = BoxelData(
+                id=target_obj_str,
+                boxel_type=BoxelType.OBJECT,
+                min_corner=np.array(t_det.est_min),
+                max_corner=np.array(t_det.est_max),
+                object_name=target_obj_str,
+                is_occluder=False,
+                on_surface=(
+                    "table"
+                    if t_det.est_min[2]
+                    <= env.table_surface_height + 0.01
+                    else None
+                ),
+                surface_z=env.table_surface_height,
+            )
+            registry.add_boxel(target_bd)
+            pose_belief.record_detection(
+                target_bd, t_det, 'eye',
+                detection_complete(
+                    env, t_det.est_min, t_det.est_max, t_det,
+                    (sense_depth_m, sense_seg, sense_view, sense_proj)),
+                first=True)
+            boxel_centers[target_obj_str] = target_bd.center
+            object_body_ids[target_obj_str] = env.plan_body_id(t_bid)
+            boxel_to_pybullet[target_obj_str] = {
+                'name': target_obj_str,
+                'pybullet_id': t_bid,
+                'position': np.array(t_det.est_center),
+            }
+            if viz is not None:
+                viz.draw_boxel_data(target_bd)
+            print(f"      -> registered OBJECT boxel for "
+                  f"{target_obj_str} at the render estimate "
+                  f"(audit #76, step 3).")
+
+    _register_new_detections()
+    _lost = refresh_object_aabbs(
+        env, registry, viz, detections=sense_detections,
+        render=(sense_depth_m, sense_seg, sense_view, sense_proj),
+        check_lost=True)
+    if _lost:
+        retire_lost_objects(_lost, registry, viz, shadows,
+                            shadow_occluder_map, boxel_centers,
+                            occluders, belief,
+                            render=(sense_depth_m, sense_seg,
+                                    sense_view, sense_proj))
 
 
 def _localize_slivers(
