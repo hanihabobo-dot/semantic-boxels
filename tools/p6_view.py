@@ -60,7 +60,7 @@ def runner_source(arm):
     """The arm's own eval_runner source: A's is this checkout's, B's is the thesis commit's."""
     if arm == 'B':
         return git_show(THESIS, 'eval_runner.py'), f'eval_runner@{THESIS}'
-    with open(os.path.join(REPO, 'eval_runner.py'), encoding='utf-8') as f:
+    with open(os.path.join(REPO, 'evaluation', 'eval_runner.py'), encoding='utf-8') as f:
         return f.read(), 'eval_runner@checkout'
 
 
@@ -68,7 +68,9 @@ def cell_argv(arm, cell):
     """What the arm's own runner runs for a cell, without the interpreter:
     ['test_full_pipeline.py', '--no-gui', ...] (p6_run.py's way: through the runner's matrix expansion)."""
     src, label = runner_source(arm)
-    ns = {'__name__': 'p6_view_runner', '__file__': label}
+    # __package__ set: the runner's start-as-a-file line (the repository root onto sys.path, since the
+    # folder move) reads it and does nothing for a module that is not started as a file
+    ns = {'__name__': 'p6_view_runner', '__file__': label, '__package__': 'p6_view'}
     exec(compile(src, label, 'exec'), ns)
     cells = list(ns['iterate_matrix'](ps.as_matrix([cell])))
     if len(cells) != 1:

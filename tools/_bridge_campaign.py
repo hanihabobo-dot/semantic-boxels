@@ -54,7 +54,10 @@ STOP_RULE_COUNT = 3         # P4.6 HARNESS STOP RULE
 PER_RUN_GATES = ('G13', 'G19')
 HERE = os.path.abspath(__file__)
 sys.path.append(os.path.dirname(os.path.dirname(HERE)))   # the snapshot's root, last
-from world import world_counts  # noqa: E402  (TB-22: drops, collisions, clean success)
+try:                                     # the folders of the folder move (22 Nov 2026) ...
+    from world import world_counts  # noqa: E402  (TB-22: drops, collisions, clean success)
+except ImportError:                      # ... or a snapshot from before it: the module at the root
+    import world_counts  # noqa: E402
 
 # Their RolloutHistory is read in THEIR venv with nothing of ours on the
 # path (G6's convention); the reader prints one JSON line.  The pickle is
@@ -72,7 +75,9 @@ with open(pks[-1], 'rb') as f:
     h = pickle.load(f)
 ours = sorted(m for m in sys.modules
               if 'tampura_bridge' in m or m.split('.')[0] in
-              ('boxel_env', 'execution', 'perception', 'streams', 'robot_utils'))
+              ('boxel_env', 'execution', 'perception', 'streams', 'robot_utils',
+               # since the folder move our modules load as <folder>.<module>
+               'world', 'sensing', 'planning', 'acting', 'console', 'evaluation'))
 print(json.dumps({'history': True, 'pkl': pks[-1],
                   'rewards': [float(r) for r in h.rewards],
                   'time_deltas': [float(t) for t in h.time_deltas],
@@ -529,8 +534,11 @@ def squeeze_defaults(snapshot):
     the campaign record names the value every arm O episode ran with
     (BF#38, BF#41); None where a line is not found."""
     out = {}
+    ru = os.path.join(snapshot, 'acting', 'robot_utils.py')    # the folders of the folder move ...
+    if not os.path.isfile(ru):
+        ru = os.path.join(snapshot, 'robot_utils.py')          # ... or a snapshot from before it
     m = re.search(r'^GRIP_SQUEEZE\s*=\s*([0-9.eE+-]+)',
-                  read_text(os.path.join(snapshot, 'robot_utils.py')), re.M)
+                  read_text(ru), re.M)
     out['robot_utils_GRIP_SQUEEZE_m'] = float(m.group(1)) if m else None
     m = re.search(r"--grip-squeeze-mm'[^\n]*default=([0-9.eE+-]+)",
                   read_text(os.path.join(snapshot, 'tampura_bridge',

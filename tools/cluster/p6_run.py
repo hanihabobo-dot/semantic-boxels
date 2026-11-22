@@ -152,12 +152,18 @@ def main(argv=None):
     sys.path.insert(0, code)          # this commit's own eval_runner, before anything else
     if TOOLS not in sys.path:
         sys.path.append(TOOLS)
-    from evaluation import eval_runner as er
+    # The arm's code is a commit of the folder layout (eval_runner in evaluation/) or one from
+    # before the folder move, such as the thesis commit (eval_runner.py at its root).
+    folders = os.path.isfile(os.path.join(code, 'evaluation', 'eval_runner.py'))
+    if folders:
+        from evaluation import eval_runner as er
+    else:
+        import eval_runner as er
     import memwatch
     import p6_slots as ps
 
     er_dir = os.path.dirname(os.path.realpath(er.__file__))
-    if er_dir != os.path.realpath(code):
+    if er_dir != os.path.realpath(os.path.join(code, 'evaluation') if folders else code):
         raise SystemExit(f"eval_runner came from {er_dir}, not from the working directory {code}: "
                          "run p6_run.py from the arm's code directory")
 

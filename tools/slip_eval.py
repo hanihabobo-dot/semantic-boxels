@@ -60,7 +60,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import episode_metrics  # noqa: E402
 sys.path.append(os.path.dirname(HERE))   # the snapshot's root, last on the path
-from world import world_counts  # noqa: E402  (TB-22: drops, collisions, clean success)
+try:                                     # the folders of the folder move (22 Nov 2026) ...
+    from world import world_counts  # noqa: E402  (TB-22: drops, collisions, clean success)
+except ImportError:                      # ... or a snapshot from before it: the module at the root
+    import world_counts  # noqa: E402
 
 # The metrics summarised per arm (tools/episode_metrics.py's names).
 MEDIANS = ('wall_s', 'planning_s', 'planning_first_s', 'exec_s', 'plan_calls',
@@ -182,8 +185,11 @@ def check_arms(a, arms):
     """Every arm's names must be registered in the snapshot: one import of
     the pipeline per arm, before any episode, so a typo fails here."""
     for arm in arms:
-        code = ("import test_full_pipeline, slip_fixes; "
-                f"slip_fixes.configure({arm_fixes(arm)!r}); "
+        # a snapshot of the folder layout holds slip_fixes in acting/, an older one at its root
+        code = ("import test_full_pipeline\n"
+                "try:\n    from acting import slip_fixes\n"
+                "except ImportError:\n    import slip_fixes\n"
+                f"slip_fixes.configure({arm_fixes(arm)!r})\n"
                 "print(sorted(slip_fixes.ENABLED))")
         r = subprocess.run([a.python, '-c', code], cwd=a.snapshot,
                            capture_output=True, text=True, timeout=600,

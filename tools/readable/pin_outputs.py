@@ -218,12 +218,13 @@ def outcome(fn, *a, **k):
 
 
 def repo_py_files(which=('root', 'bridge', 'tools')):
-    """The AST pins' scope (index open point 1, the indexer's choice): root
-    *.py, tampura_bridge/*.py (not its tests), tools/*.py (not subfolders),
+    """The AST pins' scope (index open point 1, the indexer's choice): the root
+    modules (root *.py and, since the folder move, the *.py of the six package
+    folders), tampura_bridge/*.py (not its tests), tools/*.py (not subfolders),
     sorted by path.  Files found on disk, so an untracked file shows."""
     files = []
     if 'root' in which:
-        files += sorted(REPO.glob('*.py'))
+        files += root_module_files()
     if 'bridge' in which:
         files += sorted((REPO / 'tampura_bridge').glob('*.py'))
     if 'tools' in which:
@@ -233,6 +234,43 @@ def repo_py_files(which=('root', 'bridge', 'tools')):
 
 def rel(path):
     return Path(path).resolve().relative_to(REPO).as_posix()
+
+
+# The folder move (22 Nov 2026): the modules that lay flat at the repository root lie in these six
+# package folders; test_full_pipeline.py, episode_state.py and pipeline_args.py stay at the root.
+PACKAGE_DIRS = ('acting', 'console', 'evaluation', 'planning', 'sensing', 'world')
+
+
+def root_module_files():
+    """The root modules, sorted by their path from the repository root: the root's *.py and the
+    *.py of the six package folders (their __init__.py included).  Files found on disk."""
+    files = list(REPO.glob('*.py'))
+    for d in PACKAGE_DIRS:
+        files += list((REPO / d).glob('*.py'))
+    return sorted(files, key=rel)
+
+
+def module_rel(stem):
+    """'acting/execution.py' for 'execution': the path, from the repository root, of the one root
+    module with that file name."""
+    found = [rel(p) for p in root_module_files() if p.stem == stem]
+    if len(found) != 1:
+        raise LookupError(f'{len(found)} root modules are named {stem}.py, not one: {found}')
+    return found[0]
+
+
+def module_dotted(path):
+    """'acting.execution' for acting/execution.py and 'acting' for acting/__init__.py: the name a
+    root module is imported by."""
+    parts = Path(rel(path)).with_suffix('').parts
+    return '.'.join(parts[:-1] if parts[-1] == '__init__' else parts)
+
+
+def flat_module(dotted):
+    """'execution' for 'acting.execution': the name a module of the six package folders had at the
+    root.  Any other name comes back unchanged."""
+    head, _, tail = (dotted or '').partition('.')
+    return tail if head in PACKAGE_DIRS and tail else dotted
 
 
 # ---------------------------------------------------------------------------
@@ -716,7 +754,7 @@ def _p08_look(out, m, live):
             files['domain_file'].append({'look': v, 'm8_on': m8_on, **r})
     out.json('look_files.json', files)
     # The anchors of the look delta: the constants generate() passes to _once, in source order.
-    tree = ast.parse((REPO / 'look_domain.py').read_text(encoding='utf-8'))
+    tree = ast.parse((REPO / 'planning' / 'look_domain.py').read_text(encoding='utf-8'))
     gen = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'generate')
     calls = sorted((n for n in ast.walk(gen) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
                     and n.func.id == '_once'), key=lambda n: (n.lineno, n.col_offset))
@@ -1730,7 +1768,7 @@ def p28_sprites(out):
     target = Path('console_art_assembled.py')
     r = outcome(st.assemble, str(REPO / 'tools' / 'sprites'), str(target))
     built = target.read_bytes() if target.exists() else b''
-    have = (REPO / 'console_art.py').read_bytes()
+    have = (REPO / 'console' / 'console_art.py').read_bytes()
     res = {'assemble': r, 'equal_bytes': built == have,
            'equal_after_crlf_to_lf': built.replace(b'\r\n', b'\n') == have.replace(b'\r\n', b'\n'),
            'console_art_has_crlf': b'\r\n' in have, 'assembled_sha256': hashlib.sha256(built).hexdigest(),
@@ -1986,7 +2024,7 @@ def _p30_exit_reasons(out, results):
         return assigns, other, compares
 
     m_as, m_other, m_cmp = sites(ast.parse((REPO / 'test_full_pipeline.py').read_text(encoding='utf-8')))
-    r_as, r_other, r_cmp = sites(top_def('run_logger.py', 'report_run_outcome'))
+    r_as, r_other, r_cmp = sites(top_def('console/run_logger.py', 'report_run_outcome'))
     by_reason, success_cases = {}, []
     for file, items in results:
         for name, kw, r in items:
@@ -2517,7 +2555,7 @@ def p40_ledger_schema(out):
     out.json('schema.json', [[k, list(kw), npos, multi[(k, kw, npos)]] for (k, kw, npos) in sorted(multi)])
     kinds = sorted({s['kind'] for s in sites})
     out.json('kinds.json', kinds)
-    rl_tree = _parse(REPO / 'run_logger.py')
+    rl_tree = _parse(REPO / 'console' / 'run_logger.py')
     statuses = None
     for node in rl_tree.body:
         if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'STEP_END_STATUSES'
@@ -2655,11 +2693,11 @@ def p42_gate_surface(out):
     trees = {rel(p): _parse(p) for p in scope}
     facts, info = [], []
     for mod, name in _REBOUND:
-        b = _module_binds(trees[f'{mod}.py'], name)
+        b = _module_binds(trees[module_rel(mod)], name)
         facts.append({'fact': 1, 'subject': f'{mod}.{name}', 'found': b is not None,
                       'kind': b[0] if b else None})
         info.append([f'{mod}.{name}', b[1] if b else None])
-    sync = _module_binds(trees['boxel_env.py'], 'BoxelTestEnv.sync_to_plan_client')
+    sync = _module_binds(trees[module_rel('boxel_env')], 'BoxelTestEnv.sync_to_plan_client')
     facts.append({'fact': 2, 'subject': 'BoxelTestEnv.sync_to_plan_client in the class body',
                   'found': sync is not None})
     from_pyb, aliased, solve_sites, tfp_importers, pddl_importers = [], [], [], [], []
@@ -2668,7 +2706,7 @@ def p42_gate_surface(out):
     for r, tree in trees.items():
         def on(node, qual, r=r):
             if isinstance(node, ast.ImportFrom) and not node.level:
-                m = node.module or ''
+                m = flat_module(node.module or '')      # the rebound list names modules as at the root
                 if m == 'pybullet' or m.startswith('pybullet.'):
                     from_pyb.append([r, qual])
                 if m in rebound_mods:
@@ -2691,7 +2729,7 @@ def p42_gate_surface(out):
     facts.append({'fact': 3, 'subject': 'from pybullet import ...', 'sites': sorted(from_pyb)})
     facts.append({'fact': 4, 'subject': 'aliased import of a rebound name', 'sites': sorted(aliased)})
     plan_args = None
-    for node in trees['pddlstream_planner.py'].body:
+    for node in trees[module_rel('pddlstream_planner')].body:
         if isinstance(node, ast.ClassDef) and node.name == 'PDDLStreamPlanner':
             for n in node.body:
                 if isinstance(n, ast.FunctionDef) and n.name == 'plan':
@@ -2759,7 +2797,7 @@ def _run_state_fact(trees, mod, name):
     stores of mod.name and every 'from mod import name' (a copy by value).  Names are not resolved
     by scope: a bare name is counted wherever it is spelled."""
     from collections import Counter
-    home = f'{mod}.py'
+    home = module_rel(mod)
     binding = None
     for node in trees[home].body:
         if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
@@ -2790,7 +2828,7 @@ def _run_state_fact(trees, mod, name):
             if (isinstance(node, ast.Attribute) and node.attr == name and isinstance(node.value, ast.Name)
                     and node.value.id == mod):
                 (m_loads if isinstance(node.ctx, ast.Load) else m_stores)[(r, qual)] += 1
-            if isinstance(node, ast.ImportFrom) and not node.level and node.module == mod:
+            if isinstance(node, ast.ImportFrom) and not node.level and flat_module(node.module) == mod:
                 by_value.extend([r, qual, a.asname] for a in node.names if a.name in (name, '*'))
         _walk_scoped(tree, on)
     return {'binding': binding, 'global_in': sorted(glob),
@@ -2850,9 +2888,10 @@ def _p42_tag2(out, trees):
     """Gate 7: trap 1 (the instance patch), the run state of traps 2, 14, 15, 16, and REVIEW
     item 13 (solve by any spelling), as facts 8 to 13 in facts_tag2.json."""
     attr = '_view_and_projection_matrices'
-    vpm = _module_binds(trees['boxel_env.py'], f'BoxelTestEnv.{attr}')
+    vpm = _module_binds(trees[module_rel('boxel_env')], f'BoxelTestEnv.{attr}')
     assigned, type_reads, calls, cam_writes, info = [], [], [], [], []
     arm_setattr, solve_calls, solve_imports = [], [], []
+    arm_eye_file = module_rel('arm_eye')
     for r, tree in trees.items():
         def on(node, qual, r=r):
             if isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
@@ -2872,7 +2911,7 @@ def _p42_tag2(out, trees):
                 if isinstance(fn, ast.Attribute) and fn.attr == attr:
                     calls.append([r, qual, ast.unparse(fn.value)])
                     info.append(['call', r, qual, node.lineno])
-                if r == 'arm_eye.py' and isinstance(fn, ast.Name) and fn.id == 'setattr':
+                if r == arm_eye_file and isinstance(fn, ast.Name) and fn.id == 'setattr':
                     arm_setattr.append([qual, ast.unparse(node)])
                 if (isinstance(fn, ast.Name) and fn.id == 'solve') or (isinstance(fn, ast.Attribute)
                                                                        and fn.attr == 'solve'):
@@ -2887,7 +2926,7 @@ def _p42_tag2(out, trees):
                     if a.asname == 'solve':
                         solve_imports.append([r, qual, a.name, None, a.asname])
         _walk_scoped(tree, on)
-    ae = trees['arm_eye.py']
+    ae = trees[arm_eye_file]
     facts = [
         {'fact': 8, 'trap': 1, 'subject': f'BoxelTestEnv.{attr} in the class body (reachable as '
                                           f'type(env).{attr})', 'found': vpm is not None},
@@ -2897,8 +2936,8 @@ def _p42_tag2(out, trees):
         {'fact': 10, 'trap': 1, 'subject': 'the camera attributes: assignments to an attribute camera_position, '
                                            'setattr calls in arm_eye.py, arm_eye.CAMERA_ATTRIBUTES and FOLLOW_FLAG',
          'camera_position_assignments': sorted(cam_writes), 'arm_eye_setattr': sorted(arm_setattr),
-         'CAMERA_ATTRIBUTES': _module_literal('arm_eye.py', 'CAMERA_ATTRIBUTES'),
-         'FOLLOW_FLAG': _module_literal('arm_eye.py', 'FOLLOW_FLAG'),
+         'CAMERA_ATTRIBUTES': _module_literal(arm_eye_file, 'CAMERA_ATTRIBUTES'),
+         'FOLLOW_FLAG': _module_literal(arm_eye_file, 'FOLLOW_FLAG'),
          'follow_arm_defined': _module_binds(ae, 'follow_arm') is not None,
          'use_start_view_defined': _module_binds(ae, 'use_start_view') is not None},
         {'fact': 11, 'trap': 1, 'subject': 'arm_eye.follow_arm on a stand-in env, run', **_follow_arm_standin()},
@@ -2982,10 +3021,10 @@ def p44_loggers_globals(out):
     import symtable
     builtin_names = set(dir(builtins))
     loggers, globals_, frees, used = {}, {}, {}, {}
-    mods = sorted(REPO.glob('*.py'))
+    mods = root_module_files()
     for path in mods:
         r = rel(path)
-        modname = path.stem
+        modname = module_dotted(path)
         src = path.read_text(encoding='utf-8')
         tree = ast.parse(src)
         module_loggers = {}
@@ -3010,6 +3049,9 @@ def p44_loggers_globals(out):
                 lname = modname
             elif recv in module_loggers:
                 lname = module_loggers[recv]
+            elif (isinstance(node.func.value, ast.Call) and ast.unparse(node.func.value.func) == 'logging.getLogger'
+                  and len(node.func.value.args) == 1 and isinstance(node.func.value.args[0], ast.Constant)):
+                lname = node.func.value.args[0].value   # the folder move: a logger named by a literal in the call
             else:
                 return
             loggers.setdefault(f'{r}::{qual}', []).append([node.func.attr, recv, lname])
@@ -3069,12 +3111,24 @@ def p44_loggers_globals(out):
 _EARLY_HOOKS = r'''
 early = []
 _early_seen = set()
-_early_file = os.path.join(repo, 'console_ui.py')
+_early_file = os.path.join(repo, 'console', 'console_ui.py')
 def _early_audit(event, args):
-    if event == 'import' and args[0] in ('console_ui', 'pybullet') and args[0] not in _early_seen:
-        _early_seen.add(args[0])
-        early.append({'event': 'import', 'module': args[0]})
-        sys.settrace(_early_trace if args[0] == 'console_ui' else None)
+    # The folder move: `from console import console_ui` raises no "import" event for the submodule
+    # (only `import console.console_ui` and `from console.console_ui import ...` do), so the start
+    # of its module code, the "exec" event of its file, counts as the start of its import as well,
+    # whichever comes first.  The record keeps the name the module had at the root.
+    if event == 'exec':
+        if os.path.abspath(getattr(args[0], 'co_filename', None) or os.sep) != _early_file:
+            return
+        name = 'console_ui'
+    elif event == 'import' and args[0] in ('console.console_ui', 'pybullet'):
+        name = args[0].rpartition('.')[2]
+    else:
+        return
+    if name not in _early_seen:
+        _early_seen.add(name)
+        early.append({'event': 'import', 'module': name})
+        sys.settrace(_early_trace if name == 'console_ui' else None)
 def _early_trace(frame, event, arg):
     code = frame.f_code
     if code.co_name != 'install_early' or os.path.abspath(code.co_filename) != _early_file:
@@ -3110,14 +3164,14 @@ def in_repo(m):
     f = getattr(sys.modules.get(m), '__file__', None) or ''
     return os.path.abspath(f).startswith(repo + os.sep)
 repo_mods = [m for m in order if in_repo(m)]
-sf = sys.modules.get('slip_fixes')
-cu = sys.modules.get('console_ui')
+sf = sys.modules.get('acting.slip_fixes')
+cu = sys.modules.get('console.console_ui')
 res = {'import_error': err, 'sys_path': sys.path, 'repo_modules_in_order': repo_mods,
        'slip_fixes_KNOWN': list(sf.KNOWN) if sf else None,
        'root_handlers': [type(h).__module__ + '.' + type(h).__name__ for h in logging.getLogger().handlers],
        'console_installed': (cu._console is not None) if cu else None,
-       'console_ui_before_pybullet': (order.index('console_ui') < order.index('pybullet'))
-                                     if ('console_ui' in order and 'pybullet' in order) else None,
+       'console_ui_before_pybullet': (order.index('console.console_ui') < order.index('pybullet'))
+                                     if ('console.console_ui' in order and 'pybullet' in order) else None,
        'pybullet_loaded': 'pybullet' in order}
 print('@@JSON ' + json.dumps(res))
 print('@@EARLY ' + json.dumps(early))
@@ -3158,7 +3212,7 @@ def p45_fresh_imports(out):
     res = {}
     early = {}
     tb_path = ':'.join([str(REPO), str(REPO / 'pddlstream_lib'), f'{tw}/tampura', f'{tw}/tampura_environments'])
-    mods = [p.stem for p in sorted(REPO.glob('*.py'))] + ['tampura_bridge.policy']
+    mods = [module_dotted(p) for p in root_module_files()] + ['tampura_bridge.policy']
     for m in mods:
         env = dict(os.environ)
         if m.startswith('tampura_bridge'):
@@ -3233,13 +3287,13 @@ def p48_twin_constants(out):
         def on(node, qual):
             if isinstance(node, ast.Constant) and type(node.value) in (int, float):
                 v = node.value
-                if v == 0.005 and r in ('execution.py', 'streams.py'):
+                if v == 0.005 and r in ('acting/execution.py', 'planning/streams.py'):
                     add('5 mm (grasp height and look-alikes)', node, qual, v)
                 if v == 1.96:
                     add('1.96 interval', node, qual, v)
                 if v in (900, 900.0, 1800, 1800.0):
                     add('900 s / 1800 s caps', node, qual, v)
-                if v == 0.0005 and r == 'robot_utils.py':
+                if v == 0.0005 and r == 'acting/robot_utils.py':
                     add('squeeze module default', node, qual, v)
             if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div) \
                     and isinstance(node.left, ast.Constant) and isinstance(node.right, ast.Constant) \
@@ -3251,7 +3305,7 @@ def p48_twin_constants(out):
                     vals = [ast.unparse(a) for a in node.args[1:]] + \
                            [f'{k.arg}={ast.unparse(k.value)}' for k in node.keywords if k.arg == 'default']
                     add('squeeze 0.5 mm', node, qual, vals)
-            if r in ('console_ui.py', 'console_phrases.py'):
+            if r in ('console/console_ui.py', 'console/console_phrases.py'):
                 t = _template(node) if isinstance(node, (ast.Constant, ast.JoinedStr)) else None
                 if t and ('of 3' in t or '/3' in t):
                     add('"of 3" console pattern', node, qual, t)
@@ -3276,7 +3330,7 @@ def p48_twin_constants(out):
 # Gate 7 (INDEX_PINS P5, PLAN 4.4 trap 8, R_PHASE0 3.3, U3): the twins the look and M7 code
 # wrote, by name, and the strike caps behind "of 3".
 TRAP8_NAMES = ('LOOK_BOXEL_TOL_M', 'FRAME_MARGIN_PX', 'LOOK_IMAGE_MARGIN_PX', '_FOV_V_HALF_TAN', 'STRIKE_PARK')
-STRIKE_CAP_FILES = ('test_full_pipeline.py', 'execution.py', 'look_action.py')
+STRIKE_CAP_FILES = ('test_full_pipeline.py', 'acting/execution.py', 'sensing/look_action.py')
 
 
 def _p48_tag2(out):

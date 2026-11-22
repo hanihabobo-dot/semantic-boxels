@@ -704,10 +704,28 @@ class _PatchOnLoad(importlib.abc.MetaPathFinder):
         return spec
 
 
+# The folder move (22 Nov 2026): the modules that lay flat at the repository
+# root lie in these package folders.  The recorder, its options (--set
+# execution.M7_SUSPEND_S) and its records keep naming them as at the root.
+PACKAGE_DIRS = ('acting', 'console', 'evaluation', 'planning', 'sensing', 'world')
+
+
+def real_module(name):
+    """'acting.execution' for 'execution': the name the module is imported
+    by, found on disk in the checkout's package folders.  A name that is no
+    file of those folders (test_full_pipeline, a stand-in) comes back as is."""
+    for d in PACKAGE_DIRS:
+        if (REPO / d / f'{name}.py').is_file():
+            return f'{d}.{name}'
+    return name
+
+
 def patch_on_load(name, fn):
-    """Register fn for module `name` (_PatchOnLoad).  A second fn for a name
+    """Register fn for module `name` (_PatchOnLoad), `name` as at the root
+    (real_module finds the folder).  A second fn for a name
     joins the finder already waiting for it: a second finder would never
     see the import, since the first one answers it."""
+    name = real_module(name)
     for finder in sys.meta_path:
         if isinstance(finder, _PatchOnLoad) and finder.name == name:
             finder.fns.append(fn)
@@ -881,7 +899,11 @@ def module_switches(main_locals=None):
     module (arm_eye.py:184-211): main_locals are the locals of main's frame
     (None: that frame was not found, and the record says so)."""
     out = {}
-    mods = sys.modules
+    # the loaded modules under the names they had at the root (the keys of the record)
+    mods = {name: sys.modules[real_module(name)]
+            for name in ('pose_belief', 'robot_utils', 'world_eye', 'slip_fixes', 'telemetry', 'world_counts',
+                         'interior_regions', 'execution', 'arm_eye')
+            if real_module(name) in sys.modules}
     if 'pose_belief' in mods:
         out['pose_belief.SWITCHES'] = dict(mods['pose_belief'].SWITCHES)
     if 'robot_utils' in mods:

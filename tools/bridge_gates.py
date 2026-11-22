@@ -450,7 +450,7 @@ def g7_scan(files):
 
 
 def g11_scan(files):
-    allowed = ('pddlstream_planner.py', 'streams.py')
+    allowed = ('planning/pddlstream_planner.py', 'planning/streams.py')
     hits = []
     for path in files:
         if rel(path) in allowed:
@@ -541,7 +541,7 @@ def _pddl_sha(name):
 
 def _m8_domain():
     spec = importlib.util.spec_from_file_location(
-        'm8_domain', os.path.join(REPO, 'm8_domain.py'))
+        'm8_domain', os.path.join(REPO, 'planning', 'm8_domain.py'))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -551,7 +551,7 @@ def _look_domain():
     if REPO not in sys.path:        # look_domain imports m8_domain
         sys.path.insert(0, REPO)
     spec = importlib.util.spec_from_file_location(
-        'look_domain', os.path.join(REPO, 'look_domain.py'))
+        'look_domain', os.path.join(REPO, 'planning', 'look_domain.py'))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -580,7 +580,7 @@ def run_domain(report):
                                   f'= regenerated (live + M8 delta); an OFF run '
                                   f'must load the live file, an ON run this one')
     # Path 9: the look domain is the same text plus the look delta, regenerated.
-    if os.path.isfile(os.path.join(REPO, 'look_domain.py')):
+    if os.path.isfile(os.path.join(REPO, 'planning', 'look_domain.py')):
         look = _look_domain()
         for mode, path in look.GENERATED_FILES.items():
             want_l = look.generate(look.read(look.LIVE_FILE), mode)
