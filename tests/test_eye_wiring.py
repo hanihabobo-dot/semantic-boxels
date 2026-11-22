@@ -154,16 +154,16 @@ def _execution_and_its_cut_files():
 def test_execution_runs_no_blocker_census_with_the_arm_camera():
     guarded = _under_text(EXECUTION, 'not arm_eye.following(env)')
     calls = _calls(EXECUTION, 'compute_shadow_blockers')
-    assert len(calls) == 3 and all(id(c) in guarded for c in calls)
+    assert len(calls) == 2 and all(id(c) in guarded for c in calls)
     # Eight functions of execution.py stand in execution_hand.py and
-    # execution_render.py since they were cut out of it.  The three calls
+    # execution_render.py since they were cut out of it.  The two calls
     # above are still all of them, each behind the switch, when those two
     # files are read too.
     wide, files = _execution_and_its_cut_files()
     assert {'execution_hand.py', 'execution_render.py'} <= set(files)
     guarded = _under_text(wide, 'not arm_eye.following(env)')
     calls = _calls(wide, 'compute_shadow_blockers')
-    assert len(calls) == 3 and all(id(c) in guarded for c in calls)
+    assert len(calls) == 2 and all(id(c) in guarded for c in calls)
 
 
 # ----- 3. the bridge ----------------------------------------------------------------
