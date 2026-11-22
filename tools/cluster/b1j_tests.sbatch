@@ -26,7 +26,7 @@ status() { echo "TEST $1: $2"; echo "$1 $2" >> $OUT/summary.txt; }
 # Test 1: 'import tampura', their full import set, and our modules, in (A).
 cd $TW/tampura_environments
 if $VA/python -c "import tampura, tampura_environments, torch, gymnasium, stable_baselines3, tensorboard; from tampura.policies.policy import Policy; from tampura.environment import TampuraEnv; import tampura_environments.find_dice.env; print('their import set ok')" \
-   && (cd $SB && $VA/python -c "import test_full_pipeline, execution, streams, boxel_env, pddlstream_planner, perception, world_eye, telemetry, run_logger; from tampura_bridge import gate_hooks; print('our import set ok')"); then
+   && (cd $SB && $VA/python -c "import test_full_pipeline; from acting import execution; from planning import streams, pddlstream_planner; from world import boxel_env, world_eye; from sensing import perception; from console import telemetry, run_logger; from tampura_bridge import gate_hooks; print('our import set ok')"); then
   status 1 PASS; else status 1 FAIL; fi
 (cd $SB && $VA/python -m pytest -q -p no:cacheprovider tampura_bridge/tests/test_gate_hooks.py tampura_bridge/tests/test_ledger_reader.py 2>&1 | tail -3)
 

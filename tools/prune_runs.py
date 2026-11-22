@@ -29,7 +29,9 @@ RUN_RE = re.compile(r"^run_(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})$")
 
 
 def audit_protected():
-    path = os.path.join(ROOT, "PAPER_AUDIT.txt")
+    path = os.path.join(ROOT, "docs", "PAPER_AUDIT.txt")     # its place since the folder move ...
+    if not os.path.exists(path):
+        path = os.path.join(ROOT, "PAPER_AUDIT.txt")         # ... and before it
     if not os.path.exists(path):
         return set()
     with open(path, encoding="utf-8", errors="replace") as f:

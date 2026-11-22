@@ -26,7 +26,8 @@ export PYTHONHASHSEED=0
 # have the switch: an older reference would still render and save them, and
 # the wall-clock budgets would then differ between the arms.  Deleted at the
 # end either way.
-if grep -q BOXEL_EYE_IMAGES $W/$REF/world_eye.py && grep -q BOXEL_EYE_IMAGES $W/$CAND/world_eye.py; then
+# (world_eye.py lies in world/ since the folder move, at the root in an older snapshot: both are tried)
+if grep -qs BOXEL_EYE_IMAGES $W/$REF/world/world_eye.py $W/$REF/world_eye.py && grep -qs BOXEL_EYE_IMAGES $W/$CAND/world/world_eye.py $W/$CAND/world_eye.py; then
   export BOXEL_EYE_IMAGES=0; echo "sim screenshots off on both arms"
 else
   echo "sim screenshots ON on both arms (a snapshot predates the switch); deleted at the end"

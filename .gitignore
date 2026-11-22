@@ -51,7 +51,15 @@ plan
 
 # (archive/ is now tracked — see git history)
 # Local notes under docs/ (meetings, progress, context) — not committed
-docs/
+# (the folder move: four tracked files lie in docs/ now.  git cannot re-include a file under an
+# ignored folder, so the folder's content is ignored instead of the folder: docs/* at the top,
+# any deeper docs/ folder as before, and the four files named)
+docs/*
+*/**/docs/
+!docs/PAPER_AUDIT.txt
+!docs/PROPOSAL_ATTRIBUTE_BOXELS.md
+!docs/proposal-template_PRE_MIGRATION.pdf
+!docs/thesis-template_AS_CLONED.pdf
 
 # Cygwin/msys crash dumps
 *.stackdump

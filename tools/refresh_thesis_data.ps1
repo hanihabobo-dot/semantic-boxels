@@ -72,9 +72,9 @@ cd $RepoWsl
 source wsl_env/bin/activate
 export PYTHONPATH=${RepoWsl}:$PddlWsl
 echo '--- aggregate $SweepWsl ---'
-python3 -c "from pathlib import Path; import eval_runner; eval_runner.aggregate(Path('$SweepWsl')); print('ok')"
+python3 -c "from pathlib import Path; from evaluation import eval_runner; eval_runner.aggregate(Path('$SweepWsl')); print('ok')"
 echo '--- plot $SweepWsl (drop any coarse-resolution arms; headline = 3 variants) ---'
-python3 eval_plotter.py $SweepWsl/aggregated.csv --drop-coarse-resolution
+python3 evaluation/eval_plotter.py $SweepWsl/aggregated.csv --drop-coarse-resolution
 "@ -replace "`r",""
 wsl bash -lc $wsl
 if ($LASTEXITCODE -ne 0) { throw "WSL aggregate/plot failed (exit $LASTEXITCODE)" }

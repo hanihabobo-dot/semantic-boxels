@@ -28,7 +28,7 @@ SB=/mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels
 cd $TW/tampura_environments
 PYTHONPATH=$SB:$TW/tampura:$TW/tampura_environments $VO/bin/python - <<'EOF'
 import numpy, pybullet  # noqa: F401
-import pddlstream_planner  # noqa: F401  (puts the sibling pddlstream_lib on sys.path)
+from planning import pddlstream_planner  # noqa: F401  (puts the sibling pddlstream_lib on sys.path)
 import pddlstream, tampura, tampura_environments  # noqa: F401
 import tampura_bridge.policy  # noqa: F401
 print('imports ok:', tampura.__file__, pddlstream.__file__, 'numpy', numpy.__version__)

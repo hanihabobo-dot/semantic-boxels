@@ -64,8 +64,8 @@ Spec (`spec_version` 1):
 {"spec_version": 1,
  "entries": [
   {"id": "P2-assert-xys", "kind": "move", "phase": "P2",
-   "old": {"file": "boxel_env.py", "qualname": "BoxelTestEnv._assert_xys_in_reach"},
-   "new": {"file": "world_placement.py", "qualname": "WorldPlacement._assert_xys_in_reach"}},
+   "old": {"file": "world/boxel_env.py", "qualname": "BoxelTestEnv._assert_xys_in_reach"},
+   "new": {"file": "world/world_placement.py", "qualname": "WorldPlacement._assert_xys_in_reach"}},
   {"id": "P1-tray-goal", "kind": "delete", "phase": "P1",
    "old": {"file": "test_full_pipeline.py", "qualname": "build_tray_stack_goal"},
    "reference_scan": ["tools/bridge_gates.py"]},
@@ -289,7 +289,7 @@ after the module has been executed, so the entry's import order is kept):
 
 For boxels runs RunLogger's relative `log_dir` is made absolute against the
 cwd inside the child: the export joins a relative run directory to the code
-directory (pddlstream_planner.py:434-439), so a run outside the checkout
+directory (planning/pddlstream_planner.py:434-439), so a run outside the checkout
 would stop there.
 
 Each run folder gets `RESULT.json`, `stdout.txt`, `stderr.txt`, `rec/` and
@@ -427,7 +427,7 @@ and a private lock file (never the pipeline lock).
 ## console_replay.py and group `console`: pin 27
 
 `console_replay.py` plays a recorded run through the real Console of
-`console_ui.py`, its terminal a pipe (the static layout), in a child
+`console/console_ui.py`, its terminal a pipe (the static layout), in a child
 interpreter per environment set (`plain`, `ascii`: NO_COLOR; `color`,
 `color_ascii`: FORCE_COLOR; the `ascii` sets with SB_CONSOLE_ASCII). The
 child freezes `time.perf_counter` and `time.strftime`, installs the Console

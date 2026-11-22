@@ -4,7 +4,7 @@ animated pictograms console_ui draws beside its status line).
 
   python tools/sprite_tool.py check tools/sprites/pick.txt          validate one sprite, print its sheet
   python tools/sprite_tool.py check tools/sprites/pick.txt --color  the sheet with ANSI colours (256)
-  python tools/sprite_tool.py assemble tools/sprites console_art.py
+  python tools/sprite_tool.py assemble tools/sprites console/console_art.py
         every <key>.reviewed.txt (else <key>.txt) in the directory becomes one
         entry of SPRITES in the generated module (PALETTE and ASCII_MAP included)
 
