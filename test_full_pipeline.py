@@ -1519,113 +1519,7 @@ def dispatch_step(st, env, i, action):
         return True
 
     elif action_name == 'look':
-        # LOOK (path 9, --look on): one wrist render from a viewpoint
-        # boxel.  handle_look_action checks what the PDDL
-        # precondition names and writes what its effects name and
-        # nothing else (look_action.LOOK_SPEC); the strikes are this
-        # loop's rules.  The plan goes on when the unconditional
-        # effects hold in the belief, else the loop replans.
-        st.counts.look_count += 1
-        obj_str = str(params[0])
-        look_q = params[2] if st.setup.look_mode == 'centred' else params[3]
-        if st.setup.look_mode == 'centred':
-            _named = [str(params[1])]      # the plan names one hypothesis
-        else:
-            _named = [str(f[2]) for f in st.setup.planner.last_init
-                      if f[0] == 'reveals'
-                      and getattr(f[1], 'name', f[1]) == look_q.name]
-        look_result = handle_look_action(
-            action_params=params, named=_named, env=env,
-            registry=st.setup.registry, belief=st.setup.belief, viz=st.setup.viz,
-            robot_id=st.setup.robot_id, held_body_id=st.hand.held_body_id,
-            support_body_ids=st.setup.support_body_ids, shadows=st.setup.shadows,
-            occluders=st.setup.occluders,
-            shadow_occluder_map=st.setup.shadow_occluder_map,
-            blocked_counts=st.strikes.blocked_counts,
-            blocked_giveup_shadows=st.strikes.blocked_giveup_shadows,
-            boxel_centers=st.setup.boxel_centers,
-            boxel_to_pybullet=st.setup.boxel_to_pybullet,
-            object_body_ids=st.setup.object_body_ids,
-            pose_known=lambda bd: pose_belief.pose_known(
-                bd, robot_model().finger_limits[0][1],
-                st.setup.planner.streams.GRASP_MAX_SPAN,
-                st.setup.planner.streams.GRASP_SQUARE_TOL),
-            target_name=st.setup.target_name, mode=st.setup.look_mode)
-        ledger_event('look_reveals', config=look_q.name, named=_named)
-        ledger_event('look_result', reason=look_result.reason,
-                     continue_=look_result.continue_, obj=obj_str,
-                     region=str(params[1]), config=look_q.name,
-                     outcomes=look_result.outcomes,
-                     hidden=look_result.hidden,
-                     reposed=look_result.reposed,
-                     found_in=look_result.found_in,
-                     registered=look_result.registered,
-                     blocked=look_result.blocked,
-                     parked=look_result.parked)
-        if look_result.stale:
-            dispatch_end('stale_precondition')
-            return True
-        if not look_result.continue_:
-            _bd = st.setup.registry.get_boxel(obj_str)
-            if (look_result.reason == 'look_pose_incomplete'
-                    and _bd is not None):
-                # The observe bound's rule: three looks that do not
-                # give the pose park the object until its box moves.
-                _n = st.counts.observe_strikes.get(obj_str, (0,))[0] + 1
-                st.counts.observe_strikes[obj_str] = (
-                    _n, np.concatenate([_bd.min_corner, _bd.max_corner]), _bd)
-                # The centred look's configurations are the tag's
-                # observe ones: a look that did not give the pose
-                # removes its own, as observe's strike did (the boxel
-                # look's configurations have other names: no index).
-                _k = observe_views.look_index(look_q.name, obj_str)
-                if _k is not None:
-                    st.setup.planner.m8_views.removed.add((obj_str, _k))
-                elif (st.setup.look_mode == 'boxel'
-                      and st.setup.planner.look_views is not None):
-                    # The boxel look's counterpart (PLAN.md 11.13):
-                    # the view whose image did not give the pose no
-                    # longer counts as revealing this body.
-                    st.setup.planner.look_views.refute(
-                        obj_str, look_q.joint_positions)
-                    print(f"    [look] the view from {look_q.name} is "
-                          f"withdrawn for {obj_str}")
-                _left = (len(observe_views.LOOK_STANDOFFS)
-                         * len(observe_views.LOOK_WRIST_YAWS)
-                         - sum(1 for r in st.setup.planner.m8_views.removed
-                               if r[0] == obj_str))
-                _park = _n >= 3 or (_k is not None and _left <= 0)
-                if _park:
-                    st.setup.planner.m8_views.parked.add(obj_str)
-                print(f"    [look] pose strike {_n}/3 for {obj_str}"
-                      f"{'; PARKED' if _park else ''}")
-            elif (st.setup.look_mode == 'centred'
-                  and look_result.reason == 'look_blocked'):
-                # The render still hid part of ?h (the twin said all of
-                # it was in view): that configuration leaves the facts,
-                # the next plan looks from another one, as observe's
-                # strike did.  Three blocked looks park the fragment
-                # (the handler's strike rule).
-                _k = observe_views.look_index(look_q.name, str(params[1]))
-                if _k is not None:
-                    st.setup.planner.m8_views.removed.add((str(params[1]), _k))
-                    print(f"    [look] centred view {look_q.name} left "
-                          f"{params[1]} blocked: configuration removed")
-            dispatch_end('look_outcome')
-            return True
-        st.counts.observe_strikes.pop(obj_str, None)
-        # Q5 (Hani's decision, tracks/look/Q4_Q6_CHECK.md): a look
-        # whose image registered a body the belief did not hold (M-1)
-        # ends the plan for a replan, as _integrity_after does for
-        # the other actions (the hand is empty at a look: handempty is
-        # its precondition).  In every look mode and with either eye,
-        # the replan is the loop's rule, not the handler's.  A look
-        # that registered nothing goes on with the plan.
-        if look_result.registered:
-            print(f"    [look] the image from {look_q.name} registered "
-                  f"{sorted(look_result.registered)}: the plan is made "
-                  f"again")
-            dispatch_end('look_outcome')
+        if do_look(st, env, params):
             return True
 
     elif action_name == 'pick':
@@ -1643,6 +1537,117 @@ def dispatch_step(st, env, i, action):
     dispatch_end('ok')
     if st.opts.gui:
         env.refresh_debug_camera_views()
+
+
+def do_look(st, env, params):
+    # LOOK (path 9, --look on): one wrist render from a viewpoint
+    # boxel.  handle_look_action checks what the PDDL
+    # precondition names and writes what its effects name and
+    # nothing else (look_action.LOOK_SPEC); the strikes are this
+    # loop's rules.  The plan goes on when the unconditional
+    # effects hold in the belief, else the loop replans.
+    st.counts.look_count += 1
+    obj_str = str(params[0])
+    look_q = params[2] if st.setup.look_mode == 'centred' else params[3]
+    if st.setup.look_mode == 'centred':
+        _named = [str(params[1])]      # the plan names one hypothesis
+    else:
+        _named = [str(f[2]) for f in st.setup.planner.last_init
+                  if f[0] == 'reveals'
+                  and getattr(f[1], 'name', f[1]) == look_q.name]
+    look_result = handle_look_action(
+        action_params=params, named=_named, env=env,
+        registry=st.setup.registry, belief=st.setup.belief, viz=st.setup.viz,
+        robot_id=st.setup.robot_id, held_body_id=st.hand.held_body_id,
+        support_body_ids=st.setup.support_body_ids, shadows=st.setup.shadows,
+        occluders=st.setup.occluders,
+        shadow_occluder_map=st.setup.shadow_occluder_map,
+        blocked_counts=st.strikes.blocked_counts,
+        blocked_giveup_shadows=st.strikes.blocked_giveup_shadows,
+        boxel_centers=st.setup.boxel_centers,
+        boxel_to_pybullet=st.setup.boxel_to_pybullet,
+        object_body_ids=st.setup.object_body_ids,
+        pose_known=lambda bd: pose_belief.pose_known(
+            bd, robot_model().finger_limits[0][1],
+            st.setup.planner.streams.GRASP_MAX_SPAN,
+            st.setup.planner.streams.GRASP_SQUARE_TOL),
+        target_name=st.setup.target_name, mode=st.setup.look_mode)
+    ledger_event('look_reveals', config=look_q.name, named=_named)
+    ledger_event('look_result', reason=look_result.reason,
+                 continue_=look_result.continue_, obj=obj_str,
+                 region=str(params[1]), config=look_q.name,
+                 outcomes=look_result.outcomes,
+                 hidden=look_result.hidden,
+                 reposed=look_result.reposed,
+                 found_in=look_result.found_in,
+                 registered=look_result.registered,
+                 blocked=look_result.blocked,
+                 parked=look_result.parked)
+    if look_result.stale:
+        dispatch_end('stale_precondition')
+        return True
+    if not look_result.continue_:
+        _bd = st.setup.registry.get_boxel(obj_str)
+        if (look_result.reason == 'look_pose_incomplete'
+                and _bd is not None):
+            # The observe bound's rule: three looks that do not
+            # give the pose park the object until its box moves.
+            _n = st.counts.observe_strikes.get(obj_str, (0,))[0] + 1
+            st.counts.observe_strikes[obj_str] = (
+                _n, np.concatenate([_bd.min_corner, _bd.max_corner]), _bd)
+            # The centred look's configurations are the tag's
+            # observe ones: a look that did not give the pose
+            # removes its own, as observe's strike did (the boxel
+            # look's configurations have other names: no index).
+            _k = observe_views.look_index(look_q.name, obj_str)
+            if _k is not None:
+                st.setup.planner.m8_views.removed.add((obj_str, _k))
+            elif (st.setup.look_mode == 'boxel'
+                  and st.setup.planner.look_views is not None):
+                # The boxel look's counterpart (PLAN.md 11.13):
+                # the view whose image did not give the pose no
+                # longer counts as revealing this body.
+                st.setup.planner.look_views.refute(
+                    obj_str, look_q.joint_positions)
+                print(f"    [look] the view from {look_q.name} is "
+                      f"withdrawn for {obj_str}")
+            _left = (len(observe_views.LOOK_STANDOFFS)
+                     * len(observe_views.LOOK_WRIST_YAWS)
+                     - sum(1 for r in st.setup.planner.m8_views.removed
+                           if r[0] == obj_str))
+            _park = _n >= 3 or (_k is not None and _left <= 0)
+            if _park:
+                st.setup.planner.m8_views.parked.add(obj_str)
+            print(f"    [look] pose strike {_n}/3 for {obj_str}"
+                  f"{'; PARKED' if _park else ''}")
+        elif (st.setup.look_mode == 'centred'
+              and look_result.reason == 'look_blocked'):
+            # The render still hid part of ?h (the twin said all of
+            # it was in view): that configuration leaves the facts,
+            # the next plan looks from another one, as observe's
+            # strike did.  Three blocked looks park the fragment
+            # (the handler's strike rule).
+            _k = observe_views.look_index(look_q.name, str(params[1]))
+            if _k is not None:
+                st.setup.planner.m8_views.removed.add((str(params[1]), _k))
+                print(f"    [look] centred view {look_q.name} left "
+                      f"{params[1]} blocked: configuration removed")
+        dispatch_end('look_outcome')
+        return True
+    st.counts.observe_strikes.pop(obj_str, None)
+    # Q5 (Hani's decision, tracks/look/Q4_Q6_CHECK.md): a look
+    # whose image registered a body the belief did not hold (M-1)
+    # ends the plan for a replan, as _integrity_after does for
+    # the other actions (the hand is empty at a look: handempty is
+    # its precondition).  In every look mode and with either eye,
+    # the replan is the loop's rule, not the handler's.  A look
+    # that registered nothing goes on with the plan.
+    if look_result.registered:
+        print(f"    [look] the image from {look_q.name} registered "
+              f"{sorted(look_result.registered)}: the plan is made "
+              f"again")
+        dispatch_end('look_outcome')
+        return True
 
 
 def do_pick(st, env, params):
