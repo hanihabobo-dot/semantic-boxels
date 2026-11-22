@@ -725,6 +725,689 @@ def partition_extent(objects, target_extent=None):
     return max_extent
 
 
+def announce_run(st):
+    print("=" * 60)
+    print("FULL PIPELINE: PDDLStream + Replanning")
+    print("=" * 60)
+
+    # Echo the run configuration so saved logs are self-documenting:
+    # later baseline-vs-feature comparisons (e.g. eval runner audit #9)
+    # need to know which flags produced these timings.
+    if st.opts.run_config:
+        print("\n--- Run configuration ---")
+        for k, v in st.opts.run_config.items():
+            print(f"  {k:18s} = {v}")
+
+
+def modes_from_args(st):
+    # Path 9: --look on loads the look domain (M8's plus the look delta) and
+    # needs M8's pose machinery; off, nothing below differs from the tag.
+    st.setup.look_mode = look_domain.mode_of(getattr(args, 'look', 'off'))   # off, boxel, centred
+    st.setup.look_on = st.setup.look_mode != 'off'
+    if st.setup.look_on and not pose_belief.SWITCHES['M8']:
+        raise ValueError(f"--look {st.setup.look_mode} needs --m8 on")
+    # Path 9, the arm camera only (arm_eye): --eye arm needs a look, and its
+    # start configuration is q_home: --eye-start-joints, else the caller's
+    # home joints (find_dice: DEFAULT_ARM_POS), else TAMPURA's home joints
+    # (arm_eye.TAMPURA_HOME_JOINTS, Hani's Q2 answer).  q_home stays the
+    # place the arm starts from and returns to: the planner's first
+    # current_config is home_config, and with M8 q_home is a view config, so
+    # a move there gives back the run's first view.  With --eye fixed none
+    # of this runs and the tabletop's q_home stays REST_POSES.
+    st.setup.eye = getattr(args, 'eye', 'fixed')
+    arm_eye.check_mode(st.setup.eye, st.setup.look_mode)
+    if st.setup.eye == 'arm':
+        _start = arm_eye.parse_joints(getattr(args, 'eye_start_joints', ''))
+        if _start is not None and st.setup.home_joints is not None and \
+                not np.allclose(_start, st.setup.home_joints):
+            raise ValueError("--eye-start-joints differs from the caller's home "
+                             "joints: the start configuration is q_home")
+        if _start is not None:
+            st.setup.home_joints = _start
+        elif st.setup.home_joints is None:
+            st.setup.home_joints = list(arm_eye.TAMPURA_HOME_JOINTS)
+        st.setup.eye_start = list(st.setup.home_joints)
+    if st.setup.domain_file is None and st.setup.look_on:
+        st.setup.domain_file = look_domain.domain_file(st.setup.look_mode, True)
+    elif st.setup.domain_file is None and pose_belief.SWITCHES['M8']:
+        st.setup.domain_file = m8_domain.domain_file(True)
+    # BF#52: the fold (pddlstream_planner.over_region_facts) is offered
+    # unless --sense-over-region off (the A/B).  Not a pose_belief switch:
+    # those gate the pose writers as a set.
+    st.setup.sense_over_region = getattr(args, 'sense_over_region', 'on') == 'on'
+    # BF#53: the optimistic search's settings, pddlstream solve() keyword
+    # arguments (run_logger's --search-effort-weight and
+    # --search-initial-complexity, defaults 1 and 3; 'off' and 0 leave
+    # pddlstream's own).
+    st.setup.search_effort_weight = str(getattr(args, 'search_effort_weight', '1'))
+    st.setup.search_initial_complexity = int(getattr(args, 'search_initial_complexity', 3))
+    st.setup.search_options = search_options_from(st.setup.search_effort_weight,
+                                         st.setup.search_initial_complexity)
+
+
+def check_domain_matches_switches(st):
+    # The two known domains must match the switch (a caller may pass
+    # another file deliberately; that one is not judged here).
+    _dom = os.path.abspath(st.setup.domain_file) if st.setup.domain_file else m8_domain.LIVE_FILE
+    if _dom in (m8_domain.LIVE_FILE, m8_domain.GENERATED_FILE) and \
+            (_dom == m8_domain.GENERATED_FILE) != pose_belief.SWITCHES['M8']:
+        raise ValueError(f"domain {os.path.basename(_dom)} does not match "
+                         f"M8 {'on' if pose_belief.SWITCHES['M8'] else 'off'}")
+    _dom_look = {os.path.abspath(f): m
+                 for m, f in look_domain.GENERATED_FILES.items()}.get(_dom, 'off')
+    if _dom_look != st.setup.look_mode:
+        raise ValueError(f"domain {os.path.basename(_dom)} does not match "
+                         f"--look {st.setup.look_mode}")
+    print(f"  model tweaks: {pose_belief.SWITCHES}; domain "
+          f"{os.path.basename(st.setup.domain_file or m8_domain.LIVE_FILE)}")
+
+
+def build_world(st, env):
+    # audit #10 — uniform-grid baseline.  Toggle BoxelTestEnv's
+    # free-space dispatch and (re)build the lattice at the requested
+    # cell size before any boxel/registry work in Phase 2.  Default
+    # path (baseline='semantic') leaves env.use_uniform_grid=False, so
+    # generate_free_space falls through to the octree pipeline as before.
+    # Audit #66 (Plan A) — auto-tune cell size to fit the largest
+    # object AABB.  Default uniform cell 0.05 m is smaller than default
+    # occluders (6-7 cm wide, 12-16 cm tall), so under uniform mode
+    # every (boxel_fits ?occluder ?cell) atom is unsatisfiable on all
+    # 3 axes (streams.py:369), the place precondition can't ground,
+    # and PDDLStream loops searching for a plan that cannot exist
+    # (logs/run_2026-05-09_10-48-13/: 2480 cells, 2472 boxel_fits,
+    # iter-1 Cost: inf).  Largest AABB axis is the OCCLUDER HEIGHT,
+    # so auto_cell ~ 0.17 m for the default scene.  Headroom +0.01 m
+    # for PyBullet contact margin.  Acts as a SAFETY GUARD: if the
+    # user passes --uniform-cell-size already >= auto_cell, keep it;
+    # otherwise bump up.
+    #
+    # Audit #67 follow-up — also propagate the same value to the
+    # semantic octree's min_resolution so both baselines have the
+    # SAME smallest possible boxel size.  Without this match, the
+    # octree subdivides down to its 0.035 m default while uniform
+    # uses 0.06-0.17 m cells — the comparison ends up dominated by
+    # grounding cost (number of cells), not the underlying
+    # discretization strategy.  We compute effective_cell
+    # unconditionally and apply it to whichever baseline is active.
+    # C-09: a target counts with the scene's declared size bound when it
+    # has one (SceneConfig.target_extent), not with a hidden body's own size.
+    max_extent = partition_extent(
+        env.objects, getattr(st.opts.scene_config, 'target_extent', None))
+    auto_cell = max_extent + 0.01
+    # Audit #66/#67: a uniform cell smaller than the largest object makes
+    # (boxel_fits ?occluder ?cell) ungroundable, so uniform is always
+    # clamped to auto_cell.  Semantic free space MERGES (CellMerger), so
+    # open regions stay large-boxel even at a fine leaf floor — the #67
+    # clamp on semantic existed only to keep it comparable to uniform at
+    # equal resolution.  Audit #77: an EXPLICIT --min-boxel-size opts out
+    # of that clamp (raw, may go below auto_cell); unset keeps the #67
+    # default so existing #9/#10 comparisons are unchanged.
+    if st.opts.baseline == 'uniform':
+        effective_cell = max(st.opts.uniform_cell_size, auto_cell)
+    elif st.opts.min_boxel_size is None:
+        effective_cell = auto_cell
+    else:
+        effective_cell = st.opts.min_boxel_size
+    print(f"  [audit-66/67] Effective minimum boxel size: "
+          f"{effective_cell:.3f} m (largest seen or declared object size "
+          f"{max_extent:.3f} m + 0.01 m headroom).")
+    if st.opts.baseline != 'uniform' and st.opts.min_boxel_size is not None:
+        rel = "below" if st.opts.min_boxel_size < auto_cell else "at/above"
+        print(f"  [audit-77] semantic leaf floor set to explicit "
+              f"--min-boxel-size {st.opts.min_boxel_size:.3f} m "
+              f"({rel} auto_cell {auto_cell:.3f} m).")
+
+    if st.opts.baseline == 'uniform':
+        env.use_uniform_grid = True
+        if abs(effective_cell - 0.05) > 1e-9:
+            env.set_uniform_cell_size(effective_cell)
+    else:
+        # Semantic octree — clamp the minimum leaf size to
+        # effective_cell so leaves can't be smaller than uniform's
+        # cells.  Larger leaves are still allowed (CellMerger keeps
+        # collapsing same-colour neighbours).
+        env.free_space_generator.min_resolution = effective_cell
+
+    # audit #77 — run_config logs the REQUESTED --min-boxel-size (None
+    # when unset); also record the resolution ACTUALLY used so
+    # timing_summary.json / aggregated.csv carry it.  report_run_outcome
+    # serialises this same dict later, so the mutation propagates.
+    if st.opts.run_config is not None:
+        st.opts.run_config["effective_min_boxel_size"] = round(effective_cell, 4)
+
+    # Path 9, --eye arm: the arm stands at its start configuration before the
+    # settle (scene construction; an adopted world is not moved), and after it
+    # the overview camera is the arm camera: there for the first image, and
+    # where the arm stands for every later image and cast (follow_arm).
+    if st.setup.eye == 'arm':
+        arm_eye.place_arm(env, st.setup.eye_start)
+    # Let settle: 50 steps at 240 Hz ≈ 0.2 s.  Enough for the loaded
+    # Panda + cubes to reach static equilibrium after spawning.
+    for _ in range(50):
+        env.step_simulation()
+    env.update_object_positions()
+    if st.setup.eye == 'arm':
+        _cam = arm_eye.use_start_view(env)
+        st.setup.eye_camera_pose = _cam['camera_pose']
+        print(f"  [eye] the overview camera is the arm camera at the start "
+              f"configuration: {np.round(_cam['camera_position'], 3).tolist()}")
+        arm_eye.follow_arm(env)
+
+    # Audit #29: single-shot sanity log.  Placement in
+    # ``_hidden_xy_positions`` already uses 8-corner raycasts against
+    # the spawned occluders, so if the scene loaded at all the hidden
+    # targets were raycast-verified occluded at spawn time.  We still
+    # run one ``oracle_detect_objects`` pass AFTER physics settle to
+    # catch any drift, but we do NOT retry — a mismatch here is either
+    # a placement-vs-oracle logic bug worth investigating, or sub-mm
+    # settling drift that does not affect downstream behaviour.
+    required_hidden = int(getattr(st.opts.scene_config, 'n_hidden_targets', 0) or 0)
+    if required_hidden > 0 and st.opts.oracle_phases:
+        visible, _ = env.oracle_detect_objects()
+        target_names = [
+            name for name, info in env.objects.items()
+            if not info.is_occluder
+            and name not in ("plane", "table", "robot")
+        ]
+        hidden_now = sum(1 for t in target_names if t not in visible)
+        if hidden_now >= required_hidden:
+            print(f"  Hidden-target guarantee OK: {hidden_now}/"
+                  f"{len(target_names)} hidden "
+                  f"(requested >= {required_hidden}, "
+                  f"seed={st.opts.scene_config.seed}).")
+        else:
+            print(f"  [warn] Hidden-target post-spawn check: "
+                  f"{hidden_now}/{required_hidden} hidden "
+                  f"(placement was raycast-verified; mismatch likely "
+                  f"from physics settling drift). Continuing without "
+                  f"retry.", file=sys.stderr)
+
+    st.setup.robot_id = env.objects["robot"].object_id
+    print(f"Robot ID: {st.setup.robot_id}")
+
+    # #P4 B3(c): the caller's read-only check between the settle and the
+    # first render (the bridge's D9 hook; it steps and moves nothing).
+    if st.opts.after_settle is not None:
+        st.opts.after_settle(env)
+
+
+def first_observation(st, env):
+    # =========================================================
+    # PHASE 2: Boxel Calculation (fast, no visualization)
+    # =========================================================
+    # Perception pipeline:
+    #   1. Camera observation → occupied boxels (objects + shadows they cast)
+    #   2. Free-space generation → fills unoccupied table surface with boxels
+    #   3. Cell merging → collapses adjacent free-space cells into fewer,
+    #      larger boxels so the planner's search space stays tractable
+    # The combined set gives the planner a complete spatial model of the
+    # table surface: where objects are, where shadows are, and where
+    # the robot can safely place things.
+    print("\n--- Phase 2: Calculating Boxels ---")
+    obs = env.get_camera_observation()
+    all_known = obs.boxels
+    if st.setup.eye == 'arm':
+        # Path 9, --eye arm (PLAN 11.16): the part of the safe window the
+        # first image does not show joins the known boxels as hidden regions,
+        # as tall as the planner's prior for a hidden target, so free space at
+        # the table top is made only where the image showed the table.
+        _unseen = arm_eye.unseen_boxels(
+            st.setup.eye_camera_pose, env._SAFE_TABLE_X_RANGE, env._SAFE_TABLE_Y_RANGE,
+            env.table_surface_height, float(streams.NOMINAL_HIDDEN_EXTENTS[2]),
+            known=all_known)
+        all_known = all_known + _unseen
+        print(f"  [eye] {len(_unseen)} unseen regions: the part of the table "
+              f"the first image does not show")
+    free_boxels = env.generate_free_space(all_known, visualize=False)
+    # audit #10 — uniform baseline produces a strict static lattice;
+    # CellMerger would collapse adjacent uniform cubes back into
+    # variable-sized rectangles, defeating the uniform property.  Skip
+    # merging under that mode; semantic mode keeps the merge as before
+    # (octree leaves benefit from collapse).
+    merged_free = (free_boxels if env.use_uniform_grid
+                   else merge_free_space_cells(free_boxels))
+    # Free-space geometry is stateless until here; tag table-contact info
+    # so the planner can emit (on_surface ?b) for place actions (audit #35).
+    env.annotate_free_space_surface(merged_free)
+    st.setup.all_boxels = all_known + merged_free
+    print(f"  Calculated {len(st.setup.all_boxels)} boxels")
+
+
+def build_registry(st, env, overlay_bodies):
+    # =========================================================
+    # PHASE 3: Create Registry
+    # =========================================================
+    # The registry is the single source of truth for spatial reasoning.
+    # It assigns stable IDs, classifies boxels by type, and records
+    # parent relationships (which occluder created which shadow).
+    # Both the PDDL planner and the execution layer reference the same
+    # registry, ensuring symbolic names map to consistent geometry.
+    print("\n--- Phase 3: Creating BoxelRegistry ---")
+    # Post-#35: producers emit BoxelData with semantic IDs (object name for
+    # OBJECT, "shadow_of_<name>" for SHADOW) and parent linkage already set.
+    # Free-space cells arrive with empty IDs; add_boxel assigns "free_NNN".
+    st.setup.registry = BoxelRegistry()
+    for bd in st.setup.all_boxels:
+        st.setup.registry.add_boxel(bd)
+    # M8 A: the initial registrations' pose radius (no-op, no render,
+    # while every switch is OFF).
+    record_initial_detections(env, st.setup.registry)
+    # BF#65 option 1 (D6, M2; no-op with the switch off): every registered
+    # object whose class declares a cavity that holds a target class gets
+    # its interior region, unknown, before the shadow list below is taken,
+    # so it is wired like any fragment (belief, census, facts).  BF#65 (d):
+    # a target the first render shows INSIDE a standing cover's box leaves
+    # the registry again and is recorded as seen under that cover.
+    if interior_regions.ENABLED:
+        interior_regions.cast_first_observation(env, st.setup.registry, [st.setup.target_name])
+    st.setup.registry.save_to_json("boxel_data.json")
+    if st.opts.run_logger:
+        st.opts.run_logger.save_artefact("boxel_data.json")
+
+    # Extract the two categories the planner cares about:
+    # - shadows: regions that might hide the target (must be sensed)
+    # - occluders: objects blocking those shadows (must be relocated first)
+    st.setup.shadows = [b.id for b in st.setup.registry.boxels.values() if b.boxel_type == BoxelType.SHADOW]
+    st.setup.occluders = [b.id for b in st.setup.registry.boxels.values() if b.boxel_type == BoxelType.OBJECT]
+    print(f"  {len(st.setup.registry.boxels)} boxels, {len(st.setup.shadows)} shadows, {len(st.setup.occluders)} occluders")
+
+    st.setup.viz = None
+    if st.opts.gui and st.opts.draw_boxel_overlays:
+        st.setup.viz = BoxelVisualizer(phantoms=overlay_bodies)
+        st.setup.viz.draw_registry(st.setup.registry, duration=0, label_size=1.0,
+                          skip_free=not st.opts.show_free)
+
+
+def map_blockers_and_bodies(st, env):
+    # Build shadow → [blocker_ids] mapping via raycasting (audit #78).
+    # A shadow can be blocked by MORE than just the object that created it
+    # (e.g. a second occluder drifts into the line of sight after spawning).
+    # Raycasting from the camera through each shadow volume catches all
+    # actual blockers, not just the geometrically-derived creator.
+    # Path 9, --eye arm: no census (ARM_ONLY_DESIGN, step 3, part 3).  A look
+    # mode reads none of the map for its facts (pddlstream_planner
+    # _build_init names what hides a view per configuration), and its render
+    # would be one more image with no reader.
+    st.setup.shadow_occluder_map = {}
+    if st.setup.eye != 'arm':
+        st.setup.shadow_occluder_map = compute_shadow_blockers(
+            env.camera_position, st.setup.registry, st.setup.shadows, st.setup.occluders, env
+        )
+        # compute_shadow_blockers applies the tolerance-aligned census plus
+        # the (adjacency-gated) parent-relationship fallback internally, so
+        # an EMPTY blocker list is now a legitimate state: nothing blocks
+        # more of the shadow's rays than the sense itself would tolerate,
+        # the planner derives view_clear, and a direct (move, sense) plan
+        # is schedulable — exactly what happens for marginal grazers and
+        # far-displaced carve fragments post-F5.  Log it as information,
+        # not as the broken-linkage warning it used to be.
+        for shadow_id in st.setup.shadows:
+            if not st.setup.shadow_occluder_map.get(shadow_id):
+                print(f"  Shadow {shadow_id}: no blocker above sense "
+                      f"tolerance — view-clear, directly sensable")
+
+    # Bridge between the symbolic (PDDL) and physical (PyBullet) worlds.
+    # The planner reasons about boxel IDs like "obj_000"; execution needs
+    # PyBullet body IDs and names like "red_object".  This mapping lets the
+    # action dispatcher translate plan parameters into simulator calls.
+    st.setup.boxel_to_pybullet = {}
+    for boxel in st.setup.registry.boxels.values():
+        if boxel.object_name and boxel.object_name in env.objects:
+            # Name and body id only (#P1 WP2c): poses come from the registry.
+            st.setup.boxel_to_pybullet[boxel.id] = {
+                'name': boxel.object_name,
+                'pybullet_id': env.objects[boxel.object_name].object_id,
+            }
+
+    print(f"  Boxel->PyBullet mapping: {len(st.setup.boxel_to_pybullet)} objects")
+
+    # =========================================================
+    # PHASE 5: Planning with Replanning Loop
+    # =========================================================
+    # Core idea: plan optimistically (assume target is in the first shadow),
+    # execute until a sense action reveals new information, then replan with
+    # updated beliefs.  This is a sense-plan-act loop with lazy replanning.
+    print("\n--- Phase 5: Planning with Replanning ---")
+
+    # Collision-aware planning needs to know which PyBullet bodies are
+    # movable objects (to exclude the grasped object from self-collision)
+    # vs. immovable support surfaces (always present in collision checks).
+    # Both human-readable names ("red_object") and boxel IDs ("obj_000")
+    # map to the same body ID, so streams can look up either form.
+    #
+    # Audit #46: streams operate on env.plan_client_id (a separate DIRECT-
+    # mode PyBullet world) so that the visible GUI arm is never teleported
+    # during planning.  Body ids do NOT match between clients — we translate
+    # GUI ids to plan ids via env.plan_body_id() at the planner boundary.
+    # Execution-side code (execute_pick / detect_execution_collisions /
+    # compute_shadow_blockers) keeps using GUI ids unchanged.
+    st.setup.object_body_ids = {}        # plan-side, consumed by BoxelStreams
+    for name, obj_info in env.objects.items():
+        if name not in ("plane", "table", "robot"):
+            st.setup.object_body_ids[name] = env.plan_body_id(obj_info.object_id)
+    for boxel in st.setup.registry.boxels.values():
+        if boxel.object_name and boxel.object_name in st.setup.object_body_ids:
+            st.setup.object_body_ids[boxel.id] = st.setup.object_body_ids[boxel.object_name]
+
+    # Two parallel support-id sets: planner needs plan-side ids (its
+    # collision checks run on plan_client_id); execution needs the GUI ids
+    # (detect_execution_collisions runs on client_id).
+    st.setup.planner_support_body_ids = frozenset({
+        env.plan_body_id(env.objects["plane"].object_id),
+        env.plan_body_id(env.objects["table"].object_id),
+    })
+    st.setup.support_body_ids = frozenset({
+        env.objects["plane"].object_id,
+        env.objects["table"].object_id,
+    })
+
+    st.setup.body_id_to_name = {info.object_id: name
+                       for name, info in env.objects.items()}
+
+
+def arm_observers(st, env):
+    # -----------------------------------------------------------------
+    # #P1 F17 — arm the world telemetry recorder.
+    #
+    # A GUI run lets the user WATCH the physics; a headless run used to
+    # record only decisions, so an ejected block or a toppled tower left
+    # no trace beyond its downstream symptoms (the F14 transit throw was
+    # caught by eye, not by the log).  The recorder samples every
+    # simulation step and writes telemetry.log / telemetry.jsonl into the
+    # run directory, with half-second heartbeats, physical events and
+    # per-action summaries mirrored into the run log.  It is a pure
+    # observer: log text is its only output, nothing here feeds the
+    # registry, the belief or the planner.
+    #
+    # Default ON headless, OFF under the GUI (user direction 2026-08-22);
+    # --telemetry / --no-telemetry override.  Every line goes through
+    # logger.debug or straight to the telemetry files, so the console is
+    # untouched either way.
+    # -----------------------------------------------------------------
+    world_counts.run_reset()    # TB-22: the robot's own notices, this run's
+    _tele_on = (not st.opts.gui) if st.opts.telemetry_enabled is None else st.opts.telemetry_enabled
+    if _tele_on and st.opts.run_logger is not None:
+        _rm = robot_model()
+        telemetry.enable(
+            env.client_id, st.setup.robot_id, st.setup.body_id_to_name, st.opts.run_logger.run_dir,
+            frame_period_s=st.opts.telemetry_period,
+            heartbeat_period_s=st.opts.telemetry_heartbeat,
+            ee_link=_rm.ee_link, arm_joints=_rm.arm_joints,
+            finger_joints=_rm.finger_joints,
+        )
+        print(f"  [F17] world telemetry recording to "
+              f"{st.opts.run_logger.run_dir}/telemetry.log "
+              f"(frames {st.opts.telemetry_period:.3f}s, "
+              f"heartbeat {st.opts.telemetry_heartbeat:.2f}s of sim time)")
+        telemetry.phase("phase-5 planning (pre-execution)")
+    elif world_counts.wanted(getattr(args, 'world_counts', 'auto'), st.opts.gui):
+        # TB-22 (tracks rule 18): drops and collisions in every episode
+        # record.  With the recorder off (every eval passes --no-telemetry,
+        # and so does the bridge) a headless run arms the observer's counts
+        # mode instead: the two counts and nothing else, no frame, no
+        # heartbeat, no stream file.  It is the same write-only observer:
+        # the counts go into the run's summary and nothing reads them
+        # before.  --world-counts off leaves it out (for measuring its own
+        # cost), on arms it under the GUI too.
+        _rm = robot_model()
+        telemetry.enable(
+            env.client_id, st.setup.robot_id, st.setup.body_id_to_name,
+            st.opts.run_logger.run_dir if st.opts.run_logger is not None else None,
+            ee_link=_rm.ee_link, arm_joints=_rm.arm_joints,
+            finger_joints=_rm.finger_joints, counts_only=True)
+        telemetry.phase("phase-5 planning (pre-execution)")
+    else:
+        # Nothing watches this run.  An observer a caller left armed from
+        # an earlier run in this process must not lend that run's counts
+        # to this run's record.
+        telemetry.disable()
+
+
+def build_planner(st, env, slip_fixes, args):
+    # Initialise belief (all shadows unknown) and the planner.
+    # The planner is stateless between calls — all context it needs
+    # (known-empty shadows, moved occluders, current config) is passed
+    # in each plan() call so replanning always starts from scratch with
+    # the latest world state.
+    st.setup.belief = BeliefState(st.setup.shadows, st.setup.target_name)
+    tray_name = next((name for name, info in env.objects.items()
+                      if info.is_tray), None)
+    # Path 9, --eye arm: the planner gets no camera.  Its camera facts
+    # (placement_hides, the placement view blocks) keep a camera that stands
+    # still in view, and in this mode none does; the sense gate's hide test
+    # takes the box test (streams.test_target_can_hide_in_shadow).
+    planner_camera_pos = env.camera_position
+    if st.setup.eye == 'arm':
+        planner_camera_pos = None
+    st.setup.planner = PDDLStreamPlanner(st.setup.registry, robot_id=env.plan_robot_id,
+                                shadow_occluder_map=st.setup.shadow_occluder_map,
+                                physics_client=env.plan_client_id,
+                                object_body_ids=st.setup.object_body_ids,
+                                support_body_ids=st.setup.planner_support_body_ids,
+                                camera_pos=planner_camera_pos,
+                                tray_name=tray_name,
+                                domain_file=st.setup.domain_file)
+    st.setup.planner.search_options = dict(st.setup.search_options)          # BF#53
+    # G10: which domain and stream texts the planner loaded, under which
+    # switches (the stream file's sha and the fold's switch since BF#52,
+    # the search's settings since BF#53).
+    ledger_event('domain', file=os.path.basename(st.setup.domain_file or m8_domain.LIVE_FILE),
+                 sha=m8_domain.sha(st.setup.planner.domain_pddl),
+                 stream_file=os.path.basename(m8_domain.STREAM_LIVE_FILE),
+                 stream_sha=m8_domain.sha(st.setup.planner.stream_pddl),
+                 switches=dict(pose_belief.SWITCHES,
+                               sense_over_region=st.setup.sense_over_region,
+                               interior_regions=interior_regions.ENABLED,     # BF#65
+                               search_effort_weight=st.setup.search_effort_weight,
+                               search_initial_complexity=st.setup.search_initial_complexity,
+                               slip_fixes=slip_fixes.spec(),                  # BF#59
+                               **({'look': st.setup.look_mode} if st.setup.look_on else {})))   # path 9
+    # #P4 B3(d): the scene's reach envelope (None: streams' constants),
+    # and D7 (i) to (iii): the home joints, and with a declared goal
+    # configuration its init facts and the goal conjunct.
+    if env.reach_envelope is not None:
+        st.setup.planner.streams.set_reach(*env.reach_envelope)
+    # BF#45: the executor's contact rule for the kin stream's contact
+    # check (a task's own floor, D8; the table height for boxels without
+    # a surface of their own).
+    st.setup.planner.streams.contact_floor = pick_contact_floor(env)
+    st.setup.planner.streams.surface_z_default = float(env.table_surface_height)
+    if st.setup.home_joints is not None:
+        st.setup.planner.streams.set_home_joints(st.setup.home_joints)
+    if st.opts.goal_at_home:
+        st.setup.planner.goal_config = st.setup.planner.home_config
+        st.setup.goal = ('and', st.setup.goal, ('at_config', st.setup.planner.home_config))
+    # F6: the meaning of the sense hideability fact is a CLI choice
+    # until the A/B settles the default (see run_logger --sense-gate).
+    st.setup.planner.sense_gate = getattr(args, 'sense_gate', 'off')
+    st.setup.planner.corridor_test = getattr(args, 'corridor_test', 'cell+object')
+    _ssr = getattr(args, 'search_sample_ratio', None)
+    if _ssr is not None:
+        st.setup.planner.search_sample_ratio = _ssr
+    _pcs = getattr(args, 'path_check_step', None)
+    if _pcs is not None:
+        st.setup.planner.streams.path_check_step = _pcs
+    st.setup.planner.streams.path_check_diag = bool(getattr(args, 'path_check_diag', False))
+
+    # World eye (2026-09-18): textual snapshots of world + belief + camera
+    # view at every decision and observation point of the loop, into
+    # eye.log / eye.jsonl in the run directory (tools/eye.py queries them
+    # by plan / step / time).  Pure observer, GUI and headless alike.
+    if st.opts.run_logger is not None:
+        world_eye.enable(st.opts.run_logger.run_dir, env, st.setup.robot_id, st.setup.body_id_to_name)
+        world_eye.snapshot("initial observation (phase 2-4)",
+                           registry=st.setup.registry, belief=st.setup.belief, plan_count=0,
+                           with_view=True, save_image=True,
+                           on_relations=st.setup.on_relations,
+                           shadow_occluder_map=st.setup.shadow_occluder_map,
+                           extra={"goal": str(st.setup.goal),
+                                  "hidden_targets": sorted(st.setup.hidden_targets_set)})
+
+    # The planner needs to reason about every object that may participate
+    # in the goal.  For 'holding' that's just the chosen target; for
+    # 'stack' it's every cube in the requested tower.
+    st.setup.planner_target_objects = (
+        st.setup.stack_target_objects
+        if st.opts.goal_kind in ('stack', 'find-and-tray-stack')
+        else [st.setup.target_name]
+    )
+
+
+def export_initial_problem(st):
+    # BF#54: the debug problem file goes into the run directory (the temp
+    # directory without a run logger), never into the code tree: on the
+    # cluster the snapshot is read-only and every arm O episode of the
+    # 2026-10-30 campaigns crashed here (the smoke returns above this line).
+    _export_dir = str(st.opts.run_logger.run_dir) if st.opts.run_logger else tempfile.gettempdir()
+    problem_path = st.setup.planner.export_problem_pddl(
+        target_objects=st.setup.planner_target_objects,
+        goal=st.setup.goal,
+        visible_target_locations=st.setup.visible_target_locations,
+        filepath=os.path.join(_export_dir, 'problem_debug.pddl'),
+    )
+    print(f"  Exported initial problem to {problem_path}")
+    if st.opts.run_logger:
+        st.opts.run_logger.save_artefact(problem_path, "problem_initial.pddl")
+
+
+def arm_observe_views(st, env):
+    # M8 C: the observation configurations, computed in the plan twin at
+    # every _build_init from here on (the export above has none).
+    if pose_belief.SWITCHES['M8']:
+        st.setup.planner.m8_views = observe_views.ObserveViews(
+            env, st.setup.planner.streams._robot_base_xy)
+        # BF#52: the fold's switch (over_region_facts needs m8_views).
+        st.setup.planner.sense_over_region = st.setup.sense_over_region
+        # Path 9: the look's viewpoints, from the same plan twin.  The boxel
+        # look chooses its own (look_views); the centred look takes the tag's
+        # observe rule from m8_views.
+        if st.setup.look_on:
+            if st.setup.look_mode == 'boxel':
+                st.setup.planner.look_views = look_views.LookViews(
+                    st.setup.planner.m8_views, reachable=st.setup.planner.streams.ee_reachable)
+            st.setup.planner.look_on = True
+            st.setup.planner.look_mode = st.setup.look_mode
+
+
+def start_loop(st):
+    st.setup.boxel_centers = {b.id: b.center for b in st.setup.registry.boxels.values()}
+
+    st.counts.plan_count = 0
+    # Audit #73 step 3(c) plot 4: count of executed sense actions
+    # (one increment per entry into the 'sense' dispatch branch,
+    # regardless of outcome).  Mirrors plan_count plumbing through
+    # to report_run_outcome → timing_summary.json.
+    st.counts.sense_count = 0
+    # M8 C2: executed observes, and the observe bound's strikes per
+    # object as (count, the box at the last strike, the boxel object).
+    st.counts.observe_count = 0
+    st.counts.observe_strikes: Dict[str, tuple] = {}
+    st.counts.m8_per_plan: list = []
+    st.counts.look_count = 0                   # path 9: executed looks, and the stats
+    st.counts.look_per_plan: list = []         # of each plan call's look facts
+    # Per-call planner.plan() durations.  Captured originally for
+    # audit #30 baseline timing; now consumed by the eval runner
+    # (audit #9) for scalability plots.
+    st.counts.total_plan_time = 0.0
+    st.counts.plan_times = []
+    # Audit #73 step 2(d) plot 11: per-replan boxel count snapshots.
+    # Captured after reboxelize_free_space so each entry reflects what
+    # THIS planner.plan() call actually sees.
+    st.counts.boxel_counts_per_replan: list = []
+    # --- Reactive replanning loop ---
+    # Design: the PDDL sense action is OPTIMISTIC — it assumes the
+    # target will be found.  When execution reveals otherwise (empty or
+    # still-blocked), we break out of the current plan and replan with
+    # the updated belief.  This is cheaper than encoding every possible
+    # sensing outcome in PDDL.
+    #
+    # Termination (audit #107): no per-episode replan cap. The loop ends when
+    # the goal is met, a give-up fires (3 failed drops -> drop_failed; per-shadow
+    # 3-strike still_blocked -> all_searched once every shadow is observed-empty
+    # or given up; planner returns no plan -> planner_failed), or the eval runner
+    # kills the cell at its per-cell wall-clock --timeout (exit_reason="timeout").
+    # Time-bounded, not replan-count-bounded.
+    st.hand.held_body_id = None              # PyBullet body ID of the held object
+                                     # (set during pick, cleared after
+                                     # place/stack — #P1: the friction
+                                     # grasp replaced the constraint id)
+    st.hand.held_object_boxel_id = None      # registry boxel ID of the held object
+    st.ending.exit_reason = None               # tracks why the loop ended for Phase 6
+    st.arm.current_config = st.setup.planner.home_config  # robot's last known joint config
+    # Detect infinite-replan loops: if sensing the same shadow stays
+    # "still_blocked" 3+ times, give up on it (audit #78c).
+    st.strikes.blocked_counts = {}  # shadow_id → consecutive-block count
+    # Audit #21: shadows we gave up on after 3 still_blocked outcomes
+    # are NOT observed empty — the loop only LIES about them being
+    # not_here so the planner stops re-attempting them.  Track the IDs
+    # so the run report can distinguish observed-empty shadows from
+    # blocked-unresolved ones (no false "Searched all" claim).  The
+    # real fix (re-ground blocker atoms) landed with #P1 F2's
+    # blocks_view_at re-keying; the 3-strike giveup stays as a bound
+    # for shadows that remain physically unclearable.
+    st.strikes.blocked_giveup_shadows: set = set()
+    # #P1 F2: per-object failed-pick strike counter, mirroring
+    # blocked_counts.  The single fixed top-down grasp makes a failed
+    # pick against an unmoved object deterministic — without a bound
+    # the loop regenerates the identical miss until an external kill
+    # (field report pick_giveup.md).  After 3 strikes the object is
+    # marked ungraspable in the planner's stream layer (sample_grasp
+    # yields nothing) so the planner changes course or honestly finds
+    # no plan; exit_reason "pick_giveup" classifies that ending.  A
+    # successful pick of the object clears its counter.
+    st.strikes.pick_fail_counts: Dict[str, int] = {}
+    st.strikes.pick_giveup_objects: set = set()
+    # Non-absorbing giveup (2026-08-21, investigation synthesis): a
+    # permanent "ungraspable" mark froze every shadow the object blocks
+    # for the rest of the episode (run 10-55-47: orange 3/3 made the
+    # target's own hiding shadow uncleareable).  After 4 replans the
+    # object re-enters the grasp stream for another 3 attempts — the
+    # world may have changed (it was shoved, settled differently) and
+    # the re-aimed descent may now succeed.  At most 2 paroles per
+    # object, so a truly ungraspable object still ends in a bounded
+    # giveup instead of a slow infinite loop.
+    st.strikes.pick_giveup_marked_at: Dict[str, int] = {}
+    st.strikes.pick_parole_counts: Dict[str, int] = {}
+    # Review fix 2026-08-20 (integration): transit losses (EmptyHandError
+    # at place/stack entry) need their OWN strike counter — the pick
+    # succeeds each cycle (resetting pick_fail_counts), the hold slips
+    # during the move, and without a counter the pick→transit-loss→
+    # replan cycle is unbounded.  NOT reset by a successful pick (that
+    # proves nothing about transport); cleared by a delivered
+    # place/stack of the object.  3 strikes → same giveup path.
+    st.strikes.transit_loss_counts: Dict[str, int] = {}
+    # #P1 F9: contains_nontarget REDISCOVERY strike counter, closing the
+    # asymmetry with the audit-#21 blocked-view / F2 pick / transit-loss
+    # bounds.  A sense that rediscovers an ALREADY-REGISTERED object
+    # inside a fragment rebuilds that object's boxel and re-creates its
+    # shadows — each cycle burns mission actions, and nothing bounded
+    # how often the same object could be rediscovered across replans.
+    # After 3 rediscoveries of the same object its shadows are no longer
+    # re-created (the OBJECT boxel still refreshes for census/collision);
+    # like the audit-#21 giveup this is absorbing — the belief may end
+    # incomplete, and the episode ends honestly if the target hid there.
+    st.strikes.nontarget_rediscovery_counts: Dict[str, int] = {}
+    # #P2 (a)/(d) (2026-09-19): world-integrity events (perception-only
+    # verdicts after every move/pick/place/stack: disturbed, toppled,
+    # off_support, lost, knocked_off_table) persisted in the summary;
+    # F28: physical stack failures per (object, support) with a 3-strike
+    # honest ending; episode_over ends the loop from inside a plan.
+    st.counts.integrity_events: list = []
+    st.strikes.stack_fail_counts: Dict[tuple, int] = {}
+    st.strikes.disturbed_counts: Dict[str, int] = {}   # reset every plan
+    st.ending.target_lost_seen = False                # a goal object's region observed empty
+    st.ending.episode_over = False
+    # #P4 B3(d), D7 (iv)-(vi): the held body's cargo data (the plan's
+    # grasp offset in xy, set by a verified pick), the at-home state of
+    # the last move (True only right after a move to q_home that passed
+    # the at-home test), consecutive planned moves to q_home that failed
+    # it, and the counter behind the fresh q_readback_k symbols.
+    st.hand.held_grasp_xy = None
+    st.arm.at_home_ok = False
+    st.arm.home_misses = 0
+    st.arm.readback_count = 0
+
+
 def _at_home(st, joints) -> bool:
     """TAMPURA's at-home test on the 7-joint readback (D7 (v))."""
     return bool(np.allclose(np.asarray(joints, dtype=float),
@@ -746,6 +1429,18 @@ def _readback_config(st, env, joints, name):
                  np.asarray(_hbd.max_corner, dtype=float)),
                 st.hand.held_grasp_xy)
     return RobotConfig(joint_positions=np.asarray(joints), name=name)
+
+
+def initial_home_readback(st):
+    if st.opts.goal_at_home:
+        # D7 (v) at the start: the initial configuration is q_home only
+        # if the readback passes the at-home test.
+        _q0 = arm_joint_positions(st.setup.robot_id)
+        if not _at_home(st, _q0):
+            st.arm.current_config = RobotConfig(joint_positions=_q0,
+                                         name="q_readback_0")
+            print(f"  [D7] initial arm readback is not at q_home "
+                  f"(max |dq| {np.max(np.abs(_q0 - st.setup.planner.home_config.joint_positions)):.2e} rad)")
 
 
 def _integrity_after(st, env, label: str) -> bool:
@@ -2600,17 +3295,7 @@ def main(gui=True, run_logger=None, scene_config=None,
             home_hold_step_cap=home_hold_step_cap),
         target_name=target_name, domain_file=domain_file,
         home_joints=home_joints)
-    print("=" * 60)
-    print("FULL PIPELINE: PDDLStream + Replanning")
-    print("=" * 60)
-
-    # Echo the run configuration so saved logs are self-documenting:
-    # later baseline-vs-feature comparisons (e.g. eval runner audit #9)
-    # need to know which flags produced these timings.
-    if run_config:
-        print("\n--- Run configuration ---")
-        for k, v in run_config.items():
-            print(f"  {k:18s} = {v}")
+    announce_run(st)
 
     # M8-M10 (PLAN_P4_POSE_GRASP_SAMPLERS.md, P4.5): the model tweaks'
     # switches from the CLI, set once per run.  M8 ON loads the generated
@@ -2624,49 +3309,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     robot_utils.GRIP_SQUEEZE = float(getattr(args, 'grip_squeeze_mm', '0.5')) / 1000.0
     # BF#50: the eye images are saved only when this run asks for them.
     world_eye.SAVE_IMAGES = getattr(args, 'save_screenshots', 'off') == 'on'
-    # Path 9: --look on loads the look domain (M8's plus the look delta) and
-    # needs M8's pose machinery; off, nothing below differs from the tag.
-    st.setup.look_mode = look_domain.mode_of(getattr(args, 'look', 'off'))   # off, boxel, centred
-    st.setup.look_on = st.setup.look_mode != 'off'
-    if st.setup.look_on and not pose_belief.SWITCHES['M8']:
-        raise ValueError(f"--look {st.setup.look_mode} needs --m8 on")
-    # Path 9, the arm camera only (arm_eye): --eye arm needs a look, and its
-    # start configuration is q_home: --eye-start-joints, else the caller's
-    # home joints (find_dice: DEFAULT_ARM_POS), else TAMPURA's home joints
-    # (arm_eye.TAMPURA_HOME_JOINTS, Hani's Q2 answer).  q_home stays the
-    # place the arm starts from and returns to: the planner's first
-    # current_config is home_config, and with M8 q_home is a view config, so
-    # a move there gives back the run's first view.  With --eye fixed none
-    # of this runs and the tabletop's q_home stays REST_POSES.
-    st.setup.eye = getattr(args, 'eye', 'fixed')
-    arm_eye.check_mode(st.setup.eye, st.setup.look_mode)
-    if st.setup.eye == 'arm':
-        _start = arm_eye.parse_joints(getattr(args, 'eye_start_joints', ''))
-        if _start is not None and st.setup.home_joints is not None and \
-                not np.allclose(_start, st.setup.home_joints):
-            raise ValueError("--eye-start-joints differs from the caller's home "
-                             "joints: the start configuration is q_home")
-        if _start is not None:
-            st.setup.home_joints = _start
-        elif st.setup.home_joints is None:
-            st.setup.home_joints = list(arm_eye.TAMPURA_HOME_JOINTS)
-        st.setup.eye_start = list(st.setup.home_joints)
-    if st.setup.domain_file is None and st.setup.look_on:
-        st.setup.domain_file = look_domain.domain_file(st.setup.look_mode, True)
-    elif st.setup.domain_file is None and pose_belief.SWITCHES['M8']:
-        st.setup.domain_file = m8_domain.domain_file(True)
-    # BF#52: the fold (pddlstream_planner.over_region_facts) is offered
-    # unless --sense-over-region off (the A/B).  Not a pose_belief switch:
-    # those gate the pose writers as a set.
-    st.setup.sense_over_region = getattr(args, 'sense_over_region', 'on') == 'on'
-    # BF#53: the optimistic search's settings, pddlstream solve() keyword
-    # arguments (run_logger's --search-effort-weight and
-    # --search-initial-complexity, defaults 1 and 3; 'off' and 0 leave
-    # pddlstream's own).
-    st.setup.search_effort_weight = str(getattr(args, 'search_effort_weight', '1'))
-    st.setup.search_initial_complexity = int(getattr(args, 'search_initial_complexity', 3))
-    st.setup.search_options = search_options_from(st.setup.search_effort_weight,
-                                         st.setup.search_initial_complexity)
+    modes_from_args(st)
     # BF#59: the die-slip campaign's switches (run_logger's --slip-fixes),
     # set every run; every fix registered itself at its module's import,
     # so an unknown name is refused here, before anything runs.
@@ -2680,20 +3323,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     # M7 (TB-46): a rediscovery keeps the still-hidden fragments; set every run.
     import execution
     execution.M7 = getattr(args, 'm7', 'on') == 'on'
-    # The two known domains must match the switch (a caller may pass
-    # another file deliberately; that one is not judged here).
-    _dom = os.path.abspath(st.setup.domain_file) if st.setup.domain_file else m8_domain.LIVE_FILE
-    if _dom in (m8_domain.LIVE_FILE, m8_domain.GENERATED_FILE) and \
-            (_dom == m8_domain.GENERATED_FILE) != pose_belief.SWITCHES['M8']:
-        raise ValueError(f"domain {os.path.basename(_dom)} does not match "
-                         f"M8 {'on' if pose_belief.SWITCHES['M8'] else 'off'}")
-    _dom_look = {os.path.abspath(f): m
-                 for m, f in look_domain.GENERATED_FILES.items()}.get(_dom, 'off')
-    if _dom_look != st.setup.look_mode:
-        raise ValueError(f"domain {os.path.basename(_dom)} does not match "
-                         f"--look {st.setup.look_mode}")
-    print(f"  model tweaks: {pose_belief.SWITCHES}; domain "
-          f"{os.path.basename(st.setup.domain_file or m8_domain.LIVE_FILE)}")
+    check_domain_matches_switches(st)
     # The curated console's header (a no-op without console_ui installed).
     _switch_text = ', '.join(f"{k} {'on' if v else 'off'}"
                              for k, v in pose_belief.SWITCHES.items())
@@ -2720,215 +3350,11 @@ def main(gui=True, run_logger=None, scene_config=None,
     if env is None:
         env = BoxelTestEnv(gui=gui, scene_config=scene_config)
 
-    # audit #10 — uniform-grid baseline.  Toggle BoxelTestEnv's
-    # free-space dispatch and (re)build the lattice at the requested
-    # cell size before any boxel/registry work in Phase 2.  Default
-    # path (baseline='semantic') leaves env.use_uniform_grid=False, so
-    # generate_free_space falls through to the octree pipeline as before.
-    # Audit #66 (Plan A) — auto-tune cell size to fit the largest
-    # object AABB.  Default uniform cell 0.05 m is smaller than default
-    # occluders (6-7 cm wide, 12-16 cm tall), so under uniform mode
-    # every (boxel_fits ?occluder ?cell) atom is unsatisfiable on all
-    # 3 axes (streams.py:369), the place precondition can't ground,
-    # and PDDLStream loops searching for a plan that cannot exist
-    # (logs/run_2026-05-09_10-48-13/: 2480 cells, 2472 boxel_fits,
-    # iter-1 Cost: inf).  Largest AABB axis is the OCCLUDER HEIGHT,
-    # so auto_cell ~ 0.17 m for the default scene.  Headroom +0.01 m
-    # for PyBullet contact margin.  Acts as a SAFETY GUARD: if the
-    # user passes --uniform-cell-size already >= auto_cell, keep it;
-    # otherwise bump up.
-    #
-    # Audit #67 follow-up — also propagate the same value to the
-    # semantic octree's min_resolution so both baselines have the
-    # SAME smallest possible boxel size.  Without this match, the
-    # octree subdivides down to its 0.035 m default while uniform
-    # uses 0.06-0.17 m cells — the comparison ends up dominated by
-    # grounding cost (number of cells), not the underlying
-    # discretization strategy.  We compute effective_cell
-    # unconditionally and apply it to whichever baseline is active.
-    # C-09: a target counts with the scene's declared size bound when it
-    # has one (SceneConfig.target_extent), not with a hidden body's own size.
-    max_extent = partition_extent(
-        env.objects, getattr(scene_config, 'target_extent', None))
-    auto_cell = max_extent + 0.01
-    # Audit #66/#67: a uniform cell smaller than the largest object makes
-    # (boxel_fits ?occluder ?cell) ungroundable, so uniform is always
-    # clamped to auto_cell.  Semantic free space MERGES (CellMerger), so
-    # open regions stay large-boxel even at a fine leaf floor — the #67
-    # clamp on semantic existed only to keep it comparable to uniform at
-    # equal resolution.  Audit #77: an EXPLICIT --min-boxel-size opts out
-    # of that clamp (raw, may go below auto_cell); unset keeps the #67
-    # default so existing #9/#10 comparisons are unchanged.
-    if baseline == 'uniform':
-        effective_cell = max(uniform_cell_size, auto_cell)
-    elif min_boxel_size is None:
-        effective_cell = auto_cell
-    else:
-        effective_cell = min_boxel_size
-    print(f"  [audit-66/67] Effective minimum boxel size: "
-          f"{effective_cell:.3f} m (largest seen or declared object size "
-          f"{max_extent:.3f} m + 0.01 m headroom).")
-    if baseline != 'uniform' and min_boxel_size is not None:
-        rel = "below" if min_boxel_size < auto_cell else "at/above"
-        print(f"  [audit-77] semantic leaf floor set to explicit "
-              f"--min-boxel-size {min_boxel_size:.3f} m "
-              f"({rel} auto_cell {auto_cell:.3f} m).")
+    build_world(st, env)
 
-    if baseline == 'uniform':
-        env.use_uniform_grid = True
-        if abs(effective_cell - 0.05) > 1e-9:
-            env.set_uniform_cell_size(effective_cell)
-    else:
-        # Semantic octree — clamp the minimum leaf size to
-        # effective_cell so leaves can't be smaller than uniform's
-        # cells.  Larger leaves are still allowed (CellMerger keeps
-        # collapsing same-colour neighbours).
-        env.free_space_generator.min_resolution = effective_cell
+    first_observation(st, env)
 
-    # audit #77 — run_config logs the REQUESTED --min-boxel-size (None
-    # when unset); also record the resolution ACTUALLY used so
-    # timing_summary.json / aggregated.csv carry it.  report_run_outcome
-    # serialises this same dict later, so the mutation propagates.
-    if run_config is not None:
-        run_config["effective_min_boxel_size"] = round(effective_cell, 4)
-
-    # Path 9, --eye arm: the arm stands at its start configuration before the
-    # settle (scene construction; an adopted world is not moved), and after it
-    # the overview camera is the arm camera: there for the first image, and
-    # where the arm stands for every later image and cast (follow_arm).
-    if st.setup.eye == 'arm':
-        arm_eye.place_arm(env, st.setup.eye_start)
-    # Let settle: 50 steps at 240 Hz ≈ 0.2 s.  Enough for the loaded
-    # Panda + cubes to reach static equilibrium after spawning.
-    for _ in range(50):
-        env.step_simulation()
-    env.update_object_positions()
-    if st.setup.eye == 'arm':
-        _cam = arm_eye.use_start_view(env)
-        st.setup.eye_camera_pose = _cam['camera_pose']
-        print(f"  [eye] the overview camera is the arm camera at the start "
-              f"configuration: {np.round(_cam['camera_position'], 3).tolist()}")
-        arm_eye.follow_arm(env)
-
-    # Audit #29: single-shot sanity log.  Placement in
-    # ``_hidden_xy_positions`` already uses 8-corner raycasts against
-    # the spawned occluders, so if the scene loaded at all the hidden
-    # targets were raycast-verified occluded at spawn time.  We still
-    # run one ``oracle_detect_objects`` pass AFTER physics settle to
-    # catch any drift, but we do NOT retry — a mismatch here is either
-    # a placement-vs-oracle logic bug worth investigating, or sub-mm
-    # settling drift that does not affect downstream behaviour.
-    required_hidden = int(getattr(scene_config, 'n_hidden_targets', 0) or 0)
-    if required_hidden > 0 and oracle_phases:
-        visible, _ = env.oracle_detect_objects()
-        target_names = [
-            name for name, info in env.objects.items()
-            if not info.is_occluder
-            and name not in ("plane", "table", "robot")
-        ]
-        hidden_now = sum(1 for t in target_names if t not in visible)
-        if hidden_now >= required_hidden:
-            print(f"  Hidden-target guarantee OK: {hidden_now}/"
-                  f"{len(target_names)} hidden "
-                  f"(requested >= {required_hidden}, "
-                  f"seed={scene_config.seed}).")
-        else:
-            print(f"  [warn] Hidden-target post-spawn check: "
-                  f"{hidden_now}/{required_hidden} hidden "
-                  f"(placement was raycast-verified; mismatch likely "
-                  f"from physics settling drift). Continuing without "
-                  f"retry.", file=sys.stderr)
-
-    st.setup.robot_id = env.objects["robot"].object_id
-    print(f"Robot ID: {st.setup.robot_id}")
-
-    # #P4 B3(c): the caller's read-only check between the settle and the
-    # first render (the bridge's D9 hook; it steps and moves nothing).
-    if after_settle is not None:
-        after_settle(env)
-
-    # =========================================================
-    # PHASE 2: Boxel Calculation (fast, no visualization)
-    # =========================================================
-    # Perception pipeline:
-    #   1. Camera observation → occupied boxels (objects + shadows they cast)
-    #   2. Free-space generation → fills unoccupied table surface with boxels
-    #   3. Cell merging → collapses adjacent free-space cells into fewer,
-    #      larger boxels so the planner's search space stays tractable
-    # The combined set gives the planner a complete spatial model of the
-    # table surface: where objects are, where shadows are, and where
-    # the robot can safely place things.
-    print("\n--- Phase 2: Calculating Boxels ---")
-    obs = env.get_camera_observation()
-    all_known = obs.boxels
-    if st.setup.eye == 'arm':
-        # Path 9, --eye arm (PLAN 11.16): the part of the safe window the
-        # first image does not show joins the known boxels as hidden regions,
-        # as tall as the planner's prior for a hidden target, so free space at
-        # the table top is made only where the image showed the table.
-        _unseen = arm_eye.unseen_boxels(
-            st.setup.eye_camera_pose, env._SAFE_TABLE_X_RANGE, env._SAFE_TABLE_Y_RANGE,
-            env.table_surface_height, float(streams.NOMINAL_HIDDEN_EXTENTS[2]),
-            known=all_known)
-        all_known = all_known + _unseen
-        print(f"  [eye] {len(_unseen)} unseen regions: the part of the table "
-              f"the first image does not show")
-    free_boxels = env.generate_free_space(all_known, visualize=False)
-    # audit #10 — uniform baseline produces a strict static lattice;
-    # CellMerger would collapse adjacent uniform cubes back into
-    # variable-sized rectangles, defeating the uniform property.  Skip
-    # merging under that mode; semantic mode keeps the merge as before
-    # (octree leaves benefit from collapse).
-    merged_free = (free_boxels if env.use_uniform_grid
-                   else merge_free_space_cells(free_boxels))
-    # Free-space geometry is stateless until here; tag table-contact info
-    # so the planner can emit (on_surface ?b) for place actions (audit #35).
-    env.annotate_free_space_surface(merged_free)
-    st.setup.all_boxels = all_known + merged_free
-    print(f"  Calculated {len(st.setup.all_boxels)} boxels")
-
-    # =========================================================
-    # PHASE 3: Create Registry
-    # =========================================================
-    # The registry is the single source of truth for spatial reasoning.
-    # It assigns stable IDs, classifies boxels by type, and records
-    # parent relationships (which occluder created which shadow).
-    # Both the PDDL planner and the execution layer reference the same
-    # registry, ensuring symbolic names map to consistent geometry.
-    print("\n--- Phase 3: Creating BoxelRegistry ---")
-    # Post-#35: producers emit BoxelData with semantic IDs (object name for
-    # OBJECT, "shadow_of_<name>" for SHADOW) and parent linkage already set.
-    # Free-space cells arrive with empty IDs; add_boxel assigns "free_NNN".
-    st.setup.registry = BoxelRegistry()
-    for bd in st.setup.all_boxels:
-        st.setup.registry.add_boxel(bd)
-    # M8 A: the initial registrations' pose radius (no-op, no render,
-    # while every switch is OFF).
-    record_initial_detections(env, st.setup.registry)
-    # BF#65 option 1 (D6, M2; no-op with the switch off): every registered
-    # object whose class declares a cavity that holds a target class gets
-    # its interior region, unknown, before the shadow list below is taken,
-    # so it is wired like any fragment (belief, census, facts).  BF#65 (d):
-    # a target the first render shows INSIDE a standing cover's box leaves
-    # the registry again and is recorded as seen under that cover.
-    if interior_regions.ENABLED:
-        interior_regions.cast_first_observation(env, st.setup.registry, [st.setup.target_name])
-    st.setup.registry.save_to_json("boxel_data.json")
-    if run_logger:
-        run_logger.save_artefact("boxel_data.json")
-
-    # Extract the two categories the planner cares about:
-    # - shadows: regions that might hide the target (must be sensed)
-    # - occluders: objects blocking those shadows (must be relocated first)
-    st.setup.shadows = [b.id for b in st.setup.registry.boxels.values() if b.boxel_type == BoxelType.SHADOW]
-    st.setup.occluders = [b.id for b in st.setup.registry.boxels.values() if b.boxel_type == BoxelType.OBJECT]
-    print(f"  {len(st.setup.registry.boxels)} boxels, {len(st.setup.shadows)} shadows, {len(st.setup.occluders)} occluders")
-
-    st.setup.viz = None
-    if gui and draw_boxel_overlays:
-        st.setup.viz = BoxelVisualizer(phantoms=overlay_bodies)
-        st.setup.viz.draw_registry(st.setup.registry, duration=0, label_size=1.0,
-                          skip_free=not show_free)
+    build_registry(st, env, overlay_bodies)
 
     # =========================================================
     # PHASE 4: Hidden Object Scenario (ORACLE ONLY)
@@ -3125,234 +3551,11 @@ def main(gui=True, run_logger=None, scene_config=None,
         raise ValueError(f"Unsupported --goal '{goal_kind}'. "
                          "Add a builder before passing it through.")
 
-    # Build shadow → [blocker_ids] mapping via raycasting (audit #78).
-    # A shadow can be blocked by MORE than just the object that created it
-    # (e.g. a second occluder drifts into the line of sight after spawning).
-    # Raycasting from the camera through each shadow volume catches all
-    # actual blockers, not just the geometrically-derived creator.
-    # Path 9, --eye arm: no census (ARM_ONLY_DESIGN, step 3, part 3).  A look
-    # mode reads none of the map for its facts (pddlstream_planner
-    # _build_init names what hides a view per configuration), and its render
-    # would be one more image with no reader.
-    st.setup.shadow_occluder_map = {}
-    if st.setup.eye != 'arm':
-        st.setup.shadow_occluder_map = compute_shadow_blockers(
-            env.camera_position, st.setup.registry, st.setup.shadows, st.setup.occluders, env
-        )
-        # compute_shadow_blockers applies the tolerance-aligned census plus
-        # the (adjacency-gated) parent-relationship fallback internally, so
-        # an EMPTY blocker list is now a legitimate state: nothing blocks
-        # more of the shadow's rays than the sense itself would tolerate,
-        # the planner derives view_clear, and a direct (move, sense) plan
-        # is schedulable — exactly what happens for marginal grazers and
-        # far-displaced carve fragments post-F5.  Log it as information,
-        # not as the broken-linkage warning it used to be.
-        for shadow_id in st.setup.shadows:
-            if not st.setup.shadow_occluder_map.get(shadow_id):
-                print(f"  Shadow {shadow_id}: no blocker above sense "
-                      f"tolerance — view-clear, directly sensable")
+    map_blockers_and_bodies(st, env)
 
-    # Bridge between the symbolic (PDDL) and physical (PyBullet) worlds.
-    # The planner reasons about boxel IDs like "obj_000"; execution needs
-    # PyBullet body IDs and names like "red_object".  This mapping lets the
-    # action dispatcher translate plan parameters into simulator calls.
-    st.setup.boxel_to_pybullet = {}
-    for boxel in st.setup.registry.boxels.values():
-        if boxel.object_name and boxel.object_name in env.objects:
-            # Name and body id only (#P1 WP2c): poses come from the registry.
-            st.setup.boxel_to_pybullet[boxel.id] = {
-                'name': boxel.object_name,
-                'pybullet_id': env.objects[boxel.object_name].object_id,
-            }
+    arm_observers(st, env)
 
-    print(f"  Boxel->PyBullet mapping: {len(st.setup.boxel_to_pybullet)} objects")
-
-    # =========================================================
-    # PHASE 5: Planning with Replanning Loop
-    # =========================================================
-    # Core idea: plan optimistically (assume target is in the first shadow),
-    # execute until a sense action reveals new information, then replan with
-    # updated beliefs.  This is a sense-plan-act loop with lazy replanning.
-    print("\n--- Phase 5: Planning with Replanning ---")
-
-    # Collision-aware planning needs to know which PyBullet bodies are
-    # movable objects (to exclude the grasped object from self-collision)
-    # vs. immovable support surfaces (always present in collision checks).
-    # Both human-readable names ("red_object") and boxel IDs ("obj_000")
-    # map to the same body ID, so streams can look up either form.
-    #
-    # Audit #46: streams operate on env.plan_client_id (a separate DIRECT-
-    # mode PyBullet world) so that the visible GUI arm is never teleported
-    # during planning.  Body ids do NOT match between clients — we translate
-    # GUI ids to plan ids via env.plan_body_id() at the planner boundary.
-    # Execution-side code (execute_pick / detect_execution_collisions /
-    # compute_shadow_blockers) keeps using GUI ids unchanged.
-    st.setup.object_body_ids = {}        # plan-side, consumed by BoxelStreams
-    for name, obj_info in env.objects.items():
-        if name not in ("plane", "table", "robot"):
-            st.setup.object_body_ids[name] = env.plan_body_id(obj_info.object_id)
-    for boxel in st.setup.registry.boxels.values():
-        if boxel.object_name and boxel.object_name in st.setup.object_body_ids:
-            st.setup.object_body_ids[boxel.id] = st.setup.object_body_ids[boxel.object_name]
-
-    # Two parallel support-id sets: planner needs plan-side ids (its
-    # collision checks run on plan_client_id); execution needs the GUI ids
-    # (detect_execution_collisions runs on client_id).
-    st.setup.planner_support_body_ids = frozenset({
-        env.plan_body_id(env.objects["plane"].object_id),
-        env.plan_body_id(env.objects["table"].object_id),
-    })
-    st.setup.support_body_ids = frozenset({
-        env.objects["plane"].object_id,
-        env.objects["table"].object_id,
-    })
-
-    st.setup.body_id_to_name = {info.object_id: name
-                       for name, info in env.objects.items()}
-
-    # -----------------------------------------------------------------
-    # #P1 F17 — arm the world telemetry recorder.
-    #
-    # A GUI run lets the user WATCH the physics; a headless run used to
-    # record only decisions, so an ejected block or a toppled tower left
-    # no trace beyond its downstream symptoms (the F14 transit throw was
-    # caught by eye, not by the log).  The recorder samples every
-    # simulation step and writes telemetry.log / telemetry.jsonl into the
-    # run directory, with half-second heartbeats, physical events and
-    # per-action summaries mirrored into the run log.  It is a pure
-    # observer: log text is its only output, nothing here feeds the
-    # registry, the belief or the planner.
-    #
-    # Default ON headless, OFF under the GUI (user direction 2026-08-22);
-    # --telemetry / --no-telemetry override.  Every line goes through
-    # logger.debug or straight to the telemetry files, so the console is
-    # untouched either way.
-    # -----------------------------------------------------------------
-    world_counts.run_reset()    # TB-22: the robot's own notices, this run's
-    _tele_on = (not gui) if telemetry_enabled is None else telemetry_enabled
-    if _tele_on and run_logger is not None:
-        _rm = robot_model()
-        telemetry.enable(
-            env.client_id, st.setup.robot_id, st.setup.body_id_to_name, run_logger.run_dir,
-            frame_period_s=telemetry_period,
-            heartbeat_period_s=telemetry_heartbeat,
-            ee_link=_rm.ee_link, arm_joints=_rm.arm_joints,
-            finger_joints=_rm.finger_joints,
-        )
-        print(f"  [F17] world telemetry recording to "
-              f"{run_logger.run_dir}/telemetry.log "
-              f"(frames {telemetry_period:.3f}s, "
-              f"heartbeat {telemetry_heartbeat:.2f}s of sim time)")
-        telemetry.phase("phase-5 planning (pre-execution)")
-    elif world_counts.wanted(getattr(args, 'world_counts', 'auto'), gui):
-        # TB-22 (tracks rule 18): drops and collisions in every episode
-        # record.  With the recorder off (every eval passes --no-telemetry,
-        # and so does the bridge) a headless run arms the observer's counts
-        # mode instead: the two counts and nothing else, no frame, no
-        # heartbeat, no stream file.  It is the same write-only observer:
-        # the counts go into the run's summary and nothing reads them
-        # before.  --world-counts off leaves it out (for measuring its own
-        # cost), on arms it under the GUI too.
-        _rm = robot_model()
-        telemetry.enable(
-            env.client_id, st.setup.robot_id, st.setup.body_id_to_name,
-            run_logger.run_dir if run_logger is not None else None,
-            ee_link=_rm.ee_link, arm_joints=_rm.arm_joints,
-            finger_joints=_rm.finger_joints, counts_only=True)
-        telemetry.phase("phase-5 planning (pre-execution)")
-    else:
-        # Nothing watches this run.  An observer a caller left armed from
-        # an earlier run in this process must not lend that run's counts
-        # to this run's record.
-        telemetry.disable()
-
-    # Initialise belief (all shadows unknown) and the planner.
-    # The planner is stateless between calls — all context it needs
-    # (known-empty shadows, moved occluders, current config) is passed
-    # in each plan() call so replanning always starts from scratch with
-    # the latest world state.
-    st.setup.belief = BeliefState(st.setup.shadows, st.setup.target_name)
-    tray_name = next((name for name, info in env.objects.items()
-                      if info.is_tray), None)
-    # Path 9, --eye arm: the planner gets no camera.  Its camera facts
-    # (placement_hides, the placement view blocks) keep a camera that stands
-    # still in view, and in this mode none does; the sense gate's hide test
-    # takes the box test (streams.test_target_can_hide_in_shadow).
-    planner_camera_pos = env.camera_position
-    if st.setup.eye == 'arm':
-        planner_camera_pos = None
-    st.setup.planner = PDDLStreamPlanner(st.setup.registry, robot_id=env.plan_robot_id,
-                                shadow_occluder_map=st.setup.shadow_occluder_map,
-                                physics_client=env.plan_client_id,
-                                object_body_ids=st.setup.object_body_ids,
-                                support_body_ids=st.setup.planner_support_body_ids,
-                                camera_pos=planner_camera_pos,
-                                tray_name=tray_name,
-                                domain_file=st.setup.domain_file)
-    st.setup.planner.search_options = dict(st.setup.search_options)          # BF#53
-    # G10: which domain and stream texts the planner loaded, under which
-    # switches (the stream file's sha and the fold's switch since BF#52,
-    # the search's settings since BF#53).
-    ledger_event('domain', file=os.path.basename(st.setup.domain_file or m8_domain.LIVE_FILE),
-                 sha=m8_domain.sha(st.setup.planner.domain_pddl),
-                 stream_file=os.path.basename(m8_domain.STREAM_LIVE_FILE),
-                 stream_sha=m8_domain.sha(st.setup.planner.stream_pddl),
-                 switches=dict(pose_belief.SWITCHES,
-                               sense_over_region=st.setup.sense_over_region,
-                               interior_regions=interior_regions.ENABLED,     # BF#65
-                               search_effort_weight=st.setup.search_effort_weight,
-                               search_initial_complexity=st.setup.search_initial_complexity,
-                               slip_fixes=slip_fixes.spec(),                  # BF#59
-                               **({'look': st.setup.look_mode} if st.setup.look_on else {})))   # path 9
-    # #P4 B3(d): the scene's reach envelope (None: streams' constants),
-    # and D7 (i) to (iii): the home joints, and with a declared goal
-    # configuration its init facts and the goal conjunct.
-    if env.reach_envelope is not None:
-        st.setup.planner.streams.set_reach(*env.reach_envelope)
-    # BF#45: the executor's contact rule for the kin stream's contact
-    # check (a task's own floor, D8; the table height for boxels without
-    # a surface of their own).
-    st.setup.planner.streams.contact_floor = pick_contact_floor(env)
-    st.setup.planner.streams.surface_z_default = float(env.table_surface_height)
-    if st.setup.home_joints is not None:
-        st.setup.planner.streams.set_home_joints(st.setup.home_joints)
-    if goal_at_home:
-        st.setup.planner.goal_config = st.setup.planner.home_config
-        st.setup.goal = ('and', st.setup.goal, ('at_config', st.setup.planner.home_config))
-    # F6: the meaning of the sense hideability fact is a CLI choice
-    # until the A/B settles the default (see run_logger --sense-gate).
-    st.setup.planner.sense_gate = getattr(args, 'sense_gate', 'off')
-    st.setup.planner.corridor_test = getattr(args, 'corridor_test', 'cell+object')
-    _ssr = getattr(args, 'search_sample_ratio', None)
-    if _ssr is not None:
-        st.setup.planner.search_sample_ratio = _ssr
-    _pcs = getattr(args, 'path_check_step', None)
-    if _pcs is not None:
-        st.setup.planner.streams.path_check_step = _pcs
-    st.setup.planner.streams.path_check_diag = bool(getattr(args, 'path_check_diag', False))
-
-    # World eye (2026-09-18): textual snapshots of world + belief + camera
-    # view at every decision and observation point of the loop, into
-    # eye.log / eye.jsonl in the run directory (tools/eye.py queries them
-    # by plan / step / time).  Pure observer, GUI and headless alike.
-    if run_logger is not None:
-        world_eye.enable(run_logger.run_dir, env, st.setup.robot_id, st.setup.body_id_to_name)
-        world_eye.snapshot("initial observation (phase 2-4)",
-                           registry=st.setup.registry, belief=st.setup.belief, plan_count=0,
-                           with_view=True, save_image=True,
-                           on_relations=st.setup.on_relations,
-                           shadow_occluder_map=st.setup.shadow_occluder_map,
-                           extra={"goal": str(st.setup.goal),
-                                  "hidden_targets": sorted(st.setup.hidden_targets_set)})
-
-    # The planner needs to reason about every object that may participate
-    # in the goal.  For 'holding' that's just the chosen target; for
-    # 'stack' it's every cube in the requested tower.
-    st.setup.planner_target_objects = (
-        st.setup.stack_target_objects
-        if goal_kind in ('stack', 'find-and-tray-stack')
-        else [st.setup.target_name]
-    )
+    build_planner(st, env, slip_fixes, args)
 
     # Review round 2 (2026-09-19): the export runs the same _build_init
     # as the first plan, and under --sense-gate strict that raycasts the
@@ -3366,163 +3569,12 @@ def main(gui=True, run_logger=None, scene_config=None,
               "plan-twin sync")
         env.close()
         return None
-    # BF#54: the debug problem file goes into the run directory (the temp
-    # directory without a run logger), never into the code tree: on the
-    # cluster the snapshot is read-only and every arm O episode of the
-    # 2026-10-30 campaigns crashed here (the smoke returns above this line).
-    _export_dir = str(run_logger.run_dir) if run_logger else tempfile.gettempdir()
-    problem_path = st.setup.planner.export_problem_pddl(
-        target_objects=st.setup.planner_target_objects,
-        goal=st.setup.goal,
-        visible_target_locations=st.setup.visible_target_locations,
-        filepath=os.path.join(_export_dir, 'problem_debug.pddl'),
-    )
-    print(f"  Exported initial problem to {problem_path}")
-    if run_logger:
-        run_logger.save_artefact(problem_path, "problem_initial.pddl")
-    # M8 C: the observation configurations, computed in the plan twin at
-    # every _build_init from here on (the export above has none).
-    if pose_belief.SWITCHES['M8']:
-        st.setup.planner.m8_views = observe_views.ObserveViews(
-            env, st.setup.planner.streams._robot_base_xy)
-        # BF#52: the fold's switch (over_region_facts needs m8_views).
-        st.setup.planner.sense_over_region = st.setup.sense_over_region
-        # Path 9: the look's viewpoints, from the same plan twin.  The boxel
-        # look chooses its own (look_views); the centred look takes the tag's
-        # observe rule from m8_views.
-        if st.setup.look_on:
-            if st.setup.look_mode == 'boxel':
-                st.setup.planner.look_views = look_views.LookViews(
-                    st.setup.planner.m8_views, reachable=st.setup.planner.streams.ee_reachable)
-            st.setup.planner.look_on = True
-            st.setup.planner.look_mode = st.setup.look_mode
+    export_initial_problem(st)
+    arm_observe_views(st, env)
 
-    st.setup.boxel_centers = {b.id: b.center for b in st.setup.registry.boxels.values()}
+    start_loop(st)
 
-    st.counts.plan_count = 0
-    # Audit #73 step 3(c) plot 4: count of executed sense actions
-    # (one increment per entry into the 'sense' dispatch branch,
-    # regardless of outcome).  Mirrors plan_count plumbing through
-    # to report_run_outcome → timing_summary.json.
-    st.counts.sense_count = 0
-    # M8 C2: executed observes, and the observe bound's strikes per
-    # object as (count, the box at the last strike, the boxel object).
-    st.counts.observe_count = 0
-    st.counts.observe_strikes: Dict[str, tuple] = {}
-    st.counts.m8_per_plan: list = []
-    st.counts.look_count = 0                   # path 9: executed looks, and the stats
-    st.counts.look_per_plan: list = []         # of each plan call's look facts
-    # Per-call planner.plan() durations.  Captured originally for
-    # audit #30 baseline timing; now consumed by the eval runner
-    # (audit #9) for scalability plots.
-    st.counts.total_plan_time = 0.0
-    st.counts.plan_times = []
-    # Audit #73 step 2(d) plot 11: per-replan boxel count snapshots.
-    # Captured after reboxelize_free_space so each entry reflects what
-    # THIS planner.plan() call actually sees.
-    st.counts.boxel_counts_per_replan: list = []
-    # --- Reactive replanning loop ---
-    # Design: the PDDL sense action is OPTIMISTIC — it assumes the
-    # target will be found.  When execution reveals otherwise (empty or
-    # still-blocked), we break out of the current plan and replan with
-    # the updated belief.  This is cheaper than encoding every possible
-    # sensing outcome in PDDL.
-    #
-    # Termination (audit #107): no per-episode replan cap. The loop ends when
-    # the goal is met, a give-up fires (3 failed drops -> drop_failed; per-shadow
-    # 3-strike still_blocked -> all_searched once every shadow is observed-empty
-    # or given up; planner returns no plan -> planner_failed), or the eval runner
-    # kills the cell at its per-cell wall-clock --timeout (exit_reason="timeout").
-    # Time-bounded, not replan-count-bounded.
-    st.hand.held_body_id = None              # PyBullet body ID of the held object
-                                     # (set during pick, cleared after
-                                     # place/stack — #P1: the friction
-                                     # grasp replaced the constraint id)
-    st.hand.held_object_boxel_id = None      # registry boxel ID of the held object
-    st.ending.exit_reason = None               # tracks why the loop ended for Phase 6
-    st.arm.current_config = st.setup.planner.home_config  # robot's last known joint config
-    # Detect infinite-replan loops: if sensing the same shadow stays
-    # "still_blocked" 3+ times, give up on it (audit #78c).
-    st.strikes.blocked_counts = {}  # shadow_id → consecutive-block count
-    # Audit #21: shadows we gave up on after 3 still_blocked outcomes
-    # are NOT observed empty — the loop only LIES about them being
-    # not_here so the planner stops re-attempting them.  Track the IDs
-    # so the run report can distinguish observed-empty shadows from
-    # blocked-unresolved ones (no false "Searched all" claim).  The
-    # real fix (re-ground blocker atoms) landed with #P1 F2's
-    # blocks_view_at re-keying; the 3-strike giveup stays as a bound
-    # for shadows that remain physically unclearable.
-    st.strikes.blocked_giveup_shadows: set = set()
-    # #P1 F2: per-object failed-pick strike counter, mirroring
-    # blocked_counts.  The single fixed top-down grasp makes a failed
-    # pick against an unmoved object deterministic — without a bound
-    # the loop regenerates the identical miss until an external kill
-    # (field report pick_giveup.md).  After 3 strikes the object is
-    # marked ungraspable in the planner's stream layer (sample_grasp
-    # yields nothing) so the planner changes course or honestly finds
-    # no plan; exit_reason "pick_giveup" classifies that ending.  A
-    # successful pick of the object clears its counter.
-    st.strikes.pick_fail_counts: Dict[str, int] = {}
-    st.strikes.pick_giveup_objects: set = set()
-    # Non-absorbing giveup (2026-08-21, investigation synthesis): a
-    # permanent "ungraspable" mark froze every shadow the object blocks
-    # for the rest of the episode (run 10-55-47: orange 3/3 made the
-    # target's own hiding shadow uncleareable).  After 4 replans the
-    # object re-enters the grasp stream for another 3 attempts — the
-    # world may have changed (it was shoved, settled differently) and
-    # the re-aimed descent may now succeed.  At most 2 paroles per
-    # object, so a truly ungraspable object still ends in a bounded
-    # giveup instead of a slow infinite loop.
-    st.strikes.pick_giveup_marked_at: Dict[str, int] = {}
-    st.strikes.pick_parole_counts: Dict[str, int] = {}
-    # Review fix 2026-08-20 (integration): transit losses (EmptyHandError
-    # at place/stack entry) need their OWN strike counter — the pick
-    # succeeds each cycle (resetting pick_fail_counts), the hold slips
-    # during the move, and without a counter the pick→transit-loss→
-    # replan cycle is unbounded.  NOT reset by a successful pick (that
-    # proves nothing about transport); cleared by a delivered
-    # place/stack of the object.  3 strikes → same giveup path.
-    st.strikes.transit_loss_counts: Dict[str, int] = {}
-    # #P1 F9: contains_nontarget REDISCOVERY strike counter, closing the
-    # asymmetry with the audit-#21 blocked-view / F2 pick / transit-loss
-    # bounds.  A sense that rediscovers an ALREADY-REGISTERED object
-    # inside a fragment rebuilds that object's boxel and re-creates its
-    # shadows — each cycle burns mission actions, and nothing bounded
-    # how often the same object could be rediscovered across replans.
-    # After 3 rediscoveries of the same object its shadows are no longer
-    # re-created (the OBJECT boxel still refreshes for census/collision);
-    # like the audit-#21 giveup this is absorbing — the belief may end
-    # incomplete, and the episode ends honestly if the target hid there.
-    st.strikes.nontarget_rediscovery_counts: Dict[str, int] = {}
-    # #P2 (a)/(d) (2026-09-19): world-integrity events (perception-only
-    # verdicts after every move/pick/place/stack: disturbed, toppled,
-    # off_support, lost, knocked_off_table) persisted in the summary;
-    # F28: physical stack failures per (object, support) with a 3-strike
-    # honest ending; episode_over ends the loop from inside a plan.
-    st.counts.integrity_events: list = []
-    st.strikes.stack_fail_counts: Dict[tuple, int] = {}
-    st.strikes.disturbed_counts: Dict[str, int] = {}   # reset every plan
-    st.ending.target_lost_seen = False                # a goal object's region observed empty
-    st.ending.episode_over = False
-    # #P4 B3(d), D7 (iv)-(vi): the held body's cargo data (the plan's
-    # grasp offset in xy, set by a verified pick), the at-home state of
-    # the last move (True only right after a move to q_home that passed
-    # the at-home test), consecutive planned moves to q_home that failed
-    # it, and the counter behind the fresh q_readback_k symbols.
-    st.hand.held_grasp_xy = None
-    st.arm.at_home_ok = False
-    st.arm.home_misses = 0
-    st.arm.readback_count = 0
-
-    if goal_at_home:
-        # D7 (v) at the start: the initial configuration is q_home only
-        # if the readback passes the at-home test.
-        _q0 = arm_joint_positions(st.setup.robot_id)
-        if not _at_home(st, _q0):
-            st.arm.current_config = RobotConfig(joint_positions=_q0,
-                                         name="q_readback_0")
-            print(f"  [D7] initial arm readback is not at q_home "
-                  f"(max |dq| {np.max(np.abs(_q0 - st.setup.planner.home_config.joint_positions)):.2e} rad)")
+    initial_home_readback(st)
 
     # #P1 F29 (2026-09-18): a holding goal ends when the target IS HELD,
     # not when the belief says "found".  A sense that finds the target
