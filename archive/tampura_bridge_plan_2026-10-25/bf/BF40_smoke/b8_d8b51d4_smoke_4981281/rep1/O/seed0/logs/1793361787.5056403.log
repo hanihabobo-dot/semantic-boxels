@@ -1,8 +1,0 @@
-Loading scene from 1747173591.670785.json
-
-==========t=0==========
-State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x77a0834acb50>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
-Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x77a081088b10>
-Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
-Reward: 0.0
-Action: boxel_episode()

@@ -49,7 +49,10 @@ proposal
 SESSION_HANDOFF.md
 plan
 
-# (archive/ is now tracked — see git history)
+# Internal records and agent files: local only (Hani, 23 Nov 2026).  Tracked up to that day;
+# the history has them.
+/archive/
+/CLAUDE.md
 # Local notes under docs/ (meetings, progress, context) — not committed
 # (the folder move: four tracked files lie in docs/ now.  git cannot re-include a file under an
 # ignored folder, so the folder's content is ignored instead of the folder: docs/* at the top,

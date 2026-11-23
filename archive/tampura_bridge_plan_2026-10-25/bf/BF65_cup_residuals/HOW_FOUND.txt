@@ -1,8 +1,0 @@
-# bf65_how_found.py on archive/.../bf (2026-11-06): every successful run of BF#63 (arm O, the 10 jobs' results.jsonl) and of BF#59's eval (every arm, eval/*/results.jsonl), classed by its metrics: a sense outcome containing "found", else places >= 1 (a cup was lifted), else nothing lifted.
-
-BF#63 generated scenes, arm O successes: 57
-    57 after lifting a cup (no sense found it)
-    sense_outcomes seen: {'sense_clear_but_empty x1': 22, 'sense_clear_but_empty x2': 13, 'sense_clear_but_empty x3': 11, 'None': 6, 'sense_clear_but_empty x4': 4, 'sense_clear_but_empty x5': 1}
-BF#59 shipped scenes, every arm successes: 653
-    653 after lifting a cup (no sense found it)
-    sense_outcomes seen: {'sense_clear_but_empty x1': 254, 'sense_clear_but_empty x3': 146, 'sense_clear_but_empty x4': 98, 'None': 67, 'sense_clear_but_empty x5': 57, 'sense_clear_but_empty x2': 31}

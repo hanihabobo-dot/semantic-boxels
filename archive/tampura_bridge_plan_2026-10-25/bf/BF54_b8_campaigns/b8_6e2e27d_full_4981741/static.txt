@@ -1,6 +1,0 @@
-graph    INFO  33 modules; roots not present yet: none
-G1       PASS  76 hits, all reviewed
-G2       PASS  46 hits, all reviewed
-G7       PASS  no scene literal
-G11(i)   PASS  pddlstream imported only by pddlstream_planner.py and streams.py
-G17      PASS  clean

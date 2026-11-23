@@ -1,24 +1,0 @@
-pybullet build time: Jan 29 2025 23:17:20
-/work/rleap1/hani.alassiri.alhabboub/p4/tampura-work/tampura_environments/tampura_environments/__init__.py:20: UserWarning: tampura_environments: skipping subpackage 'toy_discrete': No module named 'tampura_environments.toy_discrete'
-  _warnings.warn(f"tampura_environments: skipping subpackage '{_name}': {_e}")
-Loading scene from 1747173591.670785.json
-/work/rleap1/hani.alassiri.alhabboub/p4/armO-venvA/lib/python3.11/site-packages/trimesh/grouping.py:99: RuntimeWarning: invalid value encountered in cast
-  stacked = np.column_stack(stacked).round().astype(np.int64)
-
-==========t=0==========
-State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7c1c320e8ed0>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=None)
-Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7c1c343fcd90>
-Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='is-target', args=['o_ph_1']), Atom(pred_name='at-home', args=[])])
-Reward: 0.0
-[TampuraPolicy] Flat Action Parameter Sampling
-[TampuraPolicy] Outcome Sampling
-  0%|          | 0/200 [00:00<?, ?it/s] 10%|█         | 20/200 [00:07<01:11,  2.53it/s] 20%|██        | 40/200 [00:11<00:42,  3.79it/s] 30%|███       | 60/200 [00:21<00:52,  2.67it/s] 40%|████      | 80/200 [00:25<00:37,  3.22it/s] 50%|█████     | 100/200 [00:28<00:24,  4.15it/s] 60%|██████    | 120/200 [00:30<00:16,  4.98it/s] 70%|███████   | 140/200 [00:31<00:09,  6.31it/s] 80%|████████  | 160/200 [00:33<00:05,  7.20it/s] 90%|█████████ | 180/200 [00:35<00:02,  7.90it/s]100%|██████████| 200/200 [00:37<00:00,  8.50it/s]100%|██████████| 200/200 [00:37<00:00,  5.29it/s]
-[TampuraPolicy] MDP Solving
-Action: pick(o_ph_0, o_gr_2)
-Solutions (1): [(23, 9.024)] | Time: 0.019
-Observation: SceneObservation(...)
-Next State: SceneState(world=World(client_id=0, robot=<tampura_environments.panda_utils.robot.PandaRobot object at 0x7c1c338a1410>, environment=[1, 10, 11], floor=1, objects=[10, 11], categories=['d_cups_ud', 'dice'], regions=[]), grasp=g576)
-Next Belief: <tampura_environments.find_dice.env.SceneBelief object at 0x7c1c2cfb9390>
-Next Abstract Belief: AbstractBelief(items=[Atom(pred_name='known-pose', args=['o_ph_0']), Atom(pred_name='holding', args=['o_ph_0']), Atom(pred_name='at-grasp', args=['o_ph_0', 'o_gr_2']), Atom(pred_name='is-target', args=['o_ph_1'])])
-Next Reward: 0.0
-====================

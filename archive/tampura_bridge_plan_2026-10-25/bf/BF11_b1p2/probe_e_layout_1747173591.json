@@ -1,1 +1,0 @@
-{"item": "e_layout", "scene": "1747173591", "seed": 0, "eye": [0.17861445248126984, 0.048803217709064484, 0.5883188247680664], "bodies": {"d_cups_ud#10": {"pixels": 2721, "aabb_in_frame_fraction": 1.0}, "dice#11": {"pixels": 0, "aabb_in_frame_fraction": 1.0}}, "die_absent": true, "cup_parked_in_turn": {"d_cups_ud#10": {"die_pixels": 167, "aabb_error_m": 0.0081}}}
