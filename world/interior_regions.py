@@ -32,21 +32,25 @@ placement by the robot casts none.
 SEEN UNDER A COVER (BF#65 (d)): a detection of the target INSIDE the box of
 a cover that still stands over its interior region is no pose the robot can
 use: no wrist look sees it (observe_views.look_configs: the cover hides
-every point) and no grasp reaches it.  It is not registered as an object;
-the module records "target seen under <cover>", and while that record
-holds the main loop offers the planner that one region (the others are
-withheld through known_empty_shadows; the belief itself is not changed), so
-the plan is: move the cover, look, pick.  If no plan binds through that one
-region, the record ends (release) and is not made again for that region, so
-the planner is offered every unknown region; the target stays unregistered
-while the cover stands over it.
+every point) and no grasp reaches it.  It is not registered as an object,
+and that is all: the sighting is written to the log and the ledger once
+(note_seen_under) and changes nothing the planner is given.  Every unknown
+region stays on offer, the belief is not changed, and the target is
+registered by the first observation that shows it with the cover away.
+(Until 2026-11-22 the module kept a record "target seen under <cover>" and
+the main loop then offered the planner that one region alone, the others
+withheld as if known empty: a fact no observation had given.  Hani,
+2026-11-22: "this should be conidered cheating we are harding a solution
+and making it easy for the planner".  Such sightings come through openings
+in the drawn mesh of TAMPURA's cups that their solid mesh does not have:
+tracks/readable/SEEN_UNDER_CUP.md.)
 
 The interior ids live in the cover's ``interior_boxel_ids``, not in
 ``shadow_boxel_ids``: the rediscovery cleanup and the lost-object
 retirement walk the latter, and an interior region leaves the belief only
 through a render of its own grid (the sense or the sweep).
 """
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Iterable, List, Optional, Set, Tuple
 
 import numpy as np
 
@@ -67,21 +71,19 @@ _INSIDE_TOL = 0.005
 # A carved part of a region narrower than this is not kept (cast_for).
 _MIN_PART_SIDE = 0.01
 
-# target name -> the interior region id it was seen in while the cover
-# stood (BF#65 (d)).  Per run: configure() clears it.
-_seen_under: Dict[str, str] = {}
-# Regions for which a record ended because no plan bound through them
-# (release): no record is made for them again.  Per run.
-_no_plan_regions: set = set()
+# (target name, interior region id) pairs whose sighting under a standing
+# cover was already written to the log (BF#65 (d)): the line is written once
+# per pair.  Nothing reads this set to decide anything.  Per run:
+# configure() clears it.
+_noted: Set[Tuple[str, str]] = set()
 
 
 def configure(flag) -> bool:
     """Set the switch for this run ('on'/'off' or a bool) and clear the
-    run's records."""
+    run's log notes."""
     global ENABLED
     ENABLED = (flag is True) or (str(flag).lower() == 'on')
-    _seen_under.clear()
-    _no_plan_regions.clear()
+    _noted.clear()
     return ENABLED
 
 
@@ -330,7 +332,7 @@ def cast_first_observation(env, registry, target_names: Iterable[str]) -> List[s
     """The interior regions of every object the first observation
     registered (main(), Phase 3, before the shadow list is taken), after
     BF#65 (d)'s step: a target that observation shows inside a cover's box
-    is taken out of the registry and recorded as seen under that cover."""
+    is taken out of the registry (and the sighting noted in the log)."""
     if not ENABLED:
         return []
     covered = _take_out_covered_targets(env, registry, target_names)
@@ -382,69 +384,20 @@ def standing_cover(registry, point, exclude: Iterable[str] = ()
 
 def note_seen_under(target: str, cover: BoxelData, region: BoxelData,
                     pixel_count=None) -> None:
-    if region.id in _no_plan_regions:
-        return                         # released: every region is on offer
-    first = _seen_under.get(target) != region.id
-    _seen_under[target] = region.id
-    if first:
-        print(f"    [interior] {target} is in view"
-              f"{'' if pixel_count is None else f' ({pixel_count} px)'} inside "
-              f"{cover.id}'s box: it lies under that cover, where no look and "
-              f"no grasp reaches it.  Not registered as an object; "
-              f"{region.id} is where to look once {cover.id} is moved "
-              f"(BF#65 (d))")
-        ledger_event('seen_under', target=target, cover=cover.id,
-                     region=region.id, pixels=pixel_count)
-
-
-def seen_under(target: str) -> Optional[str]:
-    return _seen_under.get(target)
-
-
-def release(target_names: Iterable[str]) -> List[str]:
-    """No plan was found while the planner was offered only the region a
-    target was seen in (its look or its pick did not bind): the record
-    ends, and none is made for that region again, so the next plan is
-    offered every unknown region.  Returns the released region ids."""
-    out = []
-    for t in [t for t in (target_names or []) if t]:
-        rid = _seen_under.pop(t, None)
-        if rid is None:
-            continue
-        _no_plan_regions.add(rid)
-        out.append(rid)
-        print(f"  [interior] no plan through {rid} alone: the record '{t} seen "
-              f"under a cover' ends; every unknown region is on offer again "
-              f"(BF#65 (d))")
-        ledger_event('seen_under_released', target=t, region=rid,
-                     reason='no_plan')
-    return out
-
-
-def withheld(registry, belief, target_names: Iterable[str]) -> List[str]:
-    """The unknown regions the planner is NOT offered this plan: while a
-    target is recorded as seen under a cover, every unknown region but that
-    one.  A record ends when the target has its own boxel or the region left
-    the belief (looked at; the target was not there after all)."""
-    if not ENABLED or not _seen_under:
-        return []
-    keep = set()
-    for t in [t for t in (target_names or []) if t]:
-        rid = _seen_under.get(t)
-        if rid is None:
-            continue
-        if (registry.get_boxel(t) is not None
-                or registry.get_boxel(rid) is None
-                or belief.shadow_status.get(rid) != 'unknown'):
-            print(f"  [interior] the record '{t} seen under a cover' ends "
-                  f"({rid} "
-                  f"{'looked at' if registry.get_boxel(rid) is None else 'settled'})")
-            _seen_under.pop(t, None)
-            continue
-        keep.add(rid)
-    if not keep:
-        return []
-    return [s for s in belief.get_unknown_shadows() if s not in keep]
+    """The log's and the ledger's note of a target sighted inside the box of
+    a standing cover, once per target and region.  It is a note only: the
+    caller leaves the target unregistered, and nothing the planner is given
+    depends on it (every unknown region stays on offer)."""
+    if (target, region.id) in _noted:
+        return
+    _noted.add((target, region.id))
+    print(f"    [interior] {target} is in view"
+          f"{'' if pixel_count is None else f' ({pixel_count} px)'} inside "
+          f"{cover.id}'s box: under that cover no look and no grasp reaches "
+          f"it.  Not registered as an object; the planner is offered every "
+          f"unknown region as before (BF#65 (d))")
+    ledger_event('seen_under', target=target, cover=cover.id,
+                 region=region.id, pixels=pixel_count)
 
 
 # ----- the truthful record of a look into an interior region -----------------

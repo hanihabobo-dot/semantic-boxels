@@ -81,7 +81,6 @@ def test_off_casts_nothing():
     assert ir.cast_first_observation(_env(), reg, ['dice']) == []
     assert [b.id for b in reg.boxels.values()] == ['cup']
     assert ir.standing_cover(reg, [0.5, 0.0, 0.01]) is None
-    assert ir.withheld(reg, BeliefState([], 'dice'), ['dice']) == []
 
 
 def test_a_cover_owns_the_region_under_it():
@@ -198,48 +197,46 @@ def test_a_target_inside_a_standing_covers_box_is_not_an_object():
     # Taken out before the cast: the die's sliver box carved nothing.
     assert cup.interior_boxel_ids == ['interior_of_cup']
     assert reg.get_boxel('dice') is None and reg.dirty
-    assert ir.seen_under('dice') == 'interior_of_cup'
-    # The planner is offered that region alone.
+    # The sighting is a note in the log, made once.
+    assert ir._noted == {('dice', 'interior_of_cup')}
+
+
+def test_a_sighting_under_a_cover_changes_nothing_the_planner_is_given(capsys):
+    """Hani, 2026-11-22: a target sighted under a standing cover must not
+    narrow the planner's regions to that cover's (until then the main loop
+    withheld every other unknown region as if known empty).  The belief
+    keeps every region unknown, the module offers nothing that names
+    regions to withhold, and the round's planning does not ask it."""
+    env, reg, cup = _scene_104()
     belief = BeliefState(['shadow_of_cup', 'shadow_of_block', 'interior_of_cup'], 'dice')
-    assert sorted(ir.withheld(reg, belief, ['dice'])) == ['shadow_of_block', 'shadow_of_cup']
-    # The record ends when the region was looked at ...
-    belief.mark_sensed('interior_of_cup', found=False)
-    assert ir.withheld(reg, belief, ['dice']) == []
-    assert ir.seen_under('dice') is None
-
-
-def test_the_record_ends_when_the_target_has_its_own_boxel():
-    env, reg, cup = _scene_104()
-    belief = BeliefState(['shadow_of_cup', 'interior_of_cup'], 'dice')
-    reg.add_boxel(_obj('dice', 0.31, -0.06, DIE))
-    assert ir.withheld(reg, belief, ['dice']) == []
-
-
-def test_no_plan_through_the_one_region_releases_the_record():
-    """The main loop's net: no plan while only the seen-under region was on
-    offer ends the record for good, so every unknown region is offered; the
-    target stays unregistered while the cover stands."""
-    env, reg, cup = _scene_104()
-    belief = BeliefState(['shadow_of_cup', 'interior_of_cup'], 'dice')
-    assert ir.withheld(reg, belief, ['dice']) == ['shadow_of_cup']
-    assert ir.release(['dice']) == ['interior_of_cup']
-    assert ir.seen_under('dice') is None
-    assert ir.withheld(reg, belief, ['dice']) == []
-    assert ir.release(['dice']) == []                   # nothing left to end
-    # A later frame shows the die under the cup again: still no object, and
-    # no new record for the region that had no plan.
     dets = {'dice': _det('dice', 4, [0.320, -0.057, 0.0], [0.322, -0.055, 0.019])}
-    assert execution.register_new_detections(
-        env=env, registry=reg, belief=belief, viz=None, detections=dets,
-        target_name='dice', shadows=[], occluders=[], shadow_occluder_map={},
-        boxel_centers={}, boxel_to_pybullet={}, object_body_ids={}) == []
-    assert reg.get_boxel('dice') is None
-    assert ir.seen_under('dice') is None
-    assert ir.withheld(reg, belief, ['dice']) == []
-    # A new run starts clean.
+    kw = dict(env=env, registry=reg, belief=belief, viz=None, detections=dets,
+              target_name='dice', shadows=[], occluders=[], shadow_occluder_map={},
+              boxel_centers={}, boxel_to_pybullet={}, object_body_ids={})
+    capsys.readouterr()
+    assert execution.register_new_detections(**kw) == []
+    assert execution.register_new_detections(**kw) == []      # a later frame shows it again
+    assert reg.get_boxel('dice') is None                      # still no object
+    assert sorted(belief.get_unknown_shadows()) == ['interior_of_cup', 'shadow_of_block',
+                                                    'shadow_of_cup']
+    assert belief.get_known_empty_shadows() == [] and belief.get_parked_shadows() == []
+    # Noted at the first observation (the fixture); no line for the later frames.
+    assert 'dice is in view' not in capsys.readouterr().out
+    for name in ('withheld', 'release', 'seen_under', '_seen_under', '_no_plan_regions'):
+        assert not hasattr(ir, name), name
+    # The round's planning: what it calls known empty comes from the belief alone.
+    import ast
+    import pathlib
+    src = (pathlib.Path(__file__).resolve().parents[1] / 'test_full_pipeline.py').read_text(encoding='utf-8')
+    plan_or_stop = next(n for n in ast.walk(ast.parse(src))
+                        if isinstance(n, ast.FunctionDef) and n.name == 'plan_or_stop')
+    names = {n.value.id for n in ast.walk(plan_or_stop)
+             if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)}
+    assert 'interior_regions' not in names
+    # A new run starts clean: the note is made again.
     ir.configure('on')
     ir.note_seen_under('dice', cup, reg.get_boxel('interior_of_cup'))
-    assert ir.seen_under('dice') == 'interior_of_cup'
+    assert 'dice is in view' in capsys.readouterr().out
 
 
 def test_a_target_in_the_open_stays_registered():
@@ -248,7 +245,7 @@ def test_a_target_in_the_open_stays_registered():
     dice = _obj('dice', 0.45, 0.10, DIE)
     reg = _registry(cup, dice)
     assert ir.cast_first_observation(env, reg, ['dice']) == ['interior_of_cup']
-    assert reg.get_boxel('dice') is not None and ir.seen_under('dice') is None
+    assert reg.get_boxel('dice') is not None and not ir._noted
     # Nor is a body inside a SOLID object's box taken out (no cavity).
     env2 = _env(cavity=None)
     cup2 = _obj('cup', 0.31, -0.06)
@@ -274,10 +271,10 @@ def test_standing_cover_needs_the_cover_over_its_region():
 
 def test_register_new_detections_keeps_a_covered_target_out():
     """The frame's registration (F20): the target seen inside a standing
-    cover's box is recorded, not registered; with the cover held it is
-    registered as before."""
+    cover's box is noted in the log, not registered; with the cover held it
+    is registered as before."""
     env, reg, cup = _scene_104()
-    ir.configure('on')                                  # clears the record
+    ir.configure('on')                                  # clears the notes
     dets = {'dice': _det('dice', 4, [0.320, -0.057, 0.0], [0.322, -0.055, 0.019])}
     kw = dict(env=env, registry=reg, belief=BeliefState([], 'dice'), viz=None,
               detections=dets, target_name='dice', shadows=[], occluders=[],
@@ -285,7 +282,7 @@ def test_register_new_detections_keeps_a_covered_target_out():
               object_body_ids={})
     assert execution.register_new_detections(**kw) == []
     assert reg.get_boxel('dice') is None
-    assert ir.seen_under('dice') == 'interior_of_cup'
+    assert ir._noted == {('dice', 'interior_of_cup')}
     # With the cup in the hand the die is in the open: registered.  (The
     # stub env has no simulator; stop before the census refresh.)
     env.plan_body_id = lambda body: body

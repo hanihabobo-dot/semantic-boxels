@@ -2428,8 +2428,9 @@ def register_new_detections(*, env, registry, belief, viz, detections,
         # view INSIDE the box of a cover that still stands over its interior
         # region is under that cover; no look and no grasp reaches it there,
         # and an OBJECT boxel for it leaves the planner without a skeleton
-        # (scene 104).  Recorded as seen under the cover, not registered;
-        # the held object is no standing cover.
+        # (scene 104).  Not registered, and nothing else: the sighting is
+        # noted in the log, and the planner's regions stay as they are.  The
+        # held object is no standing cover.
         if name == str(target_name):
             _cov = interior_regions.standing_cover(
                 registry, det.est_center, exclude=skip_names)

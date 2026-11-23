@@ -1290,13 +1290,6 @@ def plan_or_stop(st, env, execution):
     # never observed empty, and the run outcome discloses them.
     known_empty = (st.setup.belief.get_known_empty_shadows()
                    + st.setup.belief.get_parked_shadows())
-    # BF#65 (d) (no-op with --interior-regions off): while the target is
-    # recorded as seen under a cover, the planner is offered that
-    # cover's interior region alone; the other unknown regions are
-    # withheld like the parked ones (the belief keeps them unknown).
-    st.round._withheld = interior_regions.withheld(
-        st.setup.registry, st.setup.belief, st.setup.planner_target_objects)
-    known_empty = known_empty + st.round._withheld
 
     # Giveup parole (2026-08-21): see the pick_giveup_marked_at
     # comment above.  Runs before planner.plan() so the paroled
@@ -3057,7 +3050,7 @@ def main(gui=True, run_logger=None, scene_config=None,
     # BF#65 option 1 (D6, model tweak M2): the hiding region under a cover
     # whose class declares a cavity (interior_regions.py), off unless the
     # run says --interior-regions on.  Set every run; it also clears the
-    # previous run's "seen under a cover" records.
+    # previous run's "seen under a cover" log notes.
     interior_regions.configure(getattr(args, 'interior_regions', 'off'))
     # M7 (TB-46): a rediscovery keeps the still-hidden fragments; set every run.
     from acting import execution
@@ -3140,15 +3133,6 @@ def main(gui=True, run_logger=None, scene_config=None,
     while not _loop_done(st):
         if plan_or_stop(st, env, execution):
             break
-
-        # BF#65 (d) (never true with --interior-regions off, where nothing
-        # is withheld): no plan while the planner was offered only the
-        # region the target was seen in.  The record ends and the next
-        # plan is offered every unknown region; the episode does not end
-        # on a restriction the belief never held.
-        if st.round.plan is None and st.round.held_obj_name is None and st.round._withheld:
-            interior_regions.release(st.setup.planner_target_objects)
-            continue
 
         if no_plan_ends_episode(st):
             break

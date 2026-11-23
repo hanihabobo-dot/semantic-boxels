@@ -913,7 +913,7 @@ def _made_bridge_tag2(r):
     copied from its print site (file:line on the tag, beside it) with sample values.  (b) The end
     statuses look_outcome, action_failed and dead.  (c) A row of each ledger kind new since the
     checkpoint, with its call site's keyword names (pin 40's schema.json): interior_region (both
-    sites), look_reveals, look_result, seen_under, seen_under_released, sense_discovery and
+    sites), look_reveals, look_result, seen_under, sense_discovery and
     m7_suspension (start and end)."""
     goal = ['and', ['holding', 'dice'], ['at_config', 'q_home']]
     r.line('    [interior] interior_of_cup: the space under cup (6.0 x 6.0 x 9.5 cm) is a hiding region, '
@@ -923,9 +923,9 @@ def _made_bridge_tag2(r):
     r.line('    [interior] ball: the space it now covers lay in free space, observed empty before it came '
            'to stand there; no region under it (D6 status rule)')             # interior_regions.py:223-225
     r.row('interior_region', obj='ball', cast=False, reason='observed_before_placement')  # interior_regions.py:226-227
-    r.line("    [interior] dice is in view (85 px) inside cup's box: it lies under that cover, where no look "
-           "and no grasp reaches it.  Not registered as an object; interior_of_cup is where to look once cup "
-           "is moved (BF#65 (d))")                                           # interior_regions.py:389-394
+    r.line("    [interior] dice is in view (85 px) inside cup's box: under that cover no look and no grasp "
+           "reaches it.  Not registered as an object; the planner is offered every unknown region as "
+           "before (BF#65 (d))")                                             # interior_regions.py:note_seen_under
     r.row('seen_under', target='dice', cover='cup', region='interior_of_cup', pixels=85)  # interior_regions.py:395-396
     # plan 2: a look of cup whose own region stays blocked (look_blocked: the target was not seen in
     # it, look_action.py:494-504; a boxel look that does not go on only ends, test_full_pipeline.py:
@@ -969,12 +969,9 @@ def _made_bridge_tag2(r):
     r.row('m7_suspension', op='end', region='shadow_of_cup__02', ended_by='released')  # belief.py:162-163
     r.line('  [M7] shadow_of_cup__02 is back in the search: its 120 s suspension at the F9 give-up is '
            'over')                                                            # test_full_pipeline.py:1847-1849
-    # plan 3: no plan through the region dice was seen under
+    # plan 3: no plan
     r.line('', '=== PLAN #3 ===', 'Unknown shadows remaining: 2')              # test_full_pipeline.py:1902, 1907
     r.plan(3, None, dt=1.5, goal=goal)
-    r.line("  [interior] no plan through interior_of_cup alone: the record 'dice seen under a cover' ends; "
-           "every unknown region is on offer again (BF#65 (d))")              # interior_regions.py:415-417
-    r.row('seen_under_released', target='dice', region='interior_of_cup', reason='no_plan')  # interior_regions.py:418-419
     # plan 4: the Wumpus world's two statuses (wumpus/narrate.py:128, an action that returned not
     # ok and a move into a pit or the wumpus's cell); a bridge run never writes them, the console
     # reads every status of run_logger.STEP_END_STATUSES

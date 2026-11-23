@@ -2783,8 +2783,8 @@ def p42_gate_surface(out):
 
 # Gate 7 (INDEX_PINS P4, PLAN 4.4): the module run state of traps 2, 14, 15 and 16, the names M6's
 # list holds for them.
-_RUN_STATE = [('interior_regions', 'ENABLED'), ('interior_regions', '_seen_under'),
-              ('interior_regions', '_no_plan_regions'), ('run_logger', '_ledger_t0'),
+_RUN_STATE = [('interior_regions', 'ENABLED'), ('interior_regions', '_noted'),
+              ('run_logger', '_ledger_t0'),
               ('execution', 'M7'), ('execution', 'M7_SUSPEND_S')]
 
 

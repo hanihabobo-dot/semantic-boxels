@@ -363,18 +363,15 @@ class Strikes:
 
 class Round:
     """What one round of the loop hands from its planning to its execution."""
-    __slots__ = ('plan', 'held_obj_name', '_withheld')
+    __slots__ = ('plan', 'held_obj_name')
 
     # bound by: plan_or_stop
-    # read by: main, plan_or_stop, no_plan_ends_episode, execute_plan,
+    # read by: plan_or_stop, no_plan_ends_episode, execute_plan,
     #   dispatch_step, do_move
     plan: object
     # bound by: plan_or_stop
-    # read by: main, plan_or_stop
+    # read by: plan_or_stop
     held_obj_name: object
-    # bound by: plan_or_stop
-    # read by: main, plan_or_stop
-    _withheld: object
 
 
 class Ending:
