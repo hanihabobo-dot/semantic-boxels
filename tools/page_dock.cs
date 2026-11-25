@@ -5,11 +5,17 @@
 //                of it stays visible, from the simulator's rectangle, the screen's work area and
 //                the page window's own margins.  tests/test_page_dock.py reads it.
 //   Choose       which of the simulator windows open now is this run's, and nothing else.
+//   Split        the split of the screen, and nothing else: the page's part, the simulator's
+//                part and the size of the simulator window's inside, from a screen's work area
+//                and scaling.  run.ps1 asks it before the run starts (SplitOfPrimary), the
+//                holder for the screen the simulator's window is on.  MarginOf: how far what is
+//                seen of that window lies inside the rectangle Windows has for it.
 //   Run          waits for the two windows, then keeps them together until one of them or the
 //                run is gone: Sync (place and cut), Raise and RaiseSim (the two come to the
 //                front together), OnEvent (the windows' own moves, as Windows reports them) and
 //                Tick (four times a second: are both still there; a sync in case an event was
 //                missed).  Its log says which windows it took and how Windows describes them.
+//                In a split it first puts the simulator's window into its part (MoveSimOnce).
 //   Describe,    read only, and TryRaise, TryRaiseSim: for the trial on a desktop that is not
 //   ContentOf... shown (tracks/dbgcams/checks/dock_trial.ps1).
 //
@@ -19,7 +25,9 @@
 //
 // It touches two windows that are not its own, and only so: the page's browser window is moved,
 // sized, cut to its page (a window region), shown, minimised and moved in the stacking order;
-// the simulator's window is only read, and moved in the stacking order when the page is clicked.
+// the simulator's window is read, moved in the stacking order when the page is clicked, and, in
+// a split of the screen, asked ONCE to move into its part when the pair is taken (its place
+// only, never its size; it is not asked again, wherever it then stands).
 // Nothing is sent to either window (no message, no key, no click), and nothing here reaches the run.
 using System;
 using System.Collections.Generic;
@@ -45,6 +53,8 @@ public static class PageDock
     struct MONITORINFO { public int cbSize; public RECT rcMonitor; public RECT rcWork; public uint dwFlags; }
     [StructLayout(LayoutKind.Sequential)]
     struct WINDOWPLACEMENT { public int length; public int flags; public int showCmd; public POINT ptMin; public POINT ptMax; public RECT rcNormal; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct WINDOWINFO { public uint cbSize; public RECT rcWindow; public RECT rcClient; public uint dwStyle; public uint dwExStyle; public uint dwWindowStatus; public uint cxWindowBorders; public uint cyWindowBorders; public ushort atomWindowType; public ushort wCreatorVersion; }
 
     delegate bool EnumProc(IntPtr h, IntPtr l);
     delegate void WinEventProc(IntPtr hook, uint ev, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
@@ -59,7 +69,7 @@ public static class PageDock
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
-    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    [DllImport("user32.dll", SetLastError = true)] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] static extern int SetWindowRgn(IntPtr h, IntPtr rgn, bool redraw);
     [DllImport("user32.dll")] static extern int GetWindowRgnBox(IntPtr h, out RECT r);
@@ -69,7 +79,10 @@ public static class PageDock
     [DllImport("user32.dll")] static extern bool GetWindowPlacement(IntPtr h, ref WINDOWPLACEMENT p);
     [DllImport("user32.dll")] static extern bool SetWindowPlacement(IntPtr h, ref WINDOWPLACEMENT p);
     [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr h, uint flags);
+    [DllImport("user32.dll")] static extern IntPtr MonitorFromPoint(POINT p, uint flags);
     [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr m, ref MONITORINFO i);
+    [DllImport("shcore.dll")] static extern int GetDpiForMonitor(IntPtr m, int kind, out uint x, out uint y);
+    [DllImport("user32.dll")] static extern bool GetWindowInfo(IntPtr h, ref WINDOWINFO i);
     [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr h);
     [DllImport("user32.dll")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr c);
     [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int attr, out RECT r, int size);
@@ -161,6 +174,102 @@ public static class PageDock
         return nowMs - standingSince >= OnlyOneMs;
     }
 
+    // ----- the split of the screen ----------------------------------------------------------
+    //
+    // Hani, 2026-11-25: "i want the view to be spilt between the two thing completly. so one
+    // part of the screen is the browser thing entierly, an the other part is the sim. you should
+    // measure the widtith of the screen when it starts and sets the sizes accordingly."
+    //
+    // The screen without the taskbar is divided in two, the page on the left and the simulator
+    // on the right.  run.ps1 measures the screen before the run starts and asks the run for a
+    // window whose inside fits the simulator's part (SB_GUI_WINDOW, read by boxel_env.py); the
+    // holder puts that window into its part once, when it takes the pair, and the page gets the
+    // rest.  The split is the start and not a lock: afterwards the page follows the simulator's
+    // window wherever it is dragged, as without a split.
+
+    /// The page's share of the screen's width: ShareOfPage parts of ShareOutOf.  The one place.
+    public const int ShareOfPage = 1, ShareOutOf = 3;
+    /// The least width of the page, in pixels at 100 % scaling (page_dock.ps1's -MinWidth).
+    public const int LeastWidth = 240;
+    /// A simulator window whose inside is smaller than this, either way, is of no use: a screen
+    /// that leaves less gets no split.
+    public const int LeastInside = 320;
+    /// The frame WSL's window host draws around an X window, in that window's own pixels: a
+    /// border on the left, on the right and below, a title bar above, and around all of it a
+    /// margin for the window's shadow.  The margin is part of the rectangle Windows has for the
+    /// window and is not seen as window.  INFERRED, from one measured window (Hani's run of
+    /// 2026-11-25: a rectangle of 1356 x 817 for an inside of 1280 x 720, so 76 = 2 x (32 + 6)
+    /// and 97 = 2 x 32 + 27 + 6) and from the stock numbers of the window host's theme.  The
+    /// holder computes the margin again from every window it takes (MarginOf) and writes it
+    /// into its log.
+    public const int FrameBorder = 6, FrameTitle = 27, FrameMargin = 32;
+
+    /// The scale WSL's window host shows an X window at: whole numbers only, the screen's
+    /// scaling rounded down (1 below 200 %, 2 from 200 %, 3 from 300 %).  Its settings on this
+    /// machine say so (its log: hi-dpi on, fractional scaling off, no rounding up); seen for
+    /// 150 % only.  `dpi`: the screen's dots per inch, 96 at 100 %.
+    public static int WslScale(int dpi) { return Math.Max(1, dpi / 96); }
+
+    public struct Halves
+    {
+        public bool Ok;                 // false: the screen is too small for a split (or was not measured)
+        public RECT Work;               // the screen without the taskbar, real pixels
+        public int Dpi, Scale;          // the screen's scaling, and the scale of an X window on it
+        public RECT Page;               // the page's part
+        public RECT Sim;                // the simulator's part: its window as seen, title bar and border included
+        public RECT SimWindow;          // the rectangle Windows has for that window: the part and the margin around it
+        public int ClientW, ClientH;    // the window's inside in its own pixels: what the run is asked to open
+    }
+
+    /// The split of one screen.  `work` is the screen without the taskbar in real pixels, `dpi`
+    /// its scaling, `minAt100` the page's least width at 100 %.  The page takes its share of the
+    /// width from the left, never less than its least width; the simulator takes the rest and
+    /// the whole height.  The simulator's part is brought to the scale of an X window, rounded
+    /// down, and what the rounding leaves over in the width goes to the page, so the two parts
+    /// touch (in the height under one step of that scale stays free below both).
+    public static Halves Split(RECT work, int dpi, int minAt100)
+    {
+        Halves h = new Halves();
+        if (dpi < 48) dpi = 96;
+        h.Work = work; h.Dpi = dpi; h.Scale = WslScale(dpi);
+        int s = h.Scale;
+        int least = (int)Math.Round(minAt100 * (dpi / 96.0));
+        int pageW = Math.Max(work.W * ShareOfPage / ShareOutOf, least);
+        h.ClientW = (work.W - pageW) / s - 2 * FrameBorder;
+        h.ClientH = work.H / s - FrameTitle - FrameBorder;
+        h.Ok = h.ClientW >= LeastInside && h.ClientH >= LeastInside;
+        if (!h.Ok) return h;
+        h.Sim.R = work.R; h.Sim.L = work.R - (h.ClientW + 2 * FrameBorder) * s;
+        h.Sim.T = work.T; h.Sim.B = work.T + (h.ClientH + FrameTitle + FrameBorder) * s;
+        h.Page.L = work.L; h.Page.R = h.Sim.L; h.Page.T = h.Sim.T; h.Page.B = h.Sim.B;
+        int m = FrameMargin * s;
+        h.SimWindow.L = h.Sim.L - m; h.SimWindow.T = h.Sim.T - m; h.SimWindow.R = h.Sim.R + m; h.SimWindow.B = h.Sim.B + m;
+        return h;
+    }
+
+    public struct Margin
+    {
+        public int Pixels;                  // the margin taken, real pixels on each side
+        public bool Computed;               // true: the rectangle gave it; false: it is the assumed FrameMargin
+        public int FromWidth, FromHeight;   // what the width and the height each leave for the two margins, real pixels
+    }
+
+    /// The margin around what is seen of a simulator window, from the rectangle Windows has for
+    /// it (`window`) and the inside the run was asked to open (`clientW` x `clientH`, the
+    /// window's own pixels, shown at `scale`): what the width leaves beside the inside and its
+    /// two borders, and what the height leaves beside the inside, its title bar and its border.
+    /// When the two agree that is twice the margin, computed.  When they do not, the frame is
+    /// not the one assumed or the window is not the size asked: then the assumed margin is taken.
+    public static Margin MarginOf(RECT window, int clientW, int clientH, int scale)
+    {
+        Margin m = new Margin();
+        m.FromWidth = window.W - (clientW + 2 * FrameBorder) * scale;
+        m.FromHeight = window.H - (clientH + FrameTitle + FrameBorder) * scale;
+        m.Computed = m.FromWidth >= 0 && m.FromWidth == m.FromHeight && m.FromWidth % 2 == 0;
+        m.Pixels = m.Computed ? m.FromWidth / 2 : FrameMargin * scale;
+        return m;
+    }
+
     // ----- reading windows ------------------------------------------------------------------
 
     static string Title(IntPtr h) { var s = new StringBuilder(512); GetWindowText(h, s, 512); return s.ToString(); }
@@ -230,16 +339,31 @@ public static class PageDock
     /// for it, in real pixels from the left, the top, the right and the bottom (page_dock.ps1's
     /// -SimInset).  All zero: the rectangle is taken as what is seen.  The simulator's window
     /// is drawn by WSL's window host, which may send its shadow as part of the window; Windows
-    /// has no call that tells, so this is a measured number.
+    /// has no call that tells, so this is a measured number.  In a split of the screen the
+    /// margin the holder computes (MarginOf) comes first and these four are added to it.
     public static RECT Inset;
     public static void SetInset(int left, int top, int right, int bottom)
     {
         Inset.L = left; Inset.T = top; Inset.R = right; Inset.B = bottom;
     }
+
+    /// The split of the screen: the inside the run was asked to open (0: no split), whether
+    /// the simulator's window is put into its part (page_dock.ps1's -SimClient and -SimPlace),
+    /// and the margin of that window in real pixels, computed when the pair is taken.
+    static int askedW, askedH, margin;
+    static bool placeSim = true;
+    public static void SetSplit(int clientW, int clientH, bool place)
+    {
+        askedW = clientW; askedH = clientH; placeSim = place;
+    }
+
+    /// A maximised window has no margin: the window host draws no shadow around it (from its
+    /// source as remembered, not tried).
     static RECT Seen(IntPtr simulator)
     {
         RECT r = Frame(simulator);
-        r.L += Inset.L; r.T += Inset.T; r.R -= Inset.R; r.B -= Inset.B;
+        int m = IsZoomed(simulator) ? 0 : margin;
+        r.L += m + Inset.L; r.T += m + Inset.T; r.R -= m + Inset.R; r.B -= m + Inset.B;
         return r;
     }
 
@@ -276,6 +400,44 @@ public static class PageDock
         var info = new MONITORINFO(); info.cbSize = Marshal.SizeOf(typeof(MONITORINFO));
         GetMonitorInfo(MonitorFromWindow(h, 2), ref info);
         return info.rcWork;
+    }
+
+    /// A screen's scaling in dots per inch (96 is 100 %); 96 where Windows does not tell.
+    static int DpiOf(IntPtr monitor)
+    {
+        uint x, y;
+        try { if (GetDpiForMonitor(monitor, 0, out x, out y) == 0 && x > 0) return (int)x; } catch { }
+        return 96;
+    }
+
+    /// The split of the primary screen, measured now, in real pixels (run.ps1 asks before the
+    /// run starts).  The primary screen is the one that holds the point 0,0: where WSL's window
+    /// host puts a new window when the pointer has not been over one of its windows yet (from
+    /// its source as remembered), and the only screen there is on Hani's machine.  Where the
+    /// simulator's window opens on another screen the holder measures that one again; only the
+    /// window's size is then this screen's.  Nothing but reading; Ok is false when Windows
+    /// gives no screen.
+    public static Halves SplitOfPrimary()
+    {
+        IntPtr was = SetThreadDpiAwarenessContext(new IntPtr(-4));      // real pixels on every screen
+        try
+        {
+            IntPtr monitor = MonitorFromPoint(new POINT(), 1);
+            var info = new MONITORINFO(); info.cbSize = Marshal.SizeOf(typeof(MONITORINFO));
+            if (monitor == IntPtr.Zero || !GetMonitorInfo(monitor, ref info) || info.rcWork.W <= 0) return new Halves();
+            return Split(info.rcWork, DpiOf(monitor), LeastWidth);
+        }
+        finally { if (was != IntPtr.Zero) SetThreadDpiAwarenessContext(was); }
+    }
+
+    /// More of a window as Windows has it, for the log: its inside (where it differs from the
+    /// rectangle, it may be what is seen of a simulator window), its styles and its borders.
+    static string More(IntPtr h)
+    {
+        var info = new WINDOWINFO(); info.cbSize = (uint)Marshal.SizeOf(typeof(WINDOWINFO));
+        if (!GetWindowInfo(h, ref info)) return "not told";
+        return "inside=" + info.rcClient + " style=" + info.dwStyle.ToString("X") + " exstyle=" + info.dwExStyle.ToString("X")
+             + " borders=" + info.cxWindowBorders + "," + info.cyWindowBorders;
     }
 
     /// One window in a line, for the trial: where it is, as seen, its region, its state.
@@ -385,6 +547,14 @@ public static class PageDock
         double k = GetDpiForWindow(page) / 96.0;
         if (k < 0.5) k = 1.0;
         int want = (int)Math.Round(wantAt100 * k), min = (int)Math.Round(minAt100 * k);
+        if (askedW > 0)
+        {
+            // A split of the screen: the page is as wide as its part of the screen the
+            // simulator's window is on.  With the simulator in its part that is all the room
+            // beside it; elsewhere the page is as wide as the room where it stands, as always.
+            Halves halves = Split(work, DpiOf(MonitorFromWindow(sim, 2)), minAt100);
+            if (halves.Ok) want = halves.Page.W;
+        }
         RECT w; GetWindowRect(page, out w);
         bool found;
         RECT c = Content(page, childClass, out found);
@@ -447,6 +617,111 @@ public static class PageDock
         if (IsWindow(sim) && !IsIconic(sim)) SetWindowPos(sim, page, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010);
     }
 
+    /// The split, first half: the margin of the simulator's window, computed from the rectangle
+    /// Windows has for it and the inside the run was asked to open, and written down with
+    /// every number it rests on.  Nothing is touched.
+    static void TakeMargin()
+    {
+        int dpi = DpiOf(MonitorFromWindow(sim, 2)), s = WslScale(dpi);
+        RECT r = Frame(sim), work = Work(sim);
+        Margin m = MarginOf(r, askedW, askedH, s);
+        margin = m.Pixels;
+        Note("  split: the run was asked for an inside of " + askedW + "x" + askedH + "; this screen's scaling is "
+             + (dpi * 100 / 96) + " % (dpi " + dpi + "), an X window's scale on it " + s + "; the window's rectangle is "
+             + r.W + "x" + r.H + ", which leaves " + m.FromWidth + " (width) and " + m.FromHeight
+             + " (height) beside the inside, its border of " + FrameBorder * s + " and its title bar of " + FrameTitle * s);
+        Note(m.Computed
+             ? "  split: the margin around what is seen of the window is COMPUTED from that: " + margin
+               + " px on each side (assumed: " + FrameMargin * s + ")"
+             : "  split: the two do not give one margin, so the frame is not the one assumed or the window is not the size asked: the margin is ASSUMED, "
+               + margin + " px on each side");
+        // A second reading of the margin, for the record only: a window as high as the work
+        // area is put by the window host with the top of what is seen on the work area's top,
+        // so its rectangle starts the margin above it.
+        Note("  split: the window opened with its top " + (work.T - r.T) + " px above the work area's top and its left edge "
+             + (r.L - work.L) + " px inside the work area " + work);
+    }
+
+    const int MoveWaitMs = 1500;    // how long the first placing waits for the simulator's window to reach its part
+    static bool moveOpen;           // the simulator's window was asked to move and has not been seen there yet
+    static int moveX, moveY;
+    static long moveAskedAt;
+
+    /// The split, second half: the simulator's window into its part of the screen, ONCE.  What
+    /// is seen of it goes against the right edge and the top of the work area, with the size it
+    /// has (the run opened it with the inside the launcher measured, so that is the simulator's
+    /// part).  One request to Windows, for the place only: the size, the stacking order and the
+    /// keyboard are left alone, and the request is posted and not waited for, so a simulator
+    /// window that does not answer cannot stop the holder.  Then the rectangle is read back for
+    /// MoveWaitMs and the log says where the window was, where it was asked to go and where it
+    /// is.  It is never asked again: where it does not move, or is dragged later, the page
+    /// takes the room beside where it is (Sync), as without a split.
+    ///
+    /// NOT TRIED on a real simulator window (2026-11-25): that needs a window on the desktop.
+    /// WSL's window host draws that window, and Windows holds a stand-in for it; whether a move
+    /// asked of the stand-in by another program reaches WSL only a real run can say.
+    static void MoveSimOnce()
+    {
+        RECT r = Frame(sim), work = Work(sim);
+        Halves h = Split(work, DpiOf(MonitorFromWindow(sim, 2)), minAt100);
+        Note("  split: the work area " + work + (h.Ok
+             ? " divides into the page " + h.Page + " and the simulator " + h.Sim + " (an inside of " + h.ClientW + "x" + h.ClientH
+               + ", for Windows the rectangle " + h.SimWindow + ")"
+             : " is too small for a split"));
+        if (!placeSim) { Note("  split: the simulator's window is left where it is (-SimPlace leave)"); return; }
+        if (IsZoomed(sim) || IsIconic(sim)) { Note("  split: the simulator's window is maximised or minimised and is left as it is"); return; }
+        int x = work.R + margin + Inset.R - r.W, y = work.T - margin - Inset.T;
+        if (r.L == x && r.T == y) { Note("  split: the simulator's window is in its part already: " + r); return; }
+        // position only: no size (0x0001), no stacking order (0x0004), no activation (0x0010), posted (0x4000)
+        bool posted = SetWindowPos(sim, IntPtr.Zero, x, y, 0, 0, 0x0001 | 0x0004 | 0x0010 | 0x4000);
+        int error = Marshal.GetLastWin32Error();
+        if (!posted)
+        {
+            Note("  split: Windows refused the move of the simulator's window (error " + error + "); it stays at " + r
+                 + " and the page takes the room beside it");
+            return;
+        }
+        moveOpen = true; moveX = x; moveY = y; moveAskedAt = life.ElapsedMilliseconds;
+        var waited = Stopwatch.StartNew();
+        RECT now = r;
+        while (waited.ElapsedMilliseconds < MoveWaitMs)
+        {
+            System.Threading.Thread.Sleep(50);
+            now = Frame(sim);
+            if (now.L == x && now.T == y) break;
+        }
+        string asked = "  split: the simulator's window was asked ONCE to move from " + r + " to " + x + "," + y + " (its place only)";
+        if (now.L == x && now.T == y)
+        {
+            moveOpen = false;
+            Note(asked + "; Windows has it there after " + waited.ElapsedMilliseconds + " ms: " + now);
+        }
+        else
+            Note(asked + "; after " + MoveWaitMs + " ms Windows has it at " + now
+                 + (now.L == r.L && now.T == r.T ? ", where it was" : "")
+                 + ". It is NOT asked again: the page takes the room beside where it is");
+    }
+
+    /// A simulator window that had not reached its part when the first placing was made: the
+    /// log gets one more line, when it is there or after ten seconds.  Nothing is asked of it.
+    static void CheckMove()
+    {
+        if (!IsWindow(sim)) { moveOpen = false; return; }
+        RECT now = Frame(sim);
+        long ms = life.ElapsedMilliseconds - moveAskedAt;
+        if (now.L == moveX && now.T == moveY)
+        {
+            moveOpen = false;
+            Note("split: the simulator's window is where it was asked, " + ms + " ms after the request: " + now);
+        }
+        else if (ms > 10000)
+        {
+            moveOpen = false;
+            Note("split: ten seconds after the request the simulator's window is at " + now + ", not at " + moveX + "," + moveY
+                 + "; nothing more is asked of it");
+        }
+    }
+
     /// The page's window as a window of its own again: whole, and where it was before.
     static void Release()
     {
@@ -477,6 +752,7 @@ public static class PageDock
         missing = 0;
         if (!RunAlive()) { Finish("the run has ended", true); return; }
         Sync("tick");
+        if (moveOpen) CheckMove();
     }
 
     static void OnEvent(IntPtr hook, uint ev, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
@@ -550,6 +826,8 @@ public static class PageDock
         }
         childClass = pageChildClass ?? ""; wantAt100 = width; minAt100 = minWidth; watch = watchPid;
         side = 0; missing = 0; done = false; away = false; lastLine = ""; lastSim = ""; unasked = 0; quietUntil = 0; lastUnasked = 0; hiddenSince = -1; trace = traceAll;
+        margin = 0; moveOpen = false;
+        if (askedW > 0) side = Left;        // a split of the screen: the page's part is the left one
         var hooks = new List<IntPtr>();
         UIntPtr timer = UIntPtr.Zero;
         bool held = false;
@@ -614,8 +892,10 @@ public static class PageDock
             Note("  the simulator's window " + (before.Contains(sim.ToInt64())
                  ? "was open when the holder's list was taken; taken as the only one, the run having drawn its window, after it stayed the only one for " + OnlyOneMs + " ms"
                  : "opened after the holder's list was taken"));
+            if (askedW > 0) TakeMargin();       // a split of the screen: the margin, before "taken as seen" is said
             Note("  simulator: " + Describe(sim.ToInt64()) + " process=" + ProcName(sim) + " dpi=" + GetDpiForWindow(sim)
-                 + " work=" + Work(sim) + " inset=" + Inset + " taken as seen=" + Seen(sim));
+                 + " work=" + Work(sim) + " inset=" + Inset + (askedW > 0 ? " margin=" + margin : "") + " taken as seen=" + Seen(sim));
+            Note("  simulator, more: " + More(sim));
             bool inside;
             RECT content = Content(page, childClass, out inside);
             Note("  page: " + Describe(page.ToInt64()) + " dpi=" + GetDpiForWindow(page)
@@ -623,6 +903,7 @@ public static class PageDock
             foreach (long h in FindSim(simTitle, simProcess))
                 if (h != sim.ToInt64())
                     Note("  another simulator window, left alone (" + (before.Contains(h) ? "open before" : "opened since") + "): " + Describe(h));
+            if (askedW > 0) MoveSimOnce();      // the simulator's window into its part, before the page is placed
             proc = OnEvent;
             // The reports the holder acts on, of these two programs only: a window came to the
             // front (0003), was minimised or restored (0016, 0017), was closed, shown or hidden

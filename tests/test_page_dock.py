@@ -207,6 +207,9 @@ def test_the_holder_places_shows_and_cuts_a_window_and_sends_nothing():
         'GetWindowText', 'GetClassName', 'GetWindowThreadProcessId', 'GetWindowRect',
         'GetWindowRgnBox', 'GetWindowPlacement', 'MonitorFromWindow', 'GetMonitorInfo',
         'GetDpiForWindow', 'DwmGetWindowAttribute', 'GetWindowLongPtr',
+        # the split of the screen (2026-11-25), all three read only: the primary screen, a
+        # screen's scaling, a window's inside and styles for the log
+        'MonitorFromPoint', 'GetDpiForMonitor', 'GetWindowInfo',
         'SetWindowPos', 'ShowWindow', 'SetWindowRgn', 'SetWindowPlacement',
         'CreateRectRgn', 'DeleteObject',
         'SetThreadDpiAwarenessContext', 'SetWinEventHook', 'UnhookWinEvent',
@@ -475,7 +478,10 @@ try {
 
 @needs_pwsh
 def test_loose_page_changes_nothing_of_the_runs_command():
-    """-LoosePage is the launcher's own: the run asks for the page as before."""
+    """-LoosePage is the launcher's own: the run asks for the page as before.
+    Since the split of the screen (2026-11-25) the run of a held page is also
+    asked for a window of the size measured, which a loose page never is
+    (tests/test_page_split.py); that size aside the two commands are one."""
     win = _win(RUN_PS1)
     script = (f"& '{win}' boxels -Seed 3 -LoosePage -DryRun *>&1 | Out-String; '@@'; "
               f"& '{win}' boxels -Seed 3 -DryRun *>&1 | Out-String; '@@'; & '{win}' help | Out-String")
@@ -484,6 +490,8 @@ def test_loose_page_changes_nothing_of_the_runs_command():
     assert proc.returncode == 0, proc.stderr
     loose, held, help_text = proc.stdout.split('@@')
     word = re.compile(r'SB_GUI_PAGE_TOKEN=[0-9a-f]{12}')
+    size = re.compile(r'export SB_GUI_WINDOW=\d+x\d+; ')
     assert word.search(loose) and ' --gui-page on' in loose
-    assert word.sub('', loose).strip() == word.sub('', held).strip()
+    assert 'SB_GUI_WINDOW' not in loose and len(size.findall(held)) <= 1
+    assert word.sub('', loose).strip() == word.sub('', size.sub('', held)).strip()
     assert '-LoosePage' in help_text and 'held against it' in help_text

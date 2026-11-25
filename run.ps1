@@ -13,9 +13,9 @@
 #                              same console and planner;  `boxels` alone is the same word
 #   run boxels -Seed 3 -Headless
 #   run boxels -NoPage         PyBullet's own window as it was (its panels and three camera panes) and no page;
-#                              without it a window run of boxels shows the simulator alone in its window and a
-#                              page held against it, the two moving as one (the console's drawing and lines, the
-#                              robot camera's three pictures; gui_page.py);  -LoosePage   the page as its own window
+#                              without it a window run of boxels splits the screen, measured at its start: the simulator
+#                              alone in its window on the right two thirds and a page held against it on the left third (the
+#                              console, the camera's three pictures; gui_page.py);  -LoosePage   no split, the page its own window
 #   run boxels -Scene stack -Goal stack -Occluders 0
 #   run tampura -Off           without M8-M10 (the old pipeline);  -Squeeze 1   a pick squeeze in mm
 #   run boxels -Look boxel     one look action from a free-space boxel instead of sense and observe (path 9)
@@ -185,6 +185,7 @@ function New-Run([int]$seedNo) {
     $record = $null
     $cameras = $null
     $page = $null
+    $window = ''
     if ($What -eq 'tampura') {
         $stamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
         $vis = if ($Headless) { 0 } else { 1 }
@@ -234,10 +235,22 @@ function New-Run([int]$seedNo) {
         if (-not $Headless -and -not $NoPage) {
             $page = [guid]::NewGuid().ToString('N').Substring(0, 12)
             $pageFlag = ' --gui-page on'
+            # The split of the screen (Hani, 2026-11-25), for a page that is held: the screen is
+            # measured now, before the run starts, and the run is asked for a simulator window
+            # whose inside fits the simulator's part (SB_GUI_WINDOW, read by boxel_env.py).  No
+            # split (the screen too small, or not measured): the window opens 1280x720 as before
+            # and the page is held beside it.
+            if (-not $LoosePage) {
+                $window = Get-SplitWindow
+                if (-not $window) {
+                    Write-Host "run: no split of the screen ($noSplit); the simulator's window opens 1280x720 and the page beside it" -ForegroundColor Yellow
+                }
+            }
         }
         $cmd = "cd $S && PYTHONHASHSEED=0 $PY $mine$pageFlag$sw$extra"
     }
     if ($page) { $cmd = "export SB_GUI_PAGE_TOKEN=$page; " + $cmd }
+    if ($window) { $cmd = "export SB_GUI_WINDOW=$window; " + $cmd }
     if ($audio) { $cmd = "export SB_AUDIO=$audio; " + $cmd }
     if ($Voice) { $cmd = 'export SB_VOICE=on; ' + $cmd }
     # TB-17 and rule 7: the run holds the pipeline lock, so a track's episode
@@ -255,7 +268,37 @@ function New-Run([int]$seedNo) {
     # TB-17: the run and its children carry SB_RUN, so run kill ends what
     # run started and leaves a track's episode, probe or planner alone.
     $cmd = 'export SB_RUN=1; ' + $cmd
-    [pscustomobject]@{ Seed = $seedNo; Cmd = $cmd; Mine = $mine; Record = $record; Cameras = $cameras; Page = $page }
+    [pscustomobject]@{ Seed = $seedNo; Cmd = $cmd; Mine = $mine; Record = $record; Cameras = $cameras; Page = $page; Window = $window }
+}
+
+# The split of the screen between the page and the simulator (Hani, 2026-11-25: "one part of the
+# screen is the browser thing entierly, an the other part is the sim. you should measure the
+# widtith of the screen when it starts and sets the sizes accordingly").
+# Get-SplitWindow: the inside of the simulator's window for that split, as <width>x<height> in the
+# window's own pixels, or '' with $noSplit saying why there is no split.  The screen measured is
+# the primary one, without its taskbar, in real pixels, with its scaling; the share, the frame WSL
+# draws around the window and all the arithmetic are in one place, tools/page_dock.cs
+# (PageDock.Split; compiled here when first asked, about a second).  The holder gets the same
+# size (-SimClient) and puts the window into its part.
+# SB_SPLIT_SCREEN=left,top,right,bottom,dpi stands in for the measured screen (the tests; or to
+# see with -DryRun what another screen would give).
+$noSplit = ''
+function Get-SplitWindow {
+    $script:noSplit = ''
+    try {
+        if (-not ('PageDock' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'tools/page_dock.cs') -IgnoreWarnings }
+        if ($env:SB_SPLIT_SCREEN -match '^\s*(-?\d+),(-?\d+),(-?\d+),(-?\d+),(\d+)\s*$') {
+            $work = New-Object PageDock+RECT
+            $work.L = [int]$Matches[1]; $work.T = [int]$Matches[2]; $work.R = [int]$Matches[3]; $work.B = [int]$Matches[4]
+            $halves = [PageDock]::Split($work, [int]$Matches[5], [PageDock]::LeastWidth)
+        } else {
+            $halves = [PageDock]::SplitOfPrimary()
+        }
+        if ($halves.Ok) { return "$($halves.ClientW)x$($halves.ClientH)" }
+        $script:noSplit = if ($halves.Work.W -gt 0) { "the screen is too small for it: $($halves.Work.W)x$($halves.Work.H) at $([int]($halves.Dpi * 100 / 96)) %" }
+                          else { 'Windows gave no screen to measure' }
+    } catch { $script:noSplit = $_.Exception.Message }
+    return ''
 }
 
 # The page beside our own window (gui_page.py).  Its server runs inside the run, in WSL, on
@@ -360,7 +403,8 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
     try {
         if ($r.Page -and -not $LoosePage) {
             # The page is held against the simulator's window, the two as one (tools/page_dock.ps1;
-            # Hani, 2026-11-22).  The holder waits for this run's two windows (the page by this
+            # Hani, 2026-11-22), and since 2026-11-25 the two divide the screen between them
+            # (Get-SplitWindow above).  The holder waits for this run's two windows (the page by this
             # run's word, as Find-Page does, so a page left open by another run is never taken),
             # ends by itself when the window or the run is gone, and is never ended from here.
             # It writes down what it finds and does in $holderLog (one file, started anew by
@@ -371,6 +415,9 @@ for ($i = 0; $i -lt $seeds.Count; $i++) {
                               '-PageWord', $r.Page, '-PortFrom', $pagePorts[0], '-PortTo', $pagePorts[-1],
                               '-Log', ('"' + $holderLog + '"'), '-Trace')
                 $holderAt = Get-Date
+                # the split of the screen: the inside this run was asked to open, so that the
+                # holder puts the simulator's window into its part and the page into the other
+                if ($r.Window) { $holdArgs += '-SimClient', $r.Window }
                 $holder = Start-Process -FilePath (Join-Path $PSHOME 'pwsh.exe') -ArgumentList $holdArgs -WindowStyle Hidden -PassThru
                 $null = $holder.Handle      # keeps the handle: HasExited and ExitCode stay readable
             } catch {

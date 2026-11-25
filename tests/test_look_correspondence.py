@@ -379,13 +379,17 @@ def test_without_look_the_command_is_the_bases(args):
     # 2026-11-22; gui_page.py): one word of its own and one flag, and nothing
     # else (tests/test_run_page_launcher.py holds that).  They are the page's,
     # not the look's: taken out here, the rest must still be the base's, and
-    # no other run may carry them.
+    # no other run may carry them.  Since the split of the screen (Hani,
+    # 2026-11-25) that run is also asked for a window of the size measured,
+    # at most once (tests/test_page_split.py): the page's too, taken out too.
     if args.startswith('boxels') and '-Headless' not in args:
         word = re.compile(r'export SB_GUI_PAGE_TOKEN=[0-9a-f]{12}; ')
+        size = re.compile(r'export SB_GUI_WINDOW=\d+x\d+; ')
         assert len(word.findall(mine)) == 1 and mine.count(' --gui-page on') == 1
-        mine = word.sub('', mine).replace(' --gui-page on', '')
+        assert len(size.findall(mine)) <= 1
+        mine = word.sub('', size.sub('', mine)).replace(' --gui-page on', '')
     else:
-        assert 'SB_GUI_PAGE' not in mine and '--gui-page' not in mine
+        assert 'SB_GUI_' not in mine and '--gui-page' not in mine
     if (_BASE / 'run.ps1').is_file():
         theirs = _dry(_BASE / 'run.ps1', args)
         norm = lambda s: s.replace('/mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels', '<S>')

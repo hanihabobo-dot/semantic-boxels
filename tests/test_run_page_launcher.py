@@ -49,6 +49,10 @@ CALLS = {
     'help': 'help',
 }
 TOKEN = re.compile(r'export SB_GUI_PAGE_TOKEN=([0-9a-f]{12}); ')
+# The split of the screen (Hani, 2026-11-25): a run whose page is held is also asked for a window
+# of the size measured, in front of the word (tests/test_page_split.py holds that); none where
+# this machine's screen is too small for a split.
+WINDOW = re.compile(r'export SB_GUI_WINDOW=\d+x\d+; ')
 
 
 @pytest.fixture(scope='module')
@@ -97,16 +101,18 @@ def test_every_run_has_a_word_of_its_own(out):
 
 @needs_pwsh
 def test_without_the_page_the_command_is_the_one_before(out):
-    """-NoPage and -Headless: no flag and no word; the window run's command
-    is that command plus the two."""
+    """-NoPage and -Headless: no flag, no word and no window size; the
+    window run's command is that command plus the word, the flag and, for
+    the split of the screen, at most one window size."""
     (plain,) = _commands(out['nopage'])
-    assert '--gui-page' not in plain and 'SB_GUI_PAGE' not in plain
+    assert '--gui-page' not in plain and 'SB_GUI_' not in plain
     assert _own(plain).endswith('test_full_pipeline.py --scene random-pairs --seed 3 --goal holding '
                                 '--n-occluders 2')
     (paged,) = _commands(out['boxels'])
-    assert TOKEN.sub('', paged).replace(' --gui-page on', '') == plain
+    assert len(WINDOW.findall(paged)) <= 1
+    assert TOKEN.sub('', WINDOW.sub('', paged)).replace(' --gui-page on', '') == plain
     (headless,) = _commands(out['headless'])
-    assert '--gui-page' not in headless and 'SB_GUI_PAGE' not in headless
+    assert '--gui-page' not in headless and 'SB_GUI_' not in headless
     assert ' --no-gui ' in headless
 
 
@@ -123,7 +129,7 @@ def test_the_flag_follows_the_runs_own_text_and_the_others_follow_it(out):
 def test_the_other_targets_never_ask_for_the_page(out):
     for name in ('tampura', 'wumpus'):
         assert _commands(out[name]), out[name]
-        assert '--gui-page' not in out[name] and 'SB_GUI_PAGE' not in out[name]
+        assert '--gui-page' not in out[name] and 'SB_GUI_' not in out[name]
 
 
 @needs_pwsh

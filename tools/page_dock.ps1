@@ -36,13 +36,27 @@
 # not have reached Windows yet; PageDock.Stands).  With more than one it takes none and ends
 # (PageDock.Choose).
 #
+# THE SPLIT OF THE SCREEN (Hani, 2026-11-25: "one part of the screen is the browser thing
+# entierly, an the other part is the sim").  With -SimClient, the inside `run boxels` asked the
+# run to open for the simulator's part of the screen it measured (run.ps1; a third for the page,
+# the rest for the simulator: PageDock.Split), the holder puts the simulator's window into its
+# part ONCE when it takes the pair: what is seen of it against the right edge and the top of the
+# screen.  The page then takes the part on its left, all of it.  How far "what is seen" lies
+# inside the rectangle is computed from that rectangle and the inside asked (the window host's
+# margin for the shadow; PageDock.MarginOf) and written into the log.  The split is the start
+# and not a lock: the simulator's window is never asked again, and when it is dragged, or did
+# not move, the page keeps against it as above.  -SimPlace leave: it is not moved at all.
+#
 # It only places and cuts the page's window and reads the simulator's (and puts it behind the
-# page when the page is clicked); no message, key or click is sent to either window and nothing
-# reaches the run.  `run boxels` starts it hidden (run.ps1; -LoosePage leaves it out) and never
-# ends it: it ends by itself.  The how is in tools/page_dock.cs.
+# page when the page is clicked; and, in a split, asks it once to move into its part); no
+# message, key or click is sent to either window and nothing reaches the run.  `run boxels`
+# starts it hidden (run.ps1; -LoosePage leaves it out) and never ends it: it ends by itself.
+# The how is in tools/page_dock.cs.
 #   pwsh -File tools/page_dock.ps1 -WatchPid <the run's process> -PageWord <the run's word>
-#        [-Width 400] [-MinWidth 240] [-SimInset 0,0,0,0] [-Log <file> [-Trace]]
-# -Width, -MinWidth: the page's width and the least room it takes, in pixels at 100 % scaling.
+#        [-SimClient <width>x<height> [-SimPlace move]] [-Width 400] [-MinWidth 240]
+#        [-SimInset 0,0,0,0] [-Log <file> [-Trace]]
+# -Width, -MinWidth: the page's width and the least room it takes, in pixels at 100 % scaling
+# (in a split the width is the page's part of the screen).
 # -WatchPid 0 (no run to watch): it gives up after -WaitSeconds without the page or the windows.
 # -Log: the file is started anew (while another program has it open, the log goes to
 # <name>.<this process>.log beside it; such files of earlier holders are removed once they
@@ -60,6 +74,8 @@ param([int]$WatchPid = 0,
       [int]$PortTo = 8774,
       [int]$Width = 400,
       [int]$MinWidth = 240,
+      [string]$SimClient = '',
+      [string]$SimPlace = 'move',
       [string]$SimInset = '0,0,0,0',
       [int]$WaitSeconds = 120,
       [string]$Log = '',
@@ -136,9 +152,22 @@ trap {
 if ($SimInset -notmatch '^\s*-?\d+\s*(,\s*-?\d+\s*){3}$') {
     throw "-SimInset takes four whole numbers (left,top,right,bottom), not '$SimInset'"
 }
+if ($SimClient -and $SimClient -notmatch '^\d{1,5}x\d{1,5}$') {
+    throw "-SimClient takes the simulator window's inside as <width>x<height>, not '$SimClient'"
+}
+if ($SimPlace -notin 'move', 'leave') {
+    throw "-SimPlace takes move or leave, not '$SimPlace'"
+}
 Add-Type -Path (Join-Path $PSScriptRoot 'page_dock.cs') -IgnoreWarnings
 $in = @($SimInset -split ',' | ForEach-Object { [int]$_.Trim() })
 [PageDock]::SetInset($in[0], $in[1], $in[2], $in[3])
+if ($SimClient) {
+    # the split of the screen: the inside the run was asked to open, and whether the
+    # simulator's window is put into its part
+    $inside = @($SimClient -split 'x' | ForEach-Object { [int]$_ })
+    [PageDock]::SetSplit($inside[0], $inside[1], $SimPlace -eq 'move')
+    Say "a split of the screen: the run was asked for a simulator window with an inside of $SimClient; its window is $(if ($SimPlace -eq 'move') { 'put into its part once' } else { 'left where it opens' })"
+}
 if ($PageWord) {
     Say "waiting for the page that gives this run's word back (ports $PortFrom to $PortTo)"
     $port = 0

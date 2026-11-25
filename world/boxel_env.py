@@ -5,6 +5,8 @@ This module implements the main PyBullet simulation environment for testing
 Semantic Partitioning for Partially Observable Deterministic Task and Motion Planning.
 """
 
+import os
+
 import numpy as np
 import pybullet as p
 import pybullet_data
@@ -57,6 +59,23 @@ _DEFAULT_DEBUG_VIS_PITCH = -14.04
 
 _DEFAULT_SEMANTIC_EYE = np.array([0.1, -0.8, 0.7])
 _DEFAULT_SEMANTIC_TARGET = np.array([0.1, 0.0, 0.5])
+
+
+def _own_window_size(width: int, height: int) -> Tuple[int, int]:
+    """The size our own window opens with: the caller's (1280x720 by
+    default), unless the launcher has measured the screen and hands a size
+    over in SB_GUI_WINDOW, as "<width>x<height>" in the window's own pixels
+    (run.ps1, for the split of the screen between the page and the
+    simulator; Hani, 2026-11-25).  The one place that reads it.
+
+    Display only: every camera image has its own size (image_width,
+    image_height) and the robot's renders are the TinyRenderer's.  A value
+    that is no such size is not taken."""
+    w, x, h = os.environ.get('SB_GUI_WINDOW', '').strip().partition('x')
+    if (x and w.isascii() and h.isascii() and w.isdigit() and h.isdigit()
+            and all(100 <= int(v) <= 16384 for v in (w, h))):
+        return int(w), int(h)
+    return width, height
 
 
 class _ObjectBoxLookup:
@@ -137,7 +156,10 @@ class BoxelTestEnv(WorldPlacement):
                 left edge; the third one ends at y = 695 and the status
                 bar takes 22 px, so 717 is the least that shows all three
                 in full and 720 the round number.  Under about 700 the
-                third pane is pushed up over the depth pane.
+                third pane is pushed up over the depth pane.  When the
+                launcher splits the screen (SB_GUI_WINDOW; a run with
+                the page, so without the panes) its size replaces both
+                (_own_window_size).
             adopt_client: An existing physics client to adopt as the
                 executing world (None: build our own scene, as always).
         """
@@ -181,6 +203,8 @@ class BoxelTestEnv(WorldPlacement):
             self.client_id = adopt_client
             _adopted_bodies = p.getNumBodies(physicsClientId=adopt_client)
         elif gui:
+            # The launcher's split of the screen may hand another size over (display only).
+            window_width, window_height = _own_window_size(window_width, window_height)
             self.client_id = p.connect(p.GUI, options=f"--width={window_width} --height={window_height}")
             # Disable mouse picking so left-click rotates camera instead of grabbing objects
             p.configureDebugVisualizer(p.COV_ENABLE_MOUSE_PICKING, 0)
