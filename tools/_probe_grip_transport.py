@@ -7,7 +7,7 @@ move_robot_smooth.  Records the pad normal force after the close, its
 minimum during the carry, and whether both pads still touch the die at
 home.  Measurement only: the pipeline is not changed.
 
-  bash scripts/_run_in_wsl.sh tools/_probe_grip_transport.py <out json>
+  bash tools/_run_in_wsl.sh tools/_probe_grip_transport.py <out json>
 """
 import json
 import math

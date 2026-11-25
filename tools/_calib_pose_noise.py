@@ -17,7 +17,7 @@ Modes (run in wsl_env from the repo root):
            paired with the eye.jsonl 'after place' snapshot of that place;
            prints the error quantiles.  Args: run directories.
 
-  bash scripts/_run_in_wsl.sh tools/_calib_pose_noise.py die > out.json
+  bash tools/_run_in_wsl.sh tools/_calib_pose_noise.py die > out.json
 """
 import argparse
 import glob

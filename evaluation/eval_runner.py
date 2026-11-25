@@ -1005,7 +1005,7 @@ def main(argv=None):
         print(f"[runner] FATAL: subprocess interpreter "
               f"{sys.executable} cannot import numpy/pybullet.",
               file=sys.stderr)
-        print(f"[runner] launch via wsl bash scripts/_run_in_wsl.sh "
+        print(f"[runner] launch via wsl bash tools/_run_in_wsl.sh "
               f"eval_runner.py ... to use the wsl_env Python.",
               file=sys.stderr)
         if probe.stderr.strip():

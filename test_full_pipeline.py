@@ -70,7 +70,7 @@ except ImportError:
         f"[test_full_pipeline] eval misconfigured: numpy missing from "
         f"interpreter {sys.executable}\n"
         f"Run under the wsl_env Python (source wsl_env/bin/activate, "
-        f"or invoke via scripts/_run_in_wsl.sh).\n"
+        f"or invoke via tools/_run_in_wsl.sh).\n"
     )
     sys.exit(2)
 # The curated console (console_ui, 2026-10-30): installed only when this

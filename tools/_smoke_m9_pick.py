@@ -8,7 +8,7 @@ is picked with M9 OFF and ON; the result is whether the die is held 10 cm
 up.  Contact floor 13.2 mm (the bridge's D8 value; our 35 mm default
 closes above a 17.8 mm die, BF#26).
 
-  bash scripts/_run_in_wsl.sh tools/_smoke_m9_pick.py <out json>
+  bash tools/_run_in_wsl.sh tools/_smoke_m9_pick.py <out json>
 """
 import json
 import math

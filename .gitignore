@@ -43,9 +43,8 @@ PYBULLET_EXPLANATION.md
 progress_report.html
 proposal
 
-# All HTML is local-only except the boxel viewer
+# All HTML is local-only
 *.html
-!boxel_viewer.html
 SESSION_HANDOFF.md
 plan
 
@@ -53,6 +52,7 @@ plan
 # the history has them.
 /archive/
 /CLAUDE.md
+/DATA_LEDGER.md
 # Local notes under docs/ (meetings, progress, context) — not committed
 # (the folder move: four tracked files lie in docs/ now.  git cannot re-include a file under an
 # ignored folder, so the folder's content is ignored instead of the folder: docs/* at the top,
