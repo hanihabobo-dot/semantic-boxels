@@ -392,7 +392,7 @@ def test_without_look_the_command_is_the_bases(args):
         assert 'SB_GUI_' not in mine and '--gui-page' not in mine
     if (_BASE / 'run.ps1').is_file():
         theirs = _dry(_BASE / 'run.ps1', args)
-        norm = lambda s: s.replace('/mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels', '<S>')
+        norm = lambda s: re.sub(r"/mnt/[a-z]/[^ ;'\"]*?/Semantic_Boxels", "<S>", s)   # the main checkout, wherever it lies
         assert norm(mine) == norm(theirs)
 
 
