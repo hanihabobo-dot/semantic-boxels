@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Helper to run pipeline commands inside the WSL venv from PowerShell.
-# Usage: wsl bash /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels/tools/_run_in_wsl.sh <args>
+# Usage: wsl bash <checkout>/tools/_run_in_wsl.sh <args>  (it runs in the checkout it lives in)
 # Where <args> are passed verbatim to python.  Two special forms:
 #   _run_in_wsl.sh check           -> verify pybullet imports + print versions
 #   _run_in_wsl.sh <module> <args> -> python -m <module> <args>
 set -e
-cd /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels
+cd "$(dirname "$0")/.."
 source wsl_env/bin/activate
 
 if [ "$1" = "check" ]; then

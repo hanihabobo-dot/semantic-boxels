@@ -24,7 +24,7 @@ $VT -m pip freeze | sort > "$LOG/armT_local_freeze_after.txt"
 cmp -s "$LOG/armT_local_freeze_before.txt" "$LOG/armT_local_freeze_after.txt" && echo "ARM T FREEZE UNCHANGED"
 diff <(grep -v -iE '^(pip|setuptools|wheel)=' "$LOG/armO_local_pins.txt") \
      <(grep -v -iE '^(pip|setuptools|wheel)=' "$LOG/armO_local_freeze.txt") && echo "ARM O VENV HOLDS THE PINS EXACTLY"
-SB=/mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels
+SB="$(cd "$(dirname "$0")/.." && pwd)"
 cd $TW/tampura_environments
 PYTHONPATH=$SB:$TW/tampura:$TW/tampura_environments $VO/bin/python - <<'EOF'
 import numpy, pybullet  # noqa: F401

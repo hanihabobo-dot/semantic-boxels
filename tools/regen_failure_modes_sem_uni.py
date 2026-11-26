@@ -14,9 +14,9 @@ Emits TWO figures from the same sem/uni row set:
 The 3-variant failure_modes.png the rest of the pipeline produces is untouched.
 
 Run via WSL with the project venv + PYTHONPATH (see audit #282):
-  wsl bash -lc 'cd /mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels && \
+  wsl bash -lc 'cd <checkout> && \
     source wsl_env/bin/activate && \
-    PYTHONPATH=/mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels:/mnt/c/Users/HaniAlassiriAlhabbou/git/pddlstream_lib \
+    PYTHONPATH=<checkout>:<checkout>/../pddlstream_lib \
     python3 tools/regen_failure_modes_sem_uni.py'
 """
 from pathlib import Path
