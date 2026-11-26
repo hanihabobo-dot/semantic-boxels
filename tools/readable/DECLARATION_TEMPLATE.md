@@ -122,9 +122,9 @@ with the paper's; both arms see the same scene per seed.
   "kind": "N",
   "arms": {
     "A": {"role": "old", "sha": "0000000000000000000000000000000000000000",
-          "checkout": "/mnt/c/Users/HaniAlassiriAlhabbou/git/sb-ref"},
+          "checkout": "<checkouts>/sb-ref"},
     "B": {"role": "new", "sha": "0000000000000000000000000000000000000000",
-          "checkout": "/mnt/c/Users/HaniAlassiriAlhabbou/git/sb-ref"}
+          "checkout": "<checkouts>/sb-ref"}
   },
   "worlds": {
     "boxels": {
@@ -146,16 +146,16 @@ with the paper's; both arms see the same scene per seed.
     "python": "/root/armO-venvA/bin/python",
     "pythonhashseed": "0",
     "lock": "/root/sb_pipeline.lock",
-    "gate_script": "C:\\Users\\HaniAlassiriAlhabbou\\git\\Semantic_Boxels\\archive\\tampura_bridge_plan_2026-10-25\\tracks\\meeting_2026-11-13\\scripts\\gate_run.ps1",
+    "gate_script": "<the health gate script, a Windows path>",
     "gate_max_minutes": 180,
     "mem_available_min_gb": 4,
     "pause_s": 60,
     "wsl_distro": "Ubuntu",
     "tampura_work": "/root/tampura-work",
-    "pddlstream_lib": "/mnt/c/Users/HaniAlassiriAlhabbou/git/pddlstream_lib"
+    "pddlstream_lib": "<checkouts>/pddlstream_lib"
   },
   "statistics_file": {
-    "boxels": {"stored_copy": "/mnt/c/Users/HaniAlassiriAlhabbou/git/sb-ref-stats/boxel-streams.pkl",
+    "boxels": {"stored_copy": "<checkouts>/sb-ref-stats/boxel-streams.pkl",
                "sha256": "0000000000000000000000000000000000000000000000000000000000000000"},
     "bridge": {"start": "a fresh work folder per episode, no file", "sha256": null}
   },
