@@ -46,7 +46,7 @@ def dry(*words):
 def test_the_file_is_lf_and_names_no_checkout_path():
     raw = RUN_SH.read_bytes()
     assert b'\r' not in raw
-    assert b'/mnt/c/' not in raw and b'HaniAlassiri' not in raw
+    assert b'/mnt/c/' not in raw and ('Hani' + 'Alassiri').encode() not in raw
 
 
 def test_tampura_plain_uses_only_the_given_paths():
