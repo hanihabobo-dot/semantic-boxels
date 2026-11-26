@@ -9,8 +9,14 @@
 #   commit's blob, byte for byte, so the tree is still the commit's.
 param([string]$Commit = 'HEAD', [switch]$CodeOnly)
 $ErrorActionPreference = 'Stop'
-$W = $env:SB_CLUSTER_WORK; $H = $env:SB_CLUSTER_HOST     # the cluster work folder and the ssh host, never written here
-if (-not $W -or -not $H) { throw 'set SB_CLUSTER_WORK (the cluster work folder) and SB_CLUSTER_HOST (the ssh host of the submit node)' }
+# The cluster's names are never written here: they come from the git-ignored file
+# tools/cluster/cluster.local.json beside this script, {"work": ..., "host": ..., "partition": ...}
+# (cluster.local.example.json shows the form).
+$local = Join-Path $PSScriptRoot 'cluster.local.json'
+if (-not (Test-Path $local)) { throw "no ${local}: copy cluster.local.example.json there and fill in work, host and partition" }
+$cfg = Get-Content -Raw $local | ConvertFrom-Json
+$W = $cfg.work; $H = $cfg.host; $P = $cfg.partition
+if (-not $W -or -not $H) { throw "${local} needs work and host" }
 $sha = (git rev-parse --short=7 $Commit).Trim()
 $name = "sb_$sha"
 $tgz = Join-Path $env:TEMP "$name.tar.gz"
@@ -27,7 +33,7 @@ Write-Host "archive $name : $([math]::Round((Get-Item $tgz).Length / 1MB, 1)) MB
 # BF#49: make room under the 1 GiB cap first (twice the archive: the upload
 # and the unpacked tree); the archive itself is removed after the unpack.
 $prune = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot 'prune_work.sh')).Replace("`r", '')
-$prune | ssh -o BatchMode=yes $H "bash -s -- --apply --reserve $(2 * (Get-Item $tgz).Length)"
+$prune | ssh -o BatchMode=yes $H "P4_WORK=$W bash -s -- --apply --reserve $(2 * (Get-Item $tgz).Length)"
 if ($LASTEXITCODE -ne 0) { throw "prune_work.sh could not make room under the cap (exit $LASTEXITCODE)" }
 scp -o BatchMode=yes $tgz "${H}:$W/inbox/$name.tar.gz"
 if ($LASTEXITCODE -ne 0) { throw "scp failed (exit $LASTEXITCODE): nothing unpacked" }
@@ -50,6 +56,7 @@ Remove-Item -LiteralPath $tgz
 Write-Host ""
 Write-Host "Submit from the submit node ($H) (smoke first, then full episodes):"
 Write-Host "  ssh $H"
-Write-Host "  CLEAN_STRAYS=1 sbatch -w cn-110 $W/$name/tools/cluster/bridge_run.sbatch $name smoke 0 1"
-Write-Host "  sbatch -w cn-110 $W/$name/tools/cluster/bridge_run.sbatch $name full 0 1 2 3"
+$sub = "sbatch -w <node> --partition=$(if ($P) { $P } else { '<partition>' }) --output=$W/logs/%x_%j.txt --export=ALL,P4_WORK=$W"
+Write-Host "  CLEAN_STRAYS=1 $sub $W/$name/tools/cluster/bridge_run.sbatch $name smoke 0 1"
+Write-Host "  $sub $W/$name/tools/cluster/bridge_run.sbatch $name full 0 1 2 3"
 Write-Host "  tail -f $W/logs/p4-bridge_<jobid>.txt"

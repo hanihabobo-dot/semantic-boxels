@@ -6,13 +6,19 @@
 #   pwsh -NoProfile -File tools\cluster\prune_work.ps1           # show what would happen
 #   pwsh -NoProfile -File tools\cluster\prune_work.ps1 -Apply
 param([switch]$Apply, [int]$Attempts = 3)
-$W = $env:SB_CLUSTER_WORK; $H = $env:SB_CLUSTER_HOST     # the cluster work folder and the ssh host, never written here
-if (-not $W -or -not $H) { throw 'set SB_CLUSTER_WORK (the cluster work folder) and SB_CLUSTER_HOST (the ssh host of the submit node)' }
+# The cluster's names are never written here: they come from the git-ignored file
+# tools/cluster/cluster.local.json beside this script, {"work": ..., "host": ..., "partition": ...}
+# (cluster.local.example.json shows the form).
+$local = Join-Path $PSScriptRoot 'cluster.local.json'
+if (-not (Test-Path $local)) { throw "no ${local}: copy cluster.local.example.json there and fill in work, host and partition" }
+$cfg = Get-Content -Raw $local | ConvertFrom-Json
+$W = $cfg.work; $H = $cfg.host; $P = $cfg.partition
+if (-not $W -or -not $H) { throw "${local} needs work and host" }
 $script = Join-Path $PSScriptRoot 'prune_work.sh'
 $text = [System.IO.File]::ReadAllText($script).Replace("`r", '')
 $flag = if ($Apply) { '--apply' } else { '' }
 for ($i = 1; $i -le $Attempts; $i++) {
-    $out = ($text | ssh -o BatchMode=yes -o ConnectTimeout=40 $H "cat > $W/prune_work.sh.new && mv -f $W/prune_work.sh.new $W/prune_work.sh && bash $W/prune_work.sh $flag" 2>&1) -join "`n"
+    $out = ($text | ssh -o BatchMode=yes -o ConnectTimeout=40 $H "cat > $W/prune_work.sh.new && mv -f $W/prune_work.sh.new $W/prune_work.sh && P4_WORK=$W bash $W/prune_work.sh $flag" 2>&1) -join "`n"
     if ($out -notmatch 'ssh: connect|Connection closed|timed out') { $out; break }
     Write-Host "attempt $i : $out"
     Start-Sleep -Seconds 30

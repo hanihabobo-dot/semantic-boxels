@@ -68,3 +68,6 @@ docs/*
 
 # Private correspondence + copyrighted PDFs (local only, never committed)
 emails and pdfs/
+
+# The cluster's names for tools/cluster/*.ps1 (work folder, ssh host, partition): one machine's, never committed
+tools/cluster/cluster.local.json

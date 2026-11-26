@@ -1,0 +1,5 @@
+{
+  "work": "<the cluster work folder, e.g. /work/<group>/<user>/p4>",
+  "host": "<the ssh host of the submit node, as in ~/.ssh/config>",
+  "partition": "<the Slurm partition>"
+}
