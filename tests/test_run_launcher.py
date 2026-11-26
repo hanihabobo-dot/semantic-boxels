@@ -22,10 +22,10 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 RUN_PS1 = ROOT / 'run.ps1'
 # $PSScriptRoot -> $S: the main checkout keeps its old string.
-CASES = [(r'C:\Users\HaniAlassiriAlhabbou\git\Semantic_Boxels',
-          '/mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels'),
-         (r'C:\Users\HaniAlassiriAlhabbou\git\sb-fixes',
-          '/mnt/c/Users/HaniAlassiriAlhabbou/git/sb-fixes'),
+CASES = [(r'C:\Users\someone\git\Semantic_Boxels',
+          '/mnt/c/Users/someone/git/Semantic_Boxels'),
+         (r'C:\Users\someone\git\sb-fixes',
+          '/mnt/c/Users/someone/git/sb-fixes'),
          (r'D:\work\sb', '/mnt/d/work/sb')]
 
 

@@ -418,17 +418,17 @@ REAL_PREFLIGHT_STDERR = (
     "pybullet build time: Jan 29 2025 23:17:20\n"
     + PREFLIGHT_LINE
     + "Traceback (most recent call last):\n"
-    '  File "/mnt/c/Users/HaniAlassiriAlhabbou/git/sb-readable/test_full_pipeline.py", '
+    '  File "/mnt/c/x/test_full_pipeline.py", '
     "line 3277, in <module>\n"
     "    probe_env = BoxelTestEnv(gui=False, scene_config=scene_cfg)\n"
     "                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"
-    '  File "/mnt/c/Users/HaniAlassiriAlhabbou/git/sb-readable/boxel_env.py", '
+    '  File "/mnt/c/x/boxel_env.py", '
     "line 611, in __init__\n"
     "    self._setup_scene()\n"
-    '  File "/mnt/c/Users/HaniAlassiriAlhabbou/git/sb-readable/boxel_env.py", '
+    '  File "/mnt/c/x/boxel_env.py", '
     "line 998, in _setup_scene\n"
     "    self._create_targets()\n"
-    '  File "/mnt/c/Users/HaniAlassiriAlhabbou/git/sb-readable/boxel_env.py", '
+    '  File "/mnt/c/x/boxel_env.py", '
     "line 1546, in _create_targets\n"
     "    raise RuntimeError(\n"
     f"RuntimeError: {PREFLIGHT_MESSAGE}\n")
