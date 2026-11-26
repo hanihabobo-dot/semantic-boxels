@@ -308,7 +308,12 @@ Group `episode` of `pin_outputs.py`: `p30_planner_failed` and
 `p30_binding_death` (rp0 with a synthetic one-call tape), `p34_start_rp0`
 to `rp4`, `p46_bridge_start_s0`, `s1`, `s5`, `s100` (need the bridge venv),
 `p47_replay_<episode>` for rp0, rp1, rp1o3, stack0, br0, br5 (need
-`READABLE_TAPES`, the folder of `--record-set`). On the checkpoint:
+`READABLE_TAPES`, the folder of `--record-set`). Arms R and F:
+`p34_start_rp0_look`, `p46_bridge_start_r140` and `f140`, and
+`p47_replay_<episode>` for the episodes of `ARM_R_EPISODES` and
+`ARM_F_EPISODES` in `record_episode.py`;
+their tapes go into the same folder (`--record-set <tapes> --episodes
+r140,...`). On the checkpoint:
 
 ```
 python tools/readable/record_episode.py --record-set <tapes>

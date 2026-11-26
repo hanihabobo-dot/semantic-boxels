@@ -4867,6 +4867,9 @@ def p35b_bridge_table(out):
 #                    "record_episode.py --record-set"), replayed; vs_live.json
 #                    holds the differences from the live episode's own
 #                    normalised outputs (PLAN 24.3 (a)).
+#   Arms R and F (record_episode.ARM_R_EPISODES, ARM_F_EPISODES) have the
+#   same pins: p34_start_rp0_look, p46_bridge_start_r140 and f140,
+#   p47_replay_<episode>.
 
 TAPES_VAR = 'READABLE_TAPES'
 EPISODE_PIN_TIMEOUT_S = 3600
@@ -4976,6 +4979,24 @@ for _s in (0, 1, 5, 100):
         timeout=EPISODE_PIN_TIMEOUT_S)(_p46(_s))
 
 
+# Pins 34 and 46 in arms R and F: the tabletop start in R, the bridge in both.
+
+def _arm_start(name, pin_id):
+    def f(out):
+        if name[0] in 'rf' and name[1:].isdigit():
+            _need_tampura()
+        _first_plan(out, name)
+    f.__name__ = pin_id
+    return f
+
+
+for _e, _id in (('rp0_look', 'p34_start_rp0_look'), ('r140', 'p46_bridge_start_r140'),
+                ('f140', 'p46_bridge_start_f140')):
+    pin('episode', _id, f'{_id[:3].upper()}: episode {_e} up to the first plan() call'
+        + ('' if _e.endswith('_look') else ' with the gate hooks installed (needs the bridge venv)'),
+        timeout=EPISODE_PIN_TIMEOUT_S)(_arm_start(_e, _id))
+
+
 def _tapes_root():
     root = os.environ.get(TAPES_VAR)
     if not root:
@@ -4987,7 +5008,7 @@ def _tapes_root():
 def _p47(name):
     def f(out):
         tool = _episode_tool()
-        if tool.EPISODES[name]['kind'] == 'bridge':
+        if tool.entry(name)['kind'] == 'bridge':
             _need_tampura()
         live = _tapes_root() / name
         if not (live / 'tape' / 'calls.jsonl').exists():
@@ -5016,6 +5037,11 @@ for _e in ('rp0', 'rp1', 'rp1o3', 'stack0', 'br0', 'br5'):
     pin('episode', f'p47_replay_{_e}',
         f'P47: episode {_e} replayed from its recorded tape (needs READABLE_TAPES'
         + ('; needs the bridge venv)' if _e.startswith('br') else ')'),
+        timeout=EPISODE_PIN_TIMEOUT_S)(_p47(_e))
+for _e in _episode_tool().ARM_R_EPISODES + _episode_tool().ARM_F_EPISODES:
+    pin('episode', f'p47_replay_{_e}',
+        f'P47: episode {_e} (arm {_e[0].upper() if _e[1:2].isdigit() else "R"}) replayed from its recorded tape (needs READABLE_TAPES'
+        + (')' if _e.endswith('_look') else '; needs the bridge venv)'),
         timeout=EPISODE_PIN_TIMEOUT_S)(_p47(_e))
 
 

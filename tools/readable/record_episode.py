@@ -151,6 +151,11 @@ EPISODES['stack0'] = {'kind': 'boxels', 'argv': ['--no-gui', '--scene', 'stack',
                                                  '--no-telemetry']}
 EPISODES.update({'br0': _br(0), 'br1': _br(1), 'br5': _br(5), 'br100': _br(100, gen=True)})
 PIN47_EPISODES = ('rp0', 'rp1', 'rp1o3', 'stack0', 'br0', 'br5')
+# The episodes of arms R and F in pins 34, 46 and 47 (entries beyond the table):
+# R, the look with the robot camera, on generated scenes and on the tabletop;
+# F, sense and observe with the fixed camera and interior regions on.
+ARM_R_EPISODES = ('r140', 'r141', 'r204', 'r293', 'rp0_look', 'rp1o3_look', 'stack0_look')
+ARM_F_EPISODES = ('f140', 'f141', 'f204_m7off', 'f204')
 
 
 # ---------------------------------------------------------------------------

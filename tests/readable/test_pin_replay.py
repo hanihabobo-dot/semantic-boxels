@@ -358,16 +358,21 @@ def test_console_masks_times_only():
 def test_group_episode_registers_pins_30_34_46_47():
     ids = list(po.GROUPS['episode'])
     assert [i for i in ids if i.startswith('p30_')] == ['p30_planner_failed', 'p30_binding_death']
-    assert [i for i in ids if i.startswith('p34_')] == [f'p34_start_rp{s}' for s in range(5)]
-    assert [i for i in ids if i.startswith('p46_')] == [f'p46_bridge_start_s{s}' for s in (0, 1, 5, 100)]
-    assert [i for i in ids if i.startswith('p47_replay_')] == [f'p47_replay_{e}' for e in rec.PIN47_EPISODES]
+    assert [i for i in ids if i.startswith('p34_')] == [f'p34_start_rp{s}' for s in range(5)] + [
+        'p34_start_rp0_look']
+    assert [i for i in ids if i.startswith('p46_')] == [f'p46_bridge_start_s{s}' for s in (0, 1, 5, 100)] + [
+        'p46_bridge_start_r140', 'p46_bridge_start_f140']
+    arms = rec.ARM_R_EPISODES + rec.ARM_F_EPISODES
+    assert [i for i in ids if i.startswith('p47_replay_')] == [
+        f'p47_replay_{e}' for e in rec.PIN47_EPISODES + arms]
     assert [i for i in ids if i.startswith('p47_scripted_')] == [
         f'p47_scripted_{s}' for s in scripted_tapes.SCENARIOS]
     assert sorted(SCRIPTED_EXPECT) == sorted(scripted_tapes.SCENARIOS)
     for pid in ids:
         if pid.startswith('p46_') or pid in ('p47_replay_br0', 'p47_replay_br5',
                                              'p47_scripted_home_split',
-                                             'p47_scripted_home_not_reached'):
+                                             'p47_scripted_home_not_reached') or (
+                pid[len('p47_replay_'):] in arms and not pid.endswith('_look')):
             assert 'needs the bridge venv' in po.GROUPS['episode'][pid].about
 
 
