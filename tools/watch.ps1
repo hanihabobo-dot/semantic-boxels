@@ -12,7 +12,8 @@
 # Never start it while another pipeline run is going (pddlstream temp/ race).
 param([int]$Seed = 0, [switch]$Ours, [switch]$Off, [switch]$LightGrip, [double]$Squeeze = 0,
       [switch]$Screenshots, [switch]$ReturnHome, [switch]$Before)
-$S = '/mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels'
+$repo = Split-Path $PSScriptRoot -Parent     # the checkout this script lives in, as a WSL path
+$S = '/mnt/' + $repo.Substring(0, 1).ToLowerInvariant() + ($repo.Substring(2) -replace '\\', '/')
 $sw = if ($Off) { '--m8 off --m9 off --m10 off --pick-aperture-from-pose off' } else { '' }
 if ($LightGrip) { $Squeeze = 0.5 }
 if ($Squeeze -gt 0) {

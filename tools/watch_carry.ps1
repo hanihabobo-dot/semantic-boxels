@@ -7,7 +7,8 @@
 #   pwsh tools/watch_carry.ps1 -Squeeze 0.5 -Payload a_cups_ud -Trials 3
 param([double]$Squeeze = 0.5, [int]$Trials = 5, [double]$Tilt = 0,
       [string]$Payload = 'dice', [string]$Cell = '0.673,0.216', [double]$Slow = 4)
-$S = '/mnt/c/Users/HaniAlassiriAlhabbou/git/Semantic_Boxels'
+$repo = Split-Path $PSScriptRoot -Parent     # the checkout this script lives in, as a WSL path
+$S = '/mnt/' + $repo.Substring(0, 1).ToLowerInvariant() + ($repo.Substring(2) -replace '\\', '/')
 $ic = [cultureinfo]::InvariantCulture
 $stamp = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
 $out = "$S/archive/tampura_bridge_plan_2026-10-25/bf/carry_watch/${stamp}_${Payload}_sq$($Squeeze.ToString($ic))mm_tilt$($Tilt.ToString($ic)).json"
