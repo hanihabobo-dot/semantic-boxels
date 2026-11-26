@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=p4-setup-armO
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --time=02:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # #P4 BF#6: arm O on the chair's cluster.  Our code as immutable snapshots
 # (git archive of one commit each, the CB#113 pattern), pddlstream_lib as
 # used locally, and D12's candidate (A): its own venv holding exactly the
@@ -15,7 +15,7 @@
 # read only, so every loaded tampura module lies inside the hashed trees
 # (G13).  Runs after setup_arm_t.sbatch.
 set -euo pipefail
-W=/work/rleap1/hani.alassiri.alhabboub/p4
+W=${P4_WORK:?the cluster work folder}
 TW=$W/tampura-work
 IN=$W/inbox
 echo "host $(hostname)  job ${SLURM_JOB_ID:-none}  $(date -Is)"

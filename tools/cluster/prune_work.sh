@@ -20,10 +20,10 @@
 # (tools/cluster/push_snapshot.ps1 passes twice the archive's size).  Exit 3
 # when the cap cannot be met.  Runs at the end of every campaign job
 # (b8_campaign.sbatch), weekly from the laptop (tools/cluster/prune_work.ps1)
-# and weekly from cn-04's crontab ($W/prune_work.sh).
+# and weekly from the submit node's crontab ($W/prune_work.sh).
 #   bash prune_work.sh [--apply] [--reserve BYTES] [--cap-gib N]
 set -uo pipefail
-W=${P4_WORK:-/work/rleap1/hani.alassiri.alhabboub/p4}
+W=${P4_WORK:?the cluster work folder}
 CAP=$((1024 * 1024 * 1024)); APPLY=0; RESERVE=0
 COMPACT_DAYS=2; SNAP_DAYS=14; DELETE_DAYS=90
 while [ $# -gt 0 ]; do

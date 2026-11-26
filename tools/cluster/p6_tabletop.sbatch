@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=p6-tabletop
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=12G
 #SBATCH --time=14:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # Path 6 (cluster eval of our code now, our thesis code and TAMPURA), phase 1a:
 # the tabletop benchmark.  One job runs two seed slots (tools/p6_slots.py), in
 # each slot both arms (A: our code now, B: the thesis commit 6b00cd7), the
@@ -23,20 +23,20 @@
 #     the stall rule of PLAN section 11 reads it;
 #   - at the end logs/ and temp/ of the copies are deleted (the cells keep
 #     timing_summary.json, stdout.log and run_dir.txt).
-# Usage (submit from cn-04, after tools/cluster/push_snapshot.ps1 -CodeOnly for
+# Usage (submit from the submit node, after tools/cluster/push_snapshot.ps1 -CodeOnly for
 # both snapshots; -w pins the job to its own node, so two of our pipelines never
 # share a node):
-#   sbatch -w cn-1xx $W/sb_<A1>/tools/cluster/p6_tabletop.sbatch sb_<A1> sb_6b00cd7 <job 0-14 | smoke>
+#   sbatch -w <node> $W/sb_<A1>/tools/cluster/p6_tabletop.sbatch sb_<A1> sb_6b00cd7 <job 0-14 | smoke>
 #   arguments: A's snapshot (also holds this script and the tools), B's snapshot,
 #   the job number (slots 2J and 2J+1), or 'smoke' (the cluster smoke: the three
 #   cells of the laptop smoke through B then A, then tools/p6_smoke_check.py), or
 #   'redo' with a list file (the final pass, PLAN section 11: one line "A tag1,tag2"
 #   or "B tag1,..." per run; cells that did not count, never a pre-flight rejection):
-#   sbatch -w cn-1xx .../p6_tabletop.sbatch sb_<A1> sb_6b00cd7 redo $W/inbox/p6_redo.txt
+#   sbatch -w <node> .../p6_tabletop.sbatch sb_<A1> sb_6b00cd7 redo $W/inbox/p6_redo.txt
 #   Results: $W/results/p6_<A sha>/<job, smoke or redo>_<slurm job>.tar.gz
 set -uo pipefail
 export LC_ALL=C
-W=${P4_WORK:-/work/rleap1/hani.alassiri.alhabboub/p4}
+W=${P4_WORK:?the cluster work folder}
 SNAP_A=$W/${1:?A snapshot dir, e.g. sb_1234567}
 SNAP_B=$W/${2:?B snapshot dir, e.g. sb_6b00cd7}
 MODE=${3:?job number 0-14, smoke, or redo}

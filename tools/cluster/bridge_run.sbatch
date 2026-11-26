@@ -1,23 +1,23 @@
 #!/bin/bash
 #SBATCH --job-name=p4-bridge
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --exclusive
 #SBATCH --mem=0
 #SBATCH --time=12:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # #P4: our pipeline on TAMPURA's find_dice through the bridge (arm O), one
 # episode per seed, serial (P4.6 MACHINE), in arm O's venv (A).  G13 checks
 # their trees before and after; each episode's outcome field (GF5) and
 # ledger gates are in its bridge_episode.json and console; the static gates
 # run on the snapshot.  No screenshots on the cluster (BF#17).
-# Usage (submit from cn-04, after tools/cluster/push_snapshot.ps1):
+# Usage (submit from the submit node, after tools/cluster/push_snapshot.ps1):
 #   sbatch -w cn-110 $W/sb_<sha>/tools/cluster/bridge_run.sbatch sb_<sha> full 0 1
 #   mode: full (plans and acts) or smoke (stop_before_planning)
 #   CLEAN_STRAYS=1 sbatch ... first removes the two files earlier bridge
 #   runs (before GF8) left in their tampura_environments, and nothing else.
 set -uo pipefail
-W=${P4_WORK:-/work/rleap1/hani.alassiri.alhabboub/p4}   # P4_WORK: a local dry run
+W=${P4_WORK:?the cluster work folder}   # P4_WORK: the cluster work folder, or a local folder for a dry run
 SB=$W/${1:?snapshot dir, e.g. sb_bb20e83}
 MODE=${2:?full or smoke}
 shift 2

@@ -1,24 +1,24 @@
 #!/bin/bash
 #SBATCH --job-name=p4-b8
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --exclusive
 #SBATCH --mem=0
 #SBATCH --time=16:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # #P4 B8: the campaign (P4.6): both arms on find_dice, seeds 0-19, two
 # repetitions, serial, interleaved per seed, on an exclusive node, driven
 # by tools/_bridge_campaign.py from an immutable snapshot (arm O's venv A,
 # arm T's venv).  The per-run gates before the first episode (G13's trees,
 # the T driver, the domain, the static gates), G13's tree compare and the
 # static gates after the last.  No screenshots on the cluster (BF#17).
-# Usage (submit from cn-04, after tools/cluster/push_snapshot.ps1):
+# Usage (submit from the submit node, after tools/cluster/push_snapshot.ps1):
 #   sbatch -w cn-110 $W/sb_<sha>/tools/cluster/b8_campaign.sbatch sb_<sha> smoke 1 0,1
 #   sbatch -w cn-110 $W/sb_<sha>/tools/cluster/b8_campaign.sbatch sb_<sha> full 2 0-19
 #   RESUME=<campaign dir> sbatch ...   continues a cut campaign in that directory
 #   mode: full (plans and acts) or smoke (T --max-steps 1, O stop_before_planning)
 set -uo pipefail
-W=${P4_WORK:-/work/rleap1/hani.alassiri.alhabboub/p4}   # P4_WORK: a local dry run
+W=${P4_WORK:?the cluster work folder}   # P4_WORK: the cluster work folder, or a local folder for a dry run
 SB=$W/${1:?snapshot dir, e.g. sb_1234567}
 MODE=${2:?full or smoke}
 REPS=${3:-2}

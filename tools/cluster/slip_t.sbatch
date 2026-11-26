@@ -1,20 +1,20 @@
 #!/bin/bash
 #SBATCH --job-name=p4-slipT
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=24G
 #SBATCH --time=12:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # BF#59: TAMPURA (arm T, their planner as shipped) on the campaign's seeds
 # with the same repetitions as our arms, on a shared node like them, driven
 # by tools/_bridge_campaign.py --arms T with --drop-t-history (their 12 to
 # 16 MB RolloutHistory pickle goes once its rewards and times are in the
 # record, BF#49's cap).  The per-run gates run before the first episode.
-# Usage (submit from cn-04, after tools/cluster/push_snapshot.ps1 -CodeOnly):
-#   sbatch -w cn-1xx $W/sb_<sha>/tools/cluster/slip_t.sbatch sb_<sha> 3 0-19 [OUT]
+# Usage (submit from the submit node, after tools/cluster/push_snapshot.ps1 -CodeOnly):
+#   sbatch -w <node> $W/sb_<sha>/tools/cluster/slip_t.sbatch sb_<sha> 3 0-19 [OUT]
 set -uo pipefail
-W=${P4_WORK:-/work/rleap1/hani.alassiri.alhabboub/p4}
+W=${P4_WORK:?the cluster work folder}
 SB=$W/${1:?snapshot dir, e.g. sb_1234567}
 REPS=${2:-3}
 SEEDS=${3:-0-19}

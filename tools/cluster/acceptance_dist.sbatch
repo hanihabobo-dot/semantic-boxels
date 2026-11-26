@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=p4-accept
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --exclusive
 #SBATCH --mem=0
 #SBATCH --time=16:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # #P4 the acceptance runs of B5, M6 and M7 (BF#13): the reference and the
 # candidate snapshot, our holding scene, seeds 0-19 and 100-119, THREE
 # repetitions, interleaved per seed (reference, then candidate), on an
@@ -15,7 +15,7 @@
 # with repetition 2 as each flipped seed's one re-run.
 # Usage: sbatch -w cn-110 acceptance_dist.sbatch <ref snapshot> <cand snapshot>
 set -uo pipefail
-W=/work/rleap1/hani.alassiri.alhabboub/p4
+W=${P4_WORK:?the cluster work folder}
 REF=${1:?reference snapshot dir, e.g. sb_852b319}
 CAND=${2:?candidate snapshot dir}
 VA=$W/armO-venvA/bin

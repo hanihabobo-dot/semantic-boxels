@@ -1,18 +1,18 @@
 #!/bin/bash
 #SBATCH --job-name=p4-b1j-aa
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --exclusive
 #SBATCH --mem=0
 #SBATCH --time=16:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # #P4 B1(j) test 5 (= the first half of B3's acceptance): an A/A run of
 # c31cbdd against itself in arm O's venv (A), on our holding scene, seeds
 # 0-19 and 100-119, serial on an exclusive node (P4.6 MACHINE).  The two
 # repetitions run one after the other from the same immutable snapshot;
 # their per-seed flips are the noise floor B3's A/B is judged against.
 set -euo pipefail
-W=/work/rleap1/hani.alassiri.alhabboub/p4
+W=${P4_WORK:?the cluster work folder}
 SB=$W/sb_c31cbdd
 VA=$W/armO-venvA/bin
 OUT=$W/results/b1j_aa

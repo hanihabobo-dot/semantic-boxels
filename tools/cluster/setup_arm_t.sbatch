@@ -1,18 +1,18 @@
 #!/bin/bash
 #SBATCH --job-name=p4-setup-armT
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=48G
 #SBATCH --time=03:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # #P4 BF#6: arm T (TAMPURA at the pinned commits) on the chair's cluster, in
 # user space under /work.  Mirrors /root/tampura-work/tampura_setup.sh step
 # for step, except: Python 3.11 from uv instead of apt, cmake from a pip
 # wheel, and every package pinned to the local arm T's pip freeze.
 set -euo pipefail
-W=/work/rleap1/hani.alassiri.alhabboub/p4
+W=${P4_WORK:?the cluster work folder}
 TW=$W/tampura-work
 IN=$W/inbox
 echo "host $(hostname)  job ${SLURM_JOB_ID:-none}  $(date -Is)"

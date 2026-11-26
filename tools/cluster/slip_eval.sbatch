@@ -1,25 +1,25 @@
 #!/bin/bash
 #SBATCH --job-name=p4-slip
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=24G
 #SBATCH --time=12:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # BF#59: the eval of the die-slip campaign's fixes (tools/slip_eval.py), our
 # arm alone on TAMPURA's find_dice, serial, from an immutable snapshot (arm
 # O's venv A), on a SHARED node (8 CPUs, 24 GB; BF#53: an exclusive node
 # never came free; the base arm runs in every job as the within-job
 # control).  Submit one job per group of arms, each pinned to a different
 # node (-w), so two of our pipelines never share a node.  No screenshots.
-# Usage (submit from cn-04, after tools/cluster/push_snapshot.ps1 -CodeOnly):
-#   sbatch -w cn-1xx $W/sb_<sha>/tools/cluster/slip_eval.sbatch sb_<sha> base,a,b 0-19 3 1,2,5 [OUT]
+# Usage (submit from the submit node, after tools/cluster/push_snapshot.ps1 -CodeOnly):
+#   sbatch -w <node> $W/sb_<sha>/tools/cluster/slip_eval.sbatch sb_<sha> base,a,b 0-19 3 1,2,5 [OUT]
 #   arguments: snapshot, arms, seeds, reps, replicated seeds, OUT (optional:
 #   a results directory shared by several jobs; each job's arms go to
 #   OUT/<job id>; cat the jobs' results.jsonl files into one directory and
 #   run slip_eval.py --out that --summary to read them together).
 set -uo pipefail
-W=${P4_WORK:-/work/rleap1/hani.alassiri.alhabboub/p4}
+W=${P4_WORK:?the cluster work folder}
 SB=$W/${1:?snapshot dir, e.g. sb_1234567}
 ARMS=${2:?arms, e.g. base,a,b}
 SEEDS=${3:-0-19}

@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=p4-fd
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=24G
 #SBATCH --time=4:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # Path 14 (worker B, 2026-11-13): the candidates for the frozen default on
 # find_dice through the bridge, ours against ours, no TAMPURA arm
 # (tracks/meeting_2026-11-13/cluster_requests/B_find_dice_defaults_DRAFT.md).
@@ -23,16 +23,16 @@
 # becomes one tarball on $W at the end (BF#63's slow hour: the pipeline
 # writes its planning files under the episode's folder); the I/O probe
 # writes a row every 20 s to OUT/io_probe.tsv in both modes.
-# Usage (submit from cn-04, after tools/cluster/push_snapshot.ps1 -CodeOnly):
-#   sbatch -w cn-1xx --export=ALL,P4_LOCAL=1 $W/sb_<sha>/tools/cluster/fd_defaults.sbatch sb_<sha> S <arms> 0-9 3 [OUT]
-#   sbatch -w cn-1xx --export=ALL,P4_LOCAL=1 $W/sb_<sha>/tools/cluster/fd_defaults.sbatch sb_<sha> G <arms> 100-109 2 [OUT]
+# Usage (submit from the submit node, after tools/cluster/push_snapshot.ps1 -CodeOnly):
+#   sbatch -w <node> --export=ALL,P4_LOCAL=1 $W/sb_<sha>/tools/cluster/fd_defaults.sbatch sb_<sha> S <arms> 0-9 3 [OUT]
+#   sbatch -w <node> --export=ALL,P4_LOCAL=1 $W/sb_<sha>/tools/cluster/fd_defaults.sbatch sb_<sha> G <arms> 100-109 2 [OUT]
 #   arguments: snapshot, scene set, arms (slip_eval's syntax, comma
 #   separated: a+b, a+b@corridor_object), seeds, repetitions, OUT (optional:
 #   a results directory shared by the jobs; each job writes
 #   OUT/<set>_<job id>, or with P4_LOCAL=1 OUT/<set>_<job id>.tar.gz; read
 #   them together with tools/fd_defaults_table.py).
 set -uo pipefail
-W=${P4_WORK:-/work/rleap1/hani.alassiri.alhabboub/p4}
+W=${P4_WORK:?the cluster work folder}
 SB=$W/${1:?snapshot dir, e.g. sb_1234567}
 SET=${2:?scene set: S or G}
 ARMS=${3:?arms, e.g. a+b,a+b@corridor_object}

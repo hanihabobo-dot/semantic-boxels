@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=p4-b3-ab
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --exclusive
 #SBATCH --mem=0
 #SBATCH --time=16:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # #P4 B3's acceptance, second half (BF#10): the A/B of the B3 commit against
 # c31cbdd in arm O's venv (A), on our holding scene, seeds 0-19 and 100-119,
 # serial on an exclusive node (P4.6 MACHINE), submitted with -w cn-110 like
@@ -13,7 +13,7 @@
 # A/A's first repetition; its two repetitions give the noise floor.
 # Usage: sbatch -w cn-110 b3_ab.sbatch <snapshot dir, e.g. sb_526b358>
 set -euo pipefail
-W=/work/rleap1/hani.alassiri.alhabboub/p4
+W=${P4_WORK:?the cluster work folder}
 SB=$W/${1:?snapshot dir name, e.g. sb_526b358}
 VA=$W/armO-venvA/bin
 OUT=$W/results/b3_ab

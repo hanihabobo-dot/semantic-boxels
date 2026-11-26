@@ -1,17 +1,17 @@
 #!/bin/bash
 #SBATCH --job-name=p4-b2
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --exclusive
 #SBATCH --mem=0
 #SBATCH --time=02:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # #P4 B2's deliverable (BF#12): seeds 0 and 1 through the bridge in arm O's
 # venv (A), stop_before_planning, their tree checked before and after (G13),
 # each run's ledger read by bridge_gates.py, the static gates on the snapshot.
 # Usage: sbatch -w cn-110 b2_deliverable.sbatch <snapshot dir, e.g. sb_852b319>
 set -uo pipefail
-W=/work/rleap1/hani.alassiri.alhabboub/p4
+W=${P4_WORK:?the cluster work folder}
 SB=$W/${1:?snapshot dir}
 TW=$W/tampura-work
 VA=$W/armO-venvA/bin

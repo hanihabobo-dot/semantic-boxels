@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=p4-gen
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=24G
 #SBATCH --time=12:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # BF#63: both arms (TAMPURA as shipped, then ours with BF#62's defaults) on
 # find_dice scenes made by their own generator (tampura_bridge/gen_scenes/,
 # tools/gen_scene_eval.py), interleaved per scene on one shared node like
@@ -27,8 +27,8 @@
 # 20 s, opening a file on $W, a 4 kB write with fsync on $W and the same
 # write on the local disk (OUT/io_probe.tsv), so a slow volume shows in
 # the record.
-# Usage (submit from cn-04, after tools/cluster/push_snapshot.ps1 -CodeOnly):
-#   sbatch -w cn-1xx [--export=ALL,P4_LOCAL=1] $W/sb_<sha>/tools/cluster/gen_eval.sbatch sb_<sha> 100-103 2 [OUT]
+# Usage (submit from the submit node, after tools/cluster/push_snapshot.ps1 -CodeOnly):
+#   sbatch -w <node> [--export=ALL,P4_LOCAL=1] $W/sb_<sha>/tools/cluster/gen_eval.sbatch sb_<sha> 100-103 2 [OUT]
 #   arguments: snapshot, scene seeds, repetitions, OUT (optional: a results
 #   directory shared by the jobs; each job writes OUT/<job id>, or with
 #   P4_LOCAL=1 OUT/<job id>.tar.gz; read them together with
@@ -38,7 +38,7 @@
 #   that tree too, and the harness stops unless the two snapshots hold the same
 #   scene files).  Pass OUT as '-' to keep its default when giving the fifth.
 set -uo pipefail
-W=${P4_WORK:-/work/rleap1/hani.alassiri.alhabboub/p4}
+W=${P4_WORK:?the cluster work folder}
 SB=$W/${1:?snapshot dir, e.g. sb_1234567}
 SEEDS=${2:?scene seeds, e.g. 100-103}
 REPS=${3:-2}

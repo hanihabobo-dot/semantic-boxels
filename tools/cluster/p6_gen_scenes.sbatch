@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=p6-genscenes
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=8G
 #SBATCH --time=04:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # Path 6, phase 1b: the fresh find_dice scenes (seeds 140 to 339) from TAMPURA's
 # own generator, unmodified (tools/gen_find_dice_scenes.py, the BF#63 tool: scene
 # s is the first scene their env_generator.py accepts after random.seed(s) and
@@ -14,12 +14,12 @@
 # lives on the node's own disk and becomes one small tarball on $W; the
 # scene files and the manifest are merged into the repository
 # (tools/p6_merge_scenes.py) and pinned there by sha256 before any episode runs.
-# Usage (submit from cn-04, after tools/cluster/push_snapshot.ps1 -CodeOnly):
-#   sbatch -w cn-1xx $W/sb_<A1>/tools/cluster/p6_gen_scenes.sbatch sb_<A1> 140-339
+# Usage (submit from the submit node, after tools/cluster/push_snapshot.ps1 -CodeOnly):
+#   sbatch -w <node> $W/sb_<A1>/tools/cluster/p6_gen_scenes.sbatch sb_<A1> 140-339
 #   Result: $W/results/p6_<A sha>/gen_<seeds>_<job>.tar.gz (scenes/, gen.log, header.txt)
 set -uo pipefail
 export LC_ALL=C
-W=${P4_WORK:-/work/rleap1/hani.alassiri.alhabboub/p4}
+W=${P4_WORK:?the cluster work folder}
 SB=$W/${1:?snapshot dir, e.g. sb_1234567}
 SEEDS=${2:?scene seeds, e.g. 140-339}
 JOB=${SLURM_JOB_ID:-local}

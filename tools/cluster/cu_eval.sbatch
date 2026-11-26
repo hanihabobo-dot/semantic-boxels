@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=p4-cu
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=24G
 #SBATCH --time=12:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # Q42: TAMPURA (arm T) on its own task class_uncertain, seeds 0 to 19, for path 7's table.
 # PREPARED, NOT RUN: no job of this script may be submitted before Hani's yes to the cluster
 # question, asked alone by the coordinator (tracks/eval/RUN_SHEET.md).
@@ -27,8 +27,8 @@
 # OUT/S/.  They need the seeds as one range A-B.  The snapshot must hold tasks_probe/
 # (track/tasks cfd03fa or later, merged before the freeze): arm T needs tasks_probe/cu_rand.py
 # for the world-state test and the job stops before the first episode without it.
-# Usage (from cn-04, after tools/cluster/push_snapshot.ps1 -CodeOnly):
-#   sbatch -w cn-1xx --export=ALL,P4_LOCAL=1 $W/sb_<sha>/tools/cluster/cu_eval.sbatch sb_<sha> 0-4 3 [OUT]
+# Usage (from the submit node, after tools/cluster/push_snapshot.ps1 -CodeOnly):
+#   sbatch -w <node> --export=ALL,P4_LOCAL=1 $W/sb_<sha>/tools/cluster/cu_eval.sbatch sb_<sha> 0-4 3 [OUT]
 #   arguments: snapshot, seeds, repetitions (default 3), OUT (optional: a results directory shared
 #   by the jobs; each job writes OUT/<job id>, or with P4_LOCAL=1 OUT/<job id>.tar.gz; count them
 #   together with tools/cu_eval.py --report <the job folders>).
@@ -37,7 +37,7 @@
 #   unset).  CU_ARMS (default T,S; T or S alone for a final pass).  CU_DRY=1: print the episodes
 #   and their commands, run nothing.
 set -uo pipefail
-W=${P4_WORK:-/work/rleap1/hani.alassiri.alhabboub/p4}
+W=${P4_WORK:?the cluster work folder}
 SB=$W/${1:?snapshot dir, e.g. sb_1234567}
 SEEDS=${2:?seeds, e.g. 0-4}
 REPS=${3:-3}

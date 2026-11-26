@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=C-bf70-time
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=24G
 #SBATCH --time=02:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # BF#70's timing check on a cluster node (worker C; the pairs declared in tracks/eval/STATE.md,
 # trunk c21f73f; the request: tracks/meeting_2026-11-13/cluster_requests/C_bf70_timing.md).
 # PREPARED, NOT RUN: no job of this script may be submitted before the coordinator's word.
@@ -27,12 +27,12 @@
 # end one tarball on $W without their history pickles (the check reads the console, the spans,
 # final_world.json, g13_runtime.json and rusage.json).  This job does NOT call prune_work.sh: it
 # touches nothing on $W but its own tarball and its own log.
-# Usage (from cn-04, after tools/cluster/push_snapshot.ps1 -CodeOnly for the W snapshot):
-#   sbatch -w cn-1xx $W/sb_<W sha>/tools/cluster/bf70_timing.sbatch sb_<W sha> sb_51428d8 [113] [OUT]
+# Usage (from the submit node, after tools/cluster/push_snapshot.ps1 -CodeOnly for the W snapshot):
+#   sbatch -w <node> $W/sb_<W sha>/tools/cluster/bf70_timing.sbatch sb_<W sha> sb_51428d8 [113] [OUT]
 #   BF70_ORDER (default "00_W 01_N 02_W 03_N 04_N 05_W 06_W 07_N"), BF70_CAP (s, default 960, the
 #   laptop batch's cap), BF70_PAUSE (s between episodes, default 30).
 set -uo pipefail
-W=${P4_WORK:-/work/rleap1/hani.alassiri.alhabboub/p4}
+W=${P4_WORK:?the cluster work folder}
 SNAP_W=$W/${1:?the snapshot with the wrapper, e.g. sb_1234567}
 SNAP_N=$W/${2:?the snapshot without it, e.g. sb_51428d8}
 SEED=${3:-113}

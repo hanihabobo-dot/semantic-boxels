@@ -1,16 +1,16 @@
 #!/bin/bash
 #SBATCH --job-name=p4-b1j-tests
-#SBATCH --partition=rleap_cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32G
 #SBATCH --time=03:00:00
-#SBATCH --output=/work/rleap1/hani.alassiri.alhabboub/p4/logs/%x_%j.txt
+# Submit with the cluster's names on the command line, never in this file:
+#   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # #P4 B1(j): D12's tests 1 to 4 for candidate (A).  Test 5, the A/A of
 # c31cbdd, is b1j_aa.sbatch.  Usage: sbatch b1j_tests.sbatch <head snapshot>
 set -uo pipefail
-W=/work/rleap1/hani.alassiri.alhabboub/p4
+W=${P4_WORK:?the cluster work folder}
 TW=$W/tampura-work
 SB=$W/${1:?head snapshot dir name, e.g. sb_030ef7e}
 VT=$TW/.venv/bin
