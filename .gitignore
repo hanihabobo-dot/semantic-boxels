@@ -62,7 +62,6 @@ docs/*
 !docs/PAPER_AUDIT.txt
 !docs/PROPOSAL_ATTRIBUTE_BOXELS.md
 !docs/proposal-template_PRE_MIGRATION.pdf
-!docs/thesis-template_AS_CLONED.pdf
 
 # Cygwin/msys crash dumps
 *.stackdump
