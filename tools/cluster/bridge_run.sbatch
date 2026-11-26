@@ -12,7 +12,7 @@
 # ledger gates are in its bridge_episode.json and console; the static gates
 # run on the snapshot.  No screenshots on the cluster (BF#17).
 # Usage (submit from the submit node, after tools/cluster/push_snapshot.ps1):
-#   sbatch -w cn-110 $W/sb_<sha>/tools/cluster/bridge_run.sbatch sb_<sha> full 0 1
+#   sbatch -w <node> $W/sb_<sha>/tools/cluster/bridge_run.sbatch sb_<sha> full 0 1
 #   mode: full (plans and acts) or smoke (stop_before_planning)
 #   CLEAN_STRAYS=1 sbatch ... first removes the two files earlier bridge
 #   runs (before GF8) left in their tampura_environments, and nothing else.

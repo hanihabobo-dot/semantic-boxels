@@ -83,7 +83,7 @@ def put(job, arm, label, cell, ts, stdout='', run_dir=None, mtime=None):
         (d / 'run_dir.txt').write_text(run_dir)
 
 
-def make_job(root, name, header='host cn-101  job 1  now  mode 0  A sb_a  B sb_b  cap 1800s  out x\n'
+def make_job(root, name, header='host node-a  job 1  now  mode 0  A sb_a  B sb_b  cap 1800s  out x\n'
                                  'cpu Xeon  threads 96\n'
                                  'snapshot A sb_a: 251 files, tree hash aaaa\nsnapshot B sb_b: 47 files, tree hash bbbb\n'):
     job = root / name
@@ -511,7 +511,7 @@ def test_the_cli_writes_the_report(tmp_path, capsys):
 
 def test_two_snapshots_in_the_jobs_are_flagged(tmp_path):
     fill_job(tmp_path, 'job00', slots=range(1))
-    j2 = make_job(tmp_path, 'job01', header='host cn-102  job 2  now  mode 1  A sb_a  B sb_b  cap 1800s  out x\n'
+    j2 = make_job(tmp_path, 'job01', header='host node-b  job 2  now  mode 1  A sb_a  B sb_b  cap 1800s  out x\n'
                                             'cpu Xeon  threads 96\nsnapshot A sb_other: 251 files, tree hash cccc\n')
     text, _ = pr.build_report([str(tmp_path)])
     assert 'MORE THAN ONE SNAPSHOT' in text
@@ -540,7 +540,7 @@ def put_mem(job, arm, label, recs, stop=None):
 
 
 def header_with(job_id, extra=''):
-    return (f'host cn-101  job {job_id}  now  mode 0  A sb_a  B sb_b  cap 1800s  out x\n'
+    return (f'host node-a  job {job_id}  now  mode 0  A sb_a  B sb_b  cap 1800s  out x\n'
             f'cpu Xeon  threads 96\n{extra}snapshot A sb_a: 251 files, tree hash aaaa\n')
 
 
@@ -592,11 +592,11 @@ def test_a_stopped_file_and_the_jobs_own_memory_lines_are_printed(tmp_path):
 
 
 SACCT = ('JobID|JobName|State|Elapsed|MaxRSS|ReqMem|NodeList\n'
-         '77|p6-tabletop|COMPLETED|01:00:00||12G|cn-101\n'
-         '77.batch|batch|COMPLETED|01:00:00|2345678K||cn-101\n'
-         '77.extern|extern|COMPLETED|01:00:00|0||cn-101\n'
-         '88|p6-tabletop|OUT_OF_MEMORY|00:10:00||12G|cn-102\n'
-         '88.batch|batch|OUT_OF_MEMORY|00:10:00|7000000K||cn-102\n')
+         '77|p6-tabletop|COMPLETED|01:00:00||12G|node-a\n'
+         '77.batch|batch|COMPLETED|01:00:00|2345678K||node-a\n'
+         '77.extern|extern|COMPLETED|01:00:00|0||node-a\n'
+         '88|p6-tabletop|OUT_OF_MEMORY|00:10:00||12G|node-b\n'
+         '88.batch|batch|OUT_OF_MEMORY|00:10:00|7000000K||node-b\n')
 
 
 def test_slurm_sizes_and_sacct_rows():
@@ -605,7 +605,7 @@ def test_slurm_sizes_and_sacct_rows():
     assert pr.slurm_kb('') is None and pr.slurm_kb('x') is None and pr.slurm_kb(None) is None
     info = pr.parse_sacct(SACCT)
     assert info['77'] == {'max_rss_kb': 2345678, 'name': 'p6-tabletop', 'state': 'COMPLETED',
-                          'elapsed': '01:00:00', 'req_mem': '12G', 'node': 'cn-101'}
+                          'elapsed': '01:00:00', 'req_mem': '12G', 'node': 'node-a'}
     assert info['88']['max_rss_kb'] == 7000000 and info['88']['state'] == 'OUT_OF_MEMORY'
     assert pr.parse_sacct('') == {} and pr.parse_sacct('nothing useful\n') == {}
     assert pr.parse_sacct('MaxRSS|JobID\n5K|9.batch\n') == {'9': {'max_rss_kb': 5}}      # columns are found by name
@@ -616,10 +616,10 @@ def test_sacct_rows_join_the_jobs_by_the_slurm_id_in_their_header(tmp_path):
     fill_job(tmp_path, 'job01', slots=range(1), tweak=lambda j: (j / 'header.txt').write_text(header_with(99)))
     assert pr.header_job_id(str(tmp_path / 'job00')) == '77' and pr.header_job_id(str(tmp_path / 'nope')) is None
     block = memory_block(pr.build_report([str(tmp_path)], sacct=SACCT)[0]).splitlines()
-    assert '  sacct job 77 (job00): MaxRSS 2.24 GB, requested 12G, COMPLETED, 01:00:00, cn-101' in block
+    assert '  sacct job 77 (job00): MaxRSS 2.24 GB, requested 12G, COMPLETED, 01:00:00, node-a' in block
     assert '  sacct: no row for job01 (job 99)' in block
     assert ('  sacct job 88 (not among the results folders): MaxRSS 6.68 GB, requested 12G, OUT_OF_MEMORY, '
-            '00:10:00, cn-102  OVER 6 GB (report it)') in block
+            '00:10:00, node-b  OVER 6 GB (report it)') in block
 
 
 def test_the_cli_takes_sacct_and_a_missing_file_is_an_error(tmp_path, capsys):

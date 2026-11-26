@@ -9,7 +9,7 @@
 # #P4 B2's deliverable (BF#12): seeds 0 and 1 through the bridge in arm O's
 # venv (A), stop_before_planning, their tree checked before and after (G13),
 # each run's ledger read by bridge_gates.py, the static gates on the snapshot.
-# Usage: sbatch -w cn-110 b2_deliverable.sbatch <snapshot dir, e.g. sb_852b319>
+# Usage: sbatch -w <node> b2_deliverable.sbatch <snapshot dir, e.g. sb_852b319>
 set -uo pipefail
 W=${P4_WORK:?the cluster work folder}
 SB=$W/${1:?snapshot dir}

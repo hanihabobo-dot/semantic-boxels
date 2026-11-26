@@ -787,7 +787,7 @@ def parse_sacct(text):
 
 
 def header_job_id(job):
-    """The Slurm job id in the first line of a job folder's header.txt ('host cn-101  job 5062001  ...')."""
+    """The Slurm job id in the first line of a job folder's header.txt ('host node-a  job 5062001  ...')."""
     first = (read_text(os.path.join(job, 'header.txt')) or '').splitlines()[:1]
     m = JOB_ID_RE.search(first[0]) if first else None
     return m.group(1) if m else None

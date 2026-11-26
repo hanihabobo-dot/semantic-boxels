@@ -1076,7 +1076,7 @@ def _run_with_a_leftover_marker(tmp_path, monkeypatch, arm):
     marker = gse.marker_path(a.out, arm, 140, 0)
     os.makedirs(os.path.dirname(marker))
     with open(marker, 'w') as f:
-        json.dump({'arm': arm, 'seed': 140, 'rep': 0, 'started': '2026-11-15 10:00:00', 'host': 'cn-101'}, f)
+        json.dump({'arm': arm, 'seed': 140, 'rep': 0, 'started': '2026-11-15 10:00:00', 'host': 'node-a'}, f)
     calls = []
 
     def fake(a_, arm_, seed, rep, attempt, scene, order):

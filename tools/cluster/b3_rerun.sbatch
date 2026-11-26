@@ -14,7 +14,7 @@
 # (for an outcome flip) or the same plan count (for a plan-count
 # difference) it had in the A/B; an outcome flip that reproduces fails the
 # acceptance, and so does a plan-count difference that reproduces.
-# Usage: sbatch -w cn-110 b3_rerun.sbatch <B3 snapshot dir> <seed> [<seed> ...]
+# Usage: sbatch -w <node> b3_rerun.sbatch <B3 snapshot dir> <seed> [<seed> ...]
 set -euo pipefail
 W=${P4_WORK:?the cluster work folder}
 SA=$W/sb_c31cbdd

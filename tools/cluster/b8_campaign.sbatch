@@ -13,8 +13,8 @@
 # the T driver, the domain, the static gates), G13's tree compare and the
 # static gates after the last.  No screenshots on the cluster (BF#17).
 # Usage (submit from the submit node, after tools/cluster/push_snapshot.ps1):
-#   sbatch -w cn-110 $W/sb_<sha>/tools/cluster/b8_campaign.sbatch sb_<sha> smoke 1 0,1
-#   sbatch -w cn-110 $W/sb_<sha>/tools/cluster/b8_campaign.sbatch sb_<sha> full 2 0-19
+#   sbatch -w <node> $W/sb_<sha>/tools/cluster/b8_campaign.sbatch sb_<sha> smoke 1 0,1
+#   sbatch -w <node> $W/sb_<sha>/tools/cluster/b8_campaign.sbatch sb_<sha> full 2 0-19
 #   RESUME=<campaign dir> sbatch ...   continues a cut campaign in that directory
 #   mode: full (plans and acts) or smoke (T --max-steps 1, O stop_before_planning)
 set -uo pipefail

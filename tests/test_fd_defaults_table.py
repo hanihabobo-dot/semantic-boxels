@@ -63,7 +63,7 @@ def job(tmp_path, name, rows, scenes=None, snapshot='sb_abc1234', arms=ARMS):
     d = tmp_path / name
     d.mkdir()
     (d / 'metadata.json').write_text(json.dumps(
-        {'snapshot_name': snapshot, 'arms': arms, 'scenes': scenes, 'host': 'cn-1', 'job': name,
+        {'snapshot_name': snapshot, 'arms': arms, 'scenes': scenes, 'host': 'node-a', 'job': name,
          'cap_s': 900 if scenes else 600}), encoding='utf-8')
     (d / 'results.jsonl').write_text(''.join(json.dumps(r) + '\n' for r in rows), encoding='utf-8')
     return str(d)

@@ -8,10 +8,10 @@
 #   sbatch --partition=<partition> --output=$P4_WORK/logs/%x_%j.txt --export=ALL,P4_WORK=<work folder> ...
 # #P4 B3's acceptance, second half (BF#10): the A/B of the B3 commit against
 # c31cbdd in arm O's venv (A), on our holding scene, seeds 0-19 and 100-119,
-# serial on an exclusive node (P4.6 MACHINE), submitted with -w cn-110 like
+# serial on an exclusive node (P4.6 MACHINE), submitted with -w <node> like
 # the A/A (b1j_aa.sbatch), with the same harness.  The c31cbdd arm is the
 # A/A's first repetition; its two repetitions give the noise floor.
-# Usage: sbatch -w cn-110 b3_ab.sbatch <snapshot dir, e.g. sb_526b358>
+# Usage: sbatch -w <node> b3_ab.sbatch <snapshot dir, e.g. sb_526b358>
 set -euo pipefail
 W=${P4_WORK:?the cluster work folder}
 SB=$W/${1:?snapshot dir name, e.g. sb_526b358}

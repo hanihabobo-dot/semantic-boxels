@@ -9,11 +9,11 @@
 # #P4 the acceptance runs of B5, M6 and M7 (BF#13): the reference and the
 # candidate snapshot, our holding scene, seeds 0-19 and 100-119, THREE
 # repetitions, interleaved per seed (reference, then candidate), on an
-# exclusive node (submit with -w cn-110), one harness file, armO-venvA,
+# exclusive node (submit with -w <node>), one harness file, armO-venvA,
 # PYTHONHASHSEED 0.  Afterwards: tools/acceptance_plan_counts.py on the
 # plan counts (rep 1 to 3 of each arm), and the outcome and target clauses
 # with repetition 2 as each flipped seed's one re-run.
-# Usage: sbatch -w cn-110 acceptance_dist.sbatch <ref snapshot> <cand snapshot>
+# Usage: sbatch -w <node> acceptance_dist.sbatch <ref snapshot> <cand snapshot>
 set -uo pipefail
 W=${P4_WORK:?the cluster work folder}
 REF=${1:?reference snapshot dir, e.g. sb_852b319}
