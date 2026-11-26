@@ -109,7 +109,7 @@ LOG_CALLS = frozenset(('print', 'debug', 'info', 'warning', 'error',
 
 # G19: the pinned seed-to-scene map of the campaign (BF#8, option A): the
 # cluster's own, read from B1(g)'s consoles (job 4940012, "Loading scene
-# from" in results/b1g/consoles/seed_N.log on /work/rleap1).  TAMPURA picks
+# from" in results/b1g/consoles/seed_N.log in the cluster work folder).  TAMPURA picks
 # the scene by random.choice(os.listdir(problems)), and the cluster's NFS
 # lists [1747173593, 1747173591, 1747173590].
 SCENE_MAP = {}

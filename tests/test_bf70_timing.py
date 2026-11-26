@@ -64,7 +64,7 @@ def test_the_job_script_runs_the_declared_order_and_touches_nothing_else_on_the_
     assert b'\r' not in raw
     text = raw.decode('utf-8')
     assert '#SBATCH --job-name=C-bf70-time' in text          # job names start with the worker's letter
-    assert '--partition=rleap_cpu' in text and '--cpus-per-task=8' in text and '--mem=24G' in text
+    assert '#SBATCH --partition' not in text and '--cpus-per-task=8' in text and '--mem=24G' in text
     assert 'PREPARED, NOT RUN' in text
     assert 'ORDER=${BF70_ORDER:-00_W 01_N 02_W 03_N 04_N 05_W 06_W 07_N}' in text
     # the episode: the harness's arm T line, the snapshot alone on PYTHONPATH, the hash seed fixed

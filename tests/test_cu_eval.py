@@ -498,7 +498,7 @@ def test_the_job_script_is_marked_not_run_and_calls_the_harness_as_declared():
     assert b'\r' not in raw                                   # LF: bash on the cluster rejects CRLF
     text = raw.decode('utf-8')
     assert 'PREPARED, NOT RUN' in text and "Hani's yes" in text
-    assert '--partition=rleap_cpu' in text and '--cpus-per-task=8' in text and '--mem=24G' in text
+    assert '#SBATCH --partition' not in text and '--cpus-per-task=8' in text and '--mem=24G' in text
     calls = [line for line in text.splitlines() if 'tools/cu_eval.py --snapshot' in line]
     assert len(calls) == 2                                    # the dry run and the run
     assert all('--seeds $SEEDS --reps $REPS --cap $CAP' in c for c in calls)
@@ -517,4 +517,4 @@ def test_the_job_script_is_marked_not_run_and_calls_the_harness_as_declared():
     assert 'prune_work.sh --apply' in text and 'STOPPED_LOW_MEMORY' in text
     assert '--smoke' not in text                              # a job never cuts their run short
     assert 'bridge_gates' not in text                         # find_dice's gates do not apply to this task
-    assert 'sbatch -w cn-1xx' in text and 'pkill' not in text and 'killall' not in text
+    assert 'sbatch -w <node>' in text and 'pkill' not in text and 'killall' not in text
