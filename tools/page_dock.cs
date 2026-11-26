@@ -352,6 +352,9 @@ public static class PageDock
     /// and the margin of that window in real pixels, computed when the pair is taken.
     static int askedW, askedH, margin;
     static bool placeSim = true;
+    /// Whether the simulator's window taken was on the holder's kept list, and whether its margin
+    /// was computed (it has the size asked): set when the pair is taken, read by MoveSimOnce.
+    static bool simWasKept, marginComputed;
     public static void SetSplit(int clientW, int clientH, bool place)
     {
         askedW = clientW; askedH = clientH; placeSim = place;
@@ -625,7 +628,7 @@ public static class PageDock
         int dpi = DpiOf(MonitorFromWindow(sim, 2)), s = WslScale(dpi);
         RECT r = Frame(sim), work = Work(sim);
         Margin m = MarginOf(r, askedW, askedH, s);
-        margin = m.Pixels;
+        margin = m.Pixels; marginComputed = m.Computed;
         Note("  split: the run was asked for an inside of " + askedW + "x" + askedH + "; this screen's scaling is "
              + (dpi * 100 / 96) + " % (dpi " + dpi + "), an X window's scale on it " + s + "; the window's rectangle is "
              + r.W + "x" + r.H + ", which leaves " + m.FromWidth + " (width) and " + m.FromHeight
@@ -657,9 +660,14 @@ public static class PageDock
     /// is.  It is never asked again: where it does not move, or is dragged later, the page
     /// takes the room beside where it is (Sync), as without a split.
     ///
-    /// NOT TRIED on a real simulator window (2026-11-25): that needs a window on the desktop.
-    /// WSL's window host draws that window, and Windows holds a stand-in for it; whether a move
-    /// asked of the stand-in by another program reaches WSL only a real run can say.
+    /// Seen on a real simulator window in Hani's run of 2026-11-26 09:48 (one screen, 150 %): the
+    /// window moved from 455,-32 to 608,-32 within 50 ms and stayed there for the whole run. Not
+    /// seen yet: whether input reaches the scene after the move (a drag inside the window), and
+    /// screens at other scalings.
+    ///
+    /// Two windows are left where they are (review r5): one of the holder's kept list that is not
+    /// the size this run asked for, since it may be another program's (A), and one on another
+    /// screen than the primary, which the launcher measured, since its size is that screen's (C).
     static void MoveSimOnce()
     {
         RECT r = Frame(sim), work = Work(sim);
@@ -670,6 +678,18 @@ public static class PageDock
              : " is too small for a split"));
         if (!placeSim) { Note("  split: the simulator's window is left where it is (-SimPlace leave)"); return; }
         if (IsZoomed(sim) || IsIconic(sim)) { Note("  split: the simulator's window is maximised or minimised and is left as it is"); return; }
+        if (simWasKept && !marginComputed)
+        {
+            Note("  split: the simulator's window was open when the holder's list was taken and is not the size this run asked for:"
+                 + " it may be another program's, so it is left where it is and the page takes the room beside it");
+            return;
+        }
+        if (MonitorFromWindow(sim, 2) != MonitorFromPoint(new POINT(), 1))
+        {
+            Note("  split: the simulator's window opened on another screen than the primary one, which the launcher measured;"
+                 + " its size is the primary's part, so it is left where it is and the page takes the room beside it");
+            return;
+        }
         int x = work.R + margin + Inset.R - r.W, y = work.T - margin - Inset.T;
         if (r.L == x && r.T == y) { Note("  split: the simulator's window is in its part already: " + r); return; }
         // position only: no size (0x0001), no stacking order (0x0004), no activation (0x0010), posted (0x4000)
@@ -889,7 +909,8 @@ public static class PageDock
                  + page.ToInt64().ToString("X") + " [" + Title(page) + "]");
             // What the two windows are to Windows, before anything is placed: the look of the
             // pair on a real screen is measured against these lines (see Inset).
-            Note("  the simulator's window " + (before.Contains(sim.ToInt64())
+            simWasKept = before.Contains(sim.ToInt64());
+            Note("  the simulator's window " + (simWasKept
                  ? "was open when the holder's list was taken; taken as the only one, the run having drawn its window, after it stayed the only one for " + OnlyOneMs + " ms"
                  : "opened after the holder's list was taken"));
             if (askedW > 0) TakeMargin();       // a split of the screen: the margin, before "taken as seen" is said

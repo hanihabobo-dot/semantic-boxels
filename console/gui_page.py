@@ -334,17 +334,31 @@ class Page:
         numbers (page_boxels.ground_for_page), or None.
         The registry is read on the caller's thread only, here and in the
         two methods below; the page keeps copies, never a boxel.  A failure
-        here never reaches the run."""
+        here never reaches the run.  The registry's boxels are read first and
+        handed over with it in one step, so that the page never gets an empty
+        set between the two (review r5, G)."""
         try:
+            rows = self._rows_of(registry, describe)
             with self._lock:
                 self._registry, self._describe = registry, describe
                 self._ground = None if ground is None else json.loads(json.dumps(ground))
-                self._boxels = {}
+                self._boxels = rows
                 self._boxel_version += 1
                 self._boxel_wall = time.time()
-            self.look_at_boxels()
         except Exception:
             pass
+
+    @staticmethod
+    def _rows_of(registry, describe):
+        """Every boxel of the registry as a row; a boxel that cannot be read
+        is not shown."""
+        rows = {}
+        for boxel_id, boxel in list(registry.boxels.items()):
+            try:
+                rows[boxel_id] = describe(boxel)
+            except Exception:
+                pass
+        return rows
 
     def boxel_changed(self, boxel_id):
         """The boxel of this id may have changed: added, taken out, moved,
@@ -358,7 +372,10 @@ class Page:
             if registry is None:
                 return
             boxel = registry.boxels.get(boxel_id)
-            row = None if boxel is None else self._describe(boxel)
+            try:
+                row = None if boxel is None else self._describe(boxel)
+            except Exception:
+                row = None              # not shown, as in look_at_boxels (review r5, H)
             with self._lock:
                 if row == self._boxels.get(boxel_id):
                     return
@@ -382,13 +399,7 @@ class Page:
             registry = self._registry
             if registry is None:
                 return
-            describe = self._describe
-            rows = {}
-            for boxel_id, boxel in list(registry.boxels.items()):
-                try:
-                    rows[boxel_id] = describe(boxel)
-                except Exception:
-                    pass                # a boxel that cannot be read is not shown
+            rows = self._rows_of(registry, self._describe)
             with self._lock:
                 if rows == self._boxels:
                     return
@@ -1060,7 +1071,8 @@ function takeBoxels(d) {
     else if (!sameBox(was.min, b.min) || !sameBox(was.max, b.max)) {
       const now = shownBox(was, t);
       b.how = 'moved'; b.from = [now.lo, now.hi]; moved.push(b);
-    } else if (was.kind !== b.kind || was.name !== b.name || was.occluder !== b.occluder || !sameBox(was.colour, b.colour)) {
+    } else if (was.kind !== b.kind || was.name !== b.name || was.occluder !== b.occluder || was.region !== b.region
+               || !sameBox(was.colour, b.colour)) {
       b.how = 'changed'; changed.push(b);
     } else if (was.how && !was.over) { b.how = was.how; b.t0 = was.t0; b.from = was.from; }
     next.set(b.id, b);

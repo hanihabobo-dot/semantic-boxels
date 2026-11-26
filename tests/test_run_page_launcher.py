@@ -266,7 +266,9 @@ def test_a_page_window_left_open_is_looked_for_among_all_windows():
     assert opener.index('Start-Process -FilePath $edge') < opener.index(
         'if ($own -and (Test-PageShown $title $false)) { return }') < opener.index('Start-Process $url')
     shown = ps[ps.index('function Test-PageShown('):ps.index('function Open-Page(')]
-    assert "Add-Type -Path (Join-Path $PSScriptRoot 'tools/page_dock.cs')" in shown
+    assert '$null = Use-PageDock' in shown
+    use = ps[ps.index('function Use-PageDock {'):ps.index('function Find-Page(')]
+    assert "Add-Type -Path (Join-Path $PSScriptRoot 'tools/page_dock.cs')" in use
     assert "[PageDock]::WholeTitle = $whole" in shown and "[PageDock]::FindPage($title, '') -ne 0" in shown
     assert 'catch { return $false }' in shown
     assert 'Open-Page $pageUrl ([bool]$holder)' in ps

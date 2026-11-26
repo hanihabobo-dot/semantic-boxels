@@ -280,14 +280,23 @@ function New-Run([int]$seedNo) {
 # draws around the window and all the arithmetic are in one place, tools/page_dock.cs
 # (PageDock.Split; compiled here when first asked, about a second).  The holder gets the same
 # size (-SimClient) and puts the window into its part.
-# SB_SPLIT_SCREEN=left,top,right,bottom,dpi stands in for the measured screen (the tests; or to
-# see with -DryRun what another screen would give).
+# SB_SPLIT_SCREEN=left,top,right,bottom,dpi stands in for the measured screen with -DryRun only
+# (the tests; or to see what another screen would give).  A real run measures the screen and says
+# in a yellow line that the variable was left aside (review r5, D).
 $noSplit = ''
 function Get-SplitWindow {
     $script:noSplit = ''
     try {
-        if (-not ('PageDock' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'tools/page_dock.cs') -IgnoreWarnings }
-        if ($env:SB_SPLIT_SCREEN -match '^\s*(-?\d+),(-?\d+),(-?\d+),(-?\d+),(\d+)\s*$') {
+        if (-not (Use-PageDock)) {
+            $script:noSplit = 'this terminal holds tools/page_dock.cs as an earlier run compiled it, and PowerShell cannot load it again: open a new terminal for the split'
+            return ''
+        }
+        $standIn = $env:SB_SPLIT_SCREEN -match '^\s*(-?\d+),(-?\d+),(-?\d+),(-?\d+),(\d+)\s*$'
+        if ($standIn -and -not $DryRun) {
+            Write-Host "run: SB_SPLIT_SCREEN is set and left aside (it stands in for the screen with -DryRun only); the screen is measured" -ForegroundColor Yellow
+            $standIn = $false
+        }
+        if ($standIn) {
             $work = New-Object PageDock+RECT
             $work.L = [int]$Matches[1]; $work.T = [int]$Matches[2]; $work.R = [int]$Matches[3]; $work.B = [int]$Matches[4]
             $halves = [PageDock]::Split($work, [int]$Matches[5], [PageDock]::LeastWidth)
@@ -299,6 +308,20 @@ function Get-SplitWindow {
                           else { 'Windows gave no screen to measure' }
     } catch { $script:noSplit = $_.Exception.Message }
     return ''
+}
+# Use-PageDock: tools/page_dock.cs compiled into this PowerShell process when first asked (about a
+# second).  A compiled type stays in its process until the process ends, and run.ps1 runs inside
+# the terminal's own process, so a terminal that ran an earlier run.ps1 may hold an older
+# PageDock.  The file's hash is kept beside the type when it is compiled here; $false says that
+# the PageDock of this process is not this file's (review r5, B).
+function Use-PageDock {
+    $file = Join-Path $PSScriptRoot 'tools/page_dock.cs'
+    $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
+    if (-not ('PageDock' -as [type])) {
+        Add-Type -Path (Join-Path $PSScriptRoot 'tools/page_dock.cs') -IgnoreWarnings
+        $global:SbPageDockHash = $hash
+    }
+    return ($global:SbPageDockHash -eq $hash)
 }
 
 # The page beside our own window (gui_page.py).  Its server runs inside the run, in WSL, on
@@ -320,12 +343,12 @@ function Find-Page([string]$word) {
 }
 # Test-PageShown: is a window open whose title is the page's ($whole), or starts with it (a
 # browser window with tabs that shows the page adds its own name).  All windows are looked
-# through, as the page's holder does it (tools/page_dock.cs, compiled here when first asked):
-# a browser is one process with many windows, and a process's main window alone would miss a
-# page window that stands behind another window of the same browser.
+# through, as the page's holder does it (tools/page_dock.cs, compiled here when first asked,
+# Use-PageDock): a browser is one process with many windows, and a process's main window alone
+# would miss a page window that stands behind another window of the same browser.
 function Test-PageShown([string]$title, [bool]$whole) {
     try {
-        if (-not ('PageDock' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'tools/page_dock.cs') -IgnoreWarnings }
+        $null = Use-PageDock
         [PageDock]::WholeTitle = $whole
         return ([PageDock]::FindPage($title, '') -ne 0)
     } catch { return $false }

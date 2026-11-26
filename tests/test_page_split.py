@@ -23,9 +23,10 @@ on the desktop (tracks rule 13):
   the holder       the simulator's window is asked to move in one place, once,
                    for its place only
 
-Whether the real simulator window follows that one request only a look at a
-real run can say (tools/page_dock.cs, MoveSimOnce); a stand-in window does,
-on a desktop that is not shown (tracks/dbgcams/checks/split_trial.ps1).
+The real simulator window followed that one request in Hani's run of 26 Nov
+(tools/page_dock.cs, MoveSimOnce); a stand-in window does, on a desktop that
+is not shown (tracks/dbgcams/checks/split_trial_director.ps1, run through
+dock_trial.ps1).
 """
 import json
 import os
@@ -426,6 +427,38 @@ def test_the_launcher_measures_before_the_run_starts_and_tells_the_holder():
     assert block.index("$holdArgs += '-SimClient'") < block.index('$holder = Start-Process')
 
 
+def test_a_stand_in_screen_counts_with_dry_run_only_and_the_holders_type_is_checked():
+    """Review r5: SB_SPLIT_SCREEN stands in for the screen with -DryRun only
+    (D; a real run says in a yellow line that it was left aside), and a
+    PageDock that an earlier run.ps1 compiled into the terminal's process is
+    not taken for this file's (B): the file's hash is kept beside the type."""
+    ps = RUN_PS1.read_text(encoding='utf-8')
+    code = '\n'.join(ln for ln in ps.splitlines() if not ln.lstrip().startswith('#'))
+    measure = code[code.index('function Get-SplitWindow'):code.index('$pagePorts = ')]
+    assert 'if ($standIn -and -not $DryRun) {' in measure
+    assert measure.index('if (-not (Use-PageDock)) {') < measure.index('[PageDock]::SplitOfPrimary()')
+    use = measure[measure.index('function Use-PageDock {'):]
+    assert 'Get-FileHash -LiteralPath $file -Algorithm SHA256' in use and '$global:SbPageDockHash = $hash' in use
+    assert code.count("Add-Type -Path (Join-Path $PSScriptRoot 'tools/page_dock.cs')") == 1
+
+
+@needs_pwsh
+def test_a_terminal_that_holds_an_older_holder_type_gets_no_split_and_is_told_why():
+    win = _win(RUN_PS1)
+    text = _pwsh(f"$env:SB_SPLIT_SCREEN = '0,0,1920,1008,144'; "
+                 f"& '{win}' boxels -Seed 3 -DryRun *>&1 | Out-String -Width 400; '@@first'; "
+                 f"$global:SbPageDockHash = 'from an earlier run.ps1'; "
+                 f"& '{win}' boxels -Seed 3 -DryRun *>&1 | Out-String -Width 400; '@@second'")
+    first, rest = text.split('@@first')
+    second = rest.split('@@second')[0]
+    assert WINDOW.findall(first) == [SIZES['hani']]
+    assert 'SB_GUI_WINDOW' not in second
+    assert _said(second) == [
+        "run: no split of the screen (this terminal holds tools/page_dock.cs as an earlier run compiled it, "
+        "and PowerShell cannot load it again: open a new terminal for the split); the simulator's window "
+        "opens 1280x720 and the page beside it"]
+
+
 # ----- the run --------------------------------------------------------------------------------
 
 @pytest.mark.parametrize('given, size', [
@@ -556,11 +589,18 @@ def test_the_simulators_window_is_asked_to_move_in_one_place_once_for_its_place_
     assert move in once
     assert "if (!placeSim) {" in once and once.index("if (!placeSim) {") < once.index(move)
     assert 'if (IsZoomed(sim) || IsIconic(sim)) {' in once
+    # review r5: a window of the kept list that is not the size asked (A), and one on another
+    # screen than the primary the launcher measured (C), are left where they are
+    for guard in ('if (simWasKept && !marginComputed)',
+                  'if (MonitorFromWindow(sim, 2) != MonitorFromPoint(new POINT(), 1))'):
+        assert guard in once and once.index('if (!placeSim) {') < once.index(guard) < once.index(move), guard
+    assert 'margin = m.Pixels; marginComputed = m.Computed;' in cs
     # called once, in Run, after the windows are described and before the first placing
     assert cs.count('MoveSimOnce()') == 2                   # the function and its one call
     run = cs[cs.index('public static int Run('):]
     assert (run.index('if (askedW > 0) TakeMargin();') < run.index('Note("  simulator: "')
             < run.index('if (askedW > 0) MoveSimOnce();') < run.index('Sync("first");'))
+    assert run.index('simWasKept = before.Contains(sim.ToInt64());') < run.index('if (askedW > 0) TakeMargin();')
     for later in ('static void Sync(', 'static void Tick()', 'static void OnEvent(', 'static void CheckMove()'):
         body = cs[cs.index(later):cs.index('\n    }\n', cs.index(later))]
         assert 'MoveSimOnce' not in body and 'SetWindowPos(sim, IntPtr.Zero' not in body, later

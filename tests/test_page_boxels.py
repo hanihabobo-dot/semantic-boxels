@@ -297,6 +297,45 @@ def test_the_page_follows_one_registry_and_keeps_copies(page):
     assert set(_by_id(_served(page))) == set(other.boxels) and _version(page) > v0
 
 
+def test_following_another_registry_raises_the_number_once_and_shows_no_empty_set_between(page):
+    """Review r5, G: the registry's boxels are read before they are handed
+    over, in the same step as the registry, so a page that asks meanwhile
+    gets the set it had."""
+    reg, other = _registry(), _registry()
+    other.remove_boxel('red_object')
+    page_boxels.show_on_page(page, reg)
+    v0, first = _version(page), set(_by_id(_served(page)))
+    seen = []
+
+    def describe(bd):
+        seen.append(set(_by_id(_served(page))))     # what a page asking now gets
+        return page_boxels.boxel_for_page(bd)
+
+    page.follow_boxels(other, describe)
+    assert _version(page) == v0 + 1 and set(_by_id(_served(page))) == set(other.boxels)
+    assert seen and all(ids == first for ids in seen)
+
+
+def test_a_boxel_that_can_no_longer_be_read_is_taken_off_the_page(page):
+    """Review r5, H: told of a boxel that cannot be described, the page drops
+    it, as the look at every render does."""
+    reg, broken = _registry(), set()
+
+    def describe(bd):
+        if bd.id in broken:
+            raise ValueError('cannot be read')
+        return page_boxels.boxel_for_page(bd)
+
+    page.follow_boxels(reg, describe)
+    v0 = _version(page)
+    assert 'red_object' in _by_id(_served(page))
+    broken.add('red_object')
+    page.boxel_changed('red_object')
+    assert 'red_object' not in _by_id(_served(page)) and _version(page) == v0 + 1
+    page.boxel_changed('red_object')                # still unreadable: nothing changes
+    assert _version(page) == v0 + 1
+
+
 # ---------------------------------------------------------------------------
 # no ground truth
 # ---------------------------------------------------------------------------
@@ -544,6 +583,14 @@ def test_the_page_asks_for_the_boxels_only_when_their_number_changed(page):
     for word in ("'pointerdown'", "'pointermove'", "'wheel'", 'bx.turning = false;', 'boxOrder(items, eye)'):
         assert word in text, word
     assert _get(page, '/boxels?v=3')[0] == 200      # a number after the path is fine
+
+
+def test_a_change_of_region_alone_is_marked_as_a_change(page):
+    """Review r5, I: a shadow that becomes a shadow under a cover is marked
+    and told like any other change."""
+    text = _get(page, '/')[2].decode('utf-8')
+    changed = text[text.index('function takeBoxels(d)'):text.index("b.how = 'changed'")]
+    assert 'was.region !== b.region' in changed
 
 
 def test_the_free_spaces_opacity_is_one_number_in_one_place(page):
