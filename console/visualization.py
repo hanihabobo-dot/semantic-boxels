@@ -16,6 +16,7 @@ import numpy as np
 import pybullet as p
 from typing import Dict, List, Optional, Set
 
+from world import boxel_data
 from world.boxel_data import BoxelData, BoxelType
 
 
@@ -338,6 +339,7 @@ class BoxelVisualizer:
         if bd.id:
             self._items_by_id[bd.id] = item_ids
             self._bodies_by_id[bd.id] = body_ids
+        boxel_data.note_change(bd.id)         # the page's view (page_boxels.py; display only)
 
     def remove_boxel_viz(self, boxel_id: str) -> None:
         """Remove all debug lines, labels, and phantom bodies for one boxel."""
@@ -348,6 +350,7 @@ class BoxelVisualizer:
             p.removeBody(body_id)
             self.shadow_bodies.discard(body_id)
             _PHANTOM_HOME.pop(body_id, None)
+        boxel_data.note_change(boxel_id)      # the page's view (page_boxels.py; display only)
 
     def tracks_boxel(self, boxel_id: str) -> bool:
         """Whether any debug item or phantom body is still tracked for ``boxel_id``.

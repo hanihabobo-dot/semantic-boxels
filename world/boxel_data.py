@@ -133,6 +133,31 @@ class BoxelData:
         )
 
 
+# The page beside our own window shows the registry as boxels (gui_page.py,
+# its fourth view; Hani, 2026-11-25).  Display only.  One watcher is told the
+# id of a boxel that was added, taken out or changed; it is None in every run
+# without a page, and a change then costs this one comparison and nothing
+# else.  Nothing the watcher does reaches the run: what it raises ends here.
+_watcher = None
+
+
+def watch(watcher) -> None:
+    """Set the watcher, `watcher(boxel_id)`, or take it away with None."""
+    global _watcher
+    _watcher = watcher
+
+
+def note_change(boxel_id: str) -> None:
+    """Tell the watcher, if there is one, that this boxel changed.  For a
+    change that does not go through a registry's own methods (the overlay
+    redrawing a boxel whose corners were written in place)."""
+    if _watcher is not None:
+        try:
+            _watcher(boxel_id)
+        except Exception:
+            pass
+
+
 class BoxelRegistry:
     """Registry of boxels."""
 
@@ -175,6 +200,8 @@ class BoxelRegistry:
                         f"OBJECT boxel id={existing.id!r} already claims that name."
                     )
         self.boxels[boxel.id] = boxel
+        if _watcher is not None:
+            note_change(boxel.id)
         return boxel.id
 
     def get_boxel(self, boxel_id: str) -> Optional[BoxelData]:
@@ -198,6 +225,8 @@ class BoxelRegistry:
         # change and gets a provenance row.
         if removed is not None and removed.boxel_type == BoxelType.SHADOW:
             ledger_belief(boxel_id, 'remove', None)
+        if _watcher is not None:
+            note_change(boxel_id)
         return removed
 
     def get_adjacent_free_boxels(self, region_min, region_max,
@@ -239,6 +268,8 @@ class BoxelRegistry:
                 "table" if placed_min[2] <= table_surface_height + 0.01 else None
             )
         self._dirty = True
+        if _watcher is not None:
+            note_change(object_boxel_id)
 
     def to_dict(self) -> Dict[str, Any]:
         return {

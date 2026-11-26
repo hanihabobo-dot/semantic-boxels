@@ -11,11 +11,13 @@ import sys
 import numpy as np
 
 from sensing import arm_eye
+from console import gui_page
 from world import interior_regions
 from planning import streams
 from world.boxel_data import BoxelRegistry, BoxelType
 from world.cell_merger import merge_free_space_cells
 from acting.execution import record_initial_detections
+from console.page_boxels import show_on_page
 from console.visualization import BoxelVisualizer
 
 
@@ -260,3 +262,10 @@ def build_registry(st, env, overlay_bodies):
         st.setup.viz = BoxelVisualizer(phantoms=overlay_bodies)
         st.setup.viz.draw_registry(st.setup.registry, duration=0, label_size=1.0,
                           skip_free=not st.opts.show_free)
+
+    # The page beside our own window (gui_page.py; display only), its view of
+    # the world as boxels: this registry as it stands now, and from here on
+    # every change of it.  Nothing in a run without a page.
+    page = gui_page.active()
+    if page is not None:
+        show_on_page(page, st.setup.registry, env)
