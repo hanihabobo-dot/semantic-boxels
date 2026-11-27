@@ -60,7 +60,7 @@ def build_planner(st, env, slip_fixes, args):
                                search_effort_weight=st.setup.search_effort_weight,
                                search_initial_complexity=st.setup.search_initial_complexity,
                                slip_fixes=slip_fixes.spec(),                  # BF#59
-                               **({'look': st.setup.look_mode} if st.setup.look_on else {})))   # path 9
+                               look=st.setup.look_mode))                      # path 9; 'off' is written too
     # #P4 B3(d): the scene's reach envelope (None: streams' constants),
     # and D7 (i) to (iii): the home joints, and with a declared goal
     # configuration its init facts and the goal conjunct.

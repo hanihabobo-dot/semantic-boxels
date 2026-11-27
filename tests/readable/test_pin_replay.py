@@ -113,6 +113,28 @@ SCRIPTED_EXPECT = {
 # phase0/build/episode.md).
 KNOWN_LIVE_DIFFERENCES = {}
 
+# The six recordings of the paper's setup (the look, the robot camera): four
+# on find_dice and two on the tabletop.  Since 26 Nov 2026 a run writes every
+# switch into its records always, at its default too, and these six are NOT
+# recorded again (Hani, 26 Nov 2026, line by line to the three consequences:
+# "so waht fine", "yes", "no, the dont. its fine").  So a replay of one of
+# them may differ from its live recording by the added entry of a switch that
+# is off, and by nothing else: any other difference fails
+# test_paper_recordings_differ_from_live_only_by_accepted_off_entries.
+# The accepted entries, by the record that holds them:
+#   * the run record (run_config): gui_page 'off', the page beside the
+#     window.  A tabletop replay stores it in timing_summary.json (and prints
+#     it into its console, which no test here compares: a replay's console
+#     differs from the live one for other reasons).  A find_dice replay
+#     stores no run record.
+#   * the bridge's switches (bridge_episode.json) and the ledger's domain row:
+#     nothing here.  The six already carry look and eye.  A branch that adds a
+#     switch which is off in the paper's setup (LW1's ``lw1: 'off'``) names it
+#     in these two tables, with the value.
+PAPER_RECORDINGS = ('r140', 'r141', 'r204', 'r293', 'rp1o3_look', 'stack0_look')
+ACCEPTED_OFF_ENTRIES = {'run_config': {'gui_page': 'off'}, 'bridge_episode.json': {}, 'domain_row': {}}
+EQUAL_TO_LIVE = ('facts', 'eye.json', 'world_counts.json', 'boxel_data.json', 'problem_initial.pddl')
+
 needs_golden = pytest.mark.skipif(
     not GOLDEN, reason='READABLE_GOLDEN is not set: no stored golden output exists before tag '
                        'refactor-checkpoint-2 (R\'s condition)')
@@ -613,6 +635,42 @@ def test_replay_steps_equal_the_live_episode(fresh, pin_id):
                    if (episode, d['index']) not in KNOWN_LIVE_DIFFERENCES]
     assert vs['steps']['live_rows'] == vs['steps']['replay_rows'] or unexplained, vs['steps']
     assert not unexplained, f'{pin_id}: step rows differ from the live episode: {unexplained[:3]}'
+
+
+def _without(switches, accepted):
+    """switches without the accepted entries (key and value both as accepted)."""
+    return {k: v for k, v in (switches or {}).items() if accepted.get(k, object()) != v}
+
+
+@needs_tapes
+@pytest.mark.parametrize('pin_id', [p for p in REPLAY_PINS
+                                    if p[len('p47_replay_'):] in PAPER_RECORDINGS])
+def test_paper_recordings_differ_from_live_only_by_accepted_off_entries(fresh, pin_id):
+    """The comparison of the six recordings (see PAPER_RECORDINGS above)."""
+    status, text = _status(fresh, pin_id)
+    assert status == 'ok', f'{pin_id} did not run: {status}\n{text}'
+    vs = json.loads((fresh / pin_id / 'vs_live.json').read_text(encoding='utf-8'))
+    for name in EQUAL_TO_LIVE:
+        assert name not in vs or vs[name]['equal'], f'{pin_id}: {name} differs from the live episode'
+    led = vs['ledger']
+    assert led['live_rows'] == led['replay_rows'] and led['kinds_live'] == led['kinds_replay'], led
+    assert len(led['first_differences']) < 5, 'more ledger rows differ than the comparison lists'
+    for d in led['first_differences']:
+        live, rep = d['live'], d['replay']
+        assert live['kind'] == rep['kind'] == 'domain', f'{pin_id}: ledger row {d["index"]} differs: {d}'
+        rep = dict(rep, switches=_without(rep.get('switches'), ACCEPTED_OFF_ENTRIES['domain_row']))
+        assert rep == live, f'{pin_id}: the domain row differs by more than the accepted entries: {d}'
+    accepted = {f'/switches/{k}: only in replay' for k in ACCEPTED_OFF_ENTRIES['bridge_episode.json']}
+    extra = [p for p in vs.get('bridge_episode.json', {}).get('paths', []) if p not in accepted]
+    assert not extra, f'{pin_id}: bridge_episode.json differs by more than the accepted entries: {extra}'
+    run = ACCEPTED_OFF_ENTRIES['run_config']
+    extra = [p for p in vs.get('timing_summary.json', {}).get('paths', [])
+             if p not in {f'/run_config/{k}: only in replay' for k in run}]
+    assert not extra, f'{pin_id}: timing_summary.json differs by more than the accepted entries: {extra}'
+    if vs.get('timing_summary.json', {}).get('paths'):
+        stored = json.loads((fresh / pin_id / 'timing_summary.json').read_text(encoding='utf-8'))
+        for k, v in run.items():
+            assert stored['run_config'][k] == v, f'{pin_id}: run_config {k} is {stored["run_config"][k]!r}'
 
 
 @needs_tapes

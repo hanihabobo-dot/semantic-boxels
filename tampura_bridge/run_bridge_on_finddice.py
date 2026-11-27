@@ -174,12 +174,11 @@ def main():
                  '--sense-over-region'):
         ap.add_argument(flag, choices=('off', 'on'), default='on')
     # Path 9 (BF#68): one look action from a free-space boxel in place of
-    # sense and observe; passed through only when on, so an off run's switches
-    # (and its record) are those of before.
+    # sense and observe; passed through and recorded always, 'off' as well.
     ap.add_argument('--look', choices=('off', 'on', 'boxel', 'centred'), default='off')
     # Path 9, the arm camera only (arm_eye): every image from the arm camera
-    # (main() refuses it without a look); passed through only when arm, so a
-    # fixed run's switches (and its record) are those of before.
+    # (main() refuses it without a look); passed through and recorded always,
+    # 'fixed' as well.
     ap.add_argument('--eye', choices=('fixed', 'arm'), default='fixed')
     # BF#65 option 1 (D6, model tweak M2): the hiding region under a cup
     # (interior_regions.py; task_spec.HOLLOW_CAVITY declares the cavities),
@@ -328,9 +327,8 @@ def main():
                   'search_initial_complexity': str(a.search_initial_complexity),
                   'slip_fixes': slip_fixes.resolve(a.slip_fixes),
                   'save_screenshots': a.save_screenshots,
-                  **({'look': a.look} if a.look != 'off' else {})})
-    if a.eye != 'fixed':                                  # path 9, the arm camera only
-        cfg.switches['eye'] = a.eye
+                  'look': a.look})
+    cfg.switches['eye'] = a.eye                           # path 9, the arm camera only
     cfg.driver = {'events': events, 'seed': config['global_seed'],
                   'rng_untouched': rng_untouched,
                   'pythonhashseed': os.environ.get('PYTHONHASHSEED')}

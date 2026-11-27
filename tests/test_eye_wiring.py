@@ -6,8 +6,8 @@ launcher).  No episode.
    planner gets no camera with --eye arm (FACTS case 4); no blocker census
    runs with it; the frame is read only after the switch in the same test.
 2. execution.py: every blocker census sits behind the switch.
-3. The bridge (case 5): the driver takes --eye and passes arm alone, by a
-   plain if after the switches literal; the policy declares no eye for G20
+3. The bridge (case 5): the driver takes --eye and passes its value always,
+   by a plain statement after the switches literal; the policy declares no eye for G20
    with arm, as empty matrices.  On the gate itself: empty matrices let only
    the wrist at its FK pose through, while None would check nothing.
 4. A planner without a camera makes no placement_hides (case 4).
@@ -168,7 +168,7 @@ def test_execution_runs_no_blocker_census_with_the_arm_camera():
 
 # ----- 3. the bridge ----------------------------------------------------------------
 
-def test_the_driver_takes_eye_and_passes_arm_alone_by_a_plain_if():
+def test_the_driver_takes_eye_and_passes_its_value_always():
     (flag,) = [c for c in _calls(DRIVER, 'add_argument') if c.args
                and isinstance(c.args[0], ast.Constant) and c.args[0].value == '--eye']
     assert {k.arg: ast.literal_eval(k.value) for k in flag.keywords} == {
@@ -177,12 +177,15 @@ def test_the_driver_takes_eye_and_passes_arm_alone_by_a_plain_if():
     (switches,) = [k.value for k in cfg.keywords if k.arg == 'switches']
     keys = [k.value for k in switches.keys if isinstance(k, ast.Constant)]
     spread = [ast.unparse(v) for k, v in zip(switches.keys, switches.values) if k is None]
-    assert 'eye' not in keys and not any("'eye'" in s for s in spread)
-    assert any("'look'" in s for s in spread)             # the look entry stays as it was
+    assert not spread                                     # every switch always, 'off' and 'fixed' too
+    assert keys[-1] == 'look' and 'eye' not in keys
+    assert ast.unparse(switches.values[-1]) == 'a.look'
     (record,) = _assigns(DRIVER, "cfg.switches['eye']")
     assert ast.unparse(record.value) == 'a.eye'
-    assert id(record) in _under(DRIVER, "a.eye != 'fixed'")
-    assert cfg.lineno < record.lineno
+    (main_fn,) = [n for n in DRIVER.body if isinstance(n, ast.FunctionDef) and n.name == 'main']
+    (cfg_stmt,) = [s for s in main_fn.body if isinstance(s, ast.Assign) and s.value is cfg]
+    # the next statement of main() itself: under no if
+    assert main_fn.body[main_fn.body.index(cfg_stmt) + 1] is record
 
 
 def test_the_policy_declares_no_eye_for_g20_with_the_arm_camera():

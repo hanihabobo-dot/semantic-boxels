@@ -317,6 +317,16 @@ def test_g10_on_the_run_checks_the_loaded_domain(tmp_path):
     assert run(tmp_path, rows)['G10r'] == 'FAIL'
     rows[1]['sha'] = m8_domain.sha(live)
     assert run(tmp_path, rows)['G10r'] == 'PASS'
+    # A run writes the look switch always: 'off' is a run without a look, and
+    # the check reads the value, not the key's presence.
+    rows[1]['switches'] = {'M8': False, 'look': 'off'}
+    assert run(tmp_path, rows)['G10r'] == 'PASS'
+    rows[1]['switches'] = {'M8': True, 'look': 'off'}
+    assert run(tmp_path, rows)['G10r'] == 'FAIL'
+    from planning import look_domain
+    rows[1]['switches'] = {'M8': True, 'look': 'boxel'}
+    rows[1]['sha'] = look_domain.sha(look_domain.generate(live, 'boxel'))
+    assert run(tmp_path, rows)['G10r'] == 'PASS'
 
 
 def test_scene_map_g19(tmp_path):

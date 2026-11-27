@@ -605,9 +605,13 @@ def ledger_domain(report, rows):
     bad = []
     for r in doms:
         on = bool((r.get('switches') or {}).get('M8'))
-        if (r.get('switches') or {}).get('look'):       # path 9
+        # path 9.  A run writes the look switch always, 'off' too; a row from
+        # before that rule has no key.  Both are a run without a look, so the
+        # value is tested, not the key's presence.
+        asked = (r.get('switches') or {}).get('look')
+        if asked and _look_domain().mode_of(asked) != 'off':
             look = _look_domain()
-            mode = look.mode_of(r['switches']['look'])
+            mode = look.mode_of(asked)
             want = look.sha(look.generate(live, mode))
             if r.get('sha') != want:
                 bad.append(f"look {mode}: loaded {r.get('file')} "

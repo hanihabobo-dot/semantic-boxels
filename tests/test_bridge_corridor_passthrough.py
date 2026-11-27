@@ -35,6 +35,7 @@ SWITCH_VALUES = {
     'search_effort_weight': '1', 'search_initial_complexity': '3',
     'slip_fixes': 'force_hold,grasp_wrist_home,pose_radius_keep,solver_iters',
     'save_screenshots': 'off', 'interior_regions': 'off', 'm7': 'on',
+    'look': 'off', 'eye': 'fixed',
 }
 
 
@@ -96,8 +97,9 @@ def test_the_driver_takes_the_same_flag_with_the_default_unchanged():
 
 def test_the_driver_puts_it_among_the_switches():
     d = _switches_dict()
-    # a None key is path 9's `**({'look': ...} if a.look != 'off' else {})`: absent in a default episode
+    # no None key: every switch is a plain entry, written at its default too
     keys = [k.value if k is not None else None for k in d.keys]
+    assert None not in keys
     assert 'corridor_test' in keys
     value = d.values[keys.index('corridor_test')]
     # a.corridor_test, as parsed: no rewriting between the flag and the switch
@@ -105,7 +107,8 @@ def test_the_driver_puts_it_among_the_switches():
     assert isinstance(value.value, ast.Name) and value.value.id == 'a'
     # Every switch has a value in this file's table, so the argv below is the
     # one a default episode gets.
-    assert sorted(k for k in keys if k is not None) == sorted(SWITCH_VALUES)
+    # ('eye' is set by the statement after the literal, test_eye_wiring.)
+    assert sorted(keys + ['eye']) == sorted(SWITCH_VALUES)
 
 
 def test_policy_turns_every_switch_into_a_pipeline_flag():

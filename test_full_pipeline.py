@@ -3245,8 +3245,7 @@ if __name__ == "__main__":
         "sense_gate":   args.sense_gate,
         "corridor_test": args.corridor_test,
         "m8": args.m8, "m9": args.m9, "m10": args.m10,
-        **({"look": look_domain.mode_of(getattr(args, 'look', 'off'))}
-           if look_domain.mode_of(getattr(args, 'look', 'off')) != 'off' else {}),  # path 9
+        "look": look_domain.mode_of(getattr(args, 'look', 'off')),      # path 9; written always
         "pick_aperture_from_pose": args.pick_aperture_from_pose,
         "grip_squeeze_mm": getattr(args, 'grip_squeeze_mm', '0.5'),
         "save_screenshots": getattr(args, 'save_screenshots', 'off'),   # BF#50
@@ -3266,10 +3265,14 @@ if __name__ == "__main__":
         "show_free":    args.show_free,
         "log_level":    args.log_level,
     }
-    if getattr(args, 'eye', 'fixed') == 'arm':     # path 9
-        run_config["eye"] = "arm"
-    if getattr(args, 'gui_page', 'off') == 'on' and not args.no_gui:
-        run_config["gui_page"] = "on"              # only where a run has the page
+    # Every switch is in every record, at its default too (a record never
+    # leaves a reader to guess a default).  A record from before this rule has
+    # no look, eye or gui_page key where they were off, fixed and off: a
+    # reader takes a missing key as that value.
+    run_config["eye"] = getattr(args, 'eye', 'fixed')                    # path 9
+    # "on" says the page ran: asked for and a window to stand beside.
+    run_config["gui_page"] = ("on" if getattr(args, 'gui_page', 'off') == 'on'
+                              and not args.no_gui else "off")
 
     # RunLogger captures all artefacts (PDDL files, boxel data, logs)
     # regardless of console verbosity for post-mortem analysis.

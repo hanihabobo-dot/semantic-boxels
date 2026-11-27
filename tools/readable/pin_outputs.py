@@ -1520,8 +1520,8 @@ def p22_cli(out):
 def _main_block_slice(tree, first_text, last_target):
     """The statements of the __main__ block from the one whose source starts
     with first_text through the assignment to last_target and the statements
-    right after it that only add keys to last_target (D9: the tag adds
-    run_config["eye"] in an if statement after the dict)."""
+    right after it that only add keys to last_target (D9: run_config["eye"]
+    and run_config["gui_page"] are written by statements after the dict)."""
     for node in tree.body:
         if (isinstance(node, ast.If) and isinstance(node.test, ast.Compare)
                 and isinstance(node.test.left, ast.Name) and node.test.left.id == '__name__'):
@@ -1578,7 +1578,8 @@ def p23_run_config(out):
     code = compile(ast.Module(body=stmts, type_ignores=[]), 'test_full_pipeline.py', 'exec')
     out.note('the statements of the __main__ block from "random.seed(args.seed)" through the run_config '
              'assignment and the statements right after it that only add keys to run_config (seeding, '
-             'scene_builders, scene_cfg, the tray switch, effective counts, run_config, the "eye" key: D9) '
+             'scene_builders, scene_cfg, the tray switch, effective counts, run_config, the "eye" and '
+             '"gui_page" keys: D9) '
              'are cut out with ast and executed in a copy of test_full_pipeline\'s globals with args from '
              'parse_pipeline_args; nothing else of the block runs')
     out.json('slice.json', [ast.unparse(s).splitlines()[0] for s in stmts])

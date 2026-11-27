@@ -19,7 +19,7 @@ episode; one test drives main() up to the first plan-twin sync
    in the safe window; free space made with them enters none.
 7. The wiring in main(): with --eye arm the unseen regions join the first
    scan's boxels before free space is made; with --eye fixed none of it runs
-   and the run's record has no eye key; main() cuts no region to a look's
+   and the run's record says eye fixed; main() cuts no region to a look's
    cell side (PLAN 11.16: a region is cut only by what an image saw).  With
    --eye arm and no joints given, the arm starts at TAMPURA's home joints,
    the first image is the wrist there, and q_home is the same joints.
@@ -393,11 +393,12 @@ def test_with_the_arm_camera_the_unseen_regions_join_the_first_scan_before_free_
     assert 'max_fragment_side' not in text and 'look_cell_side' not in text
 
 
-def test_with_the_fixed_camera_main_makes_no_unseen_region_and_records_no_eye():
+def test_with_the_fixed_camera_main_makes_no_unseen_region_and_the_record_names_every_switch():
     """Case 7: every path-9 call in main() and in the functions cut out of it
     is under ``if st.setup.eye == 'arm':``, so with --eye fixed (the default)
-    none runs; the record's literal has no eye key, and one plain ``if``
-    after it adds the key for --eye arm alone."""
+    none runs.  The record names every switch always, at its default too: the
+    look in the literal, the camera and the page by one plain statement each
+    after it, under no ``if``."""
     arm = _under(MAIN, "st.setup.eye == 'arm'")
     for name in ('place_arm', 'use_start_view', 'unseen_boxels'):
         calls = _calls(MAIN, name)
@@ -406,12 +407,21 @@ def test_with_the_fixed_camera_main_makes_no_unseen_region_and_records_no_eye():
     keys = [k.value for k in literal.value.keys if isinstance(k, ast.Constant)]
     spread = [ast.unparse(v) for k, v in zip(literal.value.keys, literal.value.values)
               if k is None]
-    assert 'eye' not in keys and not any("'eye'" in s for s in spread)
-    assert any("'look'" in s for s in spread)          # the look entry beside it stays
+    assert not spread                                   # no entry that a default leaves out
+    assert 'look' in keys and 'eye' not in keys and 'gui_page' not in keys
+    look = literal.value.values[keys.index('look')]
+    assert ast.unparse(look) == "look_domain.mode_of(getattr(args, 'look', 'off'))"
     (record,) = _assigns(PIPELINE, "run_config['eye']")
-    assert ast.unparse(record.value) == "'arm'"
-    assert id(record) in _under(PIPELINE, "getattr(args, 'eye', 'fixed') == 'arm'")
-    assert literal.lineno < record.lineno
+    assert ast.unparse(record.value) == "getattr(args, 'eye', 'fixed')"
+    (page,) = _assigns(PIPELINE, "run_config['gui_page']")
+    assert ast.unparse(page.value) == ("'on' if getattr(args, 'gui_page', 'off') == 'on' "
+                                       "and (not args.no_gui) else 'off'")
+    (main_block,) = [node for node in PIPELINE.body if isinstance(node, ast.If)
+                     and ast.unparse(node.test) == "__name__ == '__main__'"]
+    # the literal, then the camera, then the page: three statements of the
+    # __main__ block itself, one after the other, so none is under an inner if
+    at = [main_block.body.index(n) for n in (literal, record, page)]
+    assert at == [at[0], at[0] + 1, at[0] + 2]
 
 
 def test_the_arm_cameras_default_start_is_set_under_the_switch_alone():
