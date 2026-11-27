@@ -11,7 +11,7 @@
 #
 # Where things go (environment variables, all optional):
 #   SB_DEPS_DIR   where the third-party checkouts are built (default:
-#                 ${XDG_CACHE_HOME:-~/.cache}/semantic-boxels).  It must lie outside the
+#                 ${XDG_DATA_HOME:-~/.local/share}/semantic-boxels).  It must lie outside the
 #                 repository: the bridge's gate G13 counts every file under the repository
 #                 as our code, so a TAMPURA tree inside it fails the gate.
 #                 <repo>/pddlstream_lib links to the PDDLStream checkout there.
@@ -29,7 +29,7 @@ TAMPURA_ENVS_URL=https://github.com/aidan-curtis/tampura_environments.git
 TAMPURA_ENVS_REV=4167c35e41170beee48b108d4a6a64a69d4b555a    # as in the paper's runs
 
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-DEPS=${SB_DEPS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/semantic-boxels}
+DEPS=${SB_DEPS_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/semantic-boxels}
 TW=${SB_TAMPURA:-$DEPS/tampura-work}
 JOBS=$(nproc 2>/dev/null || echo 4)
 with_tampura=0
