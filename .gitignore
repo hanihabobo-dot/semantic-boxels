@@ -9,8 +9,7 @@ __pycache__/
 # Virtual environments
 .venv/
 
-# Third-party checkouts and builds made by scripts/setup.sh
-/.deps/
+# The link scripts/setup.sh makes to its PDDLStream checkout
 /pddlstream_lib
 venv/
 env/

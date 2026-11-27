@@ -10,7 +10,10 @@
 # autoconf, automake and libtool (TAMPURA's SymK planner builds CUDD).
 #
 # Where things go (environment variables, all optional):
-#   SB_DEPS_DIR   where the third-party checkouts are built (default: <repo>/.deps).
+#   SB_DEPS_DIR   where the third-party checkouts are built (default:
+#                 ${XDG_CACHE_HOME:-~/.cache}/semantic-boxels).  It must lie outside the
+#                 repository: the bridge's gate G13 counts every file under the repository
+#                 as our code, so a TAMPURA tree inside it fails the gate.
 #                 <repo>/pddlstream_lib links to the PDDLStream checkout there.
 #   SB_TAMPURA    the TAMPURA workspace with tampura/ and tampura_environments/
 #                 (default: $SB_DEPS_DIR/tampura-work; run.sh reads the same variable)
@@ -26,7 +29,7 @@ TAMPURA_ENVS_URL=https://github.com/aidan-curtis/tampura_environments.git
 TAMPURA_ENVS_REV=4167c35e41170beee48b108d4a6a64a69d4b555a    # as in the paper's runs
 
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-DEPS=${SB_DEPS_DIR:-$REPO/.deps}
+DEPS=${SB_DEPS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/semantic-boxels}
 TW=${SB_TAMPURA:-$DEPS/tampura-work}
 JOBS=$(nproc 2>/dev/null || echo 4)
 with_tampura=0
@@ -85,6 +88,9 @@ checkout() {
 need uv git cmake make
 [ $with_tampura = 1 ] && need autoreconf libtoolize
 mkdir -p "$DEPS"
+case "$(cd "$DEPS" && pwd -P)/" in
+    "$(cd "$REPO" && pwd -P)/"*) echo "setup: SB_DEPS_DIR=$DEPS lies inside the repository; G13 would count TAMPURA as our code" >&2; exit 2 ;;
+esac
 
 # 1. The Python environment, from uv.lock.
 groups=()
