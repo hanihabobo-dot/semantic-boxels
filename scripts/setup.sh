@@ -127,14 +127,21 @@ if [ $with_tampura = 1 ]; then
     # (BF#3 in docs/PAPER_AUDIT.txt) is the only change to their trees.
     cp "$REPO/tampura_bridge/patches/tampura_environments__init__.py" \
        "$TW/tampura_environments/tampura_environments/__init__.py"
+    # TAMPURA's own runs (arm T) start without our PYTHONPATH and import
+    # tampura_environments from the environment, as the cluster's editable
+    # install did.  A .pth file does the same without writing into their tree,
+    # and uv sync leaves it alone.
+    SITE=$(cd "$REPO" && uv run --no-sync python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')
+    echo "$TW/tampura_environments" > "$SITE/tampura_environments_checkout.pth"
 fi
 
 # 4. A quick check that everything imports.
 say "checking imports"
 if [ $with_tampura = 1 ]; then
-    # The installed tampura, as arm T sees it (no checkout on the path).
-    (cd "$REPO" && env -u PYTHONPATH uv run --no-sync python -c '
-import os, tampura
+    # The installed tampura and the find_dice environment, as arm T sees them
+    # (no checkout of ours on the path).
+    (cd "$REPO" && env -u PYTHONPATH uv run --no-sync python -W ignore -c '
+import os, tampura, tampura_environments.find_dice.env
 bin_dir = os.path.join(os.path.dirname(tampura.__file__), "third_party/symk/builds/release/bin")
 assert os.access(os.path.join(bin_dir, "downward"), os.X_OK), "no SymK planner in " + bin_dir
 ')
