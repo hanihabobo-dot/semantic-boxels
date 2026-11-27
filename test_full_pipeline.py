@@ -52,7 +52,10 @@ from typing import Any, Dict, Optional
 
 PDDLSTREAM_PATH = os.environ.get(
     'PDDLSTREAM_PATH',
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'pddlstream_lib')
+    # scripts/setup.sh links the checkout to <repo>/pddlstream_lib; a sibling
+    # ../pddlstream_lib (the older layout) is used when that is absent.
+    next((p for p in (os.path.join(os.path.dirname(os.path.abspath(__file__)), d, 'pddlstream_lib') for d in ('', '..'))
+          if os.path.isdir(p)), os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pddlstream_lib'))
 )
 if os.path.exists(PDDLSTREAM_PATH):
     sys.path.insert(0, PDDLSTREAM_PATH)

@@ -51,11 +51,31 @@ def rollout(self, env, b, store):
 '''
 
 
+def _env_dirs():
+    """The running environment's install trees (a venv's site-packages and the like)."""
+    import sysconfig
+    paths = {sys.prefix, sys.exec_prefix, sys.base_prefix, sys.base_exec_prefix}
+    paths.update(p for k, p in sysconfig.get_paths().items() if k in ('purelib', 'platlib'))
+    return tuple(os.path.realpath(p) + os.sep for p in paths if p)
+
+
 def _ours(obj):
-    """True when obj was defined in a file of this repo (the drivers' __main__ included)."""
+    """True when obj was defined in a file of this repo (the drivers' __main__ included).
+
+    Not ours, even under the repo's folder: their packages (an in-repo venv or
+    checkout may hold them; _module_files checks that every module of theirs is
+    their checkout's file), and anything installed in the running environment
+    (a project-local .venv)."""
     mod = sys.modules.get(getattr(obj, '__module__', None) or '')
     f = getattr(mod, '__file__', None)
-    return bool(f) and os.path.realpath(f).startswith(REPO + os.sep)
+    if not f:
+        return False
+    f = os.path.realpath(f)
+    if not f.startswith(REPO + os.sep):
+        return False
+    if mod.__name__.split('.')[0] in THEIR_ROOTS:
+        return False
+    return not f.startswith(_env_dirs())
 
 
 def _tw():

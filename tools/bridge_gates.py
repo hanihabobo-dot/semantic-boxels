@@ -638,6 +638,31 @@ def _run(cmd):
     return subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
 
 
+def arm_t_python():
+    """Arm T's interpreter: $ARM_T_PYTHON, else the venv in their workspace
+    (the cluster's layout, TW/.venv), else the interpreter running this check
+    (scripts/setup.sh's layout: both arms share the project's environment)."""
+    if os.environ.get('ARM_T_PYTHON'):
+        return os.environ['ARM_T_PYTHON']
+    venv = os.path.join(TW, '.venv', 'bin', 'python')
+    return venv if os.path.exists(venv) else sys.executable
+
+
+# The package list of an environment without pip (uv makes none), one
+# name==version line per distribution, sorted.
+_FREEZE = ("import importlib.metadata as m; print('\\n'.join(sorted("
+           "f\"{d.metadata['Name']}=={d.version}\" for d in m.distributions())))")
+
+
+def _freeze(python):
+    """pip freeze where the environment has pip (as recorded so far), else
+    the installed distributions from importlib.metadata."""
+    pip = os.path.join(os.path.dirname(python), 'pip')
+    if os.path.exists(pip):
+        return _run([pip, 'freeze'])
+    return _run([python, '-c', _FREEZE])
+
+
 def tree_state():
     state = {}
     for repo in ('tampura', 'tampura_environments'):
@@ -670,7 +695,9 @@ def tree_state():
                        'modified_tracked': modified,
                        'undeclared_changes': undeclared,
                        'untracked_stray': stray}
-    freeze = _run([os.path.join(TW, '.venv', 'bin', 'pip'), 'freeze'])
+    python = arm_t_python()
+    state['arm_t_python'] = python
+    freeze = _freeze(python)
     state['pip_freeze_sha256'] = hashlib.sha256(freeze.encode()).hexdigest()
     state['tampura_installed'] = installed_state()
     return state
@@ -683,8 +710,11 @@ def _sha(fp):
 
 def installed_state():
     """The site-packages tampura of arm T's venv against the checkout."""
-    found = _run([os.path.join(TW, '.venv', 'bin', 'python'), '-c',
-                  'import tampura, os; print(os.path.dirname(tampura.__file__))']).strip()
+    # Their checkout must not shadow the install, as in arm T's episodes.
+    env = {k: v for k, v in os.environ.items() if k != 'PYTHONPATH'}
+    found = subprocess.run(
+        [arm_t_python(), '-c', 'import tampura, os; print(os.path.dirname(tampura.__file__))'],
+        capture_output=True, text=True, check=True, env=env).stdout.strip()
     checkout = os.path.join(TW, 'tampura', 'tampura')
     tracked = [f[len('tampura/'):] for f in
                _run(['git', '-C', os.path.join(TW, 'tampura'), 'ls-files', '-z',
@@ -738,7 +768,8 @@ def run_tree(report, save=None, compare=None):
                                   f"HEAD {pin}, tree {s['tracked_sha256'][:16]}, "
                                   f"{n_decl} declared change(s) (BF#3), "
                                   f"nothing else modified or stray"))
-    report.add('G13', 'INFO', f"arm T pip freeze {state['pip_freeze_sha256'][:16]}")
+    report.add('G13', 'INFO', f"arm T pip freeze {state['pip_freeze_sha256'][:16]} "
+                              f"({state['arm_t_python']})")
     inst = state['tampura_installed']
     bad = [f"{k}: {inst[k][:5]}" for k in ('differ', 'missing', 'untracked_extra')
            if inst[k]]

@@ -33,7 +33,8 @@
 #   SB_PYTHON    the Python that has numpy, pybullet and the rest (default: .venv/bin/python
 #                in the checkout, then /root/armO-venvA/bin/python, then python3)
 #   SB_TAMPURA   the TAMPURA workspace holding tampura/ and tampura_environments/, for
-#                run tampura only (default: ~/tampura-work, then /root/tampura-work)
+#                run tampura only (default: ~/.local/share/semantic-boxels/tampura-work, as
+#                scripts/setup.sh --tampura makes it, then ~/tampura-work, then /root/tampura-work)
 #   SB_LOCK      the pipeline lock file (default: /root/sb_pipeline.lock where /root can be
 #                written, as run.ps1 uses, else $XDG_RUNTIME_DIR or /tmp)
 # Every run takes the pipeline lock (one episode at a time): it waits while another episode
@@ -58,6 +59,8 @@ elif [ -x "$S/.venv/bin/python" ]; then PY=$S/.venv/bin/python
 elif [ -x /root/armO-venvA/bin/python ]; then PY=/root/armO-venvA/bin/python
 else PY=python3; fi
 if [ -n "${SB_TAMPURA:-}" ]; then TW=$SB_TAMPURA
+elif [ -d "${SB_DEPS_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/semantic-boxels}/tampura-work" ]; then   # scripts/setup.sh --tampura
+    TW=${SB_DEPS_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/semantic-boxels}/tampura-work
 elif [ -d "$HOME/tampura-work" ]; then TW=$HOME/tampura-work
 else TW=/root/tampura-work; fi
 if [ -n "${SB_LOCK:-}" ]; then LOCK=$SB_LOCK
