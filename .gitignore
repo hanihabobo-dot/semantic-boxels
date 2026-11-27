@@ -6,8 +6,9 @@ __pycache__/
 .Python
 *.so
 
-# Virtual environments
+# Virtual environments (scripts/setup.sh makes /.venv a link to one outside the repository)
 .venv/
+/.venv
 
 # The link scripts/setup.sh makes to its PDDLStream checkout
 /pddlstream_lib

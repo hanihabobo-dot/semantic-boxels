@@ -17,7 +17,10 @@
 #                 <repo>/pddlstream_lib links to the PDDLStream checkout there.
 #   SB_TAMPURA    the TAMPURA workspace with tampura/ and tampura_environments/
 #                 (default: $SB_DEPS_DIR/tampura-work; run.sh reads the same variable)
-#   UV_PROJECT_ENVIRONMENT  where uv puts the virtual environment (default: <repo>/.venv)
+#   UV_PROJECT_ENVIRONMENT  where uv puts the virtual environment.  By default the
+#                 environment lives under SB_DEPS_DIR (one per checkout) and <repo>/.venv
+#                 links to it: TAMPURA is installed into it, and G13 would count an
+#                 environment inside the repository as our code, like a checkout.
 set -euo pipefail
 
 # Pinned third-party versions.
@@ -90,12 +93,24 @@ case "$(cd "$DEPS" && pwd -P)/" in
     "$(cd "$REPO" && pwd -P)/"*) echo "setup: SB_DEPS_DIR=$DEPS lies inside the repository; G13 would count TAMPURA as our code" >&2; exit 2 ;;
 esac
 
-# 1. The Python environment, from uv.lock.
+# 1. The Python environment, from uv.lock: under $DEPS, with <repo>/.venv a link
+# to it, so that uv run and run.sh find it as usual.
+if [ -z "${UV_PROJECT_ENVIRONMENT:-}" ]; then
+    VENV=$DEPS/venvs/$(basename "$REPO")-$(printf %s "$REPO" | sha256sum | cut -c1-8)
+    if [ -d "$REPO/.venv" ] && [ ! -L "$REPO/.venv" ]; then
+        echo "setup: $REPO/.venv is a directory inside the repository; G13 counts TAMPURA" >&2
+        echo "  installed there as our code.  Remove it (rm -rf .venv) and run this again." >&2
+        exit 2
+    fi
+    mkdir -p "$DEPS/venvs"
+    export UV_PROJECT_ENVIRONMENT=$VENV
+fi
 groups=()
 [ $with_tampura = 1 ] && groups+=(--group tampura)
 say "Python environment (uv sync ${groups[*]:-})"
 [ $with_tampura = 1 ] && say "(the first time, this builds the SymK planner of TAMPURA: a few minutes)"
 (cd "$REPO" && uv sync --locked "${groups[@]}")
+[ -n "${VENV:-}" ] && ln -sfn "$VENV" "$REPO/.venv"
 
 # 2. PDDLStream with the FastDownward it bundles.
 PS=$DEPS/pddlstream
