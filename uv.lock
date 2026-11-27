@@ -1136,29 +1136,10 @@ dev = [
     { name = "pytest" },
 ]
 tampura = [
-    { name = "black" },
-    { name = "docformatter" },
-    { name = "gymnasium" },
     { name = "imageio" },
-    { name = "isort" },
-    { name = "networkx" },
-    { name = "open3d" },
-    { name = "pexpect" },
-    { name = "pylint" },
-    { name = "pymdptoolbox" },
-    { name = "pytest-pylint" },
-    { name = "pyyaml" },
-    { name = "pyzmq" },
-    { name = "rtree" },
-    { name = "scipy" },
-    { name = "six" },
-    { name = "stable-baselines3" },
-    { name = "tabulate" },
-    { name = "tensorboard" },
+    { name = "tampura" },
     { name = "torch", version = "2.12.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
     { name = "torch", version = "2.12.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
-    { name = "trimesh" },
-    { name = "zmq" },
 ]
 
 [package.metadata]
@@ -1172,28 +1153,9 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [{ name = "pytest" }]
 tampura = [
-    { name = "black" },
-    { name = "docformatter" },
-    { name = "gymnasium" },
     { name = "imageio" },
-    { name = "isort" },
-    { name = "networkx" },
-    { name = "open3d" },
-    { name = "pexpect" },
-    { name = "pylint" },
-    { name = "pymdptoolbox" },
-    { name = "pytest-pylint" },
-    { name = "pyyaml" },
-    { name = "pyzmq" },
-    { name = "rtree" },
-    { name = "scipy" },
-    { name = "six" },
-    { name = "stable-baselines3" },
-    { name = "tabulate" },
-    { name = "tensorboard" },
+    { name = "tampura", git = "https://github.com/aidan-curtis/tampura.git?rev=cdddf14b45d2608fc1d3bc9c72d8ee249c4638b2" },
     { name = "torch", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "trimesh" },
-    { name = "zmq" },
 ]
 
 [[package]]
@@ -1251,6 +1213,31 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/46/58/8c37dea7bbf769b20d58e7ace7e5edfe65b849442b00ffcdd56be88697c6/tabulate-0.10.0.tar.gz", hash = "sha256:e2cfde8f79420f6deeffdeda9aaec3b6bc5abce947655d17ac662b126e48a60d", size = 91754, upload-time = "2026-03-04T18:55:34.402Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/99/55/db07de81b5c630da5cbf5c7df646580ca26dfaefa593667fc6f2fe016d2e/tabulate-0.10.0-py3-none-any.whl", hash = "sha256:f0b0622e567335c8fabaaa659f1b33bcb6ddfe2e496071b743aa113f8774f2d3", size = 39814, upload-time = "2026-03-04T18:55:31.284Z" },
+]
+
+[[package]]
+name = "tampura"
+version = "0.1.0"
+source = { git = "https://github.com/aidan-curtis/tampura.git?rev=cdddf14b45d2608fc1d3bc9c72d8ee249c4638b2#cdddf14b45d2608fc1d3bc9c72d8ee249c4638b2" }
+dependencies = [
+    { name = "black" },
+    { name = "docformatter" },
+    { name = "gymnasium" },
+    { name = "isort" },
+    { name = "open3d" },
+    { name = "pexpect" },
+    { name = "pybullet" },
+    { name = "pylint" },
+    { name = "pymdptoolbox" },
+    { name = "pytest-pylint" },
+    { name = "pyyaml" },
+    { name = "rtree" },
+    { name = "six" },
+    { name = "stable-baselines3" },
+    { name = "tabulate" },
+    { name = "tensorboard" },
+    { name = "trimesh" },
+    { name = "zmq" },
 ]
 
 [[package]]

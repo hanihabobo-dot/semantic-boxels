@@ -19,39 +19,31 @@ dependencies = [
 dev = [
     "pytest",
 ]
-# TAMPURA's runtime dependencies, as declared in the pyproject.toml files of
-# tampura@cdddf14 and tampura_environments@4167c35.  They are needed for the
-# find_dice bridge and for running TAMPURA itself.  TAMPURA's own code is a
-# checkout that scripts/setup.sh builds, not an installed package.
+# TAMPURA, for the find_dice bridge and for running TAMPURA itself (arm T).
+# Installing tampura builds its SymK planner (needs cmake, make, a C++ compiler,
+# autoconf, automake and libtool), and brings tampura's own dependencies.
+# tampura_environments stays a checkout made by scripts/setup.sh (it does not
+# import as shipped, and its scene loader reads files from the checkout), so
+# its one extra dependency, imageio, is listed here.  torch is listed only so
+# that the CPU-only index below applies to it.
 tampura = [
-    "black",
-    "docformatter",
-    "gymnasium",
+    "tampura @ git+https://github.com/aidan-curtis/tampura.git@cdddf14b45d2608fc1d3bc9c72d8ee249c4638b2",
     "imageio",
-    "isort",
-    "networkx",
-    "open3d",
-    "pexpect",
-    "pylint",
-    "pymdptoolbox",
-    "pytest-pylint",
-    "pyyaml",
-    "pyzmq",
-    "rtree",
-    "scipy",
-    "six",
-    "stable-baselines3",
-    "tabulate",
-    "tensorboard",
     "torch",
-    "trimesh",
-    "zmq",
 ]
 
 [tool.uv]
 # Not an installable package: uv only manages the environment.
 package = false
 default-groups = ["dev"]
+
+# Build settings for tampura's SymK planner (old C++ on new toolchains):
+# - cmake >= 4 refuses cmake_minimum_required(VERSION < 3.5), which SymK declares;
+# - GCC >= 14 turns -Wtemplate-body into an error in SymK's bundled tl::optional
+#   (older GCC and clang ignore the flag);
+# - CUDD builds HTML docs when doxygen is installed, and recent doxygen crashes on them.
+[tool.uv.extra-build-variables]
+tampura = { CMAKE_POLICY_VERSION_MINIMUM = "3.5", CXXFLAGS = "-Wno-template-body", DOXYGEN = "true" }
 
 # CPU-only torch: TAMPURA imports torch, but find_dice never uses a GPU, and the
 # CUDA wheels add several GB.

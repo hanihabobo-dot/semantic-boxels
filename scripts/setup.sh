@@ -7,7 +7,7 @@
 #                                   later runs keep it once its workspace exists
 #
 # Needs: uv, git, cmake, make and a C++ compiler; with --tampura also
-# autoconf, automake and libtool (TAMPURA's SymK planner builds CUDD).
+# autoconf, automake and libtool (uv builds TAMPURA's SymK planner, which builds CUDD).
 #
 # Where things go (environment variables, all optional):
 #   SB_DEPS_DIR   where the third-party checkouts are built (default:
@@ -54,15 +54,13 @@ need() {
     fi
 }
 
-# Build settings for old C++ code on new toolchains:
+# Build settings for FastDownward (old C++ on new toolchains; uv passes the same
+# ones to tampura's build, see [tool.uv.extra-build-variables] in pyproject.toml):
 # - cmake >= 4 refuses cmake_minimum_required(VERSION < 3.5), which FastDownward
-#   and SymK still declare; this policy floor lets it configure them.
+#   still declares; this policy floor lets it configure.
 # - GCC >= 14 turns -Wtemplate-body into an error, which FastDownward's bundled
 #   tl::optional triggers; the flag is only passed where the compiler knows it.
-# - CUDD's Makefile builds its HTML docs with doxygen when doxygen is
-#   installed, and recent doxygen versions crash on them; the docs are not needed.
 export CMAKE_POLICY_VERSION_MINIMUM=3.5
-export DOXYGEN=true
 CXX_EXTRA=""
 if echo 'int main(){}' | ${CXX:-c++} -x c++ -Werror -Wno-template-body -o /dev/null - 2>/dev/null; then
     CXX_EXTRA="-Wno-template-body"
@@ -96,6 +94,7 @@ esac
 groups=()
 [ $with_tampura = 1 ] && groups+=(--group tampura)
 say "Python environment (uv sync ${groups[*]:-})"
+[ $with_tampura = 1 ] && say "(the first time, this builds the SymK planner of TAMPURA: a few minutes)"
 (cd "$REPO" && uv sync --locked "${groups[@]}")
 
 # 2. PDDLStream with the FastDownward it bundles.
@@ -114,7 +113,11 @@ elif [ "$(cd "$REPO/pddlstream_lib" && pwd -P)" != "$(cd "$PS" && pwd -P)" ]; th
     say "note: $REPO/pddlstream_lib is a directory of its own and is left as it is"
 fi
 
-# 3. TAMPURA (optional).
+# 3. TAMPURA's checkouts (optional).  The environment holds an installed tampura
+# (built by uv sync above); TAMPURA's own runs (arm T) use that.  The bridge
+# (arm O) imports tampura and tampura_environments from these checkouts, and
+# G13 checks every loaded TAMPURA module against them; tampura_environments
+# is only ever used as this checkout.
 if [ $with_tampura = 1 ]; then
     mkdir -p "$TW"
     checkout "$TW/tampura" "$TAMPURA_URL" "$TAMPURA_REV"
@@ -124,16 +127,18 @@ if [ $with_tampura = 1 ]; then
     # (BF#3 in docs/PAPER_AUDIT.txt) is the only change to their trees.
     cp "$REPO/tampura_bridge/patches/tampura_environments__init__.py" \
        "$TW/tampura_environments/tampura_environments/__init__.py"
-    SYMK=$TW/tampura/tampura/third_party/symk
-    if [ ! -x "$SYMK/builds/release/bin/downward" ]; then
-        say "building TAMPURA's SymK planner (a few minutes)"
-        (cd "$SYMK" && uv run --project "$REPO" --no-sync python build.py >"$DEPS/symk_build.log" 2>&1) || {
-            echo "setup: SymK build failed; see $DEPS/symk_build.log" >&2; exit 1; }
-    fi
 fi
 
 # 4. A quick check that everything imports.
 say "checking imports"
+if [ $with_tampura = 1 ]; then
+    # The installed tampura, as arm T sees it (no checkout on the path).
+    (cd "$REPO" && env -u PYTHONPATH uv run --no-sync python -c '
+import os, tampura
+bin_dir = os.path.join(os.path.dirname(tampura.__file__), "third_party/symk/builds/release/bin")
+assert os.access(os.path.join(bin_dir, "downward"), os.X_OK), "no SymK planner in " + bin_dir
+')
+fi
 export PYTHONPATH="$REPO:$REPO/pddlstream_lib${PYTHONPATH:+:$PYTHONPATH}"
 [ $with_tampura = 1 ] && export PYTHONPATH="$PYTHONPATH:$TW/tampura:$TW/tampura_environments"
 (cd "$REPO" && uv run --no-sync python - "$with_tampura" <<'EOF'
