@@ -103,6 +103,57 @@ def test_sync_override_fails(monkeypatch):
     assert any('sync_to_plan_client' in f for f in _check_o(env, policy)['failures'])
 
 
+# --- what counts as ours: a file of this repo, not their code or the environment's
+
+def _function_in(monkeypatch, name, path):
+    """A function whose module is `name`, loaded from `path`."""
+    mod = types.ModuleType(name)
+    mod.__file__ = str(path)
+    monkeypatch.setitem(sys.modules, name, mod)
+    def fn():
+        return None
+    fn.__module__ = name
+    return fn
+
+
+def test_a_file_of_the_repo_is_ours(tmp_path, monkeypatch):
+    monkeypatch.setattr(g13_runtime, 'REPO', str(tmp_path))
+    assert g13_runtime._ours(_function_in(monkeypatch, 'helper_of_ours', tmp_path / 'helper.py'))
+
+
+def test_their_package_under_the_repo_is_not_ours(tmp_path, monkeypatch):
+    # an in-repo venv or checkout holding tampura; _module_files checks it is theirs
+    monkeypatch.setattr(g13_runtime, 'REPO', str(tmp_path))
+    fn = _function_in(monkeypatch, 'tampura.policies.fake',
+                      tmp_path / '.venv' / 'tampura' / 'policies' / 'fake.py')
+    assert not g13_runtime._ours(fn)
+
+
+def test_a_package_of_the_environment_under_the_repo_is_not_ours(tmp_path, monkeypatch):
+    # a project-local .venv: what is installed there is not code of this repo
+    venv = tmp_path / '.venv'
+    monkeypatch.setattr(g13_runtime, 'REPO', str(tmp_path))
+    monkeypatch.setattr(g13_runtime, '_env_dirs', lambda: (str(venv) + os.sep,))
+    fn = _function_in(monkeypatch, 'some_library', venv / 'site-packages' / 'some_library.py')
+    assert not g13_runtime._ours(fn)
+
+
+def test_their_classes_under_the_repo_have_no_monkeypatch(monkeypatch):
+    # the real case: their Policy loaded from a tree inside the repo's folder
+    # (an in-repo .venv) once read as a monkeypatch of its own methods
+    import tampura
+    from tampura.policies.policy import Policy
+    outer = os.path.dirname(os.path.dirname(os.path.realpath(tampura.__file__)))
+    monkeypatch.setattr(g13_runtime, 'REPO', outer)
+    assert g13_runtime._no_patch([Policy]) == []
+
+
+def test_a_function_of_ours_patched_in_under_the_repo_still_fails(monkeypatch):
+    from tampura.policies.policy import Policy
+    monkeypatch.setattr(Policy, 'helper', _execute_fn, raising=False)
+    assert any('helper' in p for p in g13_runtime._no_patch([Policy]))
+
+
 # --- their modules: in the checkout or a byte-identical copy -------------------
 
 def _fake_copy(tmp_path, monkeypatch, tamper):
