@@ -25,6 +25,8 @@ uv run pytest                                    # the unit tests
 
 Or directly: `uv run python -u test_full_pipeline.py --no-gui --scene random-pairs --seed 0 --goal holding --n-occluders 2`. Without `--no-gui` it opens the PyBullet GUI.
 
+The pinned versions live in `uv.lock`; for a pip-style list, run `uv export --format requirements-txt --no-hashes --group tampura`.
+
 ### Linux without Windows
 
 `run.sh` is the same launcher in bash, for a plain Linux machine (it also works inside WSL). It starts the same commands as `run.ps1`, takes the same words and flags, in Linux spelling or in `run.ps1`'s (`--seed 7` and `-Seed 7` both work), and finds the checkout from its own place. Three environment variables tell it about the machine, each with a default: `SB_PYTHON` (the Python that has the packages above; default `.venv/bin/python` in the checkout, then `python3`), `SB_TAMPURA` (the TAMPURA workspace holding `tampura/` and `tampura_environments/`, needed for `run tampura` only; default `~/.local/share/semantic-boxels/tampura-work` as `scripts/setup.sh --tampura` makes it, then `~/tampura-work`) and `SB_LOCK` (the lock file that keeps episodes one at a time; default under `$XDG_RUNTIME_DIR` or `/tmp`). It needs `flock` (util-linux) and, to notice a closed GUI window, `xwininfo` (x11-utils).
