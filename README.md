@@ -6,25 +6,28 @@ The pipeline runs on its own scenes (`test_full_pipeline.py`) and inside TAMPURA
 
 ## Quick Start
 
-### Linux and WSL
+### Installation (Linux and WSL)
+
+Requirements: [uv](https://docs.astral.sh/uv/getting-started/installation/), git, cmake, make and a C++ compiler; for TAMPURA also autoconf, automake and libtool.
 
 ```bash
-pip install pybullet numpy matplotlib
-git clone https://github.com/caelan/pddlstream.git ../pddlstream_lib
-python3 -u test_full_pipeline.py
+./scripts/setup.sh              # Python environment and PDDLStream (with FastDownward)
+./scripts/setup.sh --tampura    # also TAMPURA and its find_dice environment
 ```
 
-The pipeline needs numpy, pybullet and PDDLStream. PDDLStream bundles FastDownward, which runs on Linux (WSL on Windows). The pipeline looks for PDDLStream at `../pddlstream_lib`; `PDDLSTREAM_PATH` points it elsewhere. matplotlib is for the plotting tools such as `evaluation/eval_plotter.py`, and Pillow for the debug screenshots (`--save-screenshots on`). For the GUI under WSL, `export DISPLAY=:0 LIBGL_ALWAYS_SOFTWARE=1`.
-
-This opens the PyBullet GUI on the default scene; `--no-gui` runs headless. A headless run of the scene that `boxels` starts on Windows (below):
+The script is idempotent. It creates `.venv` from `uv.lock` (Python 3.11, every package pinned), clones PDDLStream at a pinned commit into `.deps/`, builds its FastDownward and links it to `pddlstream_lib`. With `--tampura` it also clones TAMPURA and `tampura_environments` at the commits used for the paper's runs into `.deps/tampura-work`, applies the one declared import fix (`tampura_bridge/patches/`), builds TAMPURA's SymK planner and installs TAMPURA's Python dependencies (CPU-only torch). `SB_DEPS_DIR`, `SB_TAMPURA` and `UV_PROJECT_ENVIRONMENT` move the checkouts, the TAMPURA workspace and the environment elsewhere. `PDDLSTREAM_PATH` points the pipeline at another PDDLStream checkout. For the GUI under WSL, `export DISPLAY=:0 LIBGL_ALWAYS_SOFTWARE=1`.
 
 ```bash
-python3 -u test_full_pipeline.py --no-gui --scene random-pairs --seed 0 --goal holding --n-occluders 2
+./run.sh boxels --headless                       # one episode on our own scene
+./run.sh tampura --seed 113 --gen --headless     # one episode on a TAMPURA find_dice scene (needs --tampura)
+uv run pytest                                    # the unit tests
 ```
+
+Or directly: `uv run python -u test_full_pipeline.py --no-gui --scene random-pairs --seed 0 --goal holding --n-occluders 2`. Without `--no-gui` it opens the PyBullet GUI.
 
 ### Linux without Windows
 
-`run.sh` is the same launcher in bash, for a plain Linux machine (it also works inside WSL). It starts the same commands as `run.ps1`, takes the same words and flags, in Linux spelling or in `run.ps1`'s (`--seed 7` and `-Seed 7` both work), and finds the checkout from its own place. Three environment variables tell it about the machine, each with a default: `SB_PYTHON` (the Python that has the packages above; default `.venv/bin/python` in the checkout, then `python3`), `SB_TAMPURA` (the TAMPURA workspace holding `tampura/` and `tampura_environments/`, needed for `run tampura` only; default `~/tampura-work`) and `SB_LOCK` (the lock file that keeps episodes one at a time; default under `$XDG_RUNTIME_DIR` or `/tmp`). It needs `flock` (util-linux) and, to notice a closed GUI window, `xwininfo` (x11-utils).
+`run.sh` is the same launcher in bash, for a plain Linux machine (it also works inside WSL). It starts the same commands as `run.ps1`, takes the same words and flags, in Linux spelling or in `run.ps1`'s (`--seed 7` and `-Seed 7` both work), and finds the checkout from its own place. Three environment variables tell it about the machine, each with a default: `SB_PYTHON` (the Python that has the packages above; default `.venv/bin/python` in the checkout, then `python3`), `SB_TAMPURA` (the TAMPURA workspace holding `tampura/` and `tampura_environments/`, needed for `run tampura` only; default `.deps/tampura-work` as `scripts/setup.sh --tampura` makes it, then `~/tampura-work`) and `SB_LOCK` (the lock file that keeps episodes one at a time; default under `$XDG_RUNTIME_DIR` or `/tmp`). It needs `flock` (util-linux) and, to notice a closed GUI window, `xwininfo` (x11-utils).
 
 ```bash
 ./run.sh                           # the bridge episode on TAMPURA's find_dice, seed 0, in the GUI

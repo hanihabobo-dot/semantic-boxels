@@ -3,7 +3,8 @@
 # after a pull, and it only does what is missing.
 #
 #   ./scripts/setup.sh              Python environment (.venv) and PDDLStream with FastDownward
-#   ./scripts/setup.sh --tampura    also TAMPURA and its find_dice environment (the bridge, arm T)
+#   ./scripts/setup.sh --tampura    also TAMPURA and its find_dice environment (the bridge, arm T);
+#                                   later runs keep it once its workspace exists
 #
 # Needs: uv, git, cmake, make and a C++ compiler; with --tampura also
 # autoconf, automake and libtool (TAMPURA's SymK planner builds CUDD).
@@ -78,6 +79,9 @@ checkout() {
     fi
 }
 
+# A workspace made by an earlier --tampura run stays set up (a plain uv sync
+# would remove TAMPURA's packages from the environment).
+[ -d "$TW/tampura/.git" ] && with_tampura=1
 need uv git cmake make
 [ $with_tampura = 1 ] && need autoreconf libtoolize
 mkdir -p "$DEPS"
@@ -134,10 +138,11 @@ import pddlstream  # noqa: F401
 if sys.argv[1] == '1':
     warnings.simplefilter('ignore')
     import tampura, tampura_environments  # noqa: F401
+    import tampura_environments.find_dice.env  # noqa: F401
     import tampura_bridge.policy  # noqa: F401
 print('imports ok; numpy', numpy.__version__)
 EOF
 )
 say "done.  Try:  ./run.sh boxels --headless"
-[ $with_tampura = 1 ] && say "and:   SB_TAMPURA=$TW ./run.sh tampura --seed 113 --gen --headless"
+[ $with_tampura = 1 ] && say "and:   ./run.sh tampura --seed 113 --gen --headless"
 exit 0

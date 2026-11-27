@@ -19,13 +19,15 @@ dependencies = [
 dev = [
     "pytest==9.0.3",
 ]
-# Runtime dependencies of TAMPURA (tampura@cdddf14 and tampura_environments@4167c35),
+# Runtime dependencies of TAMPURA (the pyproject.toml files of tampura@cdddf14 and
+# tampura_environments@4167c35),
 # needed for the find_dice bridge and for running TAMPURA itself. TAMPURA's own
 # code is a checkout built by scripts/setup.sh, not an installed package.
 tampura = [
     "black==26.5.1",
     "docformatter==1.7.8",
     "gymnasium==1.2.3",
+    "imageio==2.37.3",
     "isort==8.0.1",
     "networkx==3.6.1",
     "open3d==0.19.0",

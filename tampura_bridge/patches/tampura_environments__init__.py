@@ -1,11 +1,16 @@
-# Guarded imports (equivalent of the student's declared BF#3 fix): 4167c35
-# removed toy_discrete but still star-imports it.
-import importlib as _il
-import warnings as _w
-for _m in ("class_uncertain", "find_dice", "puck_slide", "slam_collect", "tool_use", "toy_discrete"):
-    try:
-        _mod = _il.import_module(f".{_m}.env", __name__)
-    except ModuleNotFoundError as _e:
-        _w.warn(f"tampura_environments: {_m} not importable: {_e}")
-        continue
-    globals().update({k: v for k, v in vars(_mod).items() if not k.startswith("_")})
+# tampura_environments/__init__.py for tampura_environments@4167c35, copied over
+# theirs by scripts/setup.sh --tampura.  That commit removed the toy_discrete
+# subpackage but still star-imports it, so the package does not import as
+# shipped (BF#3 in docs/PAPER_AUDIT.txt).  Only that one import is guarded; the
+# others fail loudly, so a missing dependency is never hidden.
+from .class_uncertain.env import *
+from .find_dice.env import *
+from .puck_slide.env import *
+from .slam_collect.env import *
+from .tool_use.env import *
+
+try:
+    from .toy_discrete.env import *
+except ModuleNotFoundError as e:
+    if e.name != __name__ + '.toy_discrete':
+        raise
